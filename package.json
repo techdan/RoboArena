@@ -1,0 +1,17 @@
+{
+  "name": "roboarena",
+  "version": "0.0.1",
+  "private": true,
+  "description": "RoboArena — a faithful modern clone of Maxis RoboSport (1991). Pure-TS deterministic engine package; Next.js + PixiJS UI to follow.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
