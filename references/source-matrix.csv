@@ -1,0 +1,14 @@
+mechanic,status,source,notes
+Simultaneous programmed turns,CONFIRMED,Lemon Amiga manual; MobyGames; Macintosh Repository,Players program robots then watch generated turn/movie
+15-second timeline,HIGH_CONFIDENCE,Lemon/manual screenshots; YouTube video,Exact version/mode scope should be checked
+Up to four teams,CONFIRMED,Lemon Amiga manual; Macintosh Repository,Network/multiplayer supported
+Variable robot counts by game length,CONFIRMED,Lemon Amiga manual,Skirmish/Melee/Battle/Campaign counts
+Postures standing ducking crouching,CONFIRMED,Lemon Amiga manual,Posture affects hit difficulty and traversal
+Scan box / scan direction,CONFIRMED,Lemon Amiga manual,Needed for aiming/visibility
+Weapons: rifle burst automatic missile grenade,CONFIRMED,Lemon Amiga manual,Exact stats unknown
+Bullet friendly-fire immunity,CONFIRMED,Lemon Amiga manual,Open: whether friendly blocks bullet
+Explosive friendly fire,CONFIRMED,Lemon Amiga manual,Exact damage/radius unknown
+Collision rules,UNKNOWN,None yet,Need full reference or empirical testing
+Damage formulas,UNKNOWN,None yet,Need manual/reference or empirical testing
+Weapon firing rates,UNKNOWN,None yet,Need manual/reference or empirical testing
+Objective details for all modes,PARTIAL,Lemon Amiga manual; screenshots,Need full reference

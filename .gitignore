@@ -1,0 +1,40 @@
+# Original DOS distribution — copyrighted Maxis assets, not for redistribution.
+# Used locally for empirical research only.
+RoboSport (1991)/
+
+# Node / TypeScript build artifacts (added preemptively for upcoming engine work)
+node_modules/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS detritus
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Misc
+*.tmp
+.cache/
+coverage/
+
+# Claude Code per-developer settings (project-shared settings.json may be committed if added)
+.claude/settings.local.json
