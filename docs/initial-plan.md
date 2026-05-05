@@ -495,16 +495,24 @@ Posture lowers the damage range — both ends shift down. Lower posture = smalle
 
 ### Cover terrain — what it actually does
 
-| Terrain | Effect on a target ON the tile |
-|---|---|
-| **Bush** | **~30% miss chance** when fired at (Match 6: 1/3 missed at d=5; Match 7 confirmed 0/3 missed at d=7 — small samples but consistent with ~25-35%). No damage reduction. |
-| **Low wall** | **~50% miss chance** when fired at (default; "low walls provide excellent cover" per manual). No damage reduction. Crouching can't enter a low-wall tile, but can be adjacent to it — the cover effect still applies if the bullet's last-tile-before-target is the low wall. |
-| **Wall** | **Bullets blocked entirely** — bullet fired through a wall doesn't reach the target. Engine traces bullet path tile-by-tile; first wall in path stops the bullet. |
-| **Crevice** | **No cover.** Bullets pass through crevices freely (manual: "robots can sight across them"). Distinct from walls. |
-| **Rough Ground** | **+20% damage taken** when target is ON it (vulnerable). Damage modifier, not a miss chance. |
-| **Open Ground** | None. |
+Cover splits into two effects:
+- **Target-tile cover**: target IS standing/crouching on the cover tile.
+- **In-transit cover**: cover tile sits between shooter and target (in the bullet path).
 
-**"Behind cover" doesn't apply.** Only being ON the cover tile does anything.
+Cover effects only apply when the target is **CROUCHING**. Standing targets ignore cover entirely.
+
+| Terrain | Target ON the tile (target-tile cover) | In bullet path (in-transit cover) |
+|---|---|---|
+| **Bush** | **~30% miss chance** (Match 6 confirmed: 1/3 missed at d=5) | **None** — bushes don't shield robots behind them (Match 7 confirmed) |
+| **Low wall** | **~50% miss chance** (Match 7: 4/8 missed when ON low wall) | **~90% miss chance** when crouched target is behind (Match 7: 1/10 hit) — the strongest non-wall cover effect |
+| **Wall** | (unreachable — bullets are blocked before arriving) | **Bullet blocked entirely** — bullets fired through a wall never reach the target tile. Engine traces tile-by-tile; first wall in path absorbs the bullet. |
+| **Crevice** | None | None — **bullets pass through cleanly** (manual: "robots can sight across them"). |
+| **Rough Ground** | **+20% damage taken** (vulnerable, all postures) | None |
+| **Open Ground** | None | None |
+
+**Combining target-tile and in-transit cover**: take the **stronger** of the two miss chances (max), don't stack. So a crouched target on a bush behind a low wall gets the 90% behind-low-wall effect, not 30 + 90.
+
+**Crouching on low walls is allowed** (occupancy), even though crouched robots can't *walk onto* a low wall (traversal). Placement-time positioning or in-place posture change from standing can put a crouched robot on a low wall.
 
 ### Combined firing resolution
 
@@ -513,20 +521,27 @@ function resolveShot(shooter, targetTile, projectile):
   // 1. Angle check
   if scanAngle(shooter.heading, targetTile) > 90°: return ANGLE_BLOCKED
 
-  // 2. LoS / wall blocking — bullet path tile-by-tile
-  for tile in straightLine(shooter.tile, targetTile):
+  // 2. LoS / wall blocking + in-transit cover detection — bullet path tile-by-tile
+  pathHasLowWall = false
+  for tile in straightLine(shooter.tile, targetTile, exclusiveOfEndpoints):
     if tile.terrain === WALL: return BLOCKED_BY_WALL  // bullet absorbed mid-flight
+    if tile.terrain === LOW_WALL: pathHasLowWall = true
 
   // 3. Hit chance from scan zone
   hitChance = (scanAngle ≤ 45°) ? 1.0 : 0.2  // BLACK vs GREY zones
   if random() ≥ hitChance: return MISS
 
-  // 4. Cover miss chance — applies when target is ON cover terrain
-  coverMissChance = {
-    bush: 0.30,
-    lowWall: 0.50,
-    other: 0.0
-  }[targetTile.terrain]
+  // 4. Cover miss chance — only applies if target is crouching
+  coverMissChance = 0
+  if target.posture === CROUCHING:
+    targetTileMiss = {
+      bush: 0.30,
+      lowWall: 0.50,
+      other: 0.0
+    }[targetTile.terrain]
+    // In-transit: low wall in path = strong behind cover (90%). Bushes/crevices = no transit effect.
+    inTransitMiss = pathHasLowWall ? 0.90 : 0.0
+    coverMissChance = max(targetTileMiss, inTransitMiss)
   if random() < coverMissChance: return MISS
 
   // 5. Damage roll
@@ -559,19 +574,19 @@ Posture change cost: **0.1 s per height step** (standing→crouching = 0.2 s).
 
 ### Terrain
 
-| Terrain | Movement (standing) | Movement (crouching) | Effect on target ON tile | Cover from scanning |
+| Terrain | Movement (standing) | Movement (crouching, traversal) | Crouched-target ON tile | In bullet path (target behind it) |
 |---|---|---|---|---|
 | Open Ground | full speed (0.3/0.7 alt) | full speed (0.3/0.7 alt) | none | none |
-| Rough Ground | full speed (no penalty) | **blocked** | **+20% damage taken** (vulnerable) | none |
-| Low Walls | full speed when crossing | **blocked** | **~50% miss chance** | yes (excellent) |
-| Walls | **impassable** | **impassable** | **bullets blocked mid-flight** (target safe behind a wall) | complete |
-| Bushes | full speed (no penalty) | **blocked** | **~30% miss chance** (Match 6/7 confirmed) | when on tile: blocks visibility |
-| Crevice | **impassable** | **impassable** | none | **LoS passes through** — bullets go through too |
+| Rough Ground | full speed | **blocked** | +20% damage taken (vulnerable, all postures) | none |
+| Low Walls | full speed when crossing | **blocked from walking onto**, but **occupancy allowed** (placement / in-place posture change) | **~50% miss chance** when crouching | **~90% miss chance** when target crouching behind it — strongest non-wall cover |
+| Walls | **impassable** | **impassable** | (unreachable — bullets blocked first) | **bullet blocked entirely** in transit |
+| Bushes | full speed | **blocked** | **~30% miss chance** when crouching | none — bushes don't shield from behind |
+| Crevice | **impassable** | **impassable** | none | none — bullets and LoS pass through |
 | Outer Wall | impassable except Dock↔Field | same | — | — |
 
-**Movement step costs do NOT vary by terrain for standing posture** (DOS-confirmed). Crouching can only move on Open Ground.
+**Movement step costs do NOT vary by terrain for standing posture** (DOS-confirmed). Crouching can only walk onto Open Ground.
 
-**Effects apply only when target is ON the tile.** "Behind" cover does nothing (Match 7: crouching behind bush = same damage as crouching on open ground). The only "behind" mechanic is **walls**, which block bullets in transit — bullets fired *through* a wall never reach the target tile.
+**Cover effects only apply when target is CROUCHING.** Standing targets ignore all cover terrain. Take the **max** of target-tile and in-transit miss chances (don't stack). Bushes have no in-transit effect; low walls have a strong in-transit effect.
 
 ### Movement and timing
 
@@ -596,8 +611,8 @@ Posture change cost: **0.1 s per height step** (standing→crouching = 0.2 s).
 | **Friendly fire (bullets)** | No damage; no LoS block — friendlies are transparent to bullets |
 | **Friendly fire (explosives)** | Damage all robots in blast radius regardless of team |
 | **Hit chance** | scan-zone based: BLACK (inner 90°) = 1.0 · GREY (outer 45° each) = 0.2 · outside 180° = "angle blocked" |
-| **Cover miss-chance** | bush 30% · low wall 50% · other 0% — **only when target is ON the tile** |
-| **Wall blocking** | bullets traced tile-by-tile; first wall in path stops the bullet |
+| **Cover miss-chance** (only when target is CROUCHING) | target-tile: bush 30% · low wall 50% · other 0% · in-transit: low wall 90% (target behind) · max of the two applies |
+| **Wall blocking** | bullets traced tile-by-tile; first wall in path stops the bullet entirely |
 | **Damage formula** | `bracket = (random() < clamp01(1 − d / 17)) ? FULL : PARTIAL; damage = uniform(weapon.brackets[bracket][posture])` |
 | Distance damage falloff | `P(full)(d) = clamp01(1 − d / 17)` — full bracket at d=1, partial at d=17 |
 | Posture damage shift | Standing = baseline brackets · Crouching = brackets shifted ~25% lower |
