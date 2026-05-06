@@ -390,19 +390,20 @@ export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstD
 
 **Files**:
 - `next.config.ts`, `app/layout.tsx`, `app/page.tsx` (landing)
-- `src/lib/arenas/` — `rubble-two.json`, `rubble-three.json` — tile-by-tile transcriptions of the canonical arenas
-- `src/lib/arenas/index.ts` — `loadArena(name): Arena`
+- `tools/extract-arena.ts` — arena extraction script (see §6 Arena transcription pipeline). Produces `arena.json` from 4 corner screenshots.
+- `tools/review-arena/` — companion browser tool for `--review-flagged` flagged tiles
+- `screenshots/arena-extraction/` — directory for the per-arena 4-corner captures (gitignored or LFS — large PNGs)
+- `src/lib/arenas/` — `rubble-two.json`, `rubble-three.json` — extracted via the script
+- `src/lib/arenas/index.ts` — `loadArena(name): Promise<Arena>` + JSON schema validator
 - `src/renderer/PixiArena.tsx` — React component wrapping a Pixi `Application` that renders an `Arena`
-- `src/renderer/sprites.ts` — sprite registry (terrain tiles initially; placeholder vector art)
+- `src/renderer/assets.ts` — SVG asset registry (terrain × 7 + crate; see §5 Asset inventory)
+- `src/renderer/sprites/` — terrain SVG sprites under `public/assets/terrain/`
 - `src/components/ArenaPreview.tsx` — `<ArenaPreview arenaName="rubble-three" />`
-- `src/app/preview/page.tsx` — temporary debug page that shows all arenas
+- `src/app/preview/page.tsx` — temporary debug page that shows all extracted arenas side-by-side
 
-**Note on arena transcription**: the user's empirical work mapped specific terrain at y=11 / y=12 in Rubble Three. We'll need full arena transcriptions either by:
-1. Manual entry from a screenshot grid (≈ 32×32 = 1024 tiles per arena; tedious but exact)
-2. Help-cursor probe in DOS to identify each tile
-3. Approximate transcription with playtest tuning
+**Arena transcription**: see §6 for the full pipeline. v1 uses the 4-corner extraction script; the script outputs `arena.json` with confidence flags; flagged tiles get manually reviewed via the companion tool. Result: faithful-enough arenas with hand-correction for the ~5% of tiles the classifier can't disambiguate.
 
-For v1, **option 1** (manual from existing screenshots) is the best path — we already have several screenshots of each arena. Result is an authored arena, not necessarily pixel-exact to DOS but visually faithful.
+**Art**: terrain SVGs are the first deliverable from §5 Asset inventory. 7 simple SVGs (open / rough / low-wall / wall / bush / crevice / outer-wall) plus the crate obstacle. Hand-author or AI-generate to a coherent palette.
 
 **Public API contract**:
 ```tsx
@@ -436,10 +437,14 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 
 **Files**:
 - `src/renderer/MoviePlayer.tsx` — React component that owns the playback state machine (playing / paused / current tick)
-- `src/renderer/animations.ts` — per-event animation handlers (move-step, hit explosion sprite, etc.)
-- `src/renderer/RobotSprite.tsx` — Pixi container per robot with posture-aware rendering
-- `src/components/MovieControls.tsx` — play / pause / step / speed controls
+- `src/renderer/animations.ts` — per-event animation handlers (full handler-per-event matrix in §5 Animation handlers)
+- `src/renderer/RobotSprite.tsx` — Pixi container per robot with posture-aware sprite swap + `tint` for team color
+- `src/renderer/effects/` — sprite-life-cycle helpers for explosions, smoke trails, blast waves
+- `src/components/MovieControls.tsx` — play / pause / step / speed controls (mirrors original DOS transport bar)
 - `src/app/movie/[id]/page.tsx` — debug route that runs a canned `ReplayLog` from disk
+- `public/assets/robots/` — 10 robot SVGs (5 classes × 2 postures) + projectile/effect sprites per §5
+
+**Animation pipeline**: GSAP for tweens, Pixi for sprite + container management. One handler per `ResolutionEvent.kind` per the matrix in §5. Each handler returns a `Promise<void>` so the player can await visual completion if needed, but the playback clock advances on engine ticks (determinism) — animations are decorative.
 
 **Public API contract**:
 ```tsx
@@ -646,7 +651,169 @@ client → server: Disconnect
 
 ---
 
-## 5. Cross-cutting concerns
+## 5. Art & animation plan
+
+### Style direction (locked: SVG vector)
+
+**v1 ships SVG vector art** — clean modern shapes, top-down perspective, scalable, low file size, plays well with PixiJS. Looks intentional even at low effort. Pixel art is deferred to v2; bespoke commissioned art is post-v1.
+
+Why SVG for v1:
+- Scalable rotation without sprite-sheet variants (Pixi rotates via `sprite.rotation` so we draw 1 robot, not 8 facings)
+- Small file size (a robot is ~1 KB SVG vs ~10-40 KB rasterized)
+- Easy to author or AI-generate; clean palette by construction
+- Crisp at any zoom level for the planner UI
+
+### Asset inventory (v1)
+
+**Terrain** (7 tile types — see §"Engine constants" §"Terrain"):
+- `open-ground.svg` · `rough-ground.svg` · `low-wall.svg` · `wall.svg` · `bush.svg` · `crevice.svg` · `outer-wall.svg`
+
+**Obstacle**:
+- `crate.svg` (the blue obstacles in Rubble arenas)
+
+**Robots** (5 classes × 2 postures = 10 SVGs; rotation done programmatically by Pixi):
+- `rifle-standing.svg` · `rifle-crouching.svg`
+- `burst-standing.svg` · `burst-crouching.svg`
+- `auto-standing.svg` · `auto-crouching.svg`
+- `missile-standing.svg` · `missile-crouching.svg`
+- `stealth-standing.svg` · `stealth-crouching.svg`
+
+Each robot SVG includes a directional indicator (small arrow or "muzzle") so rotation is meaningful. Color is applied via Pixi `tint` per team — SVG drawn in neutral grey, tinted at runtime to team color.
+
+**Projectiles**:
+- `bullet.svg` (small, fast)
+- `missile.svg` (longer, with smoke-trail anchor point)
+- `grenade.svg` (round)
+
+**Effects** (sprite sheet or animated SVG sequence):
+- `explosion-small.svg` (hit feedback — replaces "Ha!"/"Ow!" speech bubbles per user direction)
+- `explosion-large.svg` (destruction)
+- `blast-radial.svg` (missile/grenade blast wave)
+- `smoke-trail.svg` (missile particle)
+
+**UI / icons**:
+- Posture icons (standing / crouching) for the Tools panel
+- Weapon icons (5 weapons)
+- Scan-cone overlay (drawn with Pixi shapes, no SVG needed)
+- Last-known-marker X (drawn with Pixi shapes)
+
+### Production approach
+
+For v1: AI-assisted authoring. Generate concept SVGs via Claude or Midjourney (or hand-draw in Figma / Inkscape), iterate to a coherent palette. Each asset is small and self-contained — total v1 inventory is ~25 SVGs.
+
+Asset directory: `public/assets/`. Loaded via a single `assets.ts` registry that maps semantic names to URLs. Pixi's `Assets.load` handles the rest.
+
+### Animation handlers (per-event)
+
+Implementation: GSAP for tweens, Pixi sprite/container manipulation for state changes. One handler per `ResolutionEvent.kind` in `src/renderer/animations.ts`:
+
+| Event kind | Animation | Tools |
+|---|---|---|
+| `move-step` | tile-to-tile lerp over the step's tick budget; sprite faces movement direction | GSAP tween on `sprite.position` |
+| `posture-changed` | swap from `*-standing.svg` to `*-crouching.svg` (or reverse); brief scale tween for "feel" | sprite swap + GSAP scale tween |
+| `scan-rotated` | smooth rotation tween (0.05 s per direction unit) | GSAP tween on `sprite.rotation` |
+| `projectile-launched` (bullet/burst) | fast straight-line tween (1-2 ticks) | GSAP tween on a temporary sprite |
+| `projectile-launched` (missile) | medium-speed tween + smoke-trail particle emitter along path | GSAP tween + Pixi `ParticleContainer` |
+| `projectile-impact` (bullet) | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle |
+| `projectile-impact` (missile/grenade) | larger explosion + radial blast wave sprite | sprite life cycle |
+| `hit` | red flash on target sprite (~3 ticks) | tween on `sprite.tint` |
+| `miss` | optional small puff at impact tile | sprite life cycle |
+| `destroyed` | rotating explosion + fade out + remove sprite | composed tween chain |
+| `robot-returned-to-dock` | fade in at dock tile | tween on `sprite.alpha` |
+| `last-known-marker` | static X glyph (drawn during planning, NOT during movie) | Pixi Graphics primitive |
+
+**Determinism note**: animations are *visual representations of events*; they do not affect engine state or timing. Movie player advances ticks based on `events[i].tick`, not on animation completion. If an animation runs longer than its tick budget (e.g., explosion fade), the next tick can start before it finishes; sprites just keep rendering.
+
+---
+
+## 6. Arena transcription pipeline
+
+### Approach (locked: 4-corner extraction script with auto-detect + manual review fallback)
+
+**Input**: 4 screenshots per arena, taken with the playing-field viewport scrolled to each corner (NW / NE / SE / SW). Each captures ~22×16 tiles of a 32×32 arena, with substantial overlap (~14 tiles each direction).
+
+**Process** (implemented as `tools/extract-arena.ts`):
+
+1. **Auto-detect playing field bounds** in each screenshot via the red outer-wall color signature. Falls back to a hard-coded calibration for the DOS Windows UI if auto-detect fails.
+2. **Identify tile pixel size** (typically 16 or 24 px depending on zoom level).
+3. **Sample each tile**: take a 4×4 block at the tile center, compute average HSL.
+4. **Classify** against a palette table:
+   - Open ground: light grey-green dotted (low saturation, high lightness)
+   - Rough ground: darker brown speckled
+   - Bushes: high-saturation green
+   - Walls: saturated red, solid
+   - Low walls: red but narrower band
+   - Crevices: dark gold zigzag (high saturation, low lightness)
+   - Crates: bright blue
+5. **Stitch quadrants**: each tile gets up to 4 votes (one per screenshot it appears in).
+   - **Unanimous** → `confidence: high`
+   - **Single source** → `confidence: medium`
+   - **Disagreement** → `confidence: low`, flagged for manual review
+6. **Output** `arena.json` to `src/lib/arenas/`.
+
+### Calibration table (DOS Windows UI)
+
+Hard-coded fallback values — verified against the user's existing screenshots:
+
+```ts
+// Battle / Rubble Three (32×32) at standard window size
+const RUBBLE_THREE_CALIBRATION = {
+  playingFieldOriginPx: { x: 4, y: 84 },  // pixel offset of playing-field top-left in screenshot
+  tileSizePx: 24,                          // pixels per tile
+};
+```
+
+These are verified once and reused; auto-detect re-confirms per screenshot in case the user resizes the window or zooms.
+
+### Reviewing flagged tiles
+
+A companion mode `--review-flagged` opens a small browser tool:
+- Renders the current arena.json overlay on the source screenshots
+- Highlights `low`-confidence tiles
+- User clicks a tile → terrain palette → updates JSON
+- Saves on disk
+
+This tool also doubles as a **scenario editor** later (post-MVP). Original game had Scenarios as a first-class concept; we get authoring support nearly for free.
+
+### Output schema
+
+```ts
+// src/lib/arenas/rubble-three.json (excerpt)
+{
+  "name": "Rubble Three",
+  "type": "rubble",
+  "size": "battle",
+  "width": 32,
+  "height": 32,
+  "tiles": [
+    [{"terrain":"outer-wall"}, {"terrain":"open"}, ...],  // y=0 row
+    [{"terrain":"outer-wall"}, {"terrain":"open"}, ...],  // y=1 row
+    ...
+  ],
+  "homeAreas": [
+    { "corner": "NW", "tiles": [{"x":1,"y":1}, ...] },
+    ...
+  ],
+  "dock": [...],
+  "metadata": {
+    "extractedFrom": ["rubble3-nw.png", "rubble3-ne.png", "rubble3-sw.png", "rubble3-se.png"],
+    "confidenceCounts": { "high": 982, "medium": 36, "low": 6 },
+    "extractedAt": "2026-05-06T00:00:00Z"
+  }
+}
+```
+
+### Per-arena requirements
+
+For each arena (Rubble Two/Three at minimum for v1; Suburbs/Computer Town deferred):
+- 4 corner screenshots saved to `screenshots/arena-extraction/<name>-{nw,ne,sw,se}.png`
+- Run `npx tsx tools/extract-arena.ts --name <name> --size <wxh>`
+- Manually review flagged tiles via `--review-flagged`
+- Commit the resulting `src/lib/arenas/<name>.json`
+
+---
+
+## 7. Cross-cutting concerns
 
 ### Determinism contract (engine)
 
@@ -695,7 +862,7 @@ When PR-based review starts:
 
 ---
 
-## 6. Open questions & risks
+## 8. Open questions & risks
 
 | Question | Impact | Resolution path |
 |---|---|---|
@@ -711,7 +878,7 @@ When PR-based review starts:
 
 ---
 
-## 7. Glossary & cross-references
+## 9. Glossary & cross-references
 
 - **`docs/initial-plan.md`** — canonical spec; locked numerical constants for combat, terrain, posture, etc.
 - **`docs/priority-tests.md`** — empirical research log; Match 1-7 results
@@ -733,7 +900,7 @@ When PR-based review starts:
 
 ---
 
-## 8. Phase summary table
+## 10. Phase summary table
 
 | Phase | Status | Effort | Goal |
 |---|---|---|---|
