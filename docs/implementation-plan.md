@@ -177,7 +177,32 @@ export const createRng: (seed: string) => Rng;
 
 ---
 
-### Phase 2 — Turn resolver core [⬜ NEXT]
+### Phase 1.5 — Toolchain & determinism enforcement [⬜ NEXT]
+
+**Goal**: lock in the dev toolchain so every Phase 2+ commit lands against a polished pipeline.
+
+**Dependencies**: Phase 1.
+
+**Files**:
+- `eslint.config.mjs` — flat config; recommended TS + import-order; **custom rule** banning `Math.random` / `Date.now` / `setTimeout` / `setInterval` inside `src/engine/`
+- `.prettierrc.json` — defaults
+- `.nvmrc` — `22`
+- `package.json` — add `"engines": { "node": ">=22" }`; new scripts: `lint`, `lint:fix`, `format`, `format:check`, `dev`, `build`, `start`
+- `.github/workflows/ci.yml` — typecheck + lint + test on push (Phase 12+ adds deploy)
+- `.husky/pre-commit` + `lint-staged` config — format + lint changed files
+
+**Acceptance criteria**:
+- [ ] `npm run lint` green on existing engine code
+- [ ] `npm run format:check` green
+- [ ] CI workflow runs and passes on push
+- [ ] Adding `Math.random()` to any `src/engine/*.ts` fails lint
+- [ ] Pre-commit hook formats and lints staged files
+
+**Effort**: S (~30-60 min).
+
+---
+
+### Phase 2 — Turn resolver core [⬜]
 
 **Goal**: orchestrate per-tick simulation. Consume `MatchState + TurnOrders + seed`, emit `ResolutionEvent[]` and a new `MatchState`. Implements the per-tick phase order. Covers immediate Aim & Fire (no projectile flight time yet — see Phase 3).
 
@@ -930,66 +955,93 @@ useHelpStore         // (Phase 11.5) which first-time hints have been shown
 - **Lobby codes**: 6-character uppercase alphanumeric (e.g., `ABC123`). Memorable; verbal-shareable. Maps internally to the matchId once both players join.
 - **Tick deep-links**: query string `?t=N` on movie or replay routes; player loads paused at that tick.
 
-### Browser back-button behavior
-
-- Phase transitions (edit → movie → results) push history entries.
-- Back during edit: confirm dialog ("Lose unsaved orders?"), then return to previous phase / main menu.
-- Back during movie: jump to start of movie (don't pop the route).
-- Back during results: return to lobby or main menu.
-- Replays: back navigates from paused state to live state (clears `?t`).
-
 ### Sharing patterns
 
-- **Lobby invite**: full URL `https://roboarena.app/lobby/join/ABC123` is shareable; alternatively just the 6-char code is verbal/typed.
-- **Replay share**: full URL `https://roboarena.app/replay/ZbV2Ch9rQp` with optional `?t=` for paused-at-tick. OG metadata for social sharing (title = match teams, image = thumbnail).
-- **No sharing for active matches** — privacy by default.
+- **Lobby invite**: full URL like `/lobby/join/ABC123` is shareable; alternatively the 6-char code is verbal.
+- **Replay share**: full URL like `/replay/ZbV2Ch9rQp` with optional `?t=` for paused-at-tick.
+- Active matches are URL-private (only participants get the link).
 
 ---
 
 ## 9. Persistence model
 
-**Locked: server-focused. Client localStorage holds only personal preferences and a browser-token identity.**
+**Locked: Postgres for shared/persistent data (eventual home: Supabase). Local dev uses local Postgres. Client localStorage holds settings and an anonymous browser-token.**
 
 ### What lives where
 
-| Kind | Where | Lifetime | Rationale |
-|---|---|---|---|
-| **Active match state** (multiplayer) | Server in-memory map | Match duration + 5 min disconnect grace | Fast access; lost on server restart (acceptable for v1; matches are short) |
-| **Active match state** (hot-seat) | Client localStorage | Until user clears or starts new match | No server needed for hot-seat |
-| **Replays** | Server DB (SQLite / Postgres) | Indefinite | Shareable URLs; URL = source of truth |
-| **Saved teams** (Phase 11+) | Server DB, browser-token-keyed | Indefinite | Reusable across matches |
-| **User settings** | Client localStorage | Until cleared | Personal; no need to share |
-| **Browser-token** (anonymous identity) | Client localStorage | Until cleared | Generated on first visit; identifies "owner" of teams/replays |
-| **Last-played-config** | Client localStorage | Until overwritten | Quick Start remembers your setup |
-| **In-progress turn (multiplayer edit phase)** | Server in-memory | Until turn resolves or grace expires | Resume on reconnect |
-| **In-progress turn (hot-seat)** | Client localStorage | Until turn resolves or user resets | Single-device persistence |
-| **Cached replays (recently viewed)** | Client IndexedDB | LRU, 10 entries | Replay binaries can be ~50-100 KB; localStorage too small |
+| Kind | Where | Lifetime |
+|---|---|---|
+| Active match state (multiplayer) | Server in-memory | Match duration; lost on server restart (fine for personal use) |
+| Active match state (hot-seat) | Client localStorage | Until user starts a new match |
+| Replays | Postgres `replays` table | Indefinite |
+| Saved teams | Postgres `teams` table | Indefinite |
+| User settings | Client localStorage (`useSettingsStore` with `persist` middleware) | Until cleared |
+| Browser-token (anonymous identity) | Client localStorage | Until cleared; generated on first visit |
+| Last-played-config | Client localStorage | Until overwritten |
 
-### Server data model (SQLite for v1; promotable to Postgres)
+### Schema (Postgres)
 
 ```sql
--- minimal schema
 CREATE TABLE replays (
-  id TEXT PRIMARY KEY,                -- 10-char nanoid
-  created_at INTEGER NOT NULL,        -- unix ms
-  config_json TEXT NOT NULL,          -- GameConfig
-  data_json TEXT NOT NULL,            -- ReplayLog (~50 KB compressed)
-  format_version INTEGER NOT NULL,    -- migration support
-  owner_token TEXT,                   -- browser-token of player who saved it
-  team_names TEXT NOT NULL            -- denormalized for listing UI
+  id            TEXT PRIMARY KEY,            -- 10-char nanoid
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  config        JSONB NOT NULL,              -- GameConfig
+  data          JSONB NOT NULL,              -- ReplayLog
+  format_version INT NOT NULL DEFAULT 1,
+  owner_token   TEXT,                        -- anonymous identity
+  team_names    TEXT[] NOT NULL              -- denormalized for listing
 );
 
 CREATE TABLE teams (
-  id TEXT PRIMARY KEY,                -- nanoid
+  id          TEXT PRIMARY KEY,
   owner_token TEXT NOT NULL,
-  name TEXT NOT NULL,
-  data_json TEXT NOT NULL,            -- team composition
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  name        TEXT NOT NULL,
+  data        JSONB NOT NULL,                -- team composition
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- active matches and lobbies are in-memory; not persisted across server restart
+CREATE INDEX idx_replays_owner ON replays(owner_token);
+CREATE INDEX idx_teams_owner   ON teams(owner_token);
 ```
+
+Active matches and lobbies live in server memory — no DB persistence. If the server restarts mid-match, the match is lost. Acceptable for "fun game with friends" scope.
+
+### Local dev setup
+
+Connection string from `.env.local`:
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/roboarena
+```
+
+Schema migrations: simple `.sql` files in `db/migrations/` applied via `psql` or a tiny Node script. No migration framework needed for v1 — half a dozen migrations max.
+
+User runs locally with their own Postgres instance. v1 is "good enough for friends to play"; production hosting (Supabase) is a swap of `DATABASE_URL` once we get there.
+
+### API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/replays` | Save a finished match's replay → `{ replayId }` |
+| `GET` | `/api/replays/:id` | Fetch replay JSON |
+| `GET` | `/api/replays?owner=mine` | List replays I own |
+| `POST` | `/api/teams` | Save a team |
+| `GET` | `/api/teams` | List my teams |
+| `DELETE` | `/api/teams/:id` | Delete a team (owner check) |
+| `POST` | `/api/lobbies` | Create lobby → `{ code }` |
+| `GET` | `/api/lobbies/:code` | Lobby info (for join UX) |
+
+Server reads `X-Browser-Token` header; passes through on reads, requires on mutations. No real auth in v1 — token is honor-system anonymous identity.
+
+### Replay format versioning
+
+Replays carry `format_version`. If/when the format changes, add a migration entry to a small table:
+```ts
+const replayMigrations: Record<number, (data: any) => ReplayLog> = {
+  // 1: identity
+};
+```
+CI gate: a few canned replays must still pass `verifyReplay` after migration. Don't build the full migration framework now; add it when needed.
 
 ### API endpoints
 
@@ -1078,57 +1130,29 @@ A proper interactive tutorial (port of the original's Hunters vs. Sitting Ducks 
 
 ## 11. Error handling & resilience
 
-### Failure categories
+Scoped for "fun game with friends." Pragmatic failure handling, no production observability.
 
-#### Network failures (multiplayer)
+**Required v1 patterns**:
+- **React Error Boundaries** wrap major UI sections (planner, movie, lobby). Fallback = error message + reload button.
+- **WebSocket reconnect** in multiplayer: exponential backoff (1s, 2s, 4s, 8s, give-up after ~30s); show "Reconnecting…" overlay; if server still has the match in memory, resume; if not, send to home with a friendly message.
+- **Schema validation at server boundary** using zod for API requests + WebSocket messages. Reject malformed inputs with a clear reason.
+- **Discriminated unions for outcome types** (`FireResolution` etc.) — no silent failures, no `null`-means-"failed".
+- **localStorage corruption fallback**: parse errors on hydrate → prompt user to reset; wipe key.
+- **Engine errors** (`resolveTurn` throws): try/catch around server-side resolution; broadcast `MATCH_ABORTED { reason }`; log to console.
 
-| Failure | Detection | Response |
-|---|---|---|
-| WebSocket disconnect mid-edit | client `onclose` | Reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s); UI shows "Reconnecting…" overlay; planner state preserved in `usePlannerStore` |
-| Reconnect succeeds within 5 min | resume handshake from server | Server resends current `MatchState`; client merges with local planner draft |
-| Reconnect fails after 5 min | timeout | Match aborts; show explanation page with link to home; offer to save replay |
-| Asset load failure | Pixi `Assets.load` rejects | Retry once; on second failure, show "Failed to load. Retry?" inline |
-| Server 5xx on API call | fetch error | Toast notification; retry helper auto-backs-off transient errors |
+**Out of v1 scope** (deferred to post-MVP):
+- Sentry / third-party error reporting
+- Automatic retry for transient API failures
+- Distinguishing "network down" vs "server down" vs "session expired"
+- Match-state divergence detection / repair
+- Tab-collision detection ("match open in another tab")
 
-#### Engine failures
+If something breaks in a friend match, the user reloads. That's fine for v1.
 
-| Failure | Detection | Response |
-|---|---|---|
-| Replay verification fails | `verifyReplay` returns `{ ok: false }` | CI gate catches before deploy. In production: log to Sentry, fall back to cached client-side resolution if server engine version mismatches |
-| `resolveTurn` throws | exception | Wrap server-side resolution in try/catch; emit `MATCH_ABORTED { reason }` to both clients; auto-save the failing state for repro |
-| Schema validation fails on incoming `TurnOrders` | server-side validator (zod) | Reject with `INVALID_ORDERS { reason }`; client highlights the offending command in the planner |
-
-#### Client state corruption
-
-| Failure | Detection | Response |
-|---|---|---|
-| Client `MatchState` diverges from server (multiplayer) | server is authoritative; checksum on each broadcast | Replace client state with server snapshot; log divergence to Sentry |
-| localStorage corrupt (hot-seat) | parse error on hydrate | Prompt: "Saved match couldn't be restored. Clear and continue?"; on confirm, wipe match key from localStorage |
-
-#### User edge cases
-
-| Edge case | Handling |
-|---|---|
-| Browser tab closed during edit phase | On reopen, prompt: "Resume previous match?"; state restored from localStorage (hot-seat) or server (multiplayer) |
-| Tab opened in two windows for same match | Server rejects second connection: "Match is open in another tab" |
-| User submits invalid orders (path through wall, scan target out of cone) | Server validates; rejects; client highlights offending segment with red border + tooltip |
-
-### Implementation patterns
-
-- **React Error Boundaries** wrap major UI sections (planner, movie player, lobby). Boundary fallback shows error + "Reload" + auto-reports to Sentry.
-- **Toast notifications** for transient errors (`useToast()`).
-- **Retry helper** in `src/lib/net/retry.ts` — exponential backoff, max attempts, abort on permanent errors.
-- **Schema validation** at every server boundary using zod (or similar). All API request/response shapes typed.
-- **Discriminated unions** for outcome types (FireResolution, etc.) — no silent failures, no `null` to mean "didn't work".
-- **Sentry** (or self-hosted equivalent) for error reporting in production. Privacy: scrub user-token, no IPs.
-
-### Files
-
-- `src/lib/net/retry.ts`
-- `src/lib/net/protocol.ts` (zod schemas; Phase 12)
+**Files**:
 - `src/components/errors/ErrorBoundary.tsx`
-- `src/components/errors/AbortedMatchPage.tsx`
-- `src/components/ui/Toast.tsx` (built on top of any small toast lib)
+- `src/lib/net/protocol.ts` (zod schemas; Phase 12)
+- `src/lib/net/reconnect.ts` (Phase 12)
 
 ---
 
@@ -1180,48 +1204,25 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 
 ### Determinism contract (engine)
 
-- `Math.random()` is **forbidden** in `src/engine/`. Enforce via ESLint custom rule (Phase 2).
-- `Date.now()`, `performance.now()`, `setTimeout`, `setInterval`: forbidden in engine.
-- Only integer arithmetic on game-state values where possible. Distances / damage are integers. Fractional positions (projectile mid-flight) are fixed-point or schedule-based, never `number` floats.
-- Serialization round-trip is checked in Phase 5; from then on, every PR runs `verifyReplay` on a canned replay as a CI gate.
+- `Math.random()` and `Date.now()` are **forbidden** in `src/engine/`. Enforced by ESLint custom rule (lands in Phase 1.5).
+- Only integer arithmetic on game-state values where possible. Distances / damage are integers. Projectile mid-flight positions are tile-by-tile schedules, never `number` floats.
+- `verifyReplay` against canned replays runs in CI from Phase 5 onward.
 
 ### Testing strategy
 
-| Layer | Tool | Scope | Where |
-|---|---|---|---|
-| Unit | Vitest | Pure functions (engine, planner helpers) | colocated `*.test.ts` |
-| Integration | Vitest | Full `resolveTurn` runs against canned `MatchState`s | `src/engine/__integration__/` (Phase 2+) |
-| Replay regression | Vitest | Curated ReplayLogs verify byte-equal across engine refactors | `src/engine/__golden__/` (Phase 5+) |
-| Component | Vitest + @testing-library | React components (planner, setup) | colocated `*.test.tsx` |
-| E2E | Playwright | Full hot-seat match flow | `e2e/` (Phase 11) |
-
-### Code review (during multi-agent phase)
-
-When PR-based review starts:
-- PR description must list: **what** changed, **why**, **test coverage added**, **follow-ups deferred**
-- All new public APIs documented with JSDoc
-- ESLint + typecheck + tests must pass before merge
-- A reviewing agent checks the PR against the relevant phase's acceptance criteria
+| Layer | Tool | Scope |
+|---|---|---|
+| Unit | Vitest | Pure functions (engine, planner helpers) — colocated `*.test.ts` |
+| Integration | Vitest | Full `resolveTurn` runs against canned `MatchState`s — `src/engine/__integration__/` |
+| Replay regression | Vitest | Curated `ReplayLog`s verify byte-equal across engine refactors — `src/engine/__golden__/` |
+| Component | Vitest + @testing-library | React components — colocated `*.test.tsx` |
+| E2E | Playwright | Full hot-seat match flow — `e2e/` (Phase 11) |
 
 ### Documentation conventions
 
-- High-level: markdown in `docs/`. One-shot specs live here; long-lived references (terrain table, weapon stats) live in `initial-plan.md` § "Engine constants".
-- Module-level: each `src/engine/*.ts` has a top-of-file JSDoc block citing the spec section it implements.
-- Public APIs: JSDoc with `@example` blocks where non-obvious.
-- ADRs (architecture decisions): file under `docs/adr/NNNN-title.md` when a non-obvious choice is made (e.g., "WebSocket relay over WebRTC for v1"). One per decision; brief.
-
-### Accessibility (Phase 13 but baked in earlier)
-
-- Keyboard navigation for all menus (already a CLAUDE.md project rule via `cursor-pointer`)
-- ARIA labels on icon-only buttons (Pixi canvas has limited a11y; use offscreen text labels for screen readers)
-- Color choices avoid red-green-only signals (color-blind friendly; supplement with shape/icon cues)
-- Minimum hit targets ~44×44 CSS pixels per WCAG
-
-### Performance budget
-
-- Movie playback: maintain 12 FPS (= original) on a mid-range laptop. PixiJS @ 12 FPS with ~50 sprites is trivial.
-- Engine `resolveTurn`: target < 100 ms for a 15-second turn with 16 robots (Battle 2-team). Plenty of headroom.
-- Page weight: < 500 KB JS gzipped for the lobby; < 2 MB for the match page (includes Pixi). Track via Next.js build report.
+- High-level: markdown in `docs/`. Locked numerical constants live in `initial-plan.md` §"Engine constants".
+- Module-level: top-of-file JSDoc block in each `src/engine/*.ts` citing the spec section it implements.
+- Public APIs: JSDoc on exported functions/types.
 
 ---
 
@@ -1238,16 +1239,20 @@ When PR-based review starts:
 | Damage scaling with distance vs. binary hit/miss | Engine semantics | Currently: bracket model with `P(full)` over distance. Could prove false in playtest. Engine spec is testable; can swap without rewriting callers. |
 | Sport modes beyond Survival | Out of v1 | All non-Survival modes deferred; engine reserves `sportType` field |
 | AI tiers | Out of v1 | Deferred to post-v1; add Stupid AI in Phase 14, more later |
-| Audio / SFX / music | Out of v1 | Explicitly deferred; not in any v1 phase. Phase 14+ when art/audio investment makes sense. |
-| Localization (i18n) | Out of v1 | English only at launch. Mitigation: build with `next-intl` hooks from Phase 8 so retrofitting isn't painful. Or accept that retrofit happens in v2. |
-| Telemetry / analytics | Decided: minimal v1 | No third-party analytics in v1. Server logs include lobby events, replay saves, errors. No PII collected (anonymous browser-token only). Privacy-first posture. |
-| Account system | Out of v1 | Browser-token-only identity (§9). Real accounts (with email recovery, social login) = v2. |
-| Achievements / progression | Out of v1 | Original had no meta-progression; matches are standalone. v1 matches that. |
-| Game-balance hot-tuning post-launch | Phase 14+ | Engine constants currently hardcoded. Move to JSON config (server-loaded, hot-reloadable in dev) when balance becomes a maintenance concern. |
-| Visual regression testing | Phase 7+ | Defer to Phase 13 polish unless renderer art breakage shows up earlier. Tool: Playwright + screenshot diffing. |
-| Server scaling | Phase 12 | Single-process Node WebSocket server fine for v1 (~100 concurrent matches). Horizontal scaling = v2 (sticky sessions or external state store). |
-| Browser-token loss (cleared cookies) | Phase 11+ | Anonymous identity means clearing localStorage = losing saved teams + replay ownership. Acceptable v1; account migration in v2 lets users tie a token to an email. |
-| Spectator mode | Phase 13+ | Public replay URLs (§8) cover the main use case; live-spectating an in-progress match deferred. |
+| Audio / SFX / music | Out of v1 | Deferred to post-MVP entirely |
+| Localization | Out of v1 | English only; not building i18n hooks |
+| Accessibility | Out of v1 | Not a priority for "fun with friends" scope |
+| Security / abuse prevention | Out of v1 | Trust-based personal-use scope. Server validates inputs (zod) but no rate limiting, DDoS protection, replay tampering checks, or abuse handling |
+| Privacy / analytics / cookie policy | Out of v1 | Anonymous browser-token only; no third-party analytics; no cookie banner |
+| License / legal disclaimers | Out of v1 | Defer until shared publicly |
+| Production observability | Out of v1 | Console logs are fine for personal use; no Sentry / metrics / alerts |
+| Account system | Out of v1 | Browser-token honor-system identity is enough |
+| Achievements / progression | Out of v1 | Original had none; matches are standalone |
+| Visual regression testing | Out of v1 | Add when art breakage actually causes pain |
+| Server scaling | Out of v1 | Single-process Node, single-instance Postgres. Friend-scale only |
+| Spectator / live spectating | Out of v1 | Public replay URLs cover the main case |
+| Hosting platform swap | Phase 12+ | v1 = local Postgres + local dev. Production = Vercel + Supabase. `DATABASE_URL` env-var swap |
+| `manual.txt` provenance | Cleanup | Remove or replace with research notes; the SKID ROW dump itself is a copyright issue if the repo goes public |
 
 ---
 
@@ -1273,23 +1278,105 @@ When PR-based review starts:
 
 ---
 
-## 16. Phase summary table
+## 16. Visual style guide
+
+A small palette + token table so AI-generated SVGs and arena-extraction classifier share the same source of truth. Lives in `src/lib/design-tokens.ts` and is referenced from §5 (asset authoring) and §6 (arena extraction).
+
+### Palette
+
+```ts
+// src/lib/design-tokens.ts
+
+export const PALETTE = {
+  // App chrome
+  appBg:        "#1a1a1f",
+  panelBg:      "#272731",
+  panelBorder:  "#3a3a48",
+  textPrimary:  "#e8e8ee",
+  textMuted:    "#8a8a99",
+  accent:       "#5c8aff",  // links, active state
+  warning:      "#ffb84d",
+  danger:       "#ff5c6a",
+
+  // Team colors (4 distinct, colorblind-distinguishable)
+  team1: "#e84a4a",   // red
+  team2: "#5c8aff",   // blue
+  team3: "#54c878",   // green
+  team4: "#ffd24a",   // yellow
+
+  // Terrain (also the HSL classifier targets for §6 arena extraction)
+  terrain: {
+    open:      { fill: "#3d6a3d", classifier: { h: 120, s: 30, l: 35, tolerance: 12 } },
+    rough:     { fill: "#6e5a3a", classifier: { h:  35, s: 35, l: 33, tolerance: 12 } },
+    bush:      { fill: "#2e8c3e", classifier: { h: 130, s: 60, l: 35, tolerance: 10 } },
+    lowWall:   { fill: "#a04040", classifier: { h:   0, s: 50, l: 44, tolerance: 10 } },
+    wall:      { fill: "#e02828", classifier: { h:   0, s: 75, l: 52, tolerance: 10 } },
+    crevice:   { fill: "#4a3a1a", classifier: { h:  35, s: 50, l: 20, tolerance: 12 } },
+    crate:     { fill: "#3a6acc", classifier: { h: 215, s: 60, l: 51, tolerance: 12 } },
+    outerWall: { fill: "#7a2020", classifier: { h:   0, s: 60, l: 30, tolerance: 10 } },
+  },
+
+  // Effects
+  bulletColor:    "#ffe680",
+  missileColor:   "#ffa64d",
+  smokeColor:     "#aaaab0",
+  explosionColor: "#ff8a3a",
+  lastKnownX:     "#ff5c6a",
+};
+```
+
+Numbers are starting points — tune in playtest. The `classifier` blocks double as the §6 extraction script's terrain palette table.
+
+### Typography
+
+- **Body / UI**: `Inter` (Google Fonts) — neutral, readable at small sizes
+- **Display / numbers**: `JetBrains Mono` for the timeline / coords / Team Data table — fixed-width keeps numerical UIs aligned
+
+### Spacing
+
+Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
+
+### Animation timings
+
+| Animation | Duration | Notes |
+|---|---|---|
+| Move-step lerp | matches the step's tick budget (e.g., 0.3 s for parity-0 single move) | Engine-driven |
+| Posture sprite swap | 100 ms cross-fade | Decorative |
+| Scan rotation | 50 ms per directional unit (matches engine cost) | Engine-driven |
+| Bullet projectile | 1 ms per pixel × distance, capped 200 ms | Decorative; impact tick is engine-driven |
+| Missile projectile + smoke trail | 80 ms per tile traveled | Smoke particles fade over 600 ms |
+| Hit flash (red tint on target) | 150 ms | Decorative |
+| Small explosion sprite (hit) | 250 ms | 4 frames |
+| Large explosion sprite (destroyed) | 500 ms | 8 frames + fade |
+| Robot return-to-dock fade | 400 ms | |
+
+### SVG conventions
+
+- All robot SVGs drawn pointing **East** (rotation = 0°). Pixi rotates at runtime per `scanHeading`.
+- All robot SVGs use neutral grey for body; team color applied via Pixi `tint`.
+- 24×24 viewport per tile sprite (matches default Pixi tile size).
+- No drop shadows in source SVG; Pixi handles drop shadow via filter if desired.
+
+---
+
+## 17. Phase summary table
 
 | Phase | Status | Effort | Goal |
 |---|---|---|---|
 | 1 | ✅ DRAFT COMPLETE | M | Engine primitives (RNG, geometry, movement, firing, blast, catalog) |
-| 2 | ⬜ NEXT | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
+| **1.5** | ⬜ NEXT | S | Toolchain: ESLint flat config + custom no-Math.random rule, Prettier, lint-staged + husky, GitHub Actions CI |
+| 2 | ⬜ | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
 | 3 | ⬜ | M | Multi-tick projectiles in flight |
 | 4 | ⬜ | L | Scan & Fire mode + visibility resolver + Stealth class rule |
 | 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |
-| 6 | ⬜ | M | Next.js + PixiJS scaffold; static arena renderer; arena .json transcriptions |
-| 7 | ⬜ | L | Movie playback (consume `ResolutionEvent[]`, animate; transport controls) |
+| 6 | ⬜ | M | Next.js + PixiJS scaffold; static arena renderer; arena .json extraction (§6 script) |
+| 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |
 | 8 | ⬜ | M | Match setup UI (Quick Start + Custom Game) |
 | 9 | ⬜ | L | Planner UI: movement / posture / scan |
 | 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
 | 11 | ⬜ | M | End-turn flow + Team Data + Final Ceremony — hot-seat MVP playable |
-| **11.5** | ⬜ | M | Onboarding, contextual help, tooltips (§10) |
-| 12 | ⬜ | XL | Online lobby (WebSocket relay; host-creates / join-by-code) |
-| 13 | ⬜ ⏸ partial | L | Polish, accessibility, performance (audio out of v1) |
+| 11.5 | ⬜ | M | Onboarding, contextual help, tooltips (§10) |
+| 12 | ⬜ | XL | Online lobby (WebSocket + Postgres; host-creates / join-by-code) |
+| 13 | ⬜ | M | Polish — bug fixes, art swap-in, animation timing pass |
 
-**Critical path to v1**: Phases 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 (hot-seat playable internal alpha) → 11.5 (help system) → 12 (online ship). Phase 13 polishes throughout.
+**Critical path to v1**: 1 → 1.5 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 (hot-seat MVP) → 11.5 → 12 (online ship). Phase 13 polish runs alongside.
