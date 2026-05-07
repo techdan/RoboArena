@@ -1,34 +1,177 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for Codex and other AI coding agents working in this repository.
+
+## Start Here
+
+Read these first when picking up a fresh session:
+
+1. `CLAUDE.md` - concise current-state handoff and engine rules.
+2. `docs/spec.md` - **canonical game spec** (rules, numbers, confidence labels). Replaces `initial-plan.md` as the source of truth.
+3. `docs/implementation-plan.md` - phased roadmap and acceptance criteria.
+
+`docs/initial-plan.md` is now historical (the original planning log); see `docs/archive/` for older research-era docs. If a rule affects a numerical mechanic, check `docs/spec.md` and the source-of-truth files (`src/engine/constants.ts`, `src/engine/catalog.ts`) before changing code.
 
 ## Project
 
-RoboArena — a new project bootstrapped with Next.js 16, React 19, TypeScript, Tailwind CSS v4, and lucide-react.
+RoboArena is a modern web-based clone inspired by Maxis RoboSport (1991). Two human players program robot teams, then watch simultaneous deterministic turn resolution as a movie.
+
+Important scope constraints:
+
+- v1 is human-vs-human only: hot-seat plus online lobby.
+- Survival sport mode only for v1.
+- Desktop-only, mouse + keyboard.
+- Audio, AI, mobile/touch, accounts, analytics, i18n, production observability, and production-grade abuse prevention are out of v1 scope.
+- Do not ship copyrighted RoboSport assets, sprites, audio, or the RoboSport name in product UI. RoboArena is the product.
+
+## Current State
+
+Phase 1, engine primitives, is draft complete:
+
+- `src/engine/` contains pure TypeScript deterministic primitives.
+- Existing tests cover RNG, geometry, movement, firing, blast, and catalog behavior.
+- UI, PixiJS renderer, planner, resolver, replay system, and networking are not built yet.
+- Phase 1.5, toolchain and determinism enforcement, is next.
+
+The planned UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, Zustand, and lucide-react, but the current repository is still a pure TypeScript engine package.
 
 ## Commands
 
+Use `npm.cmd` on Windows if PowerShell blocks `npm.ps1`.
+
 ```bash
-npm run dev        # Start dev server (http://localhost:3000)
-npm run build      # Production build
-npm run start      # Serve production build
-npm run lint       # ESLint
-npm run typecheck  # tsc --noEmit (add this script if missing)
+npm test
+npm run test:watch
+npm run typecheck
+npx vitest run path/to/file.test.ts
+npx vitest run -t "BLACK zone"
 ```
 
-Run a single test file (once tests are set up):
-```bash
-npx jest path/to/file.test.ts
+Current scripts:
+
+- `npm test` - run Vitest engine tests.
+- `npm run test:watch` - Vitest watch mode.
+- `npm run typecheck` - `tsc --noEmit`.
+
+Not wired yet: `lint`, `format`, `dev`, `build`, `start`. These land in Phase 1.5 / Phase 6.
+
+## Architecture
+
+`src/engine/` is the deterministic core. It must remain independent from UI, rendering, networking, browser APIs, and wall-clock time.
+
+Current engine layering:
+
+```text
+constants.ts -> types.ts -> rng/geometry/movement/firing/blast/catalog -> index.ts
 ```
 
-## Stack
+Future architecture:
 
-- **Next.js 16 + React 19 + TypeScript** — App Router (`app/` directory)
-- **Tailwind CSS v4** — utility-first styling; no `tailwind.config.js` needed for v4 (config lives in CSS via `@theme`)
-- **lucide-react** — icon library
+- `src/engine/` resolves match state and emits event timelines.
+- `src/planner/` builds `TurnOrders` but does not run full turns.
+- `src/renderer/` consumes `ResolutionEvent[]` and animates the movie, likely through PixiJS.
+- `src/app/` and `src/components/` host the Next.js/React UI.
+- `src/lib/net/` owns lobby and transport code.
 
-## Conventions
+Dependency direction is one way: UI/planner/renderer may import engine code; engine must not import them.
 
-- Components live in `src/components/`, pages in `src/app/`
-- All clickable elements (buttons, links, expandable text) must have `cursor-pointer`
-- Prefer Server Components by default; add `"use client"` only when needed (event handlers, hooks, browser APIs)
+## Engine Hard Rules
+
+These are correctness rules, not style preferences:
+
+- No `Math.random()` in `src/engine/`; use `createRng(seed)` from `rng.ts`.
+- No `Date.now()`, `performance.now()`, `setTimeout`, or `setInterval` in `src/engine/`.
+- No imports from `src/app/`, `src/components/`, `src/renderer/`, `src/planner/`, or browser-only APIs inside `src/engine/`.
+- Prefer integer arithmetic for game-state values. Distances, ticks, damage, HP, and tile coordinates are integers.
+- Keep engine functions pure: return new state/results and do not mutate inputs.
+- Replay determinism is required: `{ initialState, seed, turnOrders[] }` must re-run to byte-identical event streams.
+- Robot HP must never go below 0 or above armor.
+- All randomness must be seedable and passed through `Rng`.
+
+Phase 1.5 is expected to enforce nondeterminism bans with ESLint.
+
+## Mechanics Source Rules
+
+Source canonicality:
+
+1. DOS / Windows empirical results are canonical when available.
+2. Mac screenshots and UI observations are secondary.
+3. Amiga/manual text is historical support.
+
+Every mechanics claim should retain a confidence level where relevant: CONFIRMED, INFERRED, PROPOSED, or OPEN QUESTION. Do not harden an unconfirmed original behavior into a fact without documenting the confidence and source.
+
+Locked or current engine assumptions include:
+
+- Robots can pass through and stack on the same tile; no robot-vs-robot collision.
+- Aim & Fire targets a tile, not a robot.
+- Bullets do not harm or block on friendlies.
+- Missile/grenade blasts can affect friendlies.
+- BLACK scan zone hit chance is 100%; GREY is approximately 20%.
+- Cover uses miss chances; crouching is required for bush/low-wall cover in the current engine model.
+- Missile blast radius is 2 with falloff at radius 0/1/2.
+- Movement on open ground alternates step costs by stride parity.
+- Match 1-7 empirical observations are reflected in `src/engine/constants.ts`.
+
+When changing any of these, update `docs/spec.md` and tests in the same change. The actual locked numerical values live in `src/engine/constants.ts` and `src/engine/catalog.ts` — those files are authoritative; the spec doc explains them.
+
+## TypeScript Conventions
+
+- Strict TypeScript is required.
+- ESM imports use `.js` extensions in source imports.
+- Prefer `readonly` types and immutable return values for engine data.
+- Use discriminated unions for outcomes and command/result variants.
+- Avoid nullable sentinel values when a typed outcome can express the case.
+- Keep module-level docs in source files and high-level design in `docs/`.
+- Each `src/engine/*.ts` file should have a top-of-file JSDoc block citing the spec it implements.
+
+## Testing
+
+Test risk, not ceremony:
+
+- Add focused Vitest coverage for any engine behavior change.
+- Deterministic behavior should usually have same-seed equality tests.
+- Probabilistic behavior should use seeded Monte Carlo tests with stable thresholds.
+- Include edge cases for simultaneous outcomes, blocked movement/LoS, posture, terrain, and replay determinism when touching related code.
+
+Before closing engine work, run:
+
+```bash
+npm test
+npm run typecheck
+```
+
+If the local sandbox blocks Vitest spawning esbuild with `EPERM`, note that in the final response and still run typecheck.
+
+## Documentation Workflow
+
+Update docs when the work changes project truth:
+
+- `docs/spec.md` is the canonical spec for rules, numbers, and confidence labels. Update when a mechanic changes.
+- `docs/implementation-plan.md` tracks phase status and acceptance criteria.
+- `docs/priority-tests.md` and `docs/empirical-tests.md` track original-game research.
+- `references/source-matrix.csv` maps mechanics to evidence.
+- `docs/initial-plan.md` is historical; do not edit. `docs/archive/` holds pre-empirical-research docs.
+
+When closing a phase, mark its status in `docs/implementation-plan.md`.
+
+## UI Guidance For Future Phases
+
+When the Next.js UI lands:
+
+- Components live in `src/components/`; routes live in `src/app/`.
+- Prefer Server Components by default. Add `"use client"` only for hooks, event handlers, browser APIs, or client state.
+- All clickable elements, including buttons, links, and expandable text, must have `cursor-pointer`.
+- Use lucide-react icons where a standard icon exists.
+- The first screen should be the usable game/setup experience, not a marketing landing page.
+- v1 targets desktop only. Small viewports should show a larger-screen message for planner/movie UI.
+
+## Workflow
+
+- Work trunk-first on `main` unless the user asks for a branch.
+- Keep commits focused. Do not amend or force-push.
+- Never revert user changes unless explicitly asked.
+- Use `rg` / `rg --files` for search.
+- Use `apply_patch` for manual file edits.
+- Avoid unrelated refactors while delivering a phase.
+
+Commit messages should be short imperative subjects; bodies should explain why and list tests when useful.

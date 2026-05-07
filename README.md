@@ -34,16 +34,19 @@ psql -f db/migrations/001_init.sql
 ## Repository layout
 
 ```
-docs/                 spec, plans, research log
-  initial-plan.md     canonical engine constants & combat spec
-  implementation-plan.md   13-phase execution roadmap
-  priority-tests.md   empirical research log (Match 1-7)
-  manual.txt          partial Amiga manual (provenance TBD; see §14 risks)
-src/engine/           pure-TS deterministic simulation (Phase 1, complete)
-src/                  (everything else lands in Phases 2-13)
-screenshots/          DOS reference captures
-references/           source matrix, screenshot index
-RoboSport (1991)/     gitignored — original DOS distribution, local research only
+docs/
+  spec.md                 CANONICAL game spec (rules + numbers; read this first)
+  implementation-plan.md  14-phase execution roadmap
+  priority-tests.md       empirical research log (Match 1-7)
+  empirical-tests.md      broader test catalog
+  manual.txt              partial Amiga manual
+  initial-plan.md         HISTORICAL — superseded by spec.md
+  archive/                pre-empirical-research docs (superseded)
+src/engine/               pure-TS deterministic simulation (Phase 1, complete)
+src/                      (everything else lands in Phases 2-13)
+screenshots/              DOS reference captures
+references/               source matrix, screenshot index
+RoboSport (1991)/         gitignored — original DOS distribution, local research only
 ```
 
 ## Key design facts
@@ -53,7 +56,7 @@ RoboSport (1991)/     gitignored — original DOS distribution, local research o
 - **No robot-vs-robot collision**: robots pass through each other; bullets only hit the target tile.
 - **5 robot classes** (Rifle / Burst / Auto / Missile / Stealth), **5 weapons**, **3 arena types** (Rubble / Suburbs / Computer), **4 game lengths** (Skirmish / Melee / Battle / Campaign).
 
-For the full mechanic spec including damage brackets, scan-cone hit chance, cover model, and terrain effects, see `docs/initial-plan.md` §"Engine constants — v1 canonical stats".
+For the full mechanic spec including damage brackets, scan-cone hit chance, cover model, and terrain effects: **[`docs/spec.md`](docs/spec.md)**.
 
 ## v1 scope
 

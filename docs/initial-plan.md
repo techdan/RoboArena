@@ -1,5 +1,16 @@
 # RoboArena Pre-Implementation Specification Package — Plan
 
+> **⚠️ HISTORICAL DOCUMENT** — preserved for provenance.
+>
+> This was the original session-by-session planning log that drove the
+> pre-implementation research. It accreted spec content along the way and
+> some sections are stale.
+>
+> For the **current canonical spec**, see [`docs/spec.md`](./spec.md).
+> For the current execution roadmap, see [`docs/implementation-plan.md`](./implementation-plan.md).
+> The actual locked numerical values live in `src/engine/constants.ts` and
+> `src/engine/catalog.ts` — those files are the literal source of truth.
+
 ## Context
 
 **Project**: RoboArena, a faithful modern clone of the 1991 Maxis tactical game *RoboSport*. Web-first, TypeScript, **Next.js 16 + React 19 + Tailwind v4 + PixiJS** renderer, deterministic pure-TS simulation engine, **Vitest** for engine tests. Audio deferred to post-MVP. Visual direction: **modernized top-down tile grid** (same camera as the original, modern art).

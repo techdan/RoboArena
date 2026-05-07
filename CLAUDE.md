@@ -46,18 +46,20 @@ Match 1-7 empirical observations are codified into `constants.ts`. Don't change 
 
 ```
 docs/
-  initial-plan.md          canonical spec & engine constants (THE source of truth for combat numbers)
+  spec.md                  CANONICAL game spec (rules + numbers; current truth)
   implementation-plan.md   14-phase execution roadmap with per-phase acceptance criteria
   priority-tests.md        empirical research log (Match 1-7 results inform engine constants)
   empirical-tests.md       broader test catalog
   manual.txt               partial Amiga manual (provenance noted in §14 risks)
+  initial-plan.md          HISTORICAL — original planning log; superseded by spec.md
+  archive/                 pre-empirical-research docs (superseded; kept for provenance)
 src/engine/                pure-TS simulation (Phase 1 complete)
 screenshots/               DOS reference captures for UI/mechanics
 references/                source matrix mapping mechanics → evidence
 RoboSport (1991)/          gitignored — original DOS distribution; local research only
 ```
 
-When working on an engine numerical value, check `docs/initial-plan.md` §"Engine constants — v1 canonical stats" first. The plan and code are in lockstep.
+When working on an engine numerical value: **`src/engine/constants.ts` and `src/engine/catalog.ts` are the literal source of truth.** `docs/spec.md` documents what's there. If they disagree, the code wins and the spec gets updated to match.
 
 ## Documentation conventions
 
