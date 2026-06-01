@@ -1,6 +1,9 @@
 # Original DOS distribution — copyrighted Maxis assets, not for redistribution.
 # Used locally for empirical research only.
 RoboSport (1991)/
+RoboSport_Full_Package.sit
+docs/manual.txt
+screenshots/
 
 # Node / TypeScript build artifacts (added preemptively for upcoming engine work)
 node_modules/

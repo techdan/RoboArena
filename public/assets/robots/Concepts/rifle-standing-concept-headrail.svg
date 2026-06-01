@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="robot rifle-standing-concept-headrail" data-facing="E" data-posture="standing" role="img" aria-labelledby="title desc">
+  <title id="title">Head rail rifle robot concept</title>
+  <desc id="desc">A modern red biped robot with a compact bulb body, circular head, and a clean rifle mounted on a blue head rail.</desc>
+  <defs>
+    <radialGradient id="headrailBody" cx="35%" cy="24%" r="76%">
+      <stop offset="0%" stop-color="#ffe8df"/>
+      <stop offset="22%" stop-color="#ff6656"/>
+      <stop offset="60%" stop-color="#cf1420"/>
+      <stop offset="100%" stop-color="#3c050b"/>
+    </radialGradient>
+    <radialGradient id="headrailHead" cx="33%" cy="23%" r="74%">
+      <stop offset="0%" stop-color="#fff1ea"/>
+      <stop offset="28%" stop-color="#f84f43"/>
+      <stop offset="72%" stop-color="#8c0e18"/>
+      <stop offset="100%" stop-color="#38050b"/>
+    </radialGradient>
+    <linearGradient id="headrailBlue" x1="70" y1="22" x2="120" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e9fbff"/>
+      <stop offset="24%" stop-color="#61d2ff"/>
+      <stop offset="62%" stop-color="#0874da"/>
+      <stop offset="100%" stop-color="#061947"/>
+    </linearGradient>
+    <linearGradient id="headrailLeg" x1="30" y1="76" x2="98" y2="119" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffb3a8"/>
+      <stop offset="34%" stop-color="#d61a26"/>
+      <stop offset="72%" stop-color="#710a13"/>
+      <stop offset="100%" stop-color="#220309"/>
+    </linearGradient>
+    <linearGradient id="headrailFoot" x1="24" y1="106" x2="105" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a5b2bc"/>
+      <stop offset="44%" stop-color="#303b48"/>
+      <stop offset="100%" stop-color="#070b11"/>
+    </linearGradient>
+    <filter id="headrailShadow" x="-25%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="3.5" flood-color="#07101a" flood-opacity="0.36"/>
+    </filter>
+    <filter id="headrailGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.6" flood-color="#32c5ff" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="64" cy="117" rx="39" ry="7.5" fill="#07101a" opacity="0.28"/>
+  <g filter="url(#headrailShadow)">
+    <g class="legs">
+      <path d="M53 77 40 94" stroke="#250309" stroke-width="9" stroke-linecap="round"/>
+      <path d="M53 77 40 94" stroke="url(#headrailLeg)" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="40" cy="94" r="5" fill="#bc1420"/>
+      <path d="M40 94 31 112" stroke="#250309" stroke-width="8" stroke-linecap="round"/>
+      <path d="M40 94 31 112" stroke="url(#headrailLeg)" stroke-width="5.2" stroke-linecap="round"/>
+      <ellipse cx="29" cy="115" rx="10.6" ry="4.4" transform="rotate(-13 29 115)" fill="url(#headrailFoot)"/>
+
+      <path d="M75 77 90 94" stroke="#250309" stroke-width="9" stroke-linecap="round"/>
+      <path d="M75 77 90 94" stroke="url(#headrailLeg)" stroke-width="6.2" stroke-linecap="round"/>
+      <circle cx="90" cy="94" r="5.2" fill="#bc1420"/>
+      <path d="M90 94 101 112" stroke="#250309" stroke-width="8.2" stroke-linecap="round"/>
+      <path d="M90 94 101 112" stroke="url(#headrailLeg)" stroke-width="5.4" stroke-linecap="round"/>
+      <ellipse cx="103" cy="115" rx="11.5" ry="4.6" transform="rotate(12 103 115)" fill="url(#headrailFoot)"/>
+    </g>
+
+    <g class="body">
+      <ellipse cx="64" cy="74" rx="24" ry="27" fill="#43060d"/>
+      <ellipse cx="63" cy="71" rx="24" ry="27" fill="url(#headrailBody)"/>
+      <path d="M43 65c12 11 31 14 48 5" fill="none" stroke="#ffd2c9" stroke-width="5" stroke-linecap="round" opacity="0.22"/>
+      <path d="M43 78c13 9 29 10 43 3" fill="none" stroke="#6a0811" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>
+      <ellipse cx="55" cy="56" rx="9" ry="4.5" transform="rotate(-27 55 56)" fill="#fff3ec" opacity="0.58"/>
+      <circle cx="81.5" cy="72.5" r="3.5" fill="#43060d"/>
+      <circle cx="81.2" cy="72" r="2" fill="#ff7667"/>
+    </g>
+
+    <g class="neck">
+      <path d="M59 50c-2-12 1-22 8-28 6 1 10 4 12 9-7 6-9 15-7 27-5 2-9-.5-13-8Z" fill="#4a060d"/>
+      <path d="M57 48c-2-13 1-23 9-29 6.5 1 11 4.5 13 10-7.6 5.8-10 15.3-8 28-5.2 2-9.4-.8-14-9Z" fill="url(#headrailBody)"/>
+    </g>
+
+    <g class="head">
+      <circle cx="67" cy="30" r="15" fill="#3c050b"/>
+      <circle cx="65" cy="29" r="15" fill="url(#headrailHead)"/>
+      <ellipse cx="59" cy="22" rx="6.5" ry="3.5" transform="rotate(-31 59 22)" fill="#fff1ea" opacity="0.62"/>
+      <circle cx="74" cy="31" r="3.5" fill="#4f0710"/>
+      <circle cx="74.7" cy="30.4" r="1.9" fill="#fff6ea"/>
+    </g>
+
+    <g class="headrail-rifle" filter="url(#headrailGlow)">
+      <path d="M73 19c4-4 11-4 15 .2l-3.2 7.2c-4.7.8-9.3-1-12.4-4.4Z" fill="url(#headrailBlue)"/>
+      <rect x="82" y="19.5" width="34" height="7.3" rx="3.65" transform="rotate(8 82 19.5)" fill="url(#headrailBlue)"/>
+      <rect x="86" y="20.8" width="25" height="1.6" rx="0.8" transform="rotate(8 86 20.8)" fill="#f5feff" opacity="0.62"/>
+      <ellipse cx="116" cy="28" rx="4.5" ry="4" transform="rotate(8 116 28)" fill="#061640"/>
+      <ellipse cx="115.6" cy="28" rx="2.3" ry="2" transform="rotate(8 115.6 28)" fill="#39a8ff"/>
+    </g>
+  </g>
+</svg>

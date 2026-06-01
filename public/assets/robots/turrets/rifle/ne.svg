@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="robot-turret rifle ne" data-weapon="rifle" data-facing="NE" data-mount-x="64" data-mount-y="20" role="img" aria-labelledby="title desc">
+  <title id="title">Rifle head turret northeast</title>
+  <desc id="desc">Circular red robot head with a blue rifle turret aimed northeast.</desc>
+  <defs>
+    <radialGradient id="headRed" cx="35%" cy="23%" r="78%">
+      <stop offset="0%" stop-color="#ffd0c7"/>
+      <stop offset="31%" stop-color="#f0443b"/>
+      <stop offset="72%" stop-color="#941019"/>
+      <stop offset="100%" stop-color="#44070d"/>
+    </radialGradient>
+    <linearGradient id="turretBlue" x1="71" y1="24" x2="111" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#d9faff"/>
+      <stop offset="22%" stop-color="#57d0ff"/>
+      <stop offset="57%" stop-color="#087ee5"/>
+      <stop offset="100%" stop-color="#0a2466"/>
+    </linearGradient>
+    <linearGradient id="barrelBlue" x1="86" y1="24" x2="124" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f2fdff"/>
+      <stop offset="28%" stop-color="#54c7ff"/>
+      <stop offset="68%" stop-color="#0b62c7"/>
+      <stop offset="100%" stop-color="#061744"/>
+    </linearGradient>
+    <filter id="blueGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="1.45" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.03 0 0 0 0 0.46 0 0 0 0 1 0 0 0 0.36 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g class="head-and-turret">
+    <path class="head-shadow" d="M57.7 15.6c3.2-8.9 14.7-11.8 22.2-5.6 7.4 6 7.5 17.3.2 23-7.4 5.8-19.3 2.3-22.6-6.6-1.1-3.2-1-6.8.2-10.8Z" fill="#3f060d" opacity="0.82"/>
+    <path class="head" d="M55.5 15.8C58.7 6.5 70.8 3.5 78.6 9.7c7.8 6.3 8.1 18.1.3 24.2-7.9 6.1-20.2 2.4-23.5-7-1.1-3.3-1.1-7.1.1-11.1Z" fill="url(#headRed)"/>
+    <ellipse class="head-highlight" cx="64.2" cy="12.3" rx="7.1" ry="3.7" transform="rotate(-31 64.2 12.3)" fill="#ffe0d8" opacity="0.58"/>
+    <circle class="optic-rim" cx="75.4" cy="21.2" r="3.5" fill="#4f0710"/>
+    <circle class="optic" cx="76.1" cy="20.5" r="1.95" fill="#fff5e9"/>
+    <circle class="optic-glint" cx="76.8" cy="19.7" r="0.65" fill="#fff"/>
+
+    <g class="turret" filter="url(#blueGlow)">
+      <path class="turret-housing" d="M76.2 24.9c5-4.4 12.8-3.7 16.8 1.5 2.8 3.8 3.3 8.9 1.1 13.4l-7.5 2.4c-4.3-1.6-7.5-5.3-8.4-9.9-.5-2.6-1.1-5.1-2-7.4Z" fill="url(#turretBlue)"/>
+      <path class="turret-highlight" d="M79.8 24.9c4-2 8.7-1.3 11.6 1.8-3.1 2.7-8.2 3-12.5.9.1-.9.4-1.8.9-2.7Z" fill="#d9fbff" opacity="0.54"/>
+      <path class="turret-shadow" d="M81.5 34.4c3.8 2.8 7.8 3.5 12.1 2.4-.6 1.5-1.6 2.9-3 4.2l-6.3 1.1c-1.8-1.9-2.7-4.5-2.8-7.7Z" fill="#071d5a" opacity="0.58"/>
+      <path class="barrel-back" d="M88.2 24.4 108.5 28.5c2.4.5 3.9 3 2.9 5.3l-.5 1.1-24.4-5.2 1.7-5.3Z" fill="#071d5a"/>
+      <path class="barrel" d="M90 22.3 111.6 26.6c3.1.6 5.1 3.6 4.4 6.7l-.4 1.4-26.9-5.4 1.3-7Z" fill="url(#barrelBlue)"/>
+      <path class="barrel-highlight" d="M91.6 23.9 112.3 27.8c1.2.2 2.1 1.1 2.5 2.2l-23.7-4.5c.1-.6.2-1.1.5-1.6Z" fill="#effdff" opacity="0.62"/>
+      <path class="muzzle" d="M111.4 25.6c3.7.6 6.2 3.9 5.5 7.2-.7 3.3-4.1 5.4-7.8 4.8-3.6-.7-6.1-3.9-5.5-7.2.7-3.4 4.1-5.5 7.8-4.8Z" fill="#061640"/>
+      <ellipse class="muzzle-ring" cx="110.3" cy="31.7" rx="4.4" ry="3.9" transform="rotate(10 110.3 31.7)" fill="#2b91ed"/>
+      <ellipse class="muzzle-core" cx="110.1" cy="31.7" rx="2" ry="1.7" transform="rotate(10 110.1 31.7)" fill="#040d27"/>
+    </g>
+  </g>
+</svg>

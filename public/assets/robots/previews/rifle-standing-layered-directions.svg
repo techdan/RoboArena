@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 544 300" class="robot-preview rifle-standing-layered-directions" role="img" aria-labelledby="title desc">
+  <title id="title">Layered rifle robot direction preview</title>
+  <desc id="desc">A contact sheet previewing one standing body composited with eight separate rifle head and turret directions.</desc>
+  <rect width="544" height="300" fill="#151820"/>
+  <g font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" fill="#dfe7ef" text-anchor="middle">
+    <g transform="translate(8 8)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/n.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">N</text>
+    </g>
+    <g transform="translate(140 8)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/ne.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">NE</text>
+    </g>
+    <g transform="translate(272 8)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/e.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">E</text>
+    </g>
+    <g transform="translate(404 8)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/se.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">SE</text>
+    </g>
+    <g transform="translate(8 154)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/s.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">S</text>
+    </g>
+    <g transform="translate(140 154)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/sw.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">SW</text>
+    </g>
+    <g transform="translate(272 154)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/w.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">W</text>
+    </g>
+    <g transform="translate(404 154)">
+      <rect width="128" height="136" rx="6" fill="#202632"/>
+      <image href="../body/standing-biped-red.svg" x="0" y="0" width="128" height="128"/>
+      <image href="../turrets/rifle/nw.svg" x="0" y="0" width="128" height="128"/>
+      <text x="64" y="128">NW</text>
+    </g>
+  </g>
+</svg>

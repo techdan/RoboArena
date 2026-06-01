@@ -2,7 +2,7 @@
 
 A modern web-based take on the 1991 Maxis tactical game *RoboSport*. Two players program teams of robots, then watch the simultaneous resolution as a movie. Inspired by but not affiliated with the original.
 
-**Status**: pre-implementation — engine primitives exist, UI not yet built. See `docs/implementation-plan.md` for the roadmap.
+**Status**: pre-implementation — engine primitives exist, UI not yet built. v1 targets hot-seat Survival first. See `docs/implementation-plan.md` for the roadmap.
 
 ## Stack
 
@@ -10,7 +10,7 @@ A modern web-based take on the 1991 Maxis tactical game *RoboSport*. Two players
 - Next.js 16 + React 19 + Tailwind v4 (UI, not yet scaffolded)
 - PixiJS (renderer, not yet scaffolded)
 - Vitest (engine tests)
-- Postgres for shared persistence (Supabase eventually; local Postgres for dev)
+- Post-MVP shared persistence: Postgres / Supabase
 
 ## Quick start
 
@@ -25,10 +25,6 @@ Once Phase 6 lands:
 ```sh
 # Local dev with hot reload
 npm run dev
-
-# Connect to a local Postgres instance
-echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/roboarena" > .env.local
-psql -f db/migrations/001_init.sql
 ```
 
 ## Repository layout
@@ -39,13 +35,12 @@ docs/
   implementation-plan.md  14-phase execution roadmap
   priority-tests.md       empirical research log (Match 1-7)
   empirical-tests.md      broader test catalog
-  manual.txt              partial Amiga manual
   initial-plan.md         HISTORICAL — superseded by spec.md
   archive/                pre-empirical-research docs (superseded)
 src/engine/               pure-TS deterministic simulation (Phase 1, complete)
 src/                      (everything else lands in Phases 2-13)
-screenshots/              DOS reference captures
 references/               source matrix, screenshot index
+screenshots/              gitignored local original-game research captures
 RoboSport (1991)/         gitignored — original DOS distribution, local research only
 ```
 
@@ -60,7 +55,7 @@ For the full mechanic spec including damage brackets, scan-cone hit chance, cove
 
 ## v1 scope
 
-Human-vs-human only (hot-seat + online lobby), no AI. Survival sport mode. Desktop-only, mouse + keyboard. Other modes / AI / mobile / accessibility / production-grade ops are post-v1.
+Human-vs-human hot-seat only, no AI. Survival sport mode. Desktop-only, mouse + keyboard. Online lobby, other modes, AI, mobile, accessibility, and production-grade ops are post-v1.
 
 ## Contributing
 

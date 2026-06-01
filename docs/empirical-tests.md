@@ -7,7 +7,7 @@ For each test:
 2. Use 2 teams with **human Brains** so you control both sides.
 3. Note timeline timestamps to 0.05 s precision.
 4. For damage/RNG tests, run the same scenario **at least 5 times** (different seeds via reset) and tally outcomes.
-5. Report results back into `docs/initial-plan.md` (or a new `empirical-results.md`).
+5. Report results back into `docs/spec.md` for current mechanics, or `docs/priority-tests.md` / a new `docs/empirical-results.md` for raw research notes.
 
 ---
 
@@ -303,7 +303,7 @@ While running other tests, log every speech-bubble string you see:
 
 ## How to report results
 
-After each test, append to `docs/initial-plan.md` under a new "Empirical results (DOS)" section, or create `docs/empirical-results.md` with one bullet per test. Include:
+After each test, append raw findings to `docs/priority-tests.md` or create `docs/empirical-results.md` with one bullet per test. If the result changes the current model, update `docs/spec.md` and the relevant engine tests in the same change. Include:
 
 - Test ID (e.g. `T2a`)
 - Setup (who, where, what postures/weapons)

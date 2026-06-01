@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RoboArena — a modern web-based clone of the 1991 Maxis tactical game *RoboSport*. Two players program teams of robots, then watch the simultaneous resolution as a deterministic movie.
 
-**v1 scope**: human-vs-human only (hot-seat + online lobby), no AI. Survival sport mode. Desktop-only (mouse + keyboard). Personal-scale, not production-grade — see "Scope discipline" below.
+**v1 scope**: human-vs-human hot-seat only, no AI. Survival sport mode. Desktop-only (mouse + keyboard). Online lobby is post-MVP after resolver, replay, planner, and movie playback are stable. Personal-scale, not production-grade — see "Scope discipline" below.
 
 **Project state**: Phase 1 (engine primitives) draft complete with 75 passing tests. Phase 1.5 (toolchain) is the next phase. The full 14-phase plan is in `docs/implementation-plan.md`.
 
@@ -28,7 +28,7 @@ The codebase is in two distinct phases of completion:
 
 **`src/engine/` (Phase 1, complete)** — pure-TypeScript deterministic simulation. No React, no DOM, no I/O. Layered: `constants.ts` → `types.ts` → primitives (`rng`, `geometry`, `movement`, `firing`, `blast`, `catalog`) → `index.ts`. Every probabilistic decision goes through a seedable RNG (`createRng(seed)`); replays = `{ initialState, seed, turnOrders[] }` re-run to byte-identical events.
 
-**Everything else (Phases 2-13, not yet built)** — turn resolver, projectiles, visibility, replay format, Next.js + PixiJS UI, planner, online lobby. Architecture sketched in `docs/implementation-plan.md` §1, repository layout in §2.
+**Everything else (Phases 2-13, not yet built)** — turn resolver, projectiles, visibility, replay format, Next.js + PixiJS UI, planner, and later online lobby. Architecture sketched in `docs/implementation-plan.md` §1, repository layout in §2.
 
 ### Hard rules for `src/engine/`
 
@@ -40,7 +40,7 @@ These are not stylistic preferences — they are the determinism contract. The e
 - **Integer arithmetic on game-state values** where possible. Distances and damage are integers. Projectile mid-flight uses tile-by-tile schedules, never floats.
 - **Pure functions everywhere**: engine modules return new state, never mutate inputs.
 
-Match 1-7 empirical observations are codified into `constants.ts`. Don't change those numbers without updating `docs/initial-plan.md` §"Engine constants" — they are coupled.
+Match 1-7 empirical observations are codified into `constants.ts`. Don't change those numbers without updating `docs/spec.md` — they are coupled.
 
 ## Where things live
 
@@ -50,12 +50,11 @@ docs/
   implementation-plan.md   14-phase execution roadmap with per-phase acceptance criteria
   priority-tests.md        empirical research log (Match 1-7 results inform engine constants)
   empirical-tests.md       broader test catalog
-  manual.txt               partial Amiga manual (provenance noted in §14 risks)
   initial-plan.md          HISTORICAL — original planning log; superseded by spec.md
   archive/                 pre-empirical-research docs (superseded; kept for provenance)
 src/engine/                pure-TS simulation (Phase 1 complete)
-screenshots/               DOS reference captures for UI/mechanics
 references/                source matrix mapping mechanics → evidence
+screenshots/               gitignored local original-game research captures
 RoboSport (1991)/          gitignored — original DOS distribution; local research only
 ```
 
@@ -83,8 +82,9 @@ This is a "fun game with friends" project, not a production-grade SaaS. Many thi
 - No production observability (Sentry, metrics, alerts)
 - No internationalization, no analytics, no cookie banner, no license/legal text
 - No AI players (Survival vs another human only)
+- No online lobby in v1; hot-seat ships first
 - No mobile / touch / tablet support
-- No account system (anonymous browser-token identity)
+- No account system; browser-token identity is only for post-MVP shared persistence
 
 Don't surface these as gaps unless something has changed about scope.
 
@@ -93,6 +93,6 @@ Don't surface these as gaps unless something has changed about scope.
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
 - Vitest 2.1 for tests
 - Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + Zustand
-- Phase 12: Postgres (local for dev, Supabase eventual) + WebSocket relay
+- Post-MVP Phase 12: Postgres (local for dev, Supabase eventual) + WebSocket relay
 
 Parent project `C:\src\DevProjects\CLAUDE.md` adds rules across the workspace (e.g. all clickable elements get `cursor-pointer`, prefer Server Components by default).

@@ -20,6 +20,109 @@ Working list. Order is value × ease — top first. Run from the top; stop when 
 
 ---
 
+## MVP empirical gates (run before Phase 3/4 if possible)
+
+These are intentionally low-burden. Stop after the qualitative answer is clear. Do not run large statistics unless a result would change implementation.
+
+### Gate A — Aim & Fire projectile timing and moving-target miss
+
+**Goal**: determine whether Aim & Fire resolves immediately or after visible travel, and whether a target that leaves the targeted tile before impact avoids damage.
+
+**Setup**:
+- Arena: Battle / Rubble Three if you need a long clean row; Melee / Rubble Two is fine if coordinates are easier.
+- Use one Rifle Hunter and one Rifle Sitting Duck on open ground with clear line of sight, distance 8-12 if possible.
+- Hunter scans toward the target. Sitting Duck starts on the targeted tile.
+
+**Steps**:
+1. Control run: SD does nothing. Hunter Aim & Fires the SD tile once. Record whether damage occurs and whether the shot has an observable travel delay.
+2. Moving run: same setup, but SD moves away from the targeted tile immediately while Hunter Aim & Fires the SD starting tile.
+3. During movie playback, record only:
+   - Did the shot hit the old tile, the moving robot, or nothing?
+   - Approximate impact timing: same tick / visibly delayed / unknown.
+   - SD HP before and after.
+
+**Default if skipped**: implement tile-targeted Aim & Fire with tunable projectile timing; do not claim original-game faithfulness until this gate is run.
+
+### Gate B — Scan & Fire trigger and tracking
+
+**Goal**: determine the minimum semantics for Scan & Fire: when it triggers, whether it fires at the detected enemy or a fixed tile, and whether it tracks the enemy through impact.
+
+**Setup**:
+- One Rifle Hunter on open ground, facing a clean lane.
+- One Rifle Sitting Duck walks across or down that lane so it enters the Hunter's scan cone during the turn.
+- Use a short enough range that the trigger is easy to see; avoid walls, bushes, and overlapping robots.
+
+**Steps**:
+1. Hunter chooses Scan & Fire with Rifle, facing the lane.
+2. SD moves into the cone and keeps moving.
+3. During playback, record:
+   - Did Hunter fire automatically?
+   - Did the shot seem to target the entry tile or the moving robot?
+   - Was ammo/shot count consumed when the shot fired?
+   - SD HP before and after.
+
+**Default if skipped**: keep Scan & Fire behavior marked PROPOSED/TBD in the spec and implementation plan.
+
+### Gate C — Scan length and target speed first pass
+
+**Goal**: interpret the COMPUTE! claim that hit outcomes depend on scan length and target speed without committing to a numeric model.
+
+Run this only after Gate B works. Use one or two paired trials, not a statistical study.
+
+**Trial 1: scan length**
+- Same Hunter/SD setup.
+- Repeat once with a short Scan & Fire length and once with a longer Scan & Fire length, if the DOS UI exposes that setting clearly.
+- Record only obvious differences: trigger range, hit/miss, and damage/no damage.
+
+**Trial 2: target speed**
+- Same range and scan length.
+- Compare a stationary SD in the cone to an SD that is moving through the cone.
+- Record only obvious differences: does moving make the shot visibly miss, delay, or do less damage?
+
+**Default if skipped or inconclusive**: no numeric target-speed modifier in v1. Model moving-target effects through tile targeting, projectile timing, and Scan & Fire trigger/tracking semantics only.
+
+### Gate D — Rubble arena transcription
+
+**Goal**: create faithful-enough v1 arena data for Rubble Two and Rubble Three without screenshot extraction tooling.
+
+**Terrain codes**:
+
+| Code | Terrain |
+|---|---|
+| `O` | open ground |
+| `R` | rough ground |
+| `B` | bush |
+| `L` | low wall |
+| `W` | wall / tall wall |
+| `C` | crevice |
+| `X` | outer wall / boundary |
+| `K` | crate / blue obstacle |
+| `?` | unknown, needs review |
+
+**Workflow**:
+1. In DOS RoboSport, open the target Rubble map and click/probe each coordinate.
+2. Record rows left-to-right, top-to-bottom. Rubble Two is 25x25 (`x=0..24`, `y=0..24`); Rubble Three is 32x32 (`x=0..31`, `y=0..31`).
+3. Use this row template:
+
+```text
+map: Rubble Two
+size: 25x25
+y00: XXXXXXXXXXXXXXXXXXXXXXXXX
+y01: X???????????????????????X
+...
+y24: XXXXXXXXXXXXXXXXXXXXXXXXX
+
+notes:
+- (x,y): reason for any `?`
+```
+
+4. Convert the row strings into `src/lib/arenas/<name>.json`.
+5. Review only `?` tiles or tiles that block a planned test path.
+
+**Default if partially complete**: ship only the map(s) fully transcribed and keep the other out of the selectable v1 UI.
+
+---
+
 ## Match 1 — Battle (Rubble Three, 32×32) — combined damage + accuracy
 
 **Goal**: in one match, get
@@ -542,7 +645,7 @@ After each match, paste the recording-template block (filled in) and I'll fold t
 - Movement step alternation — re-validated on confirmed open ground (Match 3 bonus).
 - Weapon max range — locked: **all 18 tiles** from cursor probe.
 
-After Match 3, the engine has everything it needs. Start of build is gated only on Match 3 + the docs sweep that folds locked numbers into `data-model.md` and `resolution-engine-spec.md`.
+Matches 1-3 gave the Phase 1 constants enough support to start the engine. They do not settle the Phase 3/4 gates above: projectile timing, moving-target misses, Scan & Fire tracking, scan length, target speed, or arena row data.
 
 ---
 
@@ -556,4 +659,4 @@ After Match 3, the engine has everything it needs. Start of build is gated only 
 - **Firing arc**: directional cone gated by scan heading; "angle blocked" outside it.
 - **Terrain semantics** (from in-game help dialogs): walls = total cover + impassable, low walls = excellent cover + slow + crouch-blocked, bush = on-or-behind cover + slow + crouch-blocked, rough = no cover + vulnerable + slow + crouch-blocked, crevice = impassable but LoS-transparent, open = full speed + no cover.
 - **Stealth visibility** (Compute! review): invisible unless moving or scanned from adjacent square.
-- **v1 scope**: human-vs-human only (hot-seat + online lobby); no AI.
+- **v1 scope**: human-vs-human hot-seat only; no AI. Online lobby is post-MVP.

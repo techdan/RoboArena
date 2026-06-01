@@ -1,7 +1,7 @@
 /**
  * Blast resolution for explosive weapons (Missile, Grenade).
  *
- * From `docs/initial-plan.md` §"Engine constants — v1 canonical stats" §Weapons:
+ * From `docs/spec.md` §"Explosive weapon damage (Missile)":
  *   Missile blast curve: r=0 ≈ 70, r=1 ≈ 50, r=2 ≈ 15, r≥3 = 0.
  *   blastRadius = 2 (Chebyshev / king-move).
  *

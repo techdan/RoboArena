@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile open-ground">
+  <rect class="base" width="24" height="24" fill="#3d6a3d"/>
+  <circle class="speck" cx="5" cy="6" r="0.7" fill="#54885a"/>
+  <circle class="speck" cx="14" cy="4" r="0.5" fill="#54885a"/>
+  <circle class="speck" cx="19" cy="10" r="0.6" fill="#54885a"/>
+  <circle class="speck" cx="8" cy="15" r="0.55" fill="#54885a"/>
+  <circle class="speck" cx="17" cy="18" r="0.7" fill="#54885a"/>
+  <circle class="speck" cx="11" cy="20" r="0.5" fill="#54885a"/>
+</svg>

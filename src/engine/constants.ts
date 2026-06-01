@@ -1,8 +1,8 @@
 /**
  * Engine constants — single source of truth for every locked numerical value.
  *
- * Sourced from `docs/initial-plan.md` §"Engine constants — v1 canonical stats".
- * If a number changes here, also update the plan; if the plan changes, update here.
+ * Sourced from `docs/spec.md`.
+ * If a number changes here, also update the spec; if the spec changes, update here.
  */
 
 // ──────────────────────────────────────────────────────────────────────────

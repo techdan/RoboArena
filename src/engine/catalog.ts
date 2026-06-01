@@ -2,7 +2,7 @@
  * Canonical robot-class and weapon catalogs. Numbers come straight from the
  * point-buy table in the in-game team builder + empirical damage tests.
  *
- * Source of truth: `docs/initial-plan.md` §"Engine constants" & §"Weapons".
+ * Source of truth: `docs/spec.md` §"Robot classes" and §"Weapons".
  */
 
 import { secondsToTicks, WEAPON_MAX_RANGE } from "./constants.js";

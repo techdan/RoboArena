@@ -10,7 +10,7 @@ Read these first when picking up a fresh session:
 2. `docs/spec.md` - **canonical game spec** (rules, numbers, confidence labels). Replaces `initial-plan.md` as the source of truth.
 3. `docs/implementation-plan.md` - phased roadmap and acceptance criteria.
 
-`docs/initial-plan.md` is now historical (the original planning log); see `docs/archive/` for older research-era docs. If a rule affects a numerical mechanic, check `docs/spec.md` and the source-of-truth files (`src/engine/constants.ts`, `src/engine/catalog.ts`) before changing code.
+`docs/initial-plan.md` is now historical (the original planning log); see `docs/archive/` for older research-era docs. `references/source-matrix.csv` is useful evidence tracking, but it may lag the current spec. If a rule affects a numerical mechanic, check `docs/spec.md` and the source-of-truth files (`src/engine/constants.ts`, `src/engine/catalog.ts`) before changing code.
 
 ## Project
 
@@ -18,11 +18,17 @@ RoboArena is a modern web-based clone inspired by Maxis RoboSport (1991). Two hu
 
 Important scope constraints:
 
-- v1 is human-vs-human only: hot-seat plus online lobby.
+- v1 is human-vs-human hot-seat only. Online lobby is a later-version feature after the resolver, replay, planner, and movie playback are stable.
 - Survival sport mode only for v1.
 - Desktop-only, mouse + keyboard.
 - Audio, AI, mobile/touch, accounts, analytics, i18n, production observability, and production-grade abuse prevention are out of v1 scope.
 - Do not ship copyrighted RoboSport assets, sprites, audio, or the RoboSport name in product UI. RoboArena is the product.
+
+### RoboSport parity guard
+
+Original RoboSport had a wider feature set than RoboArena v1: Ducking, AI personalities, five sports, five formations, online/link play, and eight weapon systems. RoboArena v1 intentionally ships the Survival MVP: human-vs-human hot-seat, Survival, Standing/Crouching, the core combat/planner loop, deterministic replay, and deferred parity features.
+
+Do not expand scope just because the original had a feature. Add original-game parity features only when `docs/implementation-plan.md` schedules them or the user explicitly changes v1 scope.
 
 ## Current State
 
@@ -71,7 +77,7 @@ Future architecture:
 - `src/planner/` builds `TurnOrders` but does not run full turns.
 - `src/renderer/` consumes `ResolutionEvent[]` and animates the movie, likely through PixiJS.
 - `src/app/` and `src/components/` host the Next.js/React UI.
-- `src/lib/net/` owns lobby and transport code.
+- `src/lib/net/` owns post-MVP lobby and transport code.
 
 Dependency direction is one way: UI/planner/renderer may import engine code; engine must not import them.
 
@@ -92,13 +98,17 @@ Phase 1.5 is expected to enforce nondeterminism bans with ESLint.
 
 ## Mechanics Source Rules
 
-Source canonicality:
+Research confidence:
 
-1. DOS / Windows empirical results are canonical when available.
-2. Mac screenshots and UI observations are secondary.
-3. Amiga/manual text is historical support.
+1. DOS / Windows empirical tests override everything for exact mechanics.
+2. Local bundled Windows README/manual text and package files are primary supporting evidence.
+3. Mac screenshots and UI observations are secondary.
+4. Amiga/manual text is historical support.
+5. Online reviews and databases are useful for scope and feature inventory, not exact combat numbers.
 
 Every mechanics claim should retain a confidence level where relevant: CONFIRMED, INFERRED, PROPOSED, or OPEN QUESTION. Do not harden an unconfirmed original behavior into a fact without documenting the confidence and source.
+
+The bundled Windows game under `RoboSport (1991)/` confirms the three town sets (`RUBBLE.TWN`, `SUBURBS.TWN`, `COMPUTER.TWN`), RoboPlayer, serial/modem/NetBIOS support, and cross-platform link compatibility with Macintosh and Amiga versions. Use those facts for planning, but do not copy original assets into shipped UI.
 
 Locked or current engine assumptions include:
 
@@ -111,6 +121,10 @@ Locked or current engine assumptions include:
 - Missile blast radius is 2 with falloff at radius 0/1/2.
 - Movement on open ground alternates step costs by stride parity.
 - Match 1-7 empirical observations are reflected in `src/engine/constants.ts`.
+
+Mechanics risk to preserve: the COMPUTE! review says hit outcomes depend on scan length and target speed. The current v1 spec models moving-target behavior through tile-targeted shots and projectile timing. Do not add a numeric target-speed modifier without a DOS empirical test and a matching spec update.
+
+Empirical burden rule: DOS playtesting is slow. Prefer one-turn qualitative gates from `docs/priority-tests.md` over large sample studies unless the extra precision changes implementation. Record defaults for skipped or inconclusive tests instead of blocking unrelated work.
 
 When changing any of these, update `docs/spec.md` and tests in the same change. The actual locked numerical values live in `src/engine/constants.ts` and `src/engine/catalog.ts` — those files are authoritative; the spec doc explains them.
 
@@ -149,7 +163,7 @@ Update docs when the work changes project truth:
 - `docs/spec.md` is the canonical spec for rules, numbers, and confidence labels. Update when a mechanic changes.
 - `docs/implementation-plan.md` tracks phase status and acceptance criteria.
 - `docs/priority-tests.md` and `docs/empirical-tests.md` track original-game research.
-- `references/source-matrix.csv` maps mechanics to evidence.
+- `references/source-matrix.csv` maps mechanics to evidence but may be stale; never use it over `docs/spec.md`.
 - `docs/initial-plan.md` is historical; do not edit. `docs/archive/` holds pre-empirical-research docs.
 
 When closing a phase, mark its status in `docs/implementation-plan.md`.

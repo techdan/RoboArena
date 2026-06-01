@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="robot-turret rifle sw" data-weapon="rifle" data-facing="SW" data-mount-x="64" data-mount-y="20" role="img" aria-labelledby="title desc">
+  <title id="title">Rifle head turret southwest</title>
+  <desc id="desc">Circular red robot head with blue rifle turret aimed southwest.</desc>
+  <defs>
+    <radialGradient id="headRed" cx="35%" cy="23%" r="78%">
+      <stop offset="0%" stop-color="#ffd0c7"/>
+      <stop offset="31%" stop-color="#f0443b"/>
+      <stop offset="72%" stop-color="#941019"/>
+      <stop offset="100%" stop-color="#44070d"/>
+    </radialGradient>
+    <linearGradient id="blue" x1="27" y1="27" x2="63" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#061742"/>
+      <stop offset="38%" stop-color="#0875d8"/>
+      <stop offset="76%" stop-color="#5bd2ff"/>
+      <stop offset="100%" stop-color="#e8fbff"/>
+    </linearGradient>
+    <filter id="blueGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#2bbfff" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g class="head">
+    <path d="M56.4 17.3c3.2-8.8 14.8-11.7 22.3-5.5 7.3 6.1 7.3 17.5-.2 23.2-7.7 5.9-19.5 2.1-22.7-7.2-1-3.1-.9-6.6.6-10.5Z" fill="#3f060d" opacity="0.82"/>
+    <path d="M54.3 17.6c3.3-9.3 15.3-12.2 23.1-5.7 7.6 6.4 7.7 18.2-.2 24.2-8 6-20.3 2.1-23.5-7.5-1-3.2-.9-6.8.6-11Z" fill="url(#headRed)"/>
+    <ellipse cx="63.1" cy="14.2" rx="6.8" ry="3.4" transform="rotate(-28 63.1 14.2)" fill="#ffe0d8" opacity="0.56"/>
+    <circle cx="57.4" cy="25.1" r="3.3" fill="#4f0710"/>
+    <circle cx="56.7" cy="24.7" r="1.85" fill="#fff5e9"/>
+  </g>
+  <g class="turret" filter="url(#blueGlow)">
+    <ellipse cx="53" cy="29" rx="7.8" ry="6" transform="rotate(-28 53 29)" fill="url(#blue)"/>
+    <ellipse cx="55.5" cy="27.4" rx="4.4" ry="2.3" transform="rotate(-28 55.5 27.4)" fill="#d9fbff" opacity="0.5"/>
+    <rect x="17.5" y="29.5" width="30.5" height="7.2" rx="3.6" transform="rotate(-28 17.5 29.5)" fill="url(#blue)"/>
+    <rect x="22" y="30.9" width="22.5" height="1.5" rx="0.75" transform="rotate(-28 22 30.9)" fill="#f5feff" opacity="0.52"/>
+    <ellipse cx="21" cy="47.4" rx="4.4" ry="4" transform="rotate(-28 21 47.4)" fill="#061640"/>
+    <ellipse cx="21.4" cy="47.2" rx="2.3" ry="2" transform="rotate(-28 21.4 47.2)" fill="#39a8ff"/>
+  </g>
+</svg>

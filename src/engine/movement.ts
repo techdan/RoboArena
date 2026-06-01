@@ -1,7 +1,7 @@
 /**
  * Movement step-cost calculation.
  *
- * From `docs/initial-plan.md` §"Movement, posture, and scan timing":
+ * From `docs/spec.md` §"Movement":
  *   - Single tile move: alternates 0.3 / 0.7 s (parity 0/1).
  *   - Double tile move: alternates 0.4 / 0.8 s.
  *   - Stride parity persists across non-move commands; only resets on deployment.

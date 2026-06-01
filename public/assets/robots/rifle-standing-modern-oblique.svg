@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="robot rifle-standing-modern-oblique" data-facing="NE" data-posture="standing" role="img" aria-labelledby="title desc">
+  <title id="title">Modern oblique standing rifle robot</title>
+  <desc id="desc">A red biped robot with a compact bulbous body, two narrow angled legs, long neck, small head, and blue rifle turret.</desc>
+  <defs>
+    <radialGradient id="redShell" cx="35%" cy="24%" r="78%">
+      <stop offset="0%" stop-color="#ffd1c6"/>
+      <stop offset="18%" stop-color="#ff715f"/>
+      <stop offset="54%" stop-color="#dc1824"/>
+      <stop offset="82%" stop-color="#870c16"/>
+      <stop offset="100%" stop-color="#43060d"/>
+    </radialGradient>
+    <radialGradient id="bodyGlow" cx="36%" cy="22%" r="70%">
+      <stop offset="0%" stop-color="#fff8ef" stop-opacity="0.88"/>
+      <stop offset="30%" stop-color="#ff9b8a" stop-opacity="0.48"/>
+      <stop offset="78%" stop-color="#9b1018" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="redLimb" x1="35" y1="78" x2="98" y2="113" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ff8a7b"/>
+      <stop offset="36%" stop-color="#d51a25"/>
+      <stop offset="74%" stop-color="#7c0b14"/>
+      <stop offset="100%" stop-color="#3b050b"/>
+    </linearGradient>
+    <linearGradient id="limbEdge" x1="30" y1="88" x2="103" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffd5cd"/>
+      <stop offset="28%" stop-color="#ea3340"/>
+      <stop offset="72%" stop-color="#6a0812"/>
+      <stop offset="100%" stop-color="#220309"/>
+    </linearGradient>
+    <radialGradient id="kneeCap" cx="35%" cy="25%" r="75%">
+      <stop offset="0%" stop-color="#ffb0a3"/>
+      <stop offset="48%" stop-color="#cf1721"/>
+      <stop offset="100%" stop-color="#4b060d"/>
+    </radialGradient>
+    <linearGradient id="footPad" x1="21" y1="109" x2="110" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#83929f"/>
+      <stop offset="34%" stop-color="#303b49"/>
+      <stop offset="72%" stop-color="#111822"/>
+      <stop offset="100%" stop-color="#070b11"/>
+    </linearGradient>
+    <linearGradient id="neckRed" x1="55" y1="19" x2="73" y2="66" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffe1d8"/>
+      <stop offset="22%" stop-color="#fa6b5c"/>
+      <stop offset="62%" stop-color="#a9111a"/>
+      <stop offset="100%" stop-color="#43060d"/>
+    </linearGradient>
+    <radialGradient id="headRed" cx="35%" cy="23%" r="78%">
+      <stop offset="0%" stop-color="#ffd0c7"/>
+      <stop offset="31%" stop-color="#f0443b"/>
+      <stop offset="72%" stop-color="#941019"/>
+      <stop offset="100%" stop-color="#44070d"/>
+    </radialGradient>
+    <linearGradient id="turretBlue" x1="71" y1="24" x2="111" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#d9faff"/>
+      <stop offset="22%" stop-color="#57d0ff"/>
+      <stop offset="57%" stop-color="#087ee5"/>
+      <stop offset="100%" stop-color="#0a2466"/>
+    </linearGradient>
+    <linearGradient id="barrelBlue" x1="86" y1="24" x2="124" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f2fdff"/>
+      <stop offset="28%" stop-color="#54c7ff"/>
+      <stop offset="68%" stop-color="#0b62c7"/>
+      <stop offset="100%" stop-color="#061744"/>
+    </linearGradient>
+    <filter id="softShadow" x="-24%" y="-20%" width="148%" height="152%">
+      <feDropShadow dx="0" dy="5" stdDeviation="3.6" flood-color="#07101a" flood-opacity="0.38"/>
+    </filter>
+    <filter id="blueGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="1.45" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.03 0 0 0 0 0.46 0 0 0 0 1 0 0 0 0.36 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="bodyClip">
+      <path d="M44.1 63.9c4.4-10.8 15.8-16.1 27.5-13.5 12.3 2.8 20.2 12.9 19.4 24.2-1 13.1-12.4 22.6-26.4 22.5-16.1-.2-26.8-17.8-20.5-33.2Z"/>
+    </clipPath>
+  </defs>
+
+  <ellipse class="ground-shadow" cx="65" cy="117.5" rx="37" ry="7.5" fill="#07101a" opacity="0.28"/>
+
+  <g class="robot" filter="url(#softShadow)">
+    <g class="legs">
+      <g class="rear-leg">
+        <path class="rear-upper-shadow" d="M50.3 75.6 38.7 92.4" fill="none" stroke="#3b050b" stroke-width="9.2" stroke-linecap="round"/>
+        <path class="rear-upper" d="M49.7 74.7 38.6 92.3" fill="none" stroke="url(#redLimb)" stroke-width="7.1" stroke-linecap="round"/>
+        <path class="rear-upper-glint" d="M47.5 74.4 37.1 90" fill="none" stroke="#ffd4cc" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+        <circle class="rear-knee-shadow" cx="38.4" cy="92.7" r="6.1" fill="#3b050b"/>
+        <circle class="rear-knee" cx="38.4" cy="92.7" r="4.6" fill="url(#kneeCap)"/>
+        <path class="rear-lower-shadow" d="M38.4 93.4 29.8 111.2" fill="none" stroke="#220309" stroke-width="8.1" stroke-linecap="round"/>
+        <path class="rear-lower" d="M38.6 93.1 30.6 111" fill="none" stroke="url(#limbEdge)" stroke-width="5.7" stroke-linecap="round"/>
+        <path class="rear-lower-glint" d="M36.4 94.5 29.5 109.6" fill="none" stroke="#ffd9d2" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>
+        <ellipse class="rear-foot" cx="28.3" cy="114.7" rx="10.7" ry="4.6" transform="rotate(-13 28.3 114.7)" fill="url(#footPad)"/>
+        <ellipse class="rear-foot-glint" cx="25.4" cy="112.8" rx="5.3" ry="1.2" transform="rotate(-13 25.4 112.8)" fill="#c5d0d9" opacity="0.5"/>
+      </g>
+
+      <g class="front-leg">
+        <path class="front-upper-shadow" d="M76.6 76.1 92.7 92.3" fill="none" stroke="#3b050b" stroke-width="9.6" stroke-linecap="round"/>
+        <path class="front-upper" d="M76.2 75 92.4 92" fill="none" stroke="url(#redLimb)" stroke-width="7.3" stroke-linecap="round"/>
+        <path class="front-upper-glint" d="M73.9 74.8 89.4 90" fill="none" stroke="#ffd4cc" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+        <circle class="front-knee-shadow" cx="92.5" cy="92.2" r="6.5" fill="#3b050b"/>
+        <circle class="front-knee" cx="92.5" cy="92.2" r="4.9" fill="url(#kneeCap)"/>
+        <path class="front-lower-shadow" d="M92.6 92.9 102.1 111.6" fill="none" stroke="#220309" stroke-width="8.5" stroke-linecap="round"/>
+        <path class="front-lower" d="M92.4 92.8 101.1 111.4" fill="none" stroke="url(#limbEdge)" stroke-width="6" stroke-linecap="round"/>
+        <path class="front-lower-glint" d="M90.5 94.2 98.6 110" fill="none" stroke="#ffd9d2" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>
+        <ellipse class="front-foot" cx="103.2" cy="115.6" rx="11.9" ry="4.9" transform="rotate(12 103.2 115.6)" fill="url(#footPad)"/>
+        <ellipse class="front-foot-glint" cx="99.2" cy="113.5" rx="5.9" ry="1.25" transform="rotate(12 99.2 113.5)" fill="#c5d0d9" opacity="0.5"/>
+      </g>
+
+      <ellipse class="rear-hip-socket" cx="49.7" cy="74.7" rx="5.2" ry="4.1" transform="rotate(-21 49.7 74.7)" fill="#620913"/>
+      <ellipse class="front-hip-socket" cx="76.2" cy="75" rx="5.5" ry="4.2" transform="rotate(20 76.2 75)" fill="#620913"/>
+    </g>
+
+    <g class="body">
+      <path class="lower-body" d="M44.1 65.7c4.4-10.8 15.8-16.1 27.5-13.5 12.3 2.8 20.2 12.9 19.4 24.2-1 13.1-12.4 22.6-26.4 22.5-16.1-.2-26.8-17.8-20.5-33.2Z" fill="#5b0710"/>
+      <path class="main-body" d="M43.7 63.1c4.5-11.7 16-17.7 28.2-15.2 12.9 2.6 21.6 12.9 21.3 25.2-.4 14.7-12.5 25.6-28 25.6-17.4 0-28.9-18.9-21.5-35.6Z" fill="url(#redShell)"/>
+      <path class="body-core-light" d="M43.7 63.1c4.5-11.7 16-17.7 28.2-15.2 12.9 2.6 21.6 12.9 21.3 25.2-.4 14.7-12.5 25.6-28 25.6-17.4 0-28.9-18.9-21.5-35.6Z" fill="url(#bodyGlow)"/>
+      <g clip-path="url(#bodyClip)" opacity="0.35">
+        <path class="upper-shell-panel" d="M49 57.2c9 10.3 24.4 13.5 42 6.5l.7 6.6c-15.2 7.8-35.2 6.9-46.4-5.1Z" fill="#ffd7cf"/>
+        <path class="underside-panel" d="M49.5 87.2c12 4.4 26.3 2.1 38.1-6.6-4.1 11-14.7 17.1-26.5 15.3-4.8-.7-8.9-3.4-11.6-8.7Z" fill="#3e060c" opacity="0.72"/>
+      </g>
+      <path class="body-seam" d="M47.3 72.7c12.1 8.3 29.2 8.8 42.4 1.4" fill="none" stroke="#690810" stroke-width="1.8" stroke-linecap="round" opacity="0.54"/>
+      <ellipse class="body-highlight" cx="55.9" cy="58.4" rx="9" ry="4.4" transform="rotate(-27 55.9 58.4)" fill="#ffe7df" opacity="0.6"/>
+      <ellipse class="body-glint" cx="52.3" cy="54.2" rx="3.4" ry="1.25" transform="rotate(-31 52.3 54.2)" fill="#fffaf3" opacity="0.85"/>
+      <circle class="side-port" cx="82" cy="73.3" r="3.6" fill="#4a0710" opacity="0.86"/>
+      <circle class="side-port-core" cx="81.8" cy="72.8" r="2.1" fill="#ff6758" opacity="0.76"/>
+    </g>
+
+    <g class="neck">
+      <path class="neck-shadow" d="M57 50c-2-14.3.3-26.1 8-32.2 6.5.6 11.2 4.2 13.9 9.9-8.1 5.9-11.2 15.8-9.5 29.7-4.6 2-8.7-.5-12.4-7.4Z" fill="#43060d" opacity="0.78"/>
+      <path class="neck-column" d="M54.8 48.5c-2-15 .4-27.1 8.6-33.4 6.8.7 11.7 4.3 14.6 10.4-8.6 5.8-11.9 16-10.3 30.8-4.7 2.4-9 .1-12.9-7.8Z" fill="url(#neckRed)"/>
+      <path class="neck-highlight" d="M60 44.9c-.8-10.9.9-19.6 5.8-24.7 2.2.3 4.2 1.1 6 2.4-5.4 4.9-7.6 13.8-6.8 26.4-2 .4-3.7-.9-5-4.1Z" fill="#ffe2da" opacity="0.46"/>
+      <path class="neck-ring" d="M57.3 29.5c4 3.8 9.6 5.3 17.1 3.8" fill="none" stroke="#650810" stroke-width="1.75" stroke-linecap="round" opacity="0.5"/>
+      <path class="neck-ring" d="M56.4 39.9c3.8 4.5 9.4 6.5 16.7 5.6" fill="none" stroke="#650810" stroke-width="1.75" stroke-linecap="round" opacity="0.5"/>
+    </g>
+
+    <g class="head-and-turret">
+      <path class="head-shadow" d="M57.7 15.6c3.2-8.9 14.7-11.8 22.2-5.6 7.4 6 7.5 17.3.2 23-7.4 5.8-19.3 2.3-22.6-6.6-1.1-3.2-1-6.8.2-10.8Z" fill="#3f060d" opacity="0.82"/>
+      <path class="head" d="M55.5 15.8C58.7 6.5 70.8 3.5 78.6 9.7c7.8 6.3 8.1 18.1.3 24.2-7.9 6.1-20.2 2.4-23.5-7-1.1-3.3-1.1-7.1.1-11.1Z" fill="url(#headRed)"/>
+      <ellipse class="head-highlight" cx="64.2" cy="12.3" rx="7.1" ry="3.7" transform="rotate(-31 64.2 12.3)" fill="#ffe0d8" opacity="0.58"/>
+      <circle class="optic-rim" cx="75.4" cy="21.2" r="3.5" fill="#4f0710"/>
+      <circle class="optic" cx="76.1" cy="20.5" r="1.95" fill="#fff5e9"/>
+      <circle class="optic-glint" cx="76.8" cy="19.7" r="0.65" fill="#fff"/>
+
+      <g class="turret" filter="url(#blueGlow)">
+        <path class="turret-housing" d="M76.2 24.9c5-4.4 12.8-3.7 16.8 1.5 2.8 3.8 3.3 8.9 1.1 13.4l-7.5 2.4c-4.3-1.6-7.5-5.3-8.4-9.9-.5-2.6-1.1-5.1-2-7.4Z" fill="url(#turretBlue)"/>
+        <path class="turret-highlight" d="M79.8 24.9c4-2 8.7-1.3 11.6 1.8-3.1 2.7-8.2 3-12.5.9.1-.9.4-1.8.9-2.7Z" fill="#d9fbff" opacity="0.54"/>
+        <path class="turret-shadow" d="M81.5 34.4c3.8 2.8 7.8 3.5 12.1 2.4-.6 1.5-1.6 2.9-3 4.2l-6.3 1.1c-1.8-1.9-2.7-4.5-2.8-7.7Z" fill="#071d5a" opacity="0.58"/>
+        <path class="barrel-back" d="M88.2 24.4 108.5 28.5c2.4.5 3.9 3 2.9 5.3l-.5 1.1-24.4-5.2 1.7-5.3Z" fill="#071d5a"/>
+        <path class="barrel" d="M90 22.3 111.6 26.6c3.1.6 5.1 3.6 4.4 6.7l-.4 1.4-26.9-5.4 1.3-7Z" fill="url(#barrelBlue)"/>
+        <path class="barrel-highlight" d="M91.6 23.9 112.3 27.8c1.2.2 2.1 1.1 2.5 2.2l-23.7-4.5c.1-.6.2-1.1.5-1.6Z" fill="#effdff" opacity="0.62"/>
+        <path class="muzzle" d="M111.4 25.6c3.7.6 6.2 3.9 5.5 7.2-.7 3.3-4.1 5.4-7.8 4.8-3.6-.7-6.1-3.9-5.5-7.2.7-3.4 4.1-5.5 7.8-4.8Z" fill="#061640"/>
+        <ellipse class="muzzle-ring" cx="110.3" cy="31.7" rx="4.4" ry="3.9" transform="rotate(10 110.3 31.7)" fill="#2b91ed"/>
+        <ellipse class="muzzle-core" cx="110.1" cy="31.7" rx="2" ry="1.7" transform="rotate(10 110.1 31.7)" fill="#040d27"/>
+      </g>
+    </g>
+  </g>
+</svg>

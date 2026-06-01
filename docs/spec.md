@@ -13,7 +13,29 @@ The canonical, current spec for v1 mechanics. Numbers here match `src/engine/con
 
 Two human players each command a team of robots in a top-down tactical arena. Each turn, players program their robots' actions (move, change posture, set scan, fire) over a 15-second timeline. Both teams' programs play simultaneously as a deterministic "movie", then the next turn begins. Last team standing wins (Survival mode).
 
-**v1 scope**: human-vs-human only (hot-seat or online). Survival sport mode only. Desktop with mouse + keyboard.
+**v1 scope**: human-vs-human hot-seat only. Survival sport mode only. Desktop with mouse + keyboard. Online lobby, AI, non-Survival sports, and broader original-game parity are later-version work.
+
+### Scope trims and deliberate deviations
+
+RoboArena v1 is a playable Survival MVP, not full RoboSport parity.
+
+Deferred deliberately:
+- Online lobby / remote multiplayer. Build hot-seat first; online depends on stable resolver, replay, planner, and movie playback.
+- Ducking. The original has Standing / Ducking / Crouching; v1 keeps Standing / Crouching and reserves Ducking for v2.
+- AI personalities. Original RoboSport includes AI levels; v1 is human-only.
+- Non-Survival sports and their commands. Treasure Hunt / Capture the Flag / Hostage / Baseball plus sport-specific commands are out of v1.
+- Full Custom Game team builder and point-buy roster editing. v1 can start with Quick Start / preset rosters.
+- Full original weapon-system parity. v1 uses the core weapon set currently represented in `catalog.ts`; do not add extra original weapon systems without a new phase.
+- Production persistence, accounts, observability, deployment automation, and full help/tutorial systems.
+
+### Open mechanics that must not be guessed
+
+The current defaults are good enough to prototype, but these areas need empirical confirmation before they become hard parity claims:
+
+- **Projectile timing and moving targets**: Aim & Fire is tile-targeted, but exact impact delay by weapon/distance is still under-specified. Phase 3 must test "target leaves tile before impact" behavior.
+- **Scan & Fire trigger semantics**: trigger tick, target selection when multiple enemies enter range, ammo use, and whether a tracking shot updates target tile during flight need a focused test.
+- **Scan length and target speed**: the COMPUTE! review says hits depend on scan length and target speed. v1 does not model a numeric speed modifier unless DOS tests show a clear effect.
+- **Arena data**: at least Rubble Two and Rubble Three need hand-verified tile maps before renderer/planner work depends on them.
 
 ---
 
@@ -21,7 +43,7 @@ Two human players each command a team of robots in a top-down tactical arena. Ea
 
 ### Teams
 
-- 2-4 teams per match. ✅
+- Original supports 2-4 teams. v1 UI ships exactly 2 human teams; keep engine types able to extend later. ✅
 - Each team: name, color, side (1-4), brain (`'human'` only in v1; `'stupid'` AI is post-v1), home area corner.
 - **Side** is an alliance axis: multiple teams can share a side (free-for-all vs. 2v2 etc.). Manual confirms ≥2 sides required. ✅
 
@@ -59,7 +81,7 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 
 ## 3. Robot classes
 
-5 classes. Point-buy by **rating**; team's total ≤ a configurable cap (Custom Game lobby).
+5 classes are defined by the engine/catalog. Point-buy by **rating** is reserved for the post-MVP Custom Game builder; v1 can use preset rosters, and Quick Start does not need to expose every class on day one.
 
 | Class | Primary weapon | Accuracy tier¹ | Armor (HP) | Rating | Special |
 |---|---|---|---:|---:|---|
@@ -77,7 +99,7 @@ All ✅ from B&W Mac team-builder dialog.
 
 ### Postures
 
-**v1 ships 2 postures**, dropping the original's middle Ducking posture (DOS testing showed it was strictly dominated by Standing).
+**v1 ships 2 postures**, dropping the original's middle Ducking posture as a deliberate MVP trim.
 
 | Posture | Movement | Damage taken |
 |---|---|---|
@@ -86,7 +108,7 @@ All ✅ from B&W Mac team-builder dialog.
 
 Posture-change cost: **0.1 s per height step**. Standing↔Crouching = 0.2 s. ✅
 
-> Ducking is reserved for v2; engine's `Posture` enum can extend without major refactor.
+> Ducking is reserved for v2. Do not add it opportunistically; it needs explicit movement, hit-rate, damage, and UI tests.
 
 ---
 
@@ -222,8 +244,8 @@ Scan rotation cost: **0.05 s per directional unit**. ✅ E.g., facing N, rotatin
 
 ### Two firing modes
 
-- **Aim & Fire** (tile-targeted): bullet flies to a fixed tile. If the target moves before bullet impact, the bullet hits empty space (the "shot went past" outcome). Used for static targets, predicted intercepts, area denial. ✅
-- **Scan & Fire** (enemy-targeted, tracks): robot waits in scan mode; when an enemy enters the scan cone × range, fires *at the enemy* with the bullet tracking the robot's tile each tick until impact. ✅
+- **Aim & Fire** (tile-targeted): bullet flies to a fixed tile. If the target moves before bullet impact, the bullet hits empty space (the "shot went past" outcome). Used for static targets, predicted intercepts, area denial. Projectile travel timing is TBD and must be locked in Phase 3. ⏳
+- **Scan & Fire** (enemy-targeted, tracks): robot waits in scan mode; when an enemy enters the scan cone × range, fires *at the enemy*. Trigger and tracking semantics are TBD until the focused DOS test is run. ⏳
 
 DOS shortcut: **Ctrl+Shift+click** on a target tile for repeat-fire (Amiga uses Alt). ✅
 
@@ -329,6 +351,6 @@ Re-running this through `resolveTurn` produces a **byte-identical** event stream
 | Movement implementation | `src/engine/movement.ts` |
 | Empirical research log | `docs/priority-tests.md` |
 | Implementation roadmap | `docs/implementation-plan.md` |
-| Original-game research | `docs/manual.txt`, `screenshots/` |
+| Original-game research | `docs/priority-tests.md`; local ignored source captures |
 
 If the spec and code diverge, **the code is correct** and this doc gets updated.

@@ -2,7 +2,7 @@
  * Firing resolution: angle check → bullet path → scan-zone hit chance →
  * cover miss chance → damage roll → rough-ground vulnerability.
  *
- * Mirrors the pseudocode in `docs/initial-plan.md` §"Combined firing resolution".
+ * Mirrors the pseudocode in `docs/spec.md` §"Combat resolution".
  *
  * Pure function: takes inputs + Rng, returns a discriminated-union result.
  * No engine-state mutation; the caller applies the result.

@@ -1,7 +1,7 @@
 /**
  * Core engine types. All purely structural; no React, no DOM, no I/O.
  *
- * Sourced from `docs/initial-plan.md` §"Data model".
+ * Sourced from `docs/spec.md`.
  */
 
 // ──────────────────────────────────────────────────────────────────────────
