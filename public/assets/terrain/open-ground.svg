@@ -1,9 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile open-ground">
-  <rect class="base" width="24" height="24" fill="#3d6a3d"/>
-  <circle class="speck" cx="5" cy="6" r="0.7" fill="#54885a"/>
-  <circle class="speck" cx="14" cy="4" r="0.5" fill="#54885a"/>
-  <circle class="speck" cx="19" cy="10" r="0.6" fill="#54885a"/>
-  <circle class="speck" cx="8" cy="15" r="0.55" fill="#54885a"/>
-  <circle class="speck" cx="17" cy="18" r="0.7" fill="#54885a"/>
-  <circle class="speck" cx="11" cy="20" r="0.5" fill="#54885a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile open-ground" role="img" aria-label="Open ground tile">
+  <desc>Rubble-set open ground: lawn green with sparse grass tufts. Renderer may alternate this with a +2% lightened variant in a 2x2 checker for a mowed-lawn read; tufts are interior-only so edges tile seamlessly.</desc>
+  <rect width="24" height="24" fill="#3f7d3a"/>
+  <ellipse cx="15" cy="8" rx="6" ry="4.5" fill="#428341" opacity="0.7"/>
+  <g stroke="#4f9a45" stroke-width="0.9" stroke-linecap="round" fill="none">
+    <path d="M5.2 7.5 l1.2 -2.2 M6.8 7.5 l0 -2.6 M8.3 7.5 l-1 -2.2"/>
+    <path d="M16 17.5 l1.1 -2 M17.5 17.5 l0 -2.4"/>
+  </g>
+  <circle cx="10" cy="13" r="0.6" fill="#4a9040"/>
+  <circle cx="19.5" cy="19" r="0.55" fill="#4a9040"/>
 </svg>

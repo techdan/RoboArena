@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile crevice" role="img" aria-label="Crevice tile">
+  <desc>Rubble-set crevice: a jagged void running north-south so vertical runs connect; hairline cracks radiate into the surrounding lawn. Impassable but sight passes across.</desc>
+  <rect width="24" height="24" fill="#3f7d3a"/>
+  <path d="M7 3 l-4 -1.5 M6.5 11 l-4.5 1 M14 20 l4 2 M15 5 l3.5 -2" stroke="#2f5c2b" stroke-width="1" fill="none"/>
+  <polygon points="10,0 15,3 13,8 16,13 12,18 14,24 8,24 10,17 7,11 11,6 8,2" fill="#0c0f14"/>
+  <path d="M10 0 L8 2 L11 6 L7 11 L10 17 L8 24" stroke="#454f63" stroke-width="1" fill="none" opacity="0.75"/>
+  <path d="M15 3 L13 8 L16 13" stroke="#232a38" stroke-width="1.4" fill="none" opacity="0.8"/>
+</svg>

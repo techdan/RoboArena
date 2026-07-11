@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile wall" role="img" aria-label="Wall tile">
+  <desc>Rubble-set full wall: brick block with patterned red-orange cap and darker brick front face. This standalone tile shows the fully-exposed variant; the renderer extends the cap to full height when the tile south of it is also wall, and drops the edge highlights against adjacent walls (see mockup neighbor logic). Impassable, opaque.</desc>
+  <defs>
+    <pattern id="tw-brick-top" width="12" height="9" patternUnits="userSpaceOnUse">
+      <rect width="12" height="9" fill="#b65a30"/>
+      <path d="M0 4.5 H12 M0 9 H12" stroke="#8a4526" stroke-width="1" fill="none"/>
+      <path d="M6 0 V4.5 M0 4.5 V9 M12 4.5 V9" stroke="#8a4526" stroke-width="1" fill="none"/>
+    </pattern>
+    <pattern id="tw-brick-front" width="12" height="6.5" patternUnits="userSpaceOnUse">
+      <rect width="12" height="6.5" fill="#7e3c1e"/>
+      <path d="M0 3.25 H12" stroke="#5b2a12" stroke-width="1" fill="none"/>
+      <path d="M6 0 V3.25 M0 3.25 V6.5 M12 3.25 V6.5" stroke="#5b2a12" stroke-width="1" fill="none"/>
+    </pattern>
+  </defs>
+  <rect x="0" y="0" width="24" height="17.5" fill="url(#tw-brick-top)"/>
+  <rect x="0" y="17.5" width="24" height="6.5" fill="url(#tw-brick-front)"/>
+  <rect x="0" y="0" width="24" height="1.6" fill="#dd8c5c"/>
+  <rect x="0" y="0" width="1.2" height="17.5" fill="#c9744a"/>
+  <rect x="22.8" y="0" width="1.2" height="17.5" fill="#6f3418"/>
+</svg>

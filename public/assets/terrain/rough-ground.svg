@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile rough-ground" role="img" aria-label="Rough ground tile">
+  <desc>Rubble-set rough ground: a dirt scar on the lawn strewn with lit orange-brown debris chunks and pebbles — the original's rubble litter. Slows movement; crouchers can't enter.</desc>
+  <rect width="24" height="24" fill="#3f7d3a"/>
+  <ellipse cx="12" cy="12.5" rx="9.5" ry="7" fill="#5c7a40"/>
+  <ellipse cx="12" cy="12.5" rx="7" ry="5" fill="#6d8146" opacity="0.7"/>
+  <g stroke-linejoin="round">
+    <polygon points="5,9 10,7 12,11 7,13" fill="#b07a3e" stroke="#7c4f24" stroke-width="0.5"/>
+    <path d="M5 9 L10 7" stroke="#d9a869" stroke-width="0.9" fill="none"/>
+    <polygon points="14,5.5 18,6.5 17,10 13.5,9" fill="#935f2c" stroke="#6b4321" stroke-width="0.5"/>
+    <path d="M14 5.5 L18 6.5" stroke="#c99757" stroke-width="0.8" fill="none"/>
+    <polygon points="9,15 14.5,14 16,17.5 10,19" fill="#c08a4a" stroke="#8a5f2e" stroke-width="0.5"/>
+    <path d="M9 15 L14.5 14" stroke="#e3b478" stroke-width="0.9" fill="none"/>
+  </g>
+  <circle cx="18.5" cy="13" r="1" fill="#8a5f2e"/>
+  <circle cx="6.5" cy="16.5" r="0.8" fill="#6b4a24"/>
+  <circle cx="16.5" cy="19.5" r="0.7" fill="#8a5f2e"/>
+  <path d="M17 12.5 l3.5 2.5 l-1 2.5" stroke="#4a5a35" stroke-width="0.8" fill="none"/>
+</svg>

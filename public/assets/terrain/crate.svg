@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="tile crate" role="img" aria-label="Crate obstacle">
+  <desc>Rubble-set crate obstacle: the iconic blue faceted crystal cluster from the original's Rubble arenas, drawn on transparent ground so it can overlay any floor tile.</desc>
+  <ellipse cx="12" cy="19" rx="8" ry="3" fill="#0a0d12" opacity="0.35"/>
+  <g stroke-linejoin="round">
+    <polygon points="16,4 20,6 19,11 15,9" fill="#4f8ce0" stroke="#2a55a0" stroke-width="0.5"/>
+    <path d="M16 4 L20 6" stroke="#9cc4f2" stroke-width="0.9" fill="none"/>
+    <polygon points="3,14 6,12 7.5,16 4.5,18" fill="#4f8ce0" stroke="#2a55a0" stroke-width="0.5"/>
+    <path d="M3 14 L6 12" stroke="#9cc4f2" stroke-width="0.8" fill="none"/>
+    <polygon points="6,16 8,8 13,6 17,10 16,17 10,19" fill="#3f7fd6" stroke="#244c92" stroke-width="0.6"/>
+    <polygon points="8,8 13,6 13,12 9,13" fill="#6ea7ef"/>
+    <polygon points="13,12 17,10 16,17 12,17.5" fill="#2a55a0"/>
+    <circle cx="10" cy="8.5" r="1" fill="#d9ecff" opacity="0.95"/>
+    <circle cx="18" cy="6.5" r="0.6" fill="#d9ecff" opacity="0.9"/>
+  </g>
+</svg>
