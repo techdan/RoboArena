@@ -7,6 +7,27 @@ The canonical, current spec for v1 mechanics. Numbers here match `src/engine/con
 - 🔵 **PROPOSED** — engine ships with these defaults; tunable in playtest
 - ⏳ **TBD** — strawman value in code, awaiting empirical pass
 
+> **Binary-derived corrections pending.** A reverse-engineering pass on the
+> original `ROBO.EXE` (see [`reverse-engineering.md`](./reverse-engineering.md))
+> read most of these numbers straight from the shipped program. Corrections to
+> values below: **distance is floored Euclidean, not Chebyshev** (RE §4);
+> **Rubble Two is 24×24, not 25×25** (RE §10); **bullet damage is a single wide
+> roll + posture/distance adjustments, not full/partial brackets** (RE §7b);
+> **cover is height-based line-of-sight, not a flat per-terrain %** (RE §15); and
+> **the internal clock runs at 60 units/s, not 20** (RE §19 — so the 15 s turn is
+> 900 units, and the per-action costs below are clean integers in 60ths). The
+> RE doc also supplies the exact hit tables, explosive-damage tables, robot
+> armor/accuracy table, RNG, and all arena/terrain data — the higher-authority
+> source where they conflict with the empirical estimates here.
+>
+> **Reconsider the 2-posture trim.** This spec drops Ducking (below). The RE pass
+> found the middle pose is **not** redundant: Upright and Ducking move
+> identically, differing only in *height*, which drives cover — Ducking is the
+> "mobile + partial cover" stance. Dropping it removes the one stance that is
+> both mobile and defended. If cover is implemented as height-LoS (RE §15), all
+> three poses are nearly free (three height values). See RE §14 before finalizing
+> the 2-pose decision.
+
 ---
 
 ## 1. Game overview

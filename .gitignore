@@ -5,6 +5,11 @@ RoboSport_Full_Package.sit
 docs/manual.txt
 screenshots/
 
+# Machine-derived extracts of the original binary/art (arena layouts, decoded
+# sprites, data dumps). Derivative of copyrighted originals — keep local, not
+# shipped. Regenerate with tools/re/*.py. See docs/reverse-engineering.md.
+docs/extracted/
+
 # Node / TypeScript build artifacts (added preemptively for upcoming engine work)
 node_modules/
 dist/

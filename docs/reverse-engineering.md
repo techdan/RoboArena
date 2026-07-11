@@ -1,0 +1,1184 @@
+# RoboSport reverse-engineering findings
+
+**Status:** living document. Records everything extracted from the original
+*RoboSport for Windows* (1991) binary and data files, with exact byte offsets so
+any of it can be re-derived or audited.
+
+**Why this exists:** the game-logic constants (damage, hit chance, ranges,
+terrain) were previously only *estimated* from manual DOS playtests (Match 1–7,
+see `priority-tests.md`). Those playtests are internally consistent but slow and
+noisy. This work instead reads the mechanics **directly out of the shipped
+program**, which is the ground truth the playtests were approximating.
+
+**Coverage map** (what's documented, and confidence):
+
+| System | Section | State |
+|---|---|---|
+| RNG, distance metric | §3, §4 | ✅ exact |
+| Robot stats (armor, accuracy) | §5 | ✅ exact |
+| Hit chance (live-fire + preview tables) | §6, §7b | ✅ exact |
+| Bullet damage | §7b | ✅ exact (weapon labels provisional) |
+| Explosive/blast damage | §7 | ✅ exact |
+| **Postures — 3 poses & the middle one's purpose** | **§14** | ✅ model + rules (height integers provisional) |
+| **Cover / movement / terrain / armor → damage** | **§15** | ✅ model + tables (moving-target confirmed) |
+| Terrain properties, arenas | §9, §10 | ✅ exact / extracted |
+| **Sport modes (all 5)** | **§16** | ✅ objectives (scoring point-values TBD) |
+| **Bot types & availability** | **§17** | ✅ identified & answered |
+| Scan / line-of-sight / visibility | §18 | ✅ model (cone half-width TBD) |
+| **Timeline clock (60 Hz)** | **§19** | ✅ unit confirmed (was assumed 20 Hz) |
+| **Fire rate (per-weapon interval)** | **§19** | ✅ mechanism + values (0.33/0.5 s); weapon labels provisional |
+| Move / deploy / scan / posture costs | §8, §19 | ⏳ playtest ×60 (clean integers), exact table not yet read |
+| **Outstanding-items master list** | **§20** | 📋 every assumption/TBD, prioritized |
+
+Remaining gaps are specific *constants* (posture heights, formation rosters,
+scoring points, cone half-width), each flagged with its exact code/data location
+in §13 so they can be finished with a debugger. The *mechanisms* are all mapped.
+
+**How to reproduce:** all scripts live in `tools/re/`. They are plain-Python
+(needs `pip install iced-x86` for the disassembler ones). The machine-readable
+extract is `docs/extracted/robosport-data.json`; rendered arena maps are
+`docs/extracted/arenas.txt`.
+
+```bash
+# regenerate the JSON data extract (robot stats, damage/hit tables, arenas)
+python tools/re/export_data.py "RoboSport (1991)/games/RoboSpor/ROBOWIN" docs/extracted/robosport-data.json
+# render all arena terrain grids
+python tools/re/render_maps.py "RoboSport (1991)/games/RoboSpor/ROBOWIN/RUBBLE.TWN"
+# disassemble around an offset (segment, offset, +/- N instrs), with call targets resolved
+python tools/re/ne_reloc.py  ".../ROBO.EXE" ctxr 6 0x5F7E 30
+# find ALL callers of a function (near + far + movable-entry indirection)
+python tools/re/xref.py      ".../ROBO.EXE" callers 6 0x35D1
+```
+
+---
+
+## 0. Executive summary — what this changes
+
+| Area | Old spec (from playtests) | Binary truth | Action |
+|---|---|---|---|
+| **Distance metric** | Chebyshev (king-move) | **Floored Euclidean** `floor(√(dx²+dy²))` via a 32×32 lookup table | **Correct the engine.** Only matters on diagonals; row/column tests couldn't tell them apart. |
+| **Rubble Two size** | 25×25 | **24×24** | Correct `constants.ts` + spec. |
+| **Rubble Three size** | 32×32 | 32×32 ✅ | No change. |
+| **Hit chance** | 2 zones (BLACK 1.0 / GREY 0.2) | **Score→probability tables** (two: a 20-step live-fire table `0x156E`, a 14-step planner-preview table `0x213A`) | Adopt the live-fire table; the 2-zone model is a coarse sampling of it. |
+| **Bullet damage** (Rifle/Burst/Auto) | Empirical full/partial brackets | **Fully decoded** (this pass): rolled at *fire* time in `seg6:0x35D1`, `weaponRoll + posture± + distance±`, carried on the projectile, applied at impact | Replace the bracket model with the exact rolls (§7b). |
+| **Robot armor** | 140/120/100/100/120 (from dialog) | **Confirmed byte-exact** in a stat table at DGROUP `0x0CA8` | Locks the values; also yields accuracy tiers. |
+| **Explosive damage** | Estimated curve | **Exact base+random tables** at DGROUP `0x15EE`–`0x161A`; 3 weapon categories | Replace estimates. |
+| **Weapon max range** | 18 (cursor probe) | **18, string-confirmed** ("Maximum range is 18") + code `cmp dx,0x12` | Locked. |
+| **RNG** | mulberry32 (our choice) | Original is a 16-bit LFSR, **two independent streams** (game vs. effects) | Keep mulberry32 for *our* determinism; note the two-stream idea (below). |
+| **Timeline clock** | 20 ticks/s (assumed) | **60 units/s** — time counted in 60ths of a second (RE §19) | Correct the tick rate; turn budget 15 s = 900 units. |
+| **Terrain types** | 6 (+outer wall) | **7**: Ground, Rough, Low Wall, Wall, Bush, **Fence**, Crevice | Add Fence to the model (or consciously drop it). |
+| **Postures** | drop Ducking → keep Standing/Crouching | 3 poses form a **mobility⇄cover dial**; Ducking = *mobile + partial cover* (Upright≡Ducking for movement, differ only in height/cover) | **Reconsider the 2-pose trim** — Ducking is not redundant (§14). Cheap to keep all 3 if cover is height-LoS (§15). |
+| **Cover model** | flat per-terrain cover % | **Height-based line-of-sight** (`seg87:0x1CE0`): terrain heights (TIL `b0`) vs posture-derived robot height | Adopt the height model; it unifies posture + terrain cover (§15). |
+| **Armor** | (HP pool) | Confirmed = HP pool, subtracted by shared `seg6:0x5A2B`; no damage-type interaction | No change; now confirmed. |
+| **Arenas available** | Rubble Two/Three | **8 Rubble maps + Suburbs + Computer Town**, all extracted to terrain grids | Bank them; ship a subset. |
+
+> ⚠️ **One unresolved reconciliation** blocks using the extracted maps directly:
+> the stored grid orientation doesn't yet line up with the in-game (x,y) the
+> playtests used. See [§12](#12-coordinate-system-reconciliation-todo). Everything
+> else is usable now.
+
+---
+
+## 1. The binary and its layout
+
+Directory: `RoboSport (1991)/games/RoboSpor/ROBOWIN/`
+
+| File | What it is |
+|---|---|
+| `ROBO.EXE` | The game. **NE (Win16 “New Executable”)**, 883,712 bytes, 101 segments. All game logic + the AI. |
+| `PLAYER.EXE` | The stand-alone “RoboPlayer” movie viewer. Not needed for rules. |
+| `RUBBLE.TWN`, `SUBURBS.TWN`, `COMPUTER.TWN` | Arena sets. Custom “RoboSport Resources” chunked format (see §10). Each holds 8 maps + tile art + tile-property tables. |
+| `ROBOCOLR.PRS`, `ROBOMONO.PRS` | Color / monochrome sprite resource packs (same chunk format; robot & UI art). |
+| `README.TXT` | Install notes; confirms cross-platform (Mac/Amiga/Windows) net play and the file list. |
+
+**Title string** (file `0x8BAE9` area): `RoboSport for Windows (C) 1991 Edward Kilham, Maxis`. Version `1.00` (STR 3031).
+
+### NE structure quick-reference (for the disassembly scripts)
+- NE header at file `0x250`. 101 segments; segment table at header+`0x22`; sector-align shift = 9 (segments are 512-byte aligned).
+- **Segment 101 is the sole DATA segment** (`flags 0x0D51`), file image at **`0x07D600`**. It maps to `DS:0` = **DGROUP**. Therefore any `DS`-relative offset `X` in the code (e.g. `[bx+0CA8h]`, `[3CD8h]`) lives at file **`0x07D600 + X`**. This is the single most important fact for reading data tables.
+- Code segments are near-called internally (E8 rel16, *not* relocated) and far-called across segments (9A seg:off, *relocated*). `tools/re/ne_reloc.py` reads the per-segment relocation records so cross-segment `call 0:FFFF` placeholders resolve to `segN:offset`.
+
+### Segment role map (corrected after the fire-resolution trace)
+| Segment | Role (verified unless noted) |
+|---|---|
+| `seg6` | **Core combat resolution** — the bullet hit+damage resolver (`0x35D1`), projectile constructor (`0x1A08`), projectile-impact handler (`~0x5600`), the shared apply-damage-to-robot routine (`0x5A2B`), and the explosive-damage roller (`0x5F7E`) + blast loop (`0x5D73`). Also holds AI move-gen/scoring (its heavy RNG use). *Earlier draft mislabeled this "AI brain only" and called `0x35D1` "AI scoring" — both wrong; `0x35D1` is the live bullet resolver.* |
+| `seg22` | **Movie playback / turn resolution + scoreboard** — steps the programmed turn, drives impacts, tallies the end-of-game stats ("Ows/Arghs", "shots hit for damage"). Uses the **second RNG stream** for cosmetic bits. *Earlier draft called this "effects/animation only" — it's the resolution driver.* |
+| `seg7` | **Projectile animation interpolator** — per-frame sprite/position, with FX-stream jitter (cosmetic). *Not gameplay damage.* |
+| `seg9` | Startup: allocates & fills the distance table and other globals. |
+| `seg55` | **RNG** primitives (both streams). |
+| `seg56` | **Distance** function (Euclidean). |
+| `seg76` | **Targeting validator** — the pre-fire "out of range / angle blocked / sight blocked" statuses. |
+| `seg87` | Combat geometry — LoS/path-trace + cover-flag classifier (`0x1BF8`), tile queries. |
+| `seg96` | **Planner/AI hit-preview** grid builder (`0x09AF` + table `0x213A`). Builds a per-tile "can my shot land here?" map for targeting feedback — *not* the live fire roll. |
+| `seg1` | Team-editor / stats display (`Armor: 140`, `Robot Rating of …`). |
+
+---
+
+## 2. Resource strings & dialogs (design enumerations)
+
+Extracted with `tools/re/dump_res.py ROBO.EXE strings|dialogs|menus`. These pin
+down every menu enumeration without guesswork.
+
+**Sports** (STR 2001–2005): Survival · Treasure Hunt · Capture the Flag · Hostage · Baseball.
+**Formations** (STR 2011–2015): Beginner · Standard · Fire Fight · Missile Fest · Beat the Clock.
+**Game lengths** (STR 2021–2024): Skirmish · Melee · Battle · Campaign.
+**Brains** (STR 329–333): Human · **Stupid · Ferocious · Crafty · Paranoid** (4 AI personalities).
+**Robot classes** (STR 305–309 / 1013–1017): Rifle · Burst · Auto · Missile · Stealth.
+**Weapon labels** (STR 605–609): Missile · Automatic · Burst · Rifle · Grenade. Also “Prod”, “Bomb”, “Zap” (self-destruct), “Time Bomb”.
+**Postures** — height buttons “Tall” ×3 (DLG #52 “Tools”); STR 1640: *“Bushes slow movement of upright or ducking Robots, but stop movement of crouching Robots.”* ⇒ three heights: **Upright / Ducking / Crouching**.
+**Scan directions** (STR/data `SCAN_U, SCAN_UR, SCAN_R, SCAN_DR, SCAN_D, SCAN_DL, SCAN_L, SCAN_UL`): **8 compass directions**.
+**Terrain types** (STR 644–650): Ground · Rough Ground · Low Wall · Wall · Bush · **Fence** · Crevice (**7 types**).
+**Targeting statuses** (STR 630–637): out of bounds · out of home · out of range · blocked · angle blocked · sight blocked · distance · Dock. (These are exactly the return codes of the seg76 validator — §6.)
+**Max range** (STR 641): *“Target out of range. Maximum range is 18.”*
+
+**Terrain help text (verbatim, authoritative semantics):**
+- *Ground:* “provides no protection from enemy weapons or cover from scanning.”
+- *Rough Ground:* “causes robots to move slowly. Crouching robots cannot move onto Rough ground.” + “makes a robot **vulnerable** to attack … offers no protection.”
+- *Low Wall:* “Robots can cross over low walls in upright or duck position, but slowly. Robots cannot cross walls in crouch position.” + “provide **excellent** weapon and scanner cover.”
+- *Wall:* “provide **complete** cover from scanning and **total** protection from weapons.” (impassable)
+- *Bush:* “slow movement of upright/ducking, stop crouching” + “provide visual cover and weapon protection to Robots directly **on or behind** them.”
+- *Fence:* “Robots cannot cross Fences. All weapons pass through fences, but have a **chance of striking the fence**. Fences provide **slight** cover.” (⇐ Fence is a partial in-transit blocker — new vs our spec.)
+- *Crevice:* impassable, but LoS-transparent (robots sight across; consistent with our spec).
+
+**Turn / time UI:** “Turn Length (1-%d Seconds)”, “Turn Clock”, “Time Limit”, “Score Limit”. **Damage bubbles:** “Ow”, “Argh” (STR 1422/1423) — the visual damage tells the playtests used. **Scan & Fire dialog** (DLG #38): fields *“Maximum Distance”* and *“Seconds”* (this is the Scan-and-Fire engagement cap, **not** weapon range — matches the range-correction note in `priority-tests.md`).
+
+---
+
+## 3. Random number generator
+
+Two independent generators in `seg55`, each a 32-bit state treated as a
+shift register with a fixed XOR tap.
+
+| Stream | Function | State (DGROUP) | Purpose |
+|---|---|---|---|
+| **Game** | `seg55:0x0073` | `0x3CD8` (lo), `0x3CDA` (hi) | All gameplay randomness (damage, hit, AI). |
+| **FX** | `seg55:0x00B5` | `0x3CD4`, `0x3CD6` | Cosmetic effects/animation only (`seg22`). |
+
+Algorithm (game stream, verbatim from disassembly):
+
+```
+result = state       # returns 16-bit-ish decremented state (used as-is by callers)
+if (state & 1):
+    state = (state >> 1) ^ 0xA300_0000-style tap   # XOR 0xA300 into the high word after a 32-bit shift-right
+else:
+    state = state >> 1
+```
+
+Precisely: the 32-bit state in `(hi:lo)=(0x3CDA:0x3CD8)` is shifted right one bit
+(`shr ax,1; rcr dx,1`), and when the pre-shift low bit was set, `0xA300` is XORed
+into the high word. Callers take `AX = state-1` as the random value and then mask
+it (`and ax, 2^n-1`) or reduce it (`% N`) to a range.
+
+**Why two streams matters for us:** the original deliberately draws cosmetic
+randomness from a separate generator so that visual effects can’t desync the
+deterministic game simulation across networked machines. **We already get this
+for free** by only ever calling our RNG inside the engine and never for
+rendering — but it’s worth a comment in the renderer: *never* pull from the
+engine RNG for particles/animation. Keep our mulberry32; we don’t need to match
+their exact sequence (we’re not wire-compatible with 1991 saves).
+
+Helper mask table at DGROUP **`0x2130`** = `[0,1,3,7,15,31,63,127,255]` (i.e.
+`2ⁿ−1`), used for “random in `[0, 2ⁿ)`”.
+
+---
+
+## 4. Distance metric — **Euclidean, not Chebyshev**
+
+Function **`seg56:0x02A0`** `dist(x1,y1,x2,y2)`:
+
+1. `dx=|x2−x1|`, `dy=|y2−y1|`.
+2. If either is 0 → return the other (axis-aligned fast path; here Euclidean==Chebyshev).
+3. If both ≤ 32 → look up a **precomputed 32×32 byte table**: `table[(dy−1)*32 + (dx−1)] = floor(√(dx²+dy²))`.
+4. If a coordinate exceeds 32 (large arenas), halve both and double the result (cheap scaling); if >63, clamp to 64.
+
+The table is built once at startup in **`seg9:0x0485`**: a `GlobalAlloc(1024)`
+then a double loop storing `isqrt((i+1)² + (j+1)²)` symmetrically. `isqrt`
+(binary search, `seg9:0x0530`) returns **floor**.
+
+**Consequence:** the “distance” the UI shows and the range check both use floored
+Euclidean. Examples: (dx13,dy13) → `floor(√338)=18` (in range); (dx18,dy18) →
+`floor(√648)=25` (out of range, >18); (dx18,dy0) → 18. Our engine must switch
+`chebyshev()` → `floorEuclidean()` for range and for the damage-distance term.
+The Match 1–7 data used straight rows (dy=0) so it never exercised the
+difference — the empirical damage-vs-distance curve is still valid *as a function
+of this distance*.
+
+Callers of `seg56:0x02A0` (53 sites) include the targeting validator (§6), the
+blast damage loop (§7), AI scoring, and visibility — confirming it’s **the**
+distance primitive.
+
+---
+
+## 5. Robot class stats — table at DGROUP `0x0CA8`
+
+5 classes × 4 bytes. **Column 0 (accuracy tier) and column 1 (armor) are
+confirmed**; the armor column matches the known dialog values byte-for-byte.
+
+| Class | Byte 0 = accuracy tier | Byte 1 = **armor (HP)** | Byte 2 | Byte 3 |
+|---|---:|---:|---:|---:|
+| Rifle   | 2 | **140** | 3 | 20 |
+| Burst   | 1 | **120** | 2 | 18 |
+| Auto    | 0 | **100** | 1 | 25 |
+| Missile | 1 | **100** | 3 | 20 |
+| Stealth | 1 | **120** | 0 | 0 |
+
+- **Accuracy tier** feeds the hit model (§6): higher = more accurate. Ordering
+  Rifle(2) > Burst/Missile/Stealth(1) > Auto(0) matches the manual’s
+  High/Medium/Low and our spec’s accuracy tiers.
+- **Armor** locks 140/120/100/100/120 — no change needed, now *confirmed* not
+  *assumed*.
+- **Bytes 2 & 3 — confirmed NOT used at runtime.** A full displacement scan of
+  every code segment shows `0x0CAA` (col 2) and `0x0CAB` (col 3) are **never
+  read**. Only col 0 (`0x0CA8`, accuracy) and col 1 (`0x0CA9`, armor) are
+  referenced. So the earlier guess that byte 3 = per-shot damage is **wrong** —
+  bullet damage comes from the weapon jump table (§7b), not this stat table.
+  Bytes 2–3 are display/point-buy bookkeeping at most (col 1 armor is read by
+  `seg1` for the "Armor: 140" label and by many segments for HP init/heal caps).
+  *Resolves the previous §13 item #10.*
+
+The point-buy **rating** (40/50/60/80/100) is *not* in this table — it’s either
+computed or held elsewhere; not yet located. Our catalog already has ratings, so
+this is low priority.
+
+### Struct field offsets discovered during the trace
+
+Partial, but enough to navigate. These are *heap struct* offsets (the game
+`GlobalAlloc`s each robot and projectile and passes far pointers around).
+
+**Robot struct** (fields referenced by combat code):
+| Offset | Meaning (confidence) |
+|---|---|
+| `+0x02` | robot id / handle (confirmed) |
+| `+0x08` | HP / armor current — read for compares (likely) |
+| `+0x14` | robot count in a team list (context-dependent) |
+| `+0x1A`, `+0x1C` | pixel/subtile position x, y (confirmed; movement scatter writes these) |
+| `+0x1E` | ammo for the equipped limited weapon — decremented on fire (`seg6:0x20A6`) |
+| `+0x28` | **team id** — used for the friendly-fire compare in the blast loop (confirmed) |
+| `+0x2A`, `+0x2C` | tile row, col (confirmed — the targeting validator reads these) |
+| `+0x2E` | terrain type under the robot (1/2/3), used in the accuracy score (confirmed) |
+| `+0x5C` | sound/effect id (passed to `seg6:0x4060` after a hit) — *not* the weapon selector (earlier draft was wrong) |
+| `+0x66`, `+0x68`, `+0x6C` | per-turn stat counters (shots fired / hit / damage) incremented at impact |
+
+The equipped-weapon damage selector is *not* a single robot field; it flows
+through the weapon-inventory lookup `seg13:0x060E` + the weapon-kind table at
+DGROUP `0x7F4` (see §7b).
+
+**Projectile struct** (16 bytes, built by `seg6:0x1A08`):
+| Offset | Meaning |
+|---|---|
+| `+0x02` | owner/shooter id |
+| `+0x04` | weapon/projectile **type** (drives the `seg7` animation switch) |
+| `+0x06`, `+0x08` | origin tile x, y |
+| `+0x0A`, `+0x0C` | target tile x, y |
+| `+0x0E` | **hit flag** (byte) — did it connect? |
+| `+0x0F` | **damage** (byte) — pre-rolled at fire time; applied at impact |
+
+---
+
+## 6. Hit-chance model (planner preview) — additive index + table
+
+> **Heads-up: there are _two_ hit systems, and this section is the *preview* one.**
+> `seg96:0x09AF` (below) builds the planner's "where can my shots land?" grid and
+> feeds the AI. The **authoritative live-fire hit roll** used during movie
+> playback is a *different* function with a *different, finer* table — see
+> **[§7b](#7b-bullet-fire-hit--damage--fully-decoded)**. They share the same
+> shape (a 0–N accuracy score indexing a probability table) but the numbers
+> differ (preview: 14 steps, max 255 at `0x213A`; live: 20 steps, max 240 at
+> `0x156E`). Implement combat from §7b; this section explains the preview/UI.
+
+The preview accuracy roll lives in **`seg96:0x09AF`**. Instead of our 2-zone
+(BLACK/GREY) model, it computes an **integer “accuracy index” 0–13**, then rolls
+against a probability table.
+
+**Probability table** — DGROUP **`0x213A`**, 14 bytes (thresholds out of 256):
+
+| index | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| /256 | 0 | 8 | 16 | 24 | 32 | 40 | 48 | 56 | 64 | 96 | 128 | 160 | 208 | 255 |
+| ≈ % | 0 | 3 | 6 | 9 | 12.5 | 15.6 | 18.75 | 21.9 | 25 | 37.5 | 50 | 62.5 | 81.25 | ~100 |
+
+Roll: `hit = (game_rand() & 0xFF) < table[index]`.
+
+**Index computation** (decoded; variable names are my interpretation, bp-offsets
+are exact so a reviewer can re-trace):
+
+The two arguments are, by bp-offset: `bandArg = [bp+0Ah]` (a small discrete
+scan-band selector) and `alignArg = [bp+16h]` (a larger scan-alignment
+magnitude that also acts as the “inside the cone at all?” gate).
+
+```
+# guards (both scan inputs must be nonzero, i.e. target is within the cone)
+if bandArg == 0:   return MISS      # → "angle blocked"
+if alignArg == 0:  return MISS
+
+# base index from the scan band (jump table seg96:0x09D2, selector = bandArg)
+index = { 1:2, 2:4, 3:6 }.get(bandArg, 10)     # ≥4 (dead-center) → 10
+
+index -= (4 - alignArg/4)      # alignment magnitude: well-centered adds, cone-edge subtracts
+if targetTileFlagA != 0:  index += 4          # target on exposed/rough tile → easier hit
+elif targetTileFlagB == 1: index += 2
+index -= (dist/4 - 2)          # closer = higher index (dist is the §4 Euclidean distance)
+index  = clamp(index, 0, 13)
+
+# indirect-weapon (class 4) penalty:
+if weaponClass == 4:
+    if targetTileFlagA == 0 and dist > 1: return MISS
+    index = max(0, index - 4)
+
+return (game_rand() & 0xFF) < table[index]
+```
+
+**What’s solid:** the table (exact), the clamp `[0,13]`, the roll
+`rand&0xFF < table[idx]`, the distance term `−(dist/4−2)`, and that **two**
+scan inputs feed it — a discrete band `bandArg` ∈ {0..≥4} and a continuous
+alignment magnitude `alignArg`.
+
+**What still needs one trace or a calibration playtest:** the exact numeric range
+and source of `bandArg`/`alignArg` (i.e. how a compass scan-heading vs. the
+target’s bearing maps onto those two values), and which robot field is
+`weaponClass==4`
+(candidate: Missile/Grenade indirect fire — consistent with the “can only hit
+the exact tile at range” behavior we already flagged for Aim & Fire). Callers of
+`seg96` will resolve this; noted in [§13](#13-for-the-reviewer-fable-checklist).
+
+**Reconciliation with playtests:** a Rifle (tier 2) at point-blank, dead-centre
+scan lands near index 12–13 → 81–100% (matches “BLACK = 1.0”); rotate the scan
+off-axis and `alignArg` collapses, dropping the index to the 5–6 band → ~15–19%
+(matches “GREY ≈ 0.2”). So our 2-zone model is a **coarse sampling** of this
+curve — safe to keep for v1, but the table is here if we want the real thing
+(it gives graceful intermediate accuracies and a distance falloff for free).
+
+**Targeting validator** (`seg76`, the pre-fire check that returns the status
+strings) runs in this order, returning the STR id shown to the player:
+`out-of-bounds (630)` → `out-of-home (631)` → compute distance → `out-of-range
+(632)` if `dist > 18` (`cmp dx,0x12; jg`) → `blocked (633)` → `angle blocked
+(634)` → `sight blocked (635)`. This confirms **range is checked on the
+Euclidean distance with the literal cap 18**.
+
+---
+
+## 7. Explosive (blast) damage — exact tables
+
+Shared roller **`seg6:0x5F7E`** `rollDamage(index, postureCut, category)`:
+
+```
+raw = base[category][index] + (game_rand() & mask[category][index])   # index beyond the table length → 0
+switch postureCut:            # applied after the roll
+    1: raw >>= 1              # ×0.5
+    2: raw -= raw>>2          # ×0.75
+    3: raw -= raw>>3          # ×0.875
+    else: unchanged
+return raw
+```
+
+Called from the blast-application loop **`seg6:0x5D73`**, which iterates robots,
+computes `index = dist(blastCenter, robot)` (§4 Euclidean), reads the target’s
+`postureCut` from the cover/posture classifier (`seg87:0x1BF8`), and applies
+damage. `index` = **radius**, so these tables *are* the blast falloff.
+
+**Tables (DGROUP), `min = base`, `max = base + mask`:**
+
+| Category | radius 0 | radius 1 | radius 2 | radius 3 | radius 4 | offsets (mask / base) |
+|---|---|---|---|---|---|---|
+| **0 “small”** (grenade?) | 45–76 | 25–40 | 5–12 | — | — | `0x15EE` / `0x15F4` |
+| **1 “missile”** | 60–91 | 40–55 | 10–17 | — | — | `0x15FA` / `0x1600` |
+| **2 “large”** (time bomb / self-destruct?) | 120–151 | 80–111 | 40–71 | 20–35 | 10–17 | `0x1606` / `0x1610` |
+
+- Masks are `2ⁿ−1`: cat0/1 use `[31,15,7]`; cat2 uses `[31,31,31,15,7]`.
+- **Category 1 matches the Match 2 missile playtest** (r0≈70, r1≈50, r2≈13–17,
+  r3=0) essentially exactly — strong confidence this is the **Missile** curve and
+  our `catalog.ts` blast numbers should move to `{r0:60–91, r1:40–55, r2:10–17}`
+  with `radius = 2`.
+- **Category 2 (radius 4, 120–151 at centre)** is a much bigger explosion — the
+  best fit is the **Time Bomb / Self-Destruct (“Zap”)**, both of which exist in
+  the original (STR 611 “Bomb”, 1430 “zap”, DLG #46 “Time Bomb”). Deferred in v1,
+  but the numbers are here when we add them.
+- **Category 0** is the smaller explosive — most likely the **Grenade**
+  (STR 609/621). Our current 0.8×-missile grenade estimate is close-ish; replace
+  with `{r0:45–76, r1:25–40, r2:5–12}` if we ship grenades.
+- **`postureCut`** is the target’s posture/cover reduction (½, ¾, ⅞). It comes
+  from `seg87:0x1BF8`; mapping posture→cut needs the same trace as §6’s cover
+  flags. For v1’s Standing/Crouching, treat Standing = full and Crouching =
+  one of these cuts (playtest to pick; ¾ is the safe default).
+
+---
+
+## 7b. Bullet fire (hit + damage) — **fully decoded**
+
+This was the previous pass's biggest open item; it is now traced end-to-end.
+
+### The architecture that matters (surprising, and it drives everything)
+
+**A bullet's hit and damage are decided the instant you fire, not when the
+sprite lands.** When a fire command executes during movie playback, the game:
+1. rolls **hit-or-miss** and, on a hit, **rolls the damage amount** — both in one
+   function, `seg6:0x35D1`;
+2. **spawns a projectile** (`seg6:0x1A08`, a 16-byte struct) that *carries the
+   pre-computed result*: field `+0x0E` = hit flag, field **`+0x0F` = damage**;
+3. animates it flying (that's `seg7`, cosmetic);
+4. at impact, the handler (`seg6:~0x56CD`) just **reads back `+0x0F`** and calls
+   the shared **apply-damage** routine `seg6:0x5A2B`, which subtracts it from the
+   target robot's HP.
+
+Consequence for us (our Gate A, refined): the outcome is locked when the fire
+command **resolves** (at its tick in the movie), and the flying projectile is
+just a visual — so there's no *in-flight* dodging. **But** the resolver checks
+whether the target is on the exact aimed tile *at that moment* and **halves the
+hit chance if not** (§15). So moving *does* matter — you dodge by not being where
+the shot was aimed, not by outrunning the bullet. Match this (it's both faithful
+and tactically rich); no separate projectile-collision system needed.
+
+### Call/offset map (for the reviewer)
+
+| Role | Location |
+|---|---|
+| Fire-time **hit + damage resolver** (returns damage; 0 = miss) | `seg6:0x35D1` |
+| Projectile **constructor** (writes `+0x0E` hit, `+0x0F` damage) | `seg6:0x1A08` |
+| Projectile **impact** handler (reads `+0x0F`, branches bullet vs. blast) | `seg6:~0x56CD` (explosive branch calls `seg6:0x5D73` at `0x56A8`) |
+| Shared **apply-damage-to-robot** (decrements HP) | `seg6:0x5A2B` |
+| Live-fire **hit table** (score→prob) | DGROUP `0x156E` |
+| **Weapon-damage** jump table | code `seg6:0x38C5` |
+| **Posture** damage-adjust jump table | code `seg6:0x38BD` |
+| **Weapon accuracy** add table | DGROUP `0x1596` = `[4,7,6,5,4,3,2,1]` |
+
+### Hit roll (live fire)
+
+```
+score = accuracyScore(...)          # integer, clamped to [0, 19] — see below
+threshold = hitTable[score]         # DGROUP 0x156E, /256
+hit = (game_rand() & 0xFF) < threshold
+```
+
+**Live-fire hit table** `0x156E`, indexed by score 0–19 (thresholds /256):
+
+| score | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| /256 | 0 | 4 | 8 | 16 | 24 | 32 | 40 | 48 | 64 | 80 | 96 | 112 | 128 | 144 | 160 | 176 | 192 | 208 | 224 | 240 |
+| ≈% | 0 | 1.6 | 3 | 6 | 9 | 12.5 | 15.6 | 18.75 | 25 | 31 | 37.5 | 44 | 50 | 56 | 62.5 | 69 | 75 | 81 | 87.5 | 94 |
+
+**Accuracy score** (`seg6:0x35D1`, before the hit roll):
+
+```
+base = robot.accuracyTier + 4                 # stat table col0 (§5): Rifle 2, Burst/Missile/Stealth 1, Auto 0
+score = { 1:4, 2:8, 3:12, 4:18 }[coverClass]  # coverClass from seg87:0x1BF8 path-trace (see below); default 0
+# distance weighting (dist = §4 Euclidean, in di):
+if dist > 12:      score += base/2 - 4
+elif dist >= 7:    score += base - 2
+elif dist >= 3:    score += base/2 + (6 - dist)
+else:              score += base + 2*(3 - dist) + 2      # point-blank bonus
+# target-terrain add by the tile the target stands on (field +0x2E = terrain type 1/2/3):
+score += { 1:+2, 2:-1, 3:-3 }[terrainType]    # else (open) adds weaponAccTable[weapon] from 0x1596
+score -= (posturePenalty)                     # arg: if <=4 then -4, elif <=8 then -2
+score = clamp(score, 0, 19)
+if movingFlagA: score >>= 1                    # halved for (probably) target-moving / scan-quality
+if movingFlagB: score >>= 1
+```
+
+Everything in that block is exact from the disassembly; the only soft parts are
+the *names* `coverClass` / `movingFlagA/B` (their bp-offset sources are known;
+their real-world meaning is inferred). The important, hard facts: **closer = much
+higher score** (a big point-blank bonus), **rough ground on the target adds +2**
+(vulnerable, matches the help text), and the score saturates at 19 → 94%.
+
+### Damage roll (live fire, on a hit)
+
+```
+si  = weaponRoll[ robot.weaponField_0x5C - 5 ]   # jump table seg6:0x38C5, see below
+si += postureAdjust[coverClass]                  # jump table seg6:0x38BD: {1:-4, 2:0, 3:0, 4:+4}
+if dist > 12: si -= 4
+if dist < 5:  si += 4                             # point-blank bonus (again)
+if si < 1: si = 0                                 # floor
+return si                                          # -> projectile +0x0F
+```
+
+**Weapon-damage jump table** `seg6:0x38C5` (selector − 5 → slot 0–7; the selector
+is the weapon-class value returned by the weapon-property lookup `seg13:0x060E`,
+*not* a raw robot field — see the mapping note below):
+
+| slot | roll | range | likely weapon |
+|---|---|---|---|
+| 0, 1 | `(rand&7)+10` | **10–17** | — |
+| 2 | `0` | — | explosive (blast handles damage) |
+| 3, 4 | `(rand&0xF)+8` | **8–23** | — |
+| 5 | `0` | — | explosive (blast handles damage) |
+| 6, 7 | `(rand&0xF)+6` | **6–21** | — |
+
+So each direct-fire weapon has **one wide damage roll**, then ±4 for
+posture/cover and ±4 for distance. There is **no "full/partial bracket"** in the
+code — what the Match 1/3/4 playtests bucketed as "full vs partial" is really
+this single wide roll shifted by the ±4 point-blank/long-range terms. A rifle-ish
+`8–23` roll at point-blank (`+4`) on an exposed target (`+4`) spans ~16–31,
+which is exactly the "full 18–25" range the playtests reported; at long range
+(`−4`) it sags to ~4–19 ("partial 10–17"). The empirical brackets were a
+reasonable approximation of a continuous distribution.
+
+**One sub-item still open:** the exact **weapon-id → slot** labels. The selector
+comes from the weapon-property lookup `seg13:0x060E`, which reads the equipped
+weapon's *kind* byte and indexes a **weapon-kind table at DGROUP `0x7F4`** (8
+entries × 4 bytes). That table's first byte cleanly splits weapons into
+**category 1 = direct-fire (bullet)** vs **category 3 = explosive** —
+`[1,1,1,3,1,3,3,1]` across kinds 0–7 — which is exactly why the two `0` slots in
+the damage table are the explosives. So the *structure* is confirmed: three
+bullet rolls (10–17 / 8–23 / 6–21) + two explosive `0` slots. Pinning which
+bullet roll is Rifle vs. Auto vs. Burst needs decoding the rest of the weapon
+inventory chain (`seg13` slot → kind → class), a multi-layer lookup with
+diminishing returns. Best inference from the accuracy/damage trade (Auto = low
+accuracy / high damage): **Auto = `8–23`, Rifle = `10–17`, Burst = `6–21` per
+bullet** (Burst fires 3). *The damage numbers are exact; only these three labels
+are provisional — see §13 #8.* Note: my previous draft guessed the selector was
+robot field `+0x5C`; that was wrong (`+0x5C` is a sound/effect id) — the real
+source is `seg13:0x060E` / table `0x7F4`.
+
+### Where this leaves the empirical numbers
+
+The Match 1/3/4 bullet table is now **superseded** by the rolls above for the
+engine. Keep the playtests as a cross-check (they should fall inside
+`weaponRoll ± 8`), but implement from the binary: the roll + the two ±4 terms +
+the `0x156E` hit curve. Byte 3 of the stat table is **not** the damage source
+(see §5 correction).
+
+---
+
+## 8. Movement, postures, timing (cross-checked)
+
+> **See §14 (postures) and §15 (cover/movement/armor→damage) for the full,
+> updated models — those supersede the one-liners here.**
+
+Nothing here contradicts the current spec; recording what the binary/strings
+*confirm* vs. leave to playtest:
+
+- **8 scan directions**, **8-direction movement** (the `15CE` direction-delta
+  table in `seg6` holds the 8 `(dx,dy)` unit steps: `(-1,0),(0,1),(-2,-1),(1,2),…`
+  — used by AI pathing/scatter).
+- **3 postures** confirmed (Upright/Ducking/Crouching) — and the middle pose is
+  *meaningful*, not redundant (§14). Crouch cannot enter Rough/Bush/Low-wall;
+  upright & duck cross low walls slowly. (Terrain help text, §2.)
+- **Timeline clock = 60 Hz (confirmed, §19)** — corrects the 20-tick/s
+  assumption. Time is counted in 60ths of a second; turn budget 15 s = 900 units.
+- **Move-cost alternation, deploy cost, posture-step cost, scan-rotation cost:**
+  the *values* are still the Match-3 playtest numbers, but they're all clean
+  integers in 60ths (§19), which corroborates them. Exact binary cost table not
+  yet read (the parity flag on the logic struct is a separate trace from the
+  path-render parity that shares its offsets).
+
+---
+
+## 9. Terrain property tables (TIL chunks)
+
+Each `.TWN` has 16 `TIL` chunks (ids 300–315), one per tile-set. Each is 16
+variants × **4 property bytes**. Across all sets there are exactly **7 distinct
+property tuples**, matching the 7 named terrain types. Decoded meaning
+(`tools/re/decode_til.py`):
+
+| Tuple `(b0,b1,b2,b3)` | Terrain | b0 = height/block | b1 = passability | b2 = sight-block | b3 = flag |
+|---|---|---|---|---|---|
+| `(2,2,0,0)` | **Open** | 2 | 2 = free | 0 = clear | 0 |
+| `(2,1,0,0)` | **Rough** | 2 | 1 = conditional (no crouch), vulnerable | 0 = clear | 0 |
+| `(2,1,1,0)` | **Bush** | 2 | 1 = conditional | 1 = partial | 0 |
+| `(3,1,1,0)` | **Low Wall** | 3 | 1 = conditional (cross slowly) | 1 = partial | 0 |
+| `(4,0,2,0)` | **Wall** | 4 | 0 = impassable | 2 = opaque | 0 |
+| `(2,0,0,0)` | **Crevice** | 2 | 0 = impassable | 0 = clear (sight across ✓) | 0 |
+| `(2,2,0,15)` | **Special** (Fence?/home) | 2 | 2 = free | 0 = clear | 15 |
+
+Interpretation of columns is inferred from cross-referencing the help text
+(Wall impassable+opaque; Crevice impassable+transparent; Low Wall/Bush partial
+sight cover; Rough vulnerable) — it fits all 7 cleanly. The 7th tuple
+`(2,2,0,15)` is a uniform tile-set (TIL 315) that behaves like open ground with a
+flag; **most likely the Fence** (named in STR 649 and DLG #16) or a home/dock
+marker. Confirm before relying on it. The `export_data.py` mapper currently
+labels it `"special"`.
+
+A **map cell byte** = `(tileset << 4) | variant`: high nibble picks the TIL set
+(300+hi), low nibble the variant, then the variant’s 4-byte tuple gives the
+terrain. That’s how the arena grids below are derived.
+
+---
+
+## 10. Arena maps — all extracted
+
+`.TWN` format: 32-byte signature `"RoboSport Resources …\r\n\x1a"`, then chunks:
+`[4-byte tag][u16 id][16-byte name][u32 size][payload]`. Tags: `TIL` (tile
+props), `MAP` (grid, 1 byte/cell), `INF` (set metadata: count, per-map width/
+height at INF+`0x22`/`+0x32`, names from INF+`0x52` stride 22), `DIB` (Windows
+bitmaps for tile art).
+
+**Every map decoded to a terrain grid** in `docs/extracted/arenas.txt` and as
+nested arrays in `robosport-data.json`. Dimensions (⚠️ note Rubble Two):
+
+| Set | Maps (name → size) |
+|---|---|
+| **Rubble Town** | One 16×16 · **Two 24×24** · Three 32×32 · Four 40×40 · Five 48×48 · Six 44×44 · Seven 40×20 · Eight 32×32 |
+| **Suburbs** | 8 maps, same size ladder |
+| **Computer Town** | 8 maps, same size ladder |
+
+Game-length → default arena (from `priority-tests.md`, now with corrected sizes):
+Melee → **Rubble Two (24×24)**, Battle → **Rubble Three (32×32)**.
+
+Rendering legend: `.`=open `R`=rough `B`=bush `L`=low-wall `W`=wall `C`=crevice
+`H`=special/fence. (Example: `render_maps.py RUBBLE.TWN 2` prints Rubble Three.)
+
+---
+
+## 11. Machine-readable extract
+
+`docs/extracted/robosport-data.json` (regenerate with `tools/re/export_data.py`;
+**git-ignored** — a research artifact, not a shipped data file; transcribe the
+numbers into the engine’s own catalog/spec) bundles:
+- `rng` — algorithm + state offsets (reference only).
+- `distance_metric` — Euclidean, max range 18.
+- `robot_stats` — the `0x0CA8` table per class.
+- `hit_chance_fire` — the **authoritative** 20-entry live-fire table (`0x156E`) + score formula.
+- `hit_chance_preview` — the 14-entry planner/AI preview table (`0x213A`).
+- `bullet_damage` — the weapon-roll jump table (`0x38C5`) + posture/distance adjusts (§7b).
+- `explosive_damage` — the three category tables with `min/max/base/mask` per radius.
+- `explosive_posture_multiplier` — {0:1.0, 1:0.5, 2:0.75, 3:0.875}.
+- `arenas` — every Rubble/Suburbs/Computer map as a `terrain[y][x]` class grid.
+
+---
+
+## 12. Coordinate-system reconciliation (TODO — blocks map import only)
+
+The extracted grids don’t yet align with the (x,y) the playtests used. Example:
+Match 1 treats Rubble Three row **y=11** as a clean open horizontal lane with
+buildings above/below, but the raw grid’s row index 11 has wall clusters mid-row.
+Likely causes (pick via one probe session): (a) **y is flipped** (grid row `r`
+= in-game `H−1−r`); (b) an **origin/border offset** (the playfield is inset, or
+the Dock strip occupies rows the game doesn’t count); (c) **row/column
+transpose**. Resolve by probing 3–4 known tiles in-game (Alt+click terrain help)
+and matching them against the grid. Until then: use the grids for *structure/
+sizes* and the extracted terrain *counts*, but re-derive specific coordinates
+after the probe. Everything in §3–§9 is coordinate-independent and usable now.
+
+---
+
+## 12b. Original art — extracted, and what it means for our assets
+
+The sprite packs `ROBOCOLR.PRS` (color) and `ROBOMONO.PRS` (mono) use the same
+chunk format as the `.TWN` files; the payloads are **complete Windows `.BMP`
+files** (4-bpp, 16-color) starting with `BM`. Decoder: `tools/re/dib_dump.py`.
+Reference PNGs render to `docs/extracted/sprites/` — **git-ignored** (original
+Maxis art; regenerate locally, don’t commit or ship).
+
+What the packs contain (relevant chunks):
+
+| Chunk id | Size | Content |
+|---|---|---|
+| `1010`–`1013` | 95–96 × 289 | **The four robot classes**, stacked vertically, one pose each: a chunky **oblique-top-down biped**. Rifle ≈ red, Auto ≈ blue, Burst ≈ purple, Missile ≈ green. The 4 near-identical sheets are hop/color frames. |
+| `24` | 107 × 374 | **Missile projectile** in flight with a fire trail — several animation frames, each paired with a **black silhouette mask**. |
+| `170`, `171` | — | **Explosion / “Zap” / “KA-BOOM” effect** frames (blast animation), also color+mask pairs. |
+| `150`, `20`–`22` | — | Title / “ROBOSPORT” / “Robot Battle Zone” TV-frame UI chrome. |
+| `30`–`36`, `201`–`204`, `96x` | small | HUD glyphs, cursors, direction/indicator icons. |
+
+**Key takeaways for RoboArena’s asset & animation plan:**
+1. **Robots are drawn in a single oblique pose**, not 8 hand-rotated bodies. So
+   our plan to show **8 turret directions is a faithful enhancement, not a
+   regression** — do it by rotating a separate turret/gun layer over a fixed
+   body (exactly the split in the current `rifle-standing-modern-oblique.svg`).
+2. **“Hopping” movement** in the original is a small **vertical bob** (a couple of
+   frames), not a walk cycle. A 2–4 frame bob (or a sine-based transform in
+   PixiJS) reproduces the feel cheaply.
+3. **Sprites carry an explicit black AND-mask** for transparent blitting — that’s
+   a 1991 GDI constraint we don’t have; our SVG/PixiJS assets just use alpha.
+4. The four class silhouettes are visually distinct by **body shape + color**
+   *in the resource sheets* — but **in-game, body color encodes TEAM, not
+   class** (2026-07-08, confirmed by an in-game home-area capture: all four
+   classes on one team render in identical team red). The per-class hues in
+   chunks 1010–1013 are palette variants the engine re-maps per team.
+   Consequence for our assets: class identity must read from **turret /
+   head-gear silhouette** alone; team identity is a body/plate recolor.
+5. Effects (muzzle flash, projectile trail, blast, “Zap”) are first-class
+   animated sprites in the original; budget renderer work for them.
+
+These are **reference only** (original Maxis art, not for redistribution in a
+public release — they live under the git-ignored research folder’s decoded
+output; keep them out of shipped assets). Use them to guide freshly-drawn art.
+
+---
+
+## 13. For the reviewer (Fable) — verification checklist
+
+> **For the complete, prioritized list of every open item, see [§20 — Master
+> list](#20-master-list--every-outstanding-assumption--tbd).** This section is
+> the original reviewer checklist (verification-focused); §20 is the
+> build-planning superset.
+
+Hand this section, plus the JSON and the `tools/re/` scripts, to the second-pass
+reviewer. Each item is independently checkable.
+
+**Confirmed — spot-check only:**
+1. Robot armor table `0x0CA8`: re-read bytes, confirm `140/120/100/100/120`;
+   confirm cols 2–3 are never read (displacement scan) → byte 3 ≠ damage.
+2. Live-fire hit table `0x156E` = `[0,4,8,16,24,32,40,48,64,80,96,112,128,144,160,176,192,208,224,240]`
+   (score 0–19). Preview table `0x213A` (14 entries) is the planner/AI one.
+3. Explosive tables `0x15EE–0x161A`; verify Category 1 ≈ Match-2 missile data.
+4. Distance = floored Euclidean (`seg56:0x02A0` + startup fill `seg9:0x0485`).
+5. Max range 18 (STR 641 + `seg76` `cmp dx,0x12`).
+6. Rubble Two = 24×24 (INF width/height arrays).
+7. ✅ **Bullet damage — DONE this pass (§7b).** Resolver `seg6:0x35D1` → projectile
+   `+0x0F` → apply `seg6:0x5A2B`. Damage = weapon-roll (`seg6:0x38C5`:
+   10–17 / 8–23 / 6–21 / 0) + posture± (`seg6:0x38BD`) + distance±, floored.
+   Hit & damage are locked at **fire time**, not impact. Spot-check the jump
+   tables and the `10–17/8–23/6–21` rolls.
+10. ✅ **Robot-stat bytes 2 & 3 — DONE.** Never read at runtime (displacement
+    scan); not damage/ammo. Only col 0 (accuracy) + col 1 (armor) are used.
+
+**Still open (smaller, ranked):**
+8. **Weapon-id → damage-slot labels** (§7b): decode the weapon-inventory chain
+   `seg13:0x060E` → weapon-kind byte → table `0x7F4` (`[1,1,1,3,1,3,3,1]`,
+   bullet=1/explosive=3) → class, to confirm which of 10–17 / 8–23 / 6–21 is
+   Rifle vs. Auto vs. Burst. Best inference: Auto = 8–23, Rifle = 10–17,
+   Burst = 6–21/bullet. *Everything else about bullet damage is exact; only these
+   three labels are provisional.*
+9. **Cover-flag / `coverClass` values** (§6/§7/§7b): `seg87:0x1BF8` is located and
+   its role confirmed (a Bresenham path-trace returning two cover flags, default
+   `4` at point-blank). Decode its per-terrain step loop to nail the exact
+   crouch/bush/low-wall cover numbers and the explosive posture-cut mapping.
+11. **Fence** (`(2,2,0,15)`): confirm the 7th terrain is Fence and model its
+    “weapons pass through with a chance to strike it” rule (a probabilistic
+    in-transit blocker — new mechanic).
+12. **Two hit tables — which governs what:** confirm `0x156E`/`seg6` is the live
+    roll and `0x213A`/`seg96` is only the planner preview + AI (the trace strongly
+    implies this; a reviewer can verify by checking that movie playback never
+    calls `seg96:0x09AF`).
+13. **Posture → height integers** (§14): read the value the Height tool writes and
+    where `seg87:0x1CE0` reads shooter/target height. Confirms Upright/Duck/Crouch
+    heights (hypothesis 4/3/2 on the terrain-height scale). *Model confirmed; only
+    the 3 integers provisional.*
+14. **Moving-target penalty** (§15): confirm the two score-halving flags in
+    `seg6:0x35D1` (`0x37F4`, `0x380A`) mean "target moved this tick." If so,
+    movement is a first-class defense (the COMPUTE! "target speed" claim).
+15. **Formation roster table** (§17): dump the per-formation Quick Start roster
+    counts (the data behind "%d Rifle Robot" etc.). Needed only for faithful
+    presets; Custom Game already covers all 5 bots.
+16. **Sport scoring point values** (§16): locate the score-computation function
+    that fills the struct rendered at `seg22:0x2432`. Low priority for a
+    Survival-only v1.
+17. **Exact per-action cost table** (§19): trace where the robot time field
+    (`[robot+0x52]`→`+0x10`) is incremented per action to read move/deploy/scan/
+    posture/fire costs directly (playtest values ×60 are the working set; all are
+    clean 60ths). The clock unit itself (60 Hz) is confirmed. Watch for the
+    path-render `+0x42`/`+0x44` offset collision (§19).
+
+**Design decisions this surfaces (for the human, not the reviewer):**
+- Adopt the exact live-fire model (§7b) now, or keep a simpler bracket model for
+  v1? (Recommend: adopt §7b — it’s not much more code and it’s *correct*, and it
+  gives the point-blank/long-range feel for free.)
+- **Fire-time resolution vs. moving-target dodging:** the original locks the
+  outcome when you fire (the projectile is cosmetic). Match it (simpler) or add
+  dodging as a deliberate new mechanic? (Recommend: match it for v1.)
+- Switch engine distance to Euclidean now (small, correct, low-risk) — recommend
+  yes.
+- Ship Grenade/Time-Bomb/Zap later using the Category 0/2 tables already found.
+
+---
+
+## 14. Postures — the three poses, and what the middle one is *for*
+
+**Answer up front:** the original has **Upright / Ducking / Crouching**, and the
+middle pose (Ducking) is *not* redundant. Upright and Ducking move **identically**;
+they differ only in **height**, which drives **cover**. Crouching trades away
+mobility for maximum cover. So the three poses are really a **mobility ⇄ cover**
+dial:
+
+| Pose | Move onto Rough / Bush / Low-wall | Cross low walls | Height (cover profile) | Role |
+|---|---|---|---|---|
+| **Upright** | yes (slowly) | yes (slowly) | **tallest** — exposed over low walls | fast, but easy to hit |
+| **Ducking** | yes (slowly) | yes (slowly) | **medium** — partial cover behind low walls | **advance while harder to hit** |
+| **Crouching** | **no** | **no** (also can’t cross walls) | **shortest** — full cover behind low walls | hunker down; can’t relocate through cover terrain |
+
+Movement rules are **authoritative** — verbatim from the in-game help (§2):
+*“Bushes slow movement of upright or ducking Robots, but stop movement of
+crouching Robots.”* / *“Robots can cross over low walls in upright or duck
+position, but slowly. Robots cannot cross walls in crouch position.”* /
+*“Crouching robots cannot move onto Rough ground.”*
+
+So **Upright ≡ Ducking for movement**; the only mechanical difference between
+them is the **height used in the cover calculation** (§15). That is the entire
+point of the middle pose: *keep full movement, but present a smaller target.*
+
+### Implication for our "Standing + Crouching only" v1 trim
+
+Dropping Ducking is a **real** simplification, not a free one. It removes the
+"move at reduced hit-risk behind low cover" option — the one stance that is both
+mobile *and* defended. If v1 keeps only Standing (=Upright) and Crouching, the
+game becomes "fast+exposed *or* safe+stuck," losing the interesting middle.
+**Recommendation:** cheap to keep all three if we implement cover as height-LoS
+(§15) anyway — the poses are just three height values. Keep the 3-pose model;
+it's less special-casing than a 2-pose trim, and it's what makes cover tactical.
+
+**Posture-change cost** (from playtests, unverified in binary): 0.1 s per height
+step, so Upright↔Crouching = 0.2 s, Upright↔Ducking or Ducking↔Crouching = 0.1 s.
+A binary-confirm is low priority.
+
+> **Open constant:** the exact integer *height per pose* (e.g. Upright 4 / Duck 3
+> / Crouch 2 on the same scale as terrain heights) is not yet pinned — the
+> posture field resisted offset-search because several structs collide at the
+> same offsets. A reviewer with Ghidra/a debugger can read it in minutes by
+> watching the value the Height tool writes and where `seg87:0x1CE0` reads the
+> shooter/target height. The *model* (below) is confirmed; only the 3 integers
+> are provisional.
+
+---
+
+## 15. Combat consolidated — how cover, movement, terrain & armor shape damage
+
+This ties the pieces together into the single pipeline a builder needs.
+
+### Cover is height-based line-of-sight — **the key model**
+
+`seg87:0x1BF8` → `seg87:0x1CE0` walk the tiles along (and just beside) the shot
+and read a **height map**: each tile's height is the terrain's **TIL `b0`** byte
+(§9) — **Open/Rough/Bush = 2, Low Wall = 3, Wall = 4, Crevice = 2**. The trace
+compares intervening terrain height against the **sightline between the shooter's
+height and the target's height** (heights are posture-derived, §14). A shot is
+*covered* when terrain along the path rises into that sightline. Concretely:
+- Target **crouching (short) behind a low wall (3)** → covered (wall taller than it).
+- Target **ducking (medium) behind a low wall** → partial.
+- Target **upright (tall) behind a low wall** → exposed (it pokes over).
+- **Wall (4)** blocks everyone (and it's impassable + opaque anyway).
+- **Bush (2)** gives cover only when the target is *on or behind* it (help text),
+  and it blocks sight partially (TIL `b2`=1).
+
+This unifies posture and terrain: there's **no separate "posture damage
+multiplier"** — posture just sets your height in the LoS test.
+
+### The cover result feeds two dials (both confirmed tables)
+
+The trace yields a **cover class 1–4** (1 = heavy cover … 4 = fully exposed),
+used in the live-fire resolver `seg6:0x35D1`:
+
+| cover class | hit-score init (`seg6` jump `0x38D5`) | bullet damage adjust (`seg6:0x38BD`) | explosive cut (`seg6:0x5FFD`) |
+|---|---|---|---|
+| 1 (heavy cover) | **4** (hard to hit) | **−4** | ×0.5 |
+| 2 | 8 | 0 | ×0.75 |
+| 3 | 12 | 0 | ×0.875 |
+| 4 (exposed) | **18** (easy to hit) | **+4** | ×1.0 |
+
+So **being in cover both lowers the chance you're hit and reduces the damage when
+you are** — a double benefit, cleanly table-driven. Exposed (class 4) is the
+worst place to stand: highest hit chance *and* +4 damage.
+
+### Distance
+
+Two point-blank/long-range terms, both in `seg6:0x35D1` (dist = §4 Euclidean):
+- **Hit:** big score bonus up close, tapering with range (the `if dist<3 …`
+  ladder in §7b), so closer ⇒ much likelier to hit.
+- **Damage:** `+4` if `dist<5`, `−4` if `dist>12` (§7b).
+
+### Terrain the *target stands on*
+
+Independently of the path, the target's own tile adds to the hit score
+(`+2` on the "type-1" terrain — Rough, matching *"rough ground makes a robot
+vulnerable"*; `−1`/`−3` on cover tiles). Rough ground is a **damage/hit
+liability**, not cover.
+
+### Movement of the target — **confirmed: "not on the aimed tile" halves the hit**
+
+The hit-score has **two optional halvings** (`seg6:0x35D1` at `0x37F4` and
+`0x380A`). One is now **confirmed**: the flag at `0x380A` comes from
+`seg21:0x0F0A(target, aimedTile)`, which returns **1 iff the target is still on
+the exact tile you aimed at**. When it's *not* (the target has moved off that
+tile by the time the fire command resolves), the shooter's score is **halved** —
+so a moving target is materially harder to hit. This is the mechanism behind the
+COMPUTE! "target speed" remark and our Gate A: the original doesn't let a robot
+dodge a bullet *in flight*, but firing at a tile the target has **vacated cuts
+accuracy in half** (and if it fully leaves LoS, it's a clean miss). The second
+halving flag (`0x37F4`, resolver arg `[bp+10h]`) is a further modifier not yet
+identified — flagged in §13.
+
+**Design consequence:** movement *is* a defense, and **Aim & Fire leads are
+punished** — you want to aim where the target will be, and mispredicting halves
+you. This makes the plan-then-resolve loop tactical without needing in-flight
+dodging.
+
+### Armor
+
+**Armor = the HP pool**, not a damage reducer. Stat table col 1 (§5): Rifle 140,
+Burst/Stealth 120, Auto/Missile 100. Damage (bullet or blast) is subtracted from
+current HP by the shared `seg6:0x5A2B`; at ≤ 0 the robot is destroyed and returns
+to the Dock ("arrggghhh"). There is no armor-vs-damage-type interaction.
+
+### Full per-shot pipeline (build to this)
+
+```
+1. Range gate:      dist = floorEuclid(shooter, targetTile);  if dist > 18 → "out of range"
+2. Angle gate:      target must be within the scan cone → else "angle blocked"
+3. LoS/cover:       walk path (seg87) → coverClass 1..4 (heights: terrain b0 vs posture height)
+                    if a Wall fully blocks → no hit
+4. Hit roll:        score = coverInit[coverClass] + distanceBonus + targetTerrainAdd
+                            + weaponAccAdd - posturePenalty ; clamp 0..19
+                    if target moving: score >>= 1 (×maybe twice)   [to confirm]
+                    hit = (rand&0xFF) < hitTable_0x156E[score]
+5. Damage (on hit): dmg = weaponRoll[slot] + postureAdjust[coverClass] + distanceAdjust
+                    dmg = max(0, dmg)
+6. Apply:           targetHP -= dmg   (seg6:0x5A2B); if HP<=0 → destroyed
+   (Explosive: skip 3–5; at impact tile run the blast loop seg6:0x5D73 over all
+    robots in radius, dmg = blastTable[category][radius] then ×coverCut.)
+```
+
+---
+
+## 16. Sport modes — all five, objectives & where the logic lives
+
+All five are real in the binary (STR 2001–2005, menu accelerators). v1 ships
+**Survival** only, but here is the full set so nothing is guessed later.
+
+| Mode | Objective (from strings/UI) | Per-turn/​setup pieces | Scoring bonus (STR) |
+|---|---|---|---|
+| **Survival** | Destroy all enemies; last side standing. | — | Robot Bonus (surviving bots), Survival Bonus, Side Bonus (1412–1414) |
+| **Treasure Hunt** | Collect **coins** that spawn each turn. | "Set Coins" (1–12/turn), "Grab Coin", "Show Coins" | coins collected (4009) |
+| **Capture the Flag** | Take enemy **flags** back home. | "Place Flag" (in home area), "Capture Flag", flags can be **dropped** | Flag Bonus (1415); "%d flags captured, %d dropped" (4010) |
+| **Hostage** | **Rescue hostages** (min. 1 required, STR 2204). | "Set Hostages", "Rescue Hostage"; hostages can be **killed** | Hostage Bonus (1416); "%d saved, %d killed" (4013) |
+| **Baseball** | **Tag bases** in sequence. | "Set Bases", "Tag Base"; base layouts **Four/Five Cross**, **Four/Five Corner** (STR 336–339) | "%d bases tagged" (4012) |
+
+- **Sport-specific commands** exist as menu items (STR 826–831): Grab Coin,
+  Capture Flag, Rescue Hostage, Tag Base, Place Flag — these are extra planner
+  verbs only enabled in the matching mode.
+- **Scoring** is computed into a per-team score struct and *rendered* in the
+  end-game ceremony at `seg22:~0x2430` (reads the struct; the string ids `0x58C…`
+  are the "Robot/Survival/Side/Flag/Hostage Bonus" labels). The exact **point
+  values per bonus** live in the score-*computation* function (fills the struct
+  read at `seg22:0x2432`), not yet located — low priority for a Survival v1.
+- **Final "Ows & Arghs"** damage tallies and MVP are also in that ceremony
+  (STR 4006–4019).
+
+---
+
+## 17. Bot types & availability
+
+**Five classes**, all defined by the stat table at DGROUP `0x0CA8` (§5):
+Rifle, Burst, Auto, Missile, Stealth (STR 305–309 / 1013–1017).
+
+### Availability
+
+- **Custom Game team editor** (DLG #4) exposes **all five** — Rifle, Burst, Auto,
+  Missile, **Stealth** — as build-your-team options. So no bot is *mode*-locked;
+  they're **build-mode**-gated: you need the full Custom Game (not Quick Start) to
+  place Stealth (consistent with `priority-tests.md`).
+- **Quick Start** uses **preset rosters** by Game Length (Skirmish/Melee/Battle/
+  Campaign) and **Formation** (Beginner/Standard/Fire Fight/Missile Fest/Beat the
+  Clock). Formations change roster composition and turn-time bounds. The exact
+  per-formation roster counts are a **data table not yet dumped** (the UI builds
+  strings like "%d Rifle Robot" from it, STR 311–319) — a straightforward
+  follow-up extraction if we want faithful presets.
+- **Stealth is not gated by *sport mode***, but its *effectiveness* is gated by a
+  **game option**: if "Show Enemy Positions / Sighting" is on, Stealth robots are
+  useless and the game warns you (STR 1869–1870 "STEALTH ALERT!", DLG). Stealth's
+  invisibility rule (invisible unless it moved this tick, or an enemy is adjacent
+  with LoS) is already in `spec.md` §7 from the Compute! review.
+- **Weapons per class** (stat table + strings): Rifle→Rifle, Burst→Burst Gun,
+  Auto→"Automatic"/Machine Gun, Missile→Missile Launcher (+ rifle secondary),
+  Stealth→Burst Gun. Missile also carries limited **ammo** (robot field `+0x1E`,
+  decremented on fire, §5b). Grenades/Time-Bomb/Zap are **extra weapons** granted
+  by certain formations/options (STR 605–611, DLG #46 "Every robot carries…
+  Grenades (0-9) / Missiles (0-9) / Time Bomb"), not class-inherent.
+
+### AI brains (for completeness; v1 is human-only)
+
+Four AI personalities exist: **Stupid, Ferocious, Crafty, Paranoid** (STR
+330–333), plus **Human**. The AI lives in `seg6` (shares the combat resolver).
+Out of v1 scope but documented so the enum is known.
+
+---
+
+## 18. Scan, line-of-sight & visibility
+
+### The three firing gates (in the validator `seg76`, statuses in §6)
+
+A shot is legal only if all three pass, checked in order:
+1. **Range** — `floorEuclid ≤ 18` (else "out of range").
+2. **Scan cone (angle)** — the target's bearing from the shooter must fall in the
+   robot's forward **scan cone** (else "angle blocked"). The cone is centred on
+   the robot's `scanHeading` (one of **8 compass directions**, STR
+   `SCAN_U…SCAN_UL`). Exact half-width isn't pinned in the binary yet; the
+   playtest value (±90° forward semicircle, with an inner ±45° "optimum") stands
+   until confirmed. **How centred** the target is in the cone feeds the accuracy
+   *score* (better-aligned ⇒ higher score), not a hard on/off — that's the
+   `bandArg`/`alignArg` of §6 and the score of §7b.
+3. **Line of sight** — a clear line must exist (else "sight blocked").
+
+### Line-of-sight = height-based Bresenham
+
+`seg87:0x19E3` traces the line shooter→target via the Bresenham stepper
+`seg56:0x0360`, reading the same **terrain-height map** (TIL `b0`) the cover trace
+uses. It returns *clear* / *blocked* (and a sentinel `16` for same-tile). Rules
+(consistent with the help text, §2):
+- **Wall (height 4)** blocks sight completely (opaque, TIL `b2`=2).
+- **Low Wall (3) / Bush (2 with `b2`=1)** partially block — they give cover but a
+  taller shooter/target can see over/around depending on heights.
+- **Crevice** does **not** block (LoS-transparent — help text + TIL `b2`=0), even
+  though it's impassable.
+- Because LoS uses heights, **posture again matters**: a crouching robot behind a
+  low wall is both harder to hit *and* harder to see.
+
+### Team visibility (fog of war)
+
+Per the spec (from the Compute! review + manual, not re-derived here): each team
+sees its own robots, plus tiles inside any of its robots' **scan cone × range**
+with clear LoS, plus enemies standing on those tiles. **Stealth** robots are the
+exception — invisible unless they moved during the current tick **or** an
+observer is adjacent (Chebyshev ≤ 1) with LoS. The scan-preview grid builder
+`seg96:0x09AF` (§6) is what computes, per robot, which tiles it can see/hit — the
+same machinery powers the planner's targeting feedback and the AI.
+
+### Scan as a command
+
+Rotating the scan heading is a planner command costing **0.05 s per directional
+unit** (spec; e.g. N→W = 4 units = 0.2 s). Scan heading persists across the turn.
+`Scan & Fire` (auto-fire when an enemy enters the cone) and `Aim & Fire`
+(tile-targeted) are the two fire modes; the DLG #38 "Scan and Fire … Maximum
+Distance / Seconds" fields are the auto-fire engagement cap, **not** weapon range
+(§2).
+
+---
+
+## 19. Timeline & action costs — **clock is 60 Hz, not 20**
+
+**Confirmed correction.** The internal time unit is **1/60 second (60 units per
+second)**, not the 20 ticks/s our spec assumed. Proof: the turn-timer formatter
+`seg76:0x1027` reads the robot's accumulated turn-time (field `+0x52` → a handle →
+`+0x10`) and extracts three **base-60** digits — `T%60`, `(T/60)%60`, `T/3600` —
+and prints them as `M:SS.ss` (`"%d:%d.%d"` at DGROUP `0x1D90`, with zero-padded
+variants `0x1D99/0x1DA3/0x1DAD`). The middle digit being *seconds* forces the
+base unit to be **1/60 s**; the fractional field is **60ths of a second**. So the
+simulation counts time in 60ths and the turn budget of 15 s = **900 units**
+(1–40 s = 60–2400 units).
+
+**This actually *strengthens* confidence in the playtest action costs**, because
+every one of them is a **clean integer in 60ths**:
+
+| Action | Playtest seconds | = 60ths (integer) |
+|---|---|---|
+| Move 1 tile (parity 0 / 1) | 0.3 / 0.7 s | **18 / 42** |
+| Move 2 tiles (parity 0 / 1) | 0.4 / 0.8 s | 24 / 48 |
+| Deploy (Dock → Home) | 2.0 s | **120** |
+| Posture change (per height step) | 0.1 s | **6** |
+| Scan rotate (per direction unit) | 0.05 s | **3** |
+| Rifle fire interval (parity) | 0.7 / 0.3 s | 42 / 18 |
+| Burst fire interval (parity) | 0.15 / 0.55 s | 9 / 33 |
+
+All land on whole 60ths — consistent with these being the real values (a random
+approximation wouldn't). **Caveat:** the unit (60 Hz) is binary-confirmed, but the
+individual cost *constants* above are still the playtest numbers ×60, **not yet
+read from a cost table in the binary**. The exact table would be found by tracing
+where the time field (`[robot+0x52]`→`+0x10`) is incremented per action — the
+planner's "Current Time" accumulator. The `seg74`/`seg77` `+0x42`/`+0x44` fields
+that look like a stride-parity flag are actually **path-render** state (they drive
+`seg76:0x13F8`, a path-drawing routine) — a repeated offset-collision trap; the
+real move-cost parity lives on the robot's logic struct and is a separate trace.
+
+### Fire rate — **confirmed: fixed per-weapon interval, not alternating**
+
+The command-duration function **`seg13:0x08C5`** (called from seg5/6/7 as the
+canonical "how many clock units does this command take?") resolves a **fire**
+command's cost to the weapon's **`b1` column** at DGROUP **`0x7F5`** (the
+weapon-kind table, §7b) — read in exactly one place (`seg13:0x094E`). So the fire
+interval is a **fixed value per weapon, in 60ths of a second**:
+
+| weapon-kind | `b1` | interval |
+|---|---|---|
+| 0 | 0 | 0 (non-firing / melee?) |
+| 1, 3, 4, 7 | 20 | **0.33 s** (~3 shots/s) |
+| 2, 5, 6 | 30 | **0.5 s** (2 shots/s) |
+
+**This corrects a playtest assumption:** fire cadence is a *single fixed interval
+per weapon* (0.33 s or 0.5 s), **not** the alternating `0.7 / 0.3 s` the spec
+lists — that alternation was almost certainly movement's stride-parity misread
+onto firing. A Burst click still spawns 3 projectiles but costs **one** `b1`
+interval. The same function converts player-timed commands (scan-for-N-seconds,
+zap duration, bomb fuse) as **`param × 60`**, confirming again that game time is
+in 60ths. The **weapon-kind → weapon-name** map is the same open enum as the
+damage-slot labels (§7b / §13 #8) — so *which* weapon is 0.33 vs 0.5 s is
+provisional, but the two interval values and the mechanism are exact.
+
+> **Note:** the 4-byte weapon-kind rows at `0x7F4` are now `[category, fireInterval,
+> b2, flag]` — `b0` = 1 bullet / 3 explosive (§7b), `b1` = fire interval (here),
+> `b2` (read at `seg13` + `seg76:0x0F17`) still unidentified (range or animation
+> length), `b3` = 1 only for kind 3.
+
+---
+
+## 20. Master list — every outstanding assumption & TBD
+
+The single place to check that nothing falls through the cracks. Each row: what's
+unresolved, the current working value (and its source), where in the binary to
+nail it, and priority for a **v1 Survival hot-seat** build.
+
+**Priority key:** **P1** = needed to build/play v1 correctly · **P2** = needed for
+faithful combat feel · **P3** = post-MVP content (other sports, formations, AI).
+
+**Confidence key:** 🟥 assumption (playtest/review, not in binary) · 🟨 mechanism
+confirmed, exact constant provisional · 🟩 confirmed (listed only where a small
+sub-part remains).
+
+### Combat — damage & hit
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 1 | **Weapon → damage-slot labels** — which roll is Rifle/Auto/Burst | Auto `8–23`, Rifle `10–17`, Burst `6–21`/bullet (inference) | weapon enum via `seg13:0x060E` → kind table `0x7F4`; decode inventory chain | 🟨 | P2 |
+| 2 | **2nd hit-score halving flag** `[bp+10h]` | unknown modifier | `seg6:0x35D1` @ `0x37F4` — trace the arg | 🟨 | P2 |
+| 3 | **Cover-flag per-terrain thresholds** — how the trace yields coverClass 1–4 | model = height-LoS (§15); classes map to confirmed hit/dmg tables | decode `seg87:0x1CE0` step loop | 🟨 | P2 |
+| 4 | **Explosive posture-cut → posture** — which posture = ×0.5/0.75/0.875 | Standing full, Crouch ×0.75 (guess) | `seg87:0x1BF8` output → `seg6:0x5FFD` | 🟥 | P2 |
+| 5 | **Live vs preview hit table** — confirm `0x156E` governs real fire, `0x213A` only planner/AI | strongly implied by trace | check movie playback never calls `seg96:0x09AF` | 🟩 | P2 |
+
+### Postures & cover
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 6 | **Posture → height integers** (Upright/Duck/Crouch) | 4 / 3 / 2 on terrain-height scale (hypothesis) | value the Height tool writes; height read in `seg87:0x1CE0` | 🟨 | P1 |
+| 7 | **Shooter posture affects own fire?** | inferred yes (symmetric LoS) — no separate constant found | same LoS trace | 🟨 | P2 |
+| 8 | **Keep 3 poses or trim to 2?** (design) | RE says keep all 3 — Ducking is meaningful (§14) | design call | 🟩 | P1 |
+
+### Timing
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 9 | **Clock rate** | **60 units/s — CONFIRMED** (§19) | — | 🟩 | P1 |
+| 10 | **Fire interval per weapon** | `b1`: 0.33 s or 0.5 s, **fixed (confirmed)**; labels provisional (see #1) | `0x7F5` / `seg13:0x094E` | 🟩/🟨 | P1 |
+| 11 | **Move cost & alternation** | 0.3/0.7 s alternating (playtest ×60 = 18/42) — **but fire "alternation" was a myth, so verify move actually alternates** | move-cost path (separate from path-render `+0x42`); the logic-struct stride parity | 🟥 | P1 |
+| 12 | **Deploy / posture-step / scan-rotate costs** | 2.0 s / 0.1 s / 0.05 s (playtest ×60 = 120 / 6 / 3) | command-duration `seg13:0x08C5` param×60 paths; command enum | 🟨 | P1 |
+| 13 | **Weapon table `b2` column** | unidentified (16/28/50/80/96/112) — range? anim length? | reads in `seg13` + `seg76:0x0F17` | 🟥 | P3 |
+
+### Weapons & bots
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 14 | **Weapon max range — per-weapon or uniform?** | uniform **18** (string "Maximum range is 18" + `seg76 cmp 0x12`) | confirm no per-weapon range table | 🟩 | P1 |
+| 15 | **Point-buy rating values** (40/50/60/80/100) | from B&W team-builder dialog; **not** in stat table `0x0CA8` | locate rating table/formula | 🟥 | P3 |
+| 16 | **Formation roster table** (per-formation Quick Start rosters) | Beginner rosters from playtest; others unknown | data table behind "%d Rifle Robot" (STR 311–319) | 🟥 | P3 |
+| 17 | **Grenade / Time-Bomb / Zap** damage & weapon assignment | blast cat 0 & cat 2 tables found (§7); which is which provisional | weapon enum (#1) | 🟨 | P3 |
+| 18 | **Ammo mechanics** (Missile 3, Grenade 0–9) | Missile ammo = robot field `+0x1E`, decremented on fire | trace ammo init & Grenade count | 🟨 | P3 |
+| 19 | **Stealth invisibility rule** | invisible unless moved-this-tick or adjacent+LoS (Compute! review, **not** binary) | `STEALTHDLGPROC` + visibility grid `seg96:0x09AF` | 🟥 | P3 |
+
+### Modes & scoring
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 20 | **Survival win/scoring** (Robot/Survival/Side bonus point values) | objectives known (§16); point amounts unknown | score-compute fn filling struct at `seg22:0x2432` | 🟥 | P2 (v1 uses last-team-standing) |
+| 21 | **Other sports' exact rules** (coin spawn rate, flag capture/drop, hostage, base-tag) | objectives known; exact rules TBD | mode handlers (`SETCOINS/SETHOSTAGES/BOMB` procs) | 🟥 | P3 |
+
+### Visibility, scan & arenas
+
+| # | Item | Working value & source | Where to confirm | Conf | Pri |
+|---|---|---|---|---|---|
+| 22 | **Scan cone half-width** | ±90° firing arc, ±45° optimum (playtest) | `seg76` angle gate → `seg87:0x19E3`/`0x2D07` | 🟥 | P1 |
+| 23 | **Scan & Fire trigger/tracking** (Gate B) | fires when enemy enters cone; tracking TBD | Scan&Fire command handler (`SCANFIREDLGPROC` path) | 🟥 | P1 |
+| 24 | **Aim & Fire moving-target** | **confirmed**: off-aimed-tile halves hit (§15, `seg21:0x0F0A`) | — | 🟩 | P1 |
+| 25 | **Arena coordinate reconciliation** | grid orientation vs in-game (x,y) mismatched (§12) | probe 3–4 known tiles in DOSBox | 🟥 | P1 |
+| 26 | **Home Area / Dock positions per arena** | INF metadata partially parsed (widths/heights done) | INF chunk fields past `0x52` | 🟨 | P1 |
+| 27 | **Deploy rule** (first move Dock→Home, 2.0 s) | playtest; deploy resets stride parity | deploy handler | 🟥 | P1 |
+| 28 | **Movie playback fps** (decimation from 60 Hz sim) | "%d Frames/Sec" user-set (STR 1701); default unknown | movie player timing | 🟥 | P2 |
+
+### Already resolved this pass (so they're not re-opened)
+
+- ✅ Distance = floored Euclidean · ✅ Robot armor/accuracy (`0x0CA8`) · ✅ Stat
+  bytes 2–3 unused · ✅ Bullet damage rolls · ✅ Explosive blast tables · ✅ RNG
+  (dual-stream LFSR) · ✅ Clock = 60 Hz · ✅ Fire interval mechanism · ✅ Terrain
+  properties + all arenas · ✅ Moving-target = off-tile halving · ✅ Cover =
+  height-LoS mechanism · ✅ 5 sports & 5 bots identified · ✅ Bot availability
+  (build-mode, not sport-mode gated).
+
+**Fastest path to a faithful v1:** knock out the **P1** rows — most are a single
+debugger session each (posture heights #6, move cost/alternation #11, deploy/
+posture/scan costs #12, scan cone #22, Scan&Fire #23, arena coords #25/#26/#27).
+The combat core (damage, hit, cover model, fire rate, clock) is already exact.
