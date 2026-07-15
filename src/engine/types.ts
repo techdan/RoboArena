@@ -15,14 +15,7 @@ export interface TileCoord {
 /** 8-direction compass. Used for scan headings and movement direction. */
 export type Heading = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
-export type Terrain =
-  | "open"
-  | "rough"
-  | "low-wall"
-  | "wall"
-  | "bush"
-  | "crevice"
-  | "outer-wall";
+export type Terrain = "open" | "rough" | "low-wall" | "wall" | "bush" | "crevice" | "outer-wall";
 
 export interface ArenaTile {
   readonly terrain: Terrain;
@@ -31,29 +24,18 @@ export interface ArenaTile {
 // ──────────────────────────────────────────────────────────────────────────
 // Robots
 
-/**
- * v1 ships 2 postures (Standing + Crouching). Ducking is deferred to v2 —
- * see plan §"Ducking — deferred". Reintroducing it = adding "ducking" here
- * and slotting brackets/cover lookups for it; engine code paths are already
- * keyed by posture.
- */
-export type Posture = "standing" | "crouching";
+/** Stored as 1/2/3 in the original (RE §14/§15). */
+export type Posture = "upright" | "ducking" | "crouching";
 
-export type AccuracyTier = "high" | "medium" | "low";
+/** Exact stat-table values: Auto 0, Burst/Missile/Stealth 1, Rifle 2. */
+export type AccuracyTier = 0 | 1 | 2;
 
-export type RobotClass =
-  | "rifle"
-  | "burst"
-  | "auto"
-  | "missile"
-  | "stealth";
+export type CoverClass = 1 | 2 | 3 | 4;
+
+export type RobotClass = "rifle" | "burst" | "auto" | "missile" | "stealth";
 
 export type WeaponId =
-  | "rifle"
-  | "burst-gun"
-  | "auto-rifle"
-  | "missile-launcher"
-  | "grenade-launcher";
+  "rifle" | "burst-gun" | "auto-rifle" | "missile-launcher" | "grenade-launcher";
 
 /**
  * Static class definition (Custom Game point-buy table). Engine reads these
@@ -61,7 +43,7 @@ export type WeaponId =
  */
 export interface RobotDefinition {
   readonly class: RobotClass;
-  readonly accuracy: AccuracyTier; // descriptive only — engine uses scan-zone hit chance
+  readonly accuracy: AccuracyTier;
   readonly armor: number; // max HP
   readonly rating: number; // point cost
   readonly primaryWeapon: WeaponId;
@@ -92,15 +74,9 @@ export interface RobotState {
 // ──────────────────────────────────────────────────────────────────────────
 // Weapons
 
-export interface DamageBracket {
-  readonly min: number;
-  readonly max: number;
-}
-
-/** Two damage brackets per posture; `P(full)` mixes them per shot via distance. */
-export interface WeaponBrackets {
-  readonly standing: { readonly full: DamageBracket; readonly partial: DamageBracket };
-  readonly crouching: { readonly full: DamageBracket; readonly partial: DamageBracket };
+export interface RandomMaskRoll {
+  readonly base: number;
+  readonly mask: number;
 }
 
 export interface WeaponDefinition {
@@ -108,21 +84,23 @@ export interface WeaponDefinition {
   readonly displayName: string;
   /** `bullet` = single hit, `burst` = multi-bullet per click, `explosive` = blast. */
   readonly kind: "bullet" | "burst" | "explosive";
-  /** For burst weapons (Burst Gun): bullets per click. Each rolls hit + bracket independently. */
+  /** For burst weapons: bullets per click. Each rolls hit and damage independently. */
   readonly bulletsPerClick: number;
-  /** Per-click firing intervals (alternating, in ticks). [parity-0, parity-1] */
-  readonly firingIntervalTicks: readonly [number, number];
+  /** Fixed cost for the selected firing command, in 60 Hz ticks. */
+  readonly firingIntervalTicks: number;
   /** v1: all weapons cap at 18. */
   readonly maxRange: number;
   /** Bullet weapons have unlimited ammo; explosives are limited. */
   readonly startingAmmo: number | "unlimited";
-  /** For bullet/burst weapons: per-bullet damage brackets by posture. Undefined for explosives. */
-  readonly brackets?: WeaponBrackets;
+  /** Direct-fire base + (random & mask), before cover/distance adjustments. */
+  readonly damageRoll?: RandomMaskRoll;
+  /** Index into the exact 0x1596 add table; mapping is still provisional. */
+  readonly accuracyAddIndex?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** For explosives: blast radius and per-radius damage curve. */
   readonly blast?: {
     readonly radius: number;
-    /** `damageAtRadius[i]` = damage bracket at Chebyshev distance i from impact. */
-    readonly damageAtRadius: readonly DamageBracket[];
+    /** `damageAtRadius[i]` = base + (random & mask) at Euclidean radius i. */
+    readonly damageAtRadius: readonly RandomMaskRoll[];
   };
 }
 
@@ -163,9 +141,24 @@ export interface TurnOrders {
 // Resolution events — what the renderer consumes
 
 export type ResolutionEvent =
-  | { readonly kind: "move-step"; readonly tick: number; readonly robotId: string; readonly to: TileCoord }
-  | { readonly kind: "posture-changed"; readonly tick: number; readonly robotId: string; readonly posture: Posture }
-  | { readonly kind: "scan-rotated"; readonly tick: number; readonly robotId: string; readonly heading: Heading }
+  | {
+      readonly kind: "move-step";
+      readonly tick: number;
+      readonly robotId: string;
+      readonly to: TileCoord;
+    }
+  | {
+      readonly kind: "posture-changed";
+      readonly tick: number;
+      readonly robotId: string;
+      readonly posture: Posture;
+    }
+  | {
+      readonly kind: "scan-rotated";
+      readonly tick: number;
+      readonly robotId: string;
+      readonly heading: Heading;
+    }
   | {
       readonly kind: "projectile-launched";
       readonly tick: number;
@@ -183,38 +176,39 @@ export type ResolutionEvent =
       readonly tick: number;
       readonly targetId: string;
       readonly damage: number;
-      readonly bracket: "full" | "partial";
+      readonly score: number;
     }
   | {
       readonly kind: "miss";
       readonly tick: number;
       readonly targetTile: TileCoord;
-      readonly reason: "angle-blocked" | "wall-blocked" | "scan-grey" | "cover" | "target-moved";
+      readonly reason:
+        "out-of-range" | "angle-blocked" | "sight-blocked" | "hit-roll" | "no-target";
     }
   | { readonly kind: "destroyed"; readonly tick: number; readonly robotId: string }
   | { readonly kind: "robot-returned-to-dock"; readonly tick: number; readonly robotId: string }
-  | { readonly kind: "last-known-marker"; readonly tick: number; readonly tile: TileCoord; readonly observingTeamId: string };
+  | {
+      readonly kind: "last-known-marker";
+      readonly tick: number;
+      readonly tile: TileCoord;
+      readonly observingTeamId: string;
+    };
 
 export type Projectile =
-  | { readonly kind: "tile"; readonly target: TileCoord; readonly impactTick: number; readonly weapon: WeaponId }
+  | {
+      readonly kind: "tile";
+      readonly target: TileCoord;
+      readonly impactTick: number;
+      readonly weapon: WeaponId;
+    }
   | { readonly kind: "tracking"; readonly targetRobotId: string; readonly weapon: WeaponId };
 
 // ──────────────────────────────────────────────────────────────────────────
 // Match state and config
 
-export type SportType =
-  | "survival"
-  | "treasure-hunt"
-  | "capture-the-flag"
-  | "hostage"
-  | "baseball";
+export type SportType = "survival" | "treasure-hunt" | "capture-the-flag" | "hostage" | "baseball";
 
-export type Formation =
-  | "beginner"
-  | "standard"
-  | "fire-fight"
-  | "missile-fest"
-  | "beat-the-clock";
+export type Formation = "beginner" | "standard" | "fire-fight" | "missile-fest" | "beat-the-clock";
 
 export type GameLength = "skirmish" | "melee" | "battle" | "campaign";
 
@@ -267,10 +261,12 @@ export interface HomeArea {
 // Replay
 
 export interface ReplayLog {
+  readonly formatVersion: number;
   readonly initialState: MatchState;
   readonly seed: string;
   readonly turns: readonly {
     readonly orders: TurnOrders;
-    readonly events: readonly ResolutionEvent[];
+    /** Optional digest of derived events; events are not replay source-of-truth. */
+    readonly eventDigest?: string;
   }[];
 }

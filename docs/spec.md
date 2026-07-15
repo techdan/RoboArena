@@ -3,30 +3,15 @@
 The canonical, current spec for v1 mechanics. Numbers here match `src/engine/constants.ts` and `src/engine/catalog.ts` — those files are the literal source of truth; this doc explains them.
 
 **Confidence labels** on each rule:
-- ✅ **CONFIRMED** — verified via DOS empirical test (Match 1-7); see `priority-tests.md`
+- ✅ **CONFIRMED** — binary path/semantics or controlled DOS test verified
+- 🟨 **MAPPED / PROVISIONAL LABEL** — raw mechanism is verified, named mapping remains open
 - 🔵 **PROPOSED** — engine ships with these defaults; tunable in playtest
 - ⏳ **TBD** — strawman value in code, awaiting empirical pass
 
-> **Binary-derived corrections pending.** A reverse-engineering pass on the
-> original `ROBO.EXE` (see [`reverse-engineering.md`](./reverse-engineering.md))
-> read most of these numbers straight from the shipped program. Corrections to
-> values below: **distance is floored Euclidean, not Chebyshev** (RE §4);
-> **Rubble Two is 24×24, not 25×25** (RE §10); **bullet damage is a single wide
-> roll + posture/distance adjustments, not full/partial brackets** (RE §7b);
-> **cover is height-based line-of-sight, not a flat per-terrain %** (RE §15); and
-> **the internal clock runs at 60 units/s, not 20** (RE §19 — so the 15 s turn is
-> 900 units, and the per-action costs below are clean integers in 60ths). The
-> RE doc also supplies the exact hit tables, explosive-damage tables, robot
-> armor/accuracy table, RNG, and all arena/terrain data — the higher-authority
-> source where they conflict with the empirical estimates here.
->
-> **Reconsider the 2-posture trim.** This spec drops Ducking (below). The RE pass
-> found the middle pose is **not** redundant: Upright and Ducking move
-> identically, differing only in *height*, which drives cover — Ducking is the
-> "mobile + partial cover" stance. Dropping it removes the one stance that is
-> both mobile and defended. If cover is implemented as height-LoS (RE §15), all
-> three poses are nearly free (three height values). See RE §14 before finalizing
-> the 2-pose decision.
+The binary-derived tables and code paths are documented in
+[`reverse-engineering.md`](./reverse-engineering.md) and independently checked by
+[`re-verification.md`](./re-verification.md). Named weapon-selector mappings,
+movement timing, and the scan-cone boundary remain explicitly provisional.
 
 ---
 
@@ -42,7 +27,6 @@ RoboArena v1 is a playable Survival MVP, not full RoboSport parity.
 
 Deferred deliberately:
 - Online lobby / remote multiplayer. Build hot-seat first; online depends on stable resolver, replay, planner, and movie playback.
-- Ducking. The original has Standing / Ducking / Crouching; v1 keeps Standing / Crouching and reserves Ducking for v2.
 - AI personalities. Original RoboSport includes AI levels; v1 is human-only.
 - Non-Survival sports and their commands. Treasure Hunt / Capture the Flag / Hostage / Baseball plus sport-specific commands are out of v1.
 - Full Custom Game team builder and point-buy roster editing. v1 can start with Quick Start / preset rosters.
@@ -53,7 +37,8 @@ Deferred deliberately:
 
 The current defaults are good enough to prototype, but these areas need empirical confirmation before they become hard parity claims:
 
-- **Projectile timing and moving targets**: Aim & Fire is tile-targeted, but exact impact delay by weapon/distance is still under-specified. Phase 3 must test "target leaves tile before impact" behavior.
+- **Projectile presentation timing**: hit/damage are locked at fire time; exact
+  visual/impact delay by weapon remains under-specified for Phase 3.
 - **Scan & Fire trigger semantics**: trigger tick, target selection when multiple enemies enter range, ammo use, and whether a tracking shot updates target tile during flight need a focused test.
 - **Scan length and target speed**: the COMPUTE! review says hits depend on scan length and target speed. v1 does not model a numeric speed modifier unless DOS tests show a clear effect.
 - **Arena data**: at least Rubble Two and Rubble Three need hand-verified tile maps before renderer/planner work depends on them.
@@ -73,7 +58,7 @@ The current defaults are good enough to prototype, but these areas need empirica
 | Length | Robots/team | Arena dimensions | Default roster |
 |---|---:|---|---|
 | Skirmish | 2 | TBD ⏳ | TBD ⏳ |
-| Melee | 4 | 25×25 (Rubble Two) ✅ | 1 Rifle / 1 Burst / 1 Auto / 1 Missile ✅ |
+| Melee | 4 | 24×24 (Rubble Two) ✅ | 1 Rifle / 1 Burst / 1 Auto / 1 Missile ✅ |
 | Battle | 6 | 32×32 (Rubble Three) ✅ | 2 Rifle / 2 Burst / 1 Auto / 1 Missile ✅ |
 | Campaign | 8 | TBD ⏳ | 3 Rifle / 2 Burst / 2 Auto / 1 Missile ✅ |
 
@@ -94,7 +79,7 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 
 ### Turn budget
 
-- Beginner default: **15.0 seconds = 300 ticks**. ✅
+- Beginner default: **15.0 seconds = 900 ticks**. ✅
 - Other formations: configurable 1-40 seconds (Turn Length dialog in original). ✅
 - The planner permits commands extending past the budget; commands beyond 15.0 s are greyed out and not executed. ✅
 
@@ -114,75 +99,74 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 
 All ✅ from B&W Mac team-builder dialog.
 
-¹ Accuracy tier is descriptive — engine uses scan-zone-based hit chance (§6), not accuracy multipliers.
+¹ Accuracy is the exact binary tier `Rifle=2`, `Burst/Missile/Stealth=1`,
+`Auto=0`; it feeds the live-fire score (§6).
 ² Auto Rifle's in-game label is "Machine Gun"; manual calls it "Automatic Rifle". Engine uses `auto-rifle` as the canonical id.
 ³ Missile robots also carry rifles per Amiga manual. Other formations may grant secondaries (TBD ⏳).
 
 ### Postures
 
-**v1 ships 2 postures**, dropping the original's middle Ducking posture as a deliberate MVP trim.
+**v1 ships all 3 postures.** The binary stores them as `1/2/3`; Ducking is the
+mobile middle point in the cover system.
 
-| Posture | Movement | Damage taken |
+| Posture | Movement | Exposed / Bush / Low-wall cover class |
 |---|---|---|
-| Standing (default) | full speed on all passable terrain ✅ | baseline brackets (§6) |
-| Crouching | only Open Ground; blocked by all non-flat terrain ✅ | brackets shifted ~25% lower 🔵 |
+| Upright (default) | passable terrain | 4 / 4 / 3 ✅ |
+| Ducking | same traversal as Upright | 4 / 3 / 2 ✅ |
+| Crouching | Open Ground only | 3 / 2 / 1 ✅ |
 
-Posture-change cost: **0.1 s per height step**. Standing↔Crouching = 0.2 s. ✅
-
-> Ducking is reserved for v2. Do not add it opportunistically; it needs explicit movement, hit-rate, damage, and UI tests.
+Posture-change cost: **6 ticks (0.1 s) per step**; still provisional pending the
+command-duration trace (RE §20 #12).
 
 ---
 
 ## 4. Weapons
 
-| Weapon | Bullets/click | Firing interval (alt) | Max range | Ammo |
+| Weapon | Bullets/click | Engine firing interval | Max range | Ammo |
 |---|---:|---|---:|---|
-| Rifle | 1 | **0.7 / 0.3 s** ✅ | 18 ✅ | unlimited |
-| Burst Gun | **3** ✅ | **0.15 / 0.55 s** ✅ | 18 ✅ | unlimited |
-| Auto Rifle | 1 | 0.7 / 0.3 s ⏳ | 18 ✅ | unlimited |
-| Missile Launcher | 1 (explosive) | 0.7 / 0.3 s ⏳ | 18 ✅ | 3 |
-| Grenade Launcher | 1 (explosive) | 0.7 / 0.3 s ⏳ | 18 ✅ | limited (TBD ⏳) |
+| Rifle | 1 | 30 ticks (0.50 s) 🟨 | 18 ✅ | unlimited |
+| Burst Gun | **3** ✅ | 10 ticks (0.17 s) 🟨 | 18 ✅ | unlimited |
+| Auto Rifle | 1 | 20 ticks (0.33 s) 🟨 | 18 ✅ | unlimited |
+| Missile Launcher | 1 (explosive) | 20 ticks (0.33 s) 🟨 | 18 ✅ | 3 |
+| Grenade Launcher | 1 (explosive) | 20 ticks (0.33 s) 🟨 | 18 ✅ | limited (TBD ⏳) |
 
-Firing intervals **alternate by stride parity** like movement (§5). Range is **Chebyshev distance** (king-move) and is uniform across weapons (cursor-probed in DOS). ✅
+The binary's reachable selector rows contain exact intervals
+`30/30/20/15/20/20/10/10`; the named mappings above are isolated provisional
+choices. Range uses **floored Euclidean distance** and is uniform at 18. ✅
 
 ### Bullet weapon damage
 
-Two-bracket model: each on-tile hit rolls full or partial damage. P(full) falls linearly with distance.
+Each direct-fire hit rolls `base + (random & mask)`, then applies cover and
+distance adjustments. The roll families are exact; labels are 🟨 until the
+inventory selector mapping is completed.
 
-```
-P(full)(d) = clamp01(1 − d / 17)   ✅
-   d=1  → 0.94 (mostly full)
-   d=6  → 0.65 (mix)
-   d=17 → 0.00 (all partial)
-```
+| Weapon | Base roll per bullet |
+|---|---|
+| Rifle | `10 + (random & 7)` → 10–17 🟨 |
+| Auto Rifle | `8 + (random & 15)` → 8–23 🟨 |
+| Burst Gun | `6 + (random & 15)` → 6–21, three independent bullets 🟨 |
 
-Per-bullet damage brackets (in HP):
-
-| Weapon | Standing target | Crouching target |
-|---|---|---|
-| Rifle full | 18-25 ✅ | 14-21 🔵 |
-| Rifle partial | 10-17 ✅ | 7-13 🔵 |
-| Burst Gun full (per bullet × 3) | 7-10 🔵 | 5-8 🔵 |
-| Burst Gun partial | 3-6 🔵 | 2-5 🔵 |
-| Auto Rifle full | 18-25 🔵 | 14-21 🔵 |
-| Auto Rifle partial | 10-17 🔵 | 7-13 🔵 |
-
-Burst Gun rolls 3 independent hit + bracket rolls per click; per-click damage is the sum of bullet damages (with each bullet possibly missing).
+Damage adjustment: cover class 1/2/3/4 adds `-4/0/0/+4`; distance `<5` adds
+4 and distance `>12` subtracts 4. Clamp final damage to at least 0. ✅
 
 ### Explosive weapon damage (Missile)
 
-Blast at impact tile; falloff by Chebyshev radius from impact:
+Blast at impact tile; falloff by floored Euclidean radius:
 
 | Radius | Damage |
 |---|---|
-| 0 (direct hit) | 55-80 ✅ |
-| 1 | 40-60 ✅ |
-| 2 | 13-17 ✅ |
+| 0 (direct hit) | 60-91 ✅ |
+| 1 | 40-55 ✅ |
+| 2 | 10-17 ✅ |
 | 3+ | 0 ✅ |
 
 **Blast radius = 2.** Friendly-fire rule: explosives damage all robots in radius regardless of team. ✅
 
-Grenade Launcher uses a similar shape at ~80% of Missile damages (🔵 tunable; see `catalog.ts`).
+Grenade category: radius 0/1/2 = `45-76 / 25-40 / 5-12` 🟨 (raw category is
+exact; Grenade label remains mapped rather than proven).
+
+Cover class 1/2/3/4 reduces blast damage to `1/2`, `3/4`, `7/8`, or full using
+integer shifts/truncation. ✅
 
 ---
 
@@ -190,12 +174,13 @@ Grenade Launcher uses a similar shape at ~80% of Missile damages (🔵 tunable; 
 
 ### Step costs
 
-Movement steps **alternate by stride parity** (per-robot 0/1 flag flipping each step):
+Movement currently alternates by stride parity; values remain provisional until
+the movement command trace is complete (RE §20 #11):
 
 | Move size | Parity 0 | Parity 1 |
 |---|---|---|
-| Single tile | 0.3 s ✅ | 0.7 s ✅ |
-| Double tile | 0.4 s ✅ | 0.8 s ✅ |
+| Single tile | 18 ticks / 0.3 s 🔵 | 42 ticks / 0.7 s 🔵 |
+| Double tile | 24 ticks / 0.4 s 🔵 | 48 ticks / 0.8 s 🔵 |
 
 The pathfinder is responsible for chunking long paths into 1- and 2-tile moves to minimize total time. Triple+ chunks: TBD ⏳.
 
@@ -203,69 +188,60 @@ Stride parity **persists across non-movement commands** (posture change, scan ro
 
 ### Terrain & traversal
 
-Movement step costs do **not** vary by terrain at standing posture. ✅
+Upright and Ducking share traversal rules; exact terrain speed modifiers remain
+under review.
 
-| Terrain | Standing can walk on | Crouching can walk on |
+| Terrain | Upright/Ducking | Crouching |
 |---|---|---|
 | Open Ground | yes | yes |
 | Rough Ground | yes | **no** |
-| Low Walls | yes (occupies briefly while crossing) | **no** to walk onto; can occupy via in-place posture change |
+| Low Walls | yes | **no** to enter; may crouch in place |
 | Walls | **no** | **no** |
 | Bushes | yes | **no** |
 | Crevices | **no** | **no** |
-| Outer Walls | **no** (except Dock↔Field transitions) | **no** |
+| Outer Walls | **no** except Dock transitions | **no** |
 
 ### Deployment
 
-First action of each robot: deploy from Dock into Home Area. Cost: **2.0 s = 40 ticks**. ✅
+First action of each robot: deploy from Dock into Home Area. Current cost:
+**2.0 s = 120 ticks** 🔵 (RE §20 #27).
 First move out of the Dock must enter the Home Area. ✅
 
 ---
 
 ## 6. Combat resolution
 
-### Two independent dials
-
-Hit chance and damage bracket are independent:
-- **Scan-cone position** → hit chance (does the bullet hit at all?)
-- **Distance** → damage bracket (full vs partial)
+Hit chance is an integer score indexing the exact 20-word live-fire threshold
+table. Damage is a separate wide roll plus cover/distance adjustments.
 
 ### Scan cone
 
-Each robot has a `scanHeading` (one of 8 compass directions). The firing arc is a 180° forward semicircle, subdivided:
-
-| Zone | Half-width from heading | Hit chance |
-|---|---|---|
-| BLACK (optimum) | ±45° | **1.0** ✅ |
-| GREY (peripheral) | ±45-90° | **0.2** ✅ |
-| Outside | > 90° | "angle blocked" — cannot fire ✅ |
+Each robot has one of 8 scan headings. The current hard firing gate is a forward
+±90° semicircle 🔵; the exact binary angle boundary remains RE §20 #22. The old
+BLACK/GREY probabilities are removed from live resolution.
 
 Scan rotation cost: **0.05 s per directional unit**. ✅ E.g., facing N, rotating to W = 4 units = 0.2 s.
 
 ### Per-shot resolution pipeline
 
 ```
-1. Range check       — distance > weapon.maxRange (18) → angle-blocked equivalent
-2. Angle check       — scan-cone classify; "blocked" → no fire
-3. Bullet path trace — tile-by-tile from shooter to target tile:
-                          • Wall in path: bullet absorbed mid-flight (no damage)
-                          • Low wall in path: pathHasLowWall = true (used in cover)
-                          • Bushes / crevices / open / rough: pass through
-4. Hit chance        — BLACK 1.0 / GREY 0.2; failure → miss
-5. Cover miss chance — only if target is CROUCHING:
-                          • Target tile bush:        30%
-                          • Target tile low wall:    50%
-                          • Low wall in path:        90% (in-transit cover)
-                          • Take MAX of target-tile and in-transit (don't stack)
-                       Standing targets ignore all cover. ✅
-6. Damage roll       — bracket = (random < P(full)(distance)) ? FULL : PARTIAL
-                       damage = uniform(weapon.brackets[bracket][posture])
-7. Rough multiplier  — if target is on rough ground: damage × 1.2 ✅ 🔵
+1. Range gate: `floorEuclidean(shooter, aimedTile) <= 18`.
+2. Angle gate: aimed tile must be inside the scan cone.
+3. LoS/cover: Bresenham terrain sampling yields cover class 1..4; wall blocks.
+4. Score starts from cover class `1/2/3/4 -> 4/8/12/18`.
+5. Add the exact accuracy/distance ladder and target-terrain modifier
+   (`rough +2`, `bush -1`, `low-wall -3`, otherwise weapon-property add).
+6. Clamp score to 0..19. If the target left the aimed tile, halve the score.
+   A second unresolved modifier may halve it again (RE §20 #2; omitted).
+7. Hit when `(rng & 255) < LIVE_FIRE_HIT_THRESHOLDS[score]`.
+8. On hit, roll direct damage and apply cover/distance adjustments above.
 ```
 
 ### Two firing modes
 
-- **Aim & Fire** (tile-targeted): bullet flies to a fixed tile. If the target moves before bullet impact, the bullet hits empty space (the "shot went past" outcome). Used for static targets, predicted intercepts, area denial. Projectile travel timing is TBD and must be locked in Phase 3. ⏳
+- **Aim & Fire** (tile-targeted): hit and damage lock when the fire command
+  resolves. If the target has already left the aimed tile, the score is halved.
+  Later projectile flight does not reroll or enable in-flight dodging. ✅
 - **Scan & Fire** (enemy-targeted, tracks): robot waits in scan mode; when an enemy enters the scan cone × range, fires *at the enemy*. Trigger and tracking semantics are TBD until the focused DOS test is run. ⏳
 
 DOS shortcut: **Ctrl+Shift+click** on a target tile for repeat-fire (Amiga uses Alt). ✅
@@ -308,10 +284,10 @@ At end of each turn, for every team, record tiles where they last saw any enemy 
 
 | Quantity | Value |
 |---|---|
-| Tick rate | **20 ticks/second** (0.05 s/tick) ✅ |
-| Movie playback | 12 fps (decimated from 20-fps sim) ✅ |
-| Default turn duration | 15.0 s = 300 ticks ✅ |
-| Configurable turn range | 1-40 s = 20-800 ticks ✅ |
+| Tick rate | **60 ticks/second** ✅ |
+| Movie playback | 12 fps 🔵 (presentation only) |
+| Default turn duration | 15.0 s = 900 ticks ✅ |
+| Configurable turn range | 1-40 s = 60-2400 ticks ✅ |
 
 Time is integer ticks throughout the engine. Conversions to/from seconds happen at UI boundaries only.
 

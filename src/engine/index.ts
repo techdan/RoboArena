@@ -14,6 +14,7 @@ export * from "./types.js";
 export * from "./constants.js";
 export * from "./rng.js";
 export * from "./geometry.js";
+export * from "./cover.js";
 export * from "./catalog.js";
 export * from "./movement.js";
 export * from "./firing.js";

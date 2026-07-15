@@ -4,14 +4,25 @@
   "private": true,
   "description": "RoboArena — a faithful modern clone of Maxis RoboSport (1991). Pure-TS deterministic engine package; Next.js + PixiJS UI to follow.",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
+    "format": "prettier --write \"src/**/*.ts\" \"*.{json,mjs}\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"*.{json,mjs}\" \".github/**/*.yml\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.5",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^2.1.0"
   }
 }

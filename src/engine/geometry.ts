@@ -1,25 +1,23 @@
 /**
- * Pure geometry helpers — Chebyshev distance, scan-cone classification,
- * tile-line tracing for bullet paths.
+ * Pure deterministic geometry helpers.
  *
- * No engine state, no RNG; these are deterministic functions of inputs.
+ * Combat distance is floored Euclidean (RE §4). Bresenham paths stay integer
+ * and are shared by LoS, cover, and renderer path construction.
  */
 
-import {
-  SCAN_BLACK_ZONE_HALF_WIDTH_DEGREES,
-  SCAN_CONE_HALF_WIDTH_DEGREES,
-} from "./constants.js";
+import { SCAN_CONE_HALF_WIDTH_DEGREES } from "./constants.js";
 import type { Heading, TileCoord } from "./types.js";
 
-// ──────────────────────────────────────────────────────────────────────────
-// Distance
+/** Exact combat/range/blast metric for arena-sized integer coordinates. */
+export const floorEuclideanDistance = (a: TileCoord, b: TileCoord): number => {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.floor(Math.sqrt(dx * dx + dy * dy));
+};
 
-/** King-move distance, used for both range checks and missile blast radius. */
+/** Retained for rules that explicitly mean eight-neighbor adjacency. */
 export const chebyshevDistance = (a: TileCoord, b: TileCoord): number =>
   Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-
-// ──────────────────────────────────────────────────────────────────────────
-// Headings (8-direction compass)
 
 const HEADING_DEGREES: Readonly<Record<Heading, number>> = {
   N: 0,
@@ -32,60 +30,35 @@ const HEADING_DEGREES: Readonly<Record<Heading, number>> = {
   NW: 315,
 };
 
-/** Bearing in degrees from `from` to `to`, clockwise from N. Returns 0..360. */
 export const bearingDegrees = (from: TileCoord, to: TileCoord): number => {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   if (dx === 0 && dy === 0) return 0;
-  // y grows down (screen-style); flip dy for compass math (N = -dy)
   const radians = Math.atan2(dx, -dy);
-  let degrees = (radians * 180) / Math.PI;
-  if (degrees < 0) degrees += 360;
-  return degrees;
+  const degrees = (radians * 180) / Math.PI;
+  return degrees < 0 ? degrees + 360 : degrees;
 };
 
-/** Smallest absolute angle between two bearings, in [0, 180]. */
 export const angleDelta = (a: number, b: number): number => {
-  const d = Math.abs(a - b) % 360;
-  return d > 180 ? 360 - d : d;
+  const delta = Math.abs(a - b) % 360;
+  return delta > 180 ? 360 - delta : delta;
 };
 
-export type ScanZone = "black" | "grey" | "blocked";
-
-/**
- * Classify where `target` falls in the shooter's scan cone.
- *  - "black": inside ±SCAN_BLACK_ZONE_HALF_WIDTH_DEGREES (45°), full hit chance
- *  - "grey":  inside ±SCAN_CONE_HALF_WIDTH_DEGREES (90°) but outside black, low hit chance
- *  - "blocked": outside the cone entirely, can't fire ("angle blocked")
- */
-export const classifyScanZone = (
+/** Hard firing gate. Cone width remains PROVISIONAL RE §20 #22. */
+export const isWithinScanCone = (
   shooterTile: TileCoord,
   shooterHeading: Heading,
   target: TileCoord,
-): ScanZone => {
-  if (shooterTile.x === target.x && shooterTile.y === target.y) return "black";
-  const targetBearing = bearingDegrees(shooterTile, target);
-  const headingBearing = HEADING_DEGREES[shooterHeading];
-  const delta = angleDelta(targetBearing, headingBearing);
-  if (delta <= SCAN_BLACK_ZONE_HALF_WIDTH_DEGREES) return "black";
-  if (delta <= SCAN_CONE_HALF_WIDTH_DEGREES) return "grey";
-  return "blocked";
+): boolean => {
+  if (shooterTile.x === target.x && shooterTile.y === target.y) return true;
+  return (
+    angleDelta(bearingDegrees(shooterTile, target), HEADING_DEGREES[shooterHeading]) <=
+    SCAN_CONE_HALF_WIDTH_DEGREES
+  );
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// Line-of-sight tile tracing (Bresenham-style; integer-only, deterministic)
-
-/**
- * Tiles the bullet passes through from `from` to `to`, EXCLUSIVE of both
- * endpoints. Used for wall-blocking and in-transit cover detection.
- *
- * Pure integer Bresenham — never floating-point, so identical input → identical output
- * across machines (replay determinism contract).
- */
-export const tilesAlongLineExclusive = (
-  from: TileCoord,
-  to: TileCoord,
-): TileCoord[] => {
+/** Tiles crossed by a Bresenham line, excluding both endpoints. */
+export const tilesAlongLineExclusive = (from: TileCoord, to: TileCoord): TileCoord[] => {
   const tiles: TileCoord[] = [];
   let x0 = from.x;
   let y0 = from.y;

@@ -1,119 +1,91 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_ROSTER_BY_LENGTH,
-  ROBOT_DEFINITIONS,
-  WEAPONS,
-} from "./catalog.js";
-import { ROBOTS_PER_TEAM_BY_LENGTH } from "./constants.js";
+import { ARENA_DIMENSIONS } from "./constants.js";
+import { DEFAULT_ROSTER_BY_LENGTH, ROBOT_DEFINITIONS, WEAPONS } from "./catalog.js";
 
-describe("ROBOT_DEFINITIONS — point-buy table from B&W Mac Custom Game", () => {
-  it("all 5 v1 classes present", () => {
-    expect(Object.keys(ROBOT_DEFINITIONS).sort()).toEqual([
-      "auto",
-      "burst",
-      "missile",
-      "rifle",
-      "stealth",
-    ]);
+describe("robot catalog", () => {
+  it("matches the binary accuracy tiers", () => {
+    expect(
+      Object.fromEntries(Object.entries(ROBOT_DEFINITIONS).map(([k, v]) => [k, v.accuracy])),
+    ).toEqual({
+      rifle: 2,
+      burst: 1,
+      auto: 0,
+      missile: 1,
+      stealth: 1,
+    });
   });
 
-  it("Rifle: 140 armor / 40 rating / High accuracy", () => {
-    const r = ROBOT_DEFINITIONS.rifle;
-    expect(r.armor).toBe(140);
-    expect(r.rating).toBe(40);
-    expect(r.accuracy).toBe("high");
+  it("matches the binary armor table", () => {
+    expect(
+      Object.fromEntries(Object.entries(ROBOT_DEFINITIONS).map(([k, v]) => [k, v.armor])),
+    ).toEqual({
+      rifle: 140,
+      burst: 120,
+      auto: 100,
+      missile: 100,
+      stealth: 120,
+    });
   });
 
-  it("Stealth: 120 armor / 100 rating / Burst Gun + stealth visibility", () => {
-    const s = ROBOT_DEFINITIONS.stealth;
-    expect(s.armor).toBe(120);
-    expect(s.rating).toBe(100);
-    expect(s.primaryWeapon).toBe("burst-gun");
-    expect(s.stealthVisibility).toBe("stealth");
-  });
-
-  it("Missile carries Rifle as secondary (per manual)", () => {
+  it("gives Missile robots their rifle secondary", () => {
     expect(ROBOT_DEFINITIONS.missile.secondaryWeapons).toContain("rifle");
   });
 
-  it("Default Melee roster sums to a Team Rating of 230 (40+50+60+80)", () => {
-    const roster = DEFAULT_ROSTER_BY_LENGTH.melee;
-    const sum = roster.reduce((acc, c) => acc + ROBOT_DEFINITIONS[c].rating, 0);
-    expect(sum).toBe(230);
-  });
-
-  it("Default rosters match robots-per-team count for each game length", () => {
-    expect(DEFAULT_ROSTER_BY_LENGTH.skirmish).toHaveLength(
-      ROBOTS_PER_TEAM_BY_LENGTH.skirmish,
-    );
-    expect(DEFAULT_ROSTER_BY_LENGTH.melee).toHaveLength(
-      ROBOTS_PER_TEAM_BY_LENGTH.melee,
-    );
-    expect(DEFAULT_ROSTER_BY_LENGTH.battle).toHaveLength(
-      ROBOTS_PER_TEAM_BY_LENGTH.battle,
-    );
-    expect(DEFAULT_ROSTER_BY_LENGTH.campaign).toHaveLength(
-      ROBOTS_PER_TEAM_BY_LENGTH.campaign,
-    );
-  });
-
-  it("Battle default roster: 2 Rifle, 2 Burst, 1 Auto, 1 Missile (DOS-confirmed)", () => {
-    const roster = DEFAULT_ROSTER_BY_LENGTH.battle;
-    const counts = roster.reduce<Record<string, number>>((acc, c) => {
-      acc[c] = (acc[c] ?? 0) + 1;
-      return acc;
-    }, {});
-    expect(counts).toEqual({ rifle: 2, burst: 2, auto: 1, missile: 1 });
+  it("keeps the beginner battle roster", () => {
+    expect(DEFAULT_ROSTER_BY_LENGTH.battle).toEqual([
+      "rifle",
+      "rifle",
+      "burst",
+      "burst",
+      "auto",
+      "missile",
+    ]);
   });
 });
 
-describe("WEAPONS catalog", () => {
-  it("all 5 weapon ids present", () => {
-    expect(Object.keys(WEAPONS).sort()).toEqual([
-      "auto-rifle",
-      "burst-gun",
-      "grenade-launcher",
-      "missile-launcher",
-      "rifle",
+describe("weapon catalog", () => {
+  it("uses the three exact direct-fire roll families", () => {
+    expect(WEAPONS.rifle.damageRoll).toEqual({ base: 10, mask: 7 });
+    expect(WEAPONS["auto-rifle"].damageRoll).toEqual({ base: 8, mask: 15 });
+    expect(WEAPONS["burst-gun"].damageRoll).toEqual({ base: 6, mask: 15 });
+  });
+
+  it("uses exact missile base/mask rows", () => {
+    expect(WEAPONS["missile-launcher"].blast?.damageAtRadius).toEqual([
+      { base: 60, mask: 31 },
+      { base: 40, mask: 15 },
+      { base: 10, mask: 7 },
     ]);
   });
 
-  it("all weapons have max range 18 (DOS cursor probe)", () => {
-    for (const w of Object.values(WEAPONS)) {
-      expect(w.maxRange).toBe(18);
-    }
+  it("uses exact grenade base/mask rows", () => {
+    expect(WEAPONS["grenade-launcher"].blast?.damageAtRadius).toEqual([
+      { base: 45, mask: 31 },
+      { base: 25, mask: 15 },
+      { base: 5, mask: 7 },
+    ]);
   });
 
-  it("Burst Gun fires 3 bullets per click (multi-bullet model)", () => {
+  it("uses a uniform max range of 18", () => {
+    for (const weapon of Object.values(WEAPONS)) expect(weapon.maxRange).toBe(18);
+  });
+
+  it("keeps burst at three bullets per click", () => {
     expect(WEAPONS["burst-gun"].bulletsPerClick).toBe(3);
   });
 
-  it("Missile blast: radius 2, 3 damage entries (r=0,1,2)", () => {
-    const m = WEAPONS["missile-launcher"];
-    expect(m.blast?.radius).toBe(2);
-    expect(m.blast?.damageAtRadius).toHaveLength(3);
+  it("uses fixed, integer fire costs", () => {
+    for (const weapon of Object.values(WEAPONS)) {
+      expect(Number.isInteger(weapon.firingIntervalTicks)).toBe(true);
+      expect(weapon.firingIntervalTicks).toBeGreaterThan(0);
+    }
   });
 
-  it("Missile damage curve: r0 ≈ 70, r1 ≈ 50, r2 ≈ 15 (from Match 2)", () => {
-    const curve = WEAPONS["missile-launcher"].blast!.damageAtRadius;
-    const mid = (b: { min: number; max: number }) => (b.min + b.max) / 2;
-    expect(mid(curve[0]!)).toBeCloseTo(67.5, 0); // 55-80
-    expect(mid(curve[1]!)).toBe(50); // 40-60
-    expect(mid(curve[2]!)).toBe(15); // 13-17
+  it("limits missile ammunition", () => {
+    expect(WEAPONS["missile-launcher"].startingAmmo).toBe(3);
   });
 
-  it("Rifle full bracket (standing) is 18-25 (Match 3 confirmed)", () => {
-    expect(WEAPONS.rifle.brackets!.standing.full).toEqual({ min: 18, max: 25 });
-  });
-
-  it("Rifle partial bracket (standing) is 10-17 (Match 1 d=6 confirmed)", () => {
-    expect(WEAPONS.rifle.brackets!.standing.partial).toEqual({ min: 10, max: 17 });
-  });
-
-  it("Rifle crouching brackets are shifted ~25% lower than standing", () => {
-    const r = WEAPONS.rifle.brackets!;
-    expect(r.crouching.full.min).toBeLessThan(r.standing.full.min);
-    expect(r.crouching.full.max).toBeLessThan(r.standing.full.max);
-    expect(r.crouching.partial.min).toBeLessThan(r.standing.partial.min);
+  it("corrects Rubble Two to 24x24", () => {
+    expect(ARENA_DIMENSIONS.melee).toEqual({ width: 24, height: 24 });
   });
 });

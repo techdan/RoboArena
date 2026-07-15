@@ -1,23 +1,16 @@
 /**
- * Blast resolution for explosive weapons (Missile, Grenade).
- *
- * From `docs/spec.md` §"Explosive weapon damage (Missile)":
- *   Missile blast curve: r=0 ≈ 70, r=1 ≈ 50, r=2 ≈ 15, r≥3 = 0.
- *   blastRadius = 2 (Chebyshev / king-move).
- *
- * Friendly-fire rule: explosives damage all robots in radius regardless of team
- * (manual: "Missiles (and other explosives) can [harm friendlies]"). Bullets do not.
- *
- * Pure function — caller maps the result onto match state.
+ * Exact explosive base/mask rolls and Euclidean falloff (RE §7).
  */
 
-import { chebyshevDistance } from "./geometry.js";
+import { floorEuclideanDistance } from "./geometry.js";
 import type { Rng } from "./rng.js";
-import type { TileCoord, WeaponDefinition } from "./types.js";
+import type { CoverClass, TileCoord, WeaponDefinition } from "./types.js";
 
 export interface BlastTarget {
   readonly robotId: string;
   readonly tile: TileCoord;
+  /** Cover/posture class at the blast path, produced by the cover resolver. */
+  readonly coverClass: CoverClass;
 }
 
 export interface BlastDamageRoll {
@@ -33,10 +26,13 @@ export interface BlastContext {
   readonly rng: Rng;
 }
 
-/**
- * Returns one damage roll per robot that fell within the blast radius.
- * Robots outside the radius are filtered out (no zero-damage rolls).
- */
+export const applyExplosiveCoverCut = (raw: number, coverClass: CoverClass): number => {
+  if (coverClass === 1) return raw >> 1;
+  if (coverClass === 2) return raw - (raw >> 2);
+  if (coverClass === 3) return raw - (raw >> 3);
+  return raw;
+};
+
 export const resolveBlast = ({
   impact,
   weapon,
@@ -44,22 +40,20 @@ export const resolveBlast = ({
   rng,
 }: BlastContext): BlastDamageRoll[] => {
   if (!weapon.blast) {
-    throw new Error(
-      `resolveBlast called for non-explosive weapon ${weapon.id}; bullets use resolveFire instead`,
-    );
+    throw new Error(`resolveBlast requires an explosive weapon; received ${weapon.id}`);
   }
 
-  const { damageAtRadius, radius: maxRadius } = weapon.blast;
   const rolls: BlastDamageRoll[] = [];
-
   for (const target of potentialTargets) {
-    const radius = chebyshevDistance(impact, target.tile);
-    if (radius > maxRadius) continue;
-    const bracket = damageAtRadius[radius];
-    if (!bracket) continue; // defensive — should not happen if catalog is well-formed
-    const damage = rng.intInRange(bracket.min, bracket.max);
-    rolls.push({ robotId: target.robotId, damage, radius });
+    const radius = floorEuclideanDistance(impact, target.tile);
+    const damageRoll = weapon.blast.damageAtRadius[radius];
+    if (radius > weapon.blast.radius || !damageRoll) continue;
+    const raw = damageRoll.base + (rng.nextUint32() & damageRoll.mask);
+    rolls.push({
+      robotId: target.robotId,
+      radius,
+      damage: applyExplosiveCoverCut(raw, target.coverClass),
+    });
   }
-
   return rolls;
 };

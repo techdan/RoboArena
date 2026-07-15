@@ -1,31 +1,23 @@
 /**
- * Firing resolution: angle check → bullet path → scan-zone hit chance →
- * cover miss chance → damage roll → rough-ground vulnerability.
+ * Direct-fire resolution from RoboSport's live resolver (RE §7b/§15).
  *
- * Mirrors the pseudocode in `docs/spec.md` §"Combat resolution".
- *
- * Pure function: takes inputs + Rng, returns a discriminated-union result.
- * No engine-state mutation; the caller applies the result.
+ * Hit and damage are rolled at fire time. Projectile travel may delay applying
+ * the pre-rolled result, but it never rerolls or enables in-flight dodging.
  */
 
 import {
-  COVER_BUSH_MISS_CHANCE,
-  COVER_LOW_WALL_IN_PATH_MISS_CHANCE,
-  COVER_LOW_WALL_ON_TILE_MISS_CHANCE,
-  HIT_CHANCE_BLACK,
-  HIT_CHANCE_GREY,
-  ROUGH_GROUND_DAMAGE_MULTIPLIER,
-  fullBracketProbability,
+  COVER_CLASS_BULLET_DAMAGE_ADJUST,
+  COVER_CLASS_HIT_SCORE,
+  LIVE_FIRE_HIT_THRESHOLDS,
+  WEAPON_ACCURACY_ADDS,
 } from "./constants.js";
-import {
-  chebyshevDistance,
-  classifyScanZone,
-  tilesAlongLineExclusive,
-} from "./geometry.js";
+import { resolveCover } from "./cover.js";
+import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
 import type { Rng } from "./rng.js";
 import type {
+  AccuracyTier,
   ArenaTile,
-  DamageBracket,
+  CoverClass,
   Heading,
   Posture,
   TileCoord,
@@ -33,106 +25,136 @@ import type {
 } from "./types.js";
 
 export type FireResolution =
+  | { readonly outcome: "out-of-range"; readonly distance: number }
   | { readonly outcome: "angle-blocked" }
-  | { readonly outcome: "wall-blocked"; readonly stoppedAt: TileCoord }
-  | { readonly outcome: "miss"; readonly reason: "scan-grey" | "cover" }
+  | { readonly outcome: "sight-blocked"; readonly stoppedAt: TileCoord }
+  | {
+      readonly outcome: "miss";
+      readonly score: number;
+      readonly threshold: number;
+      readonly coverClass: CoverClass;
+    }
   | {
       readonly outcome: "hit";
       readonly damage: number;
-      readonly bracket: "full" | "partial";
+      readonly score: number;
+      readonly threshold: number;
+      readonly coverClass: CoverClass;
     };
 
 export interface FireContext {
   readonly shooterTile: TileCoord;
   readonly shooterHeading: Heading;
+  readonly shooterAccuracy: AccuracyTier;
+  /** Fixed tile selected by Aim & Fire. */
+  readonly aimedTile: TileCoord;
+  /** Target robot's actual tile when the command resolves. */
   readonly targetTile: TileCoord;
   readonly targetPosture: Posture;
   readonly weapon: WeaponDefinition;
-  readonly arenaTileAt: (t: TileCoord) => ArenaTile | undefined;
+  readonly arenaTileAt: (tile: TileCoord) => ArenaTile | undefined;
   readonly rng: Rng;
+  /** PROVISIONAL RE §20 #2: unresolved first score-halving modifier. */
+  readonly additionalHalving?: boolean;
 }
 
-const rollDamage = (rng: Rng, bracket: DamageBracket): number =>
-  rng.intInRange(bracket.min, bracket.max);
+const clampScore = (score: number): number => Math.max(0, Math.min(19, score));
 
-/**
- * Resolve a single bullet (or per-bullet roll for burst weapons).
- *
- * For burst weapons, the caller invokes this once per bullet; each bullet rolls
- * its own scan zone (same), wall block (same), hit chance, cover, and damage.
- */
+export const distanceScoreAdjustment = (distance: number, accuracyBase: number): number => {
+  if (distance > 12) return Math.floor(accuracyBase / 2) - 4;
+  if (distance >= 7) return accuracyBase - 2;
+  if (distance >= 3) return Math.floor(accuracyBase / 2) + (6 - distance);
+  return accuracyBase + 2 * (3 - distance) + 2;
+};
+
+const terrainScoreAdjustment = (
+  terrain: ArenaTile["terrain"] | undefined,
+  weapon: WeaponDefinition,
+): number => {
+  if (terrain === "rough") return 2;
+  if (terrain === "bush") return -1;
+  if (terrain === "low-wall") return -3;
+  const index = weapon.accuracyAddIndex ?? 0;
+  return WEAPON_ACCURACY_ADDS[index];
+};
+
+export const calculateLiveFireScore = (input: {
+  readonly accuracy: AccuracyTier;
+  readonly distance: number;
+  readonly coverClass: CoverClass;
+  readonly targetTerrain: ArenaTile["terrain"] | undefined;
+  readonly weapon: WeaponDefinition;
+  readonly targetOnAimedTile: boolean;
+  readonly additionalHalving?: boolean;
+}): number => {
+  const accuracyBase = input.accuracy + 4;
+  let score =
+    COVER_CLASS_HIT_SCORE[input.coverClass] +
+    distanceScoreAdjustment(input.distance, accuracyBase) +
+    terrainScoreAdjustment(input.targetTerrain, input.weapon);
+
+  // The original also subtracts an unresolved posture/scan argument. Omitted
+  // intentionally until RE §20 #2 is decoded.
+  score = clampScore(score);
+  if (input.additionalHalving) score >>= 1;
+  if (!input.targetOnAimedTile) score >>= 1;
+  return score;
+};
+
+const rollDirectDamage = (
+  rng: Rng,
+  weapon: WeaponDefinition,
+  coverClass: CoverClass,
+  distance: number,
+): number => {
+  if (!weapon.damageRoll) {
+    throw new Error(`resolveFire requires a direct-fire weapon; received ${weapon.id}`);
+  }
+  const raw = weapon.damageRoll.base + (rng.nextUint32() & weapon.damageRoll.mask);
+  const distanceAdjust = distance > 12 ? -4 : distance < 5 ? 4 : 0;
+  return Math.max(0, raw + COVER_CLASS_BULLET_DAMAGE_ADJUST[coverClass] + distanceAdjust);
+};
+
 export const resolveFire = (ctx: FireContext): FireResolution => {
-  const {
-    shooterTile,
-    shooterHeading,
-    targetTile,
-    targetPosture,
-    weapon,
-    arenaTileAt,
-    rng,
-  } = ctx;
-
-  // 1. Angle check — outside the 180° forward cone? Can't fire at all.
-  const zone = classifyScanZone(shooterTile, shooterHeading, targetTile);
-  if (zone === "blocked") return { outcome: "angle-blocked" };
-
-  // 2. Range check
-  const distance = chebyshevDistance(shooterTile, targetTile);
-  if (distance > weapon.maxRange) return { outcome: "angle-blocked" };
-
-  // 3. Trace bullet path; check for walls (block entirely) and low walls (in-transit cover signal)
-  const pathTiles = tilesAlongLineExclusive(shooterTile, targetTile);
-  let pathHasLowWall = false;
-  for (const tileCoord of pathTiles) {
-    const tile = arenaTileAt(tileCoord);
-    if (!tile) continue;
-    if (tile.terrain === "wall" || tile.terrain === "outer-wall") {
-      return { outcome: "wall-blocked", stoppedAt: tileCoord };
-    }
-    if (tile.terrain === "low-wall") {
-      pathHasLowWall = true;
-    }
+  const distance = floorEuclideanDistance(ctx.shooterTile, ctx.aimedTile);
+  if (distance > ctx.weapon.maxRange) {
+    return { outcome: "out-of-range", distance };
+  }
+  if (!isWithinScanCone(ctx.shooterTile, ctx.shooterHeading, ctx.aimedTile)) {
+    return { outcome: "angle-blocked" };
   }
 
-  // 4. Scan-zone hit chance (BLACK 1.0 / GREY 0.2)
-  const hitChance = zone === "black" ? HIT_CHANCE_BLACK : HIT_CHANCE_GREY;
-  if (!rng.chance(hitChance)) {
-    return { outcome: "miss", reason: "scan-grey" };
+  const cover = resolveCover({
+    from: ctx.shooterTile,
+    to: ctx.aimedTile,
+    targetPosture: ctx.targetPosture,
+    arenaTileAt: ctx.arenaTileAt,
+  });
+  if (cover.outcome === "blocked") {
+    return { outcome: "sight-blocked", stoppedAt: cover.stoppedAt };
   }
 
-  // 5. Cover miss chance (only applies to crouching targets).
-  //    Take the max of target-tile cover and in-transit cover.
-  if (targetPosture === "crouching") {
-    const targetTileTerrain = arenaTileAt(targetTile)?.terrain;
-    const targetTileMiss =
-      targetTileTerrain === "bush"
-        ? COVER_BUSH_MISS_CHANCE
-        : targetTileTerrain === "low-wall"
-          ? COVER_LOW_WALL_ON_TILE_MISS_CHANCE
-          : 0;
-    const inTransitMiss = pathHasLowWall ? COVER_LOW_WALL_IN_PATH_MISS_CHANCE : 0;
-    const coverMiss = Math.max(targetTileMiss, inTransitMiss);
-    if (rng.chance(coverMiss)) {
-      return { outcome: "miss", reason: "cover" };
-    }
+  const targetTerrain = ctx.arenaTileAt(ctx.targetTile)?.terrain;
+  const score = calculateLiveFireScore({
+    accuracy: ctx.shooterAccuracy,
+    distance,
+    coverClass: cover.coverClass,
+    targetTerrain,
+    weapon: ctx.weapon,
+    targetOnAimedTile: ctx.aimedTile.x === ctx.targetTile.x && ctx.aimedTile.y === ctx.targetTile.y,
+    ...(ctx.additionalHalving === undefined ? {} : { additionalHalving: ctx.additionalHalving }),
+  });
+  const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
+  const roll = ctx.rng.nextUint32() & 0xff;
+  if (roll >= threshold) {
+    return { outcome: "miss", score, threshold, coverClass: cover.coverClass };
   }
 
-  // 6. Damage roll: bracket from distance, range from weapon × posture
-  if (!weapon.brackets) {
-    throw new Error(
-      `resolveFire called for non-bullet weapon ${weapon.id}; explosives use the blast resolver instead`,
-    );
-  }
-  const pFull = fullBracketProbability(distance);
-  const bracket: "full" | "partial" = rng.chance(pFull) ? "full" : "partial";
-  const range = weapon.brackets[targetPosture][bracket];
-  let damage = rollDamage(rng, range);
-
-  // 7. Rough-ground vulnerability — applies to all postures
-  const targetTerrain = arenaTileAt(targetTile)?.terrain;
-  if (targetTerrain === "rough") {
-    damage = Math.round(damage * ROUGH_GROUND_DAMAGE_MULTIPLIER);
-  }
-
-  return { outcome: "hit", damage, bracket };
+  return {
+    outcome: "hit",
+    damage: rollDirectDamage(ctx.rng, ctx.weapon, cover.coverClass, distance),
+    score,
+    threshold,
+    coverClass: cover.coverClass,
+  };
 };

@@ -19,20 +19,20 @@ program**, which is the ground truth the playtests were approximating.
 | Hit chance (live-fire + preview tables) | §6, §7b | ✅ exact |
 | Bullet damage | §7b | ✅ exact (weapon labels provisional) |
 | Explosive/blast damage | §7 | ✅ exact |
-| **Postures — 3 poses & the middle one's purpose** | **§14** | ✅ model + rules (height integers provisional) |
+| **Postures — 3 poses & cover-class mapping** | **§14–15** | ✅ stored enum + final terrain/posture table |
 | **Cover / movement / terrain / armor → damage** | **§15** | ✅ model + tables (moving-target confirmed) |
 | Terrain properties, arenas | §9, §10 | ✅ exact / extracted |
 | **Sport modes (all 5)** | **§16** | ✅ objectives (scoring point-values TBD) |
 | **Bot types & availability** | **§17** | ✅ identified & answered |
 | Scan / line-of-sight / visibility | §18 | ✅ model (cone half-width TBD) |
 | **Timeline clock (60 Hz)** | **§19** | ✅ unit confirmed (was assumed 20 Hz) |
-| **Fire rate (per-weapon interval)** | **§19** | ✅ mechanism + values (0.33/0.5 s); weapon labels provisional |
+| **Fire rate (per-selector interval)** | **§19** | ✅ rows 5..12 (`10/15/20/30` units); named mapping provisional |
 | Move / deploy / scan / posture costs | §8, §19 | ⏳ playtest ×60 (clean integers), exact table not yet read |
 | **Outstanding-items master list** | **§20** | 📋 every assumption/TBD, prioritized |
 
-Remaining gaps are specific *constants* (posture heights, formation rosters,
-scoring points, cone half-width), each flagged with its exact code/data location
-in §13 so they can be finished with a debugger. The *mechanisms* are all mapped.
+Remaining gaps are specific mappings/constants (named weapon selectors,
+movement/action timing, formation rosters, scoring points, cone half-width),
+each tracked in §20. The posture enum and final cover-class table are resolved.
 
 **How to reproduce:** all scripts live in `tools/re/`. They are plain-Python
 (needs `pip install iced-x86` for the disassembler ones). The machine-readable
@@ -260,8 +260,8 @@ Partial, but enough to navigate. These are *heap struct* offsets (the game
 | `+0x66`, `+0x68`, `+0x6C` | per-turn stat counters (shots fired / hit / damage) incremented at impact |
 
 The equipped-weapon damage selector is *not* a single robot field; it flows
-through the weapon-inventory lookup `seg13:0x060E` + the weapon-kind table at
-DGROUP `0x7F4` (see §7b).
+through the weapon-inventory lookup `seg13:0x060E` + the selector table at
+DGROUP `0x7F4` (see §7b). Live-fire selectors occupy values **5..12**.
 
 **Projectile struct** (16 bytes, built by `seg6:0x1A08`):
 | Offset | Meaning |
@@ -514,11 +514,13 @@ reasonable approximation of a continuous distribution.
 
 **One sub-item still open:** the exact **weapon-id → slot** labels. The selector
 comes from the weapon-property lookup `seg13:0x060E`, which reads the equipped
-weapon's *kind* byte and indexes a **weapon-kind table at DGROUP `0x7F4`** (8
-entries × 4 bytes). That table's first byte cleanly splits weapons into
-**category 1 = direct-fire (bullet)** vs **category 3 = explosive** —
-`[1,1,1,3,1,3,3,1]` across kinds 0–7 — which is exactly why the two `0` slots in
-the damage table are the explosives. So the *structure* is confirmed: three
+weapon's selector byte and indexes a selector table at DGROUP `0x7F4` (4-byte
+rows). **Correction from the 2026-07-12 audit:** live fire uses selectors
+**5..12**, not rows 0..7. Their first bytes are
+`[3,3,1,3,3,1,3,3]`; the two `0` damage slots are selectors 7 and 10, both
+category 1. Therefore, for the live selectors, **category 1 = explosive** and
+**category 3 = direct-fire**, the reverse of the earlier draft. The structure
+is still confirmed: three
 bullet rolls (10–17 / 8–23 / 6–21) + two explosive `0` slots. Pinning which
 bullet roll is Rifle vs. Auto vs. Burst needs decoding the rest of the weapon
 inventory chain (`seg13` slot → kind → class), a multi-layer lookup with
@@ -724,8 +726,9 @@ reviewer. Each item is independently checkable.
 
 **Still open (smaller, ranked):**
 8. **Weapon-id → damage-slot labels** (§7b): decode the weapon-inventory chain
-   `seg13:0x060E` → weapon-kind byte → table `0x7F4` (`[1,1,1,3,1,3,3,1]`,
-   bullet=1/explosive=3) → class, to confirm which of 10–17 / 8–23 / 6–21 is
+   `seg13:0x060E` → selector byte 5..12 → table `0x7F4`
+   (`[3,3,1,3,3,1,3,3]`; live selectors use direct=3/explosive=1) → class,
+   to confirm which of 10–17 / 8–23 / 6–21 is
    Rifle vs. Auto vs. Burst. Best inference: Auto = 8–23, Rifle = 10–17,
    Burst = 6–21/bullet. *Everything else about bullet damage is exact; only these
    three labels are provisional.*
@@ -740,10 +743,9 @@ reviewer. Each item is independently checkable.
     roll and `0x213A`/`seg96` is only the planner preview + AI (the trace strongly
     implies this; a reviewer can verify by checking that movie playback never
     calls `seg96:0x09AF`).
-13. **Posture → height integers** (§14): read the value the Height tool writes and
-    where `seg87:0x1CE0` reads shooter/target height. Confirms Upright/Duck/Crouch
-    heights (hypothesis 4/3/2 on the terrain-height scale). *Model confirmed; only
-    the 3 integers provisional.*
+13. ✅ **Posture values + final cover table — DONE.** `seg87:0x1CE0` reads
+    robot `+0x50` as Upright/Duck/Crouch = 1/2/3 and maps those values with
+    sampled obstruction height to cover classes (§15).
 14. **Moving-target penalty** (§15): confirm the two score-halving flags in
     `seg6:0x35D1` (`0x37F4`, `0x380A`) mean "target moved this tick." If so,
     movement is a first-class defense (the COMPUTE! "target speed" claim).
@@ -810,13 +812,10 @@ it's less special-casing than a 2-pose trim, and it's what makes cover tactical.
 step, so Upright↔Crouching = 0.2 s, Upright↔Ducking or Ducking↔Crouching = 0.1 s.
 A binary-confirm is low priority.
 
-> **Open constant:** the exact integer *height per pose* (e.g. Upright 4 / Duck 3
-> / Crouch 2 on the same scale as terrain heights) is not yet pinned — the
-> posture field resisted offset-search because several structs collide at the
-> same offsets. A reviewer with Ghidra/a debugger can read it in minutes by
-> watching the value the Height tool writes and where `seg87:0x1CE0` reads the
-> shooter/target height. The *model* (below) is confirmed; only the 3 integers
-> are provisional.
+> **Resolved 2026-07-12:** `seg87:0x1CE0` reads robot field `+0x50` and compares
+> it directly with `1/2/3`: `1=Upright`, `2=Ducking`, `3=Crouching`. The final
+> cover-class table is decoded in §15. The earlier proposed synthetic heights
+> `4/3/2` should not be used.
 
 ---
 
@@ -839,8 +838,20 @@ height and the target's height** (heights are posture-derived, §14). A shot is
 - **Bush (2)** gives cover only when the target is *on or behind* it (help text),
   and it blocks sight partially (TIL `b2`=1).
 
-This unifies posture and terrain: there's **no separate "posture damage
-multiplier"** — posture just sets your height in the LoS test.
+This unifies posture and terrain: there's **no separate posture damage
+multiplier** — posture and the sampled terrain produce a cover class.
+
+The final `seg87:0x1CE0` mapping is now decoded:
+
+| sampled obstruction | Upright (1) | Ducking (2) | Crouching (3) |
+|---|---:|---:|---:|
+| exposed/open | 4 | 4 | 3 |
+| bush / partial height 2 | 4 | 3 | 2 |
+| low wall / height 3 | 3 | 2 | 1 |
+
+Walls remain complete blockers through the separate LoS gate. The trace also
+samples tiles beside certain diagonal/corner paths; reproducing those exact
+sampling edge cases remains open, but the posture/terrain output table does not.
 
 ### The cover result feeds two dials (both confirmed tables)
 
@@ -903,7 +914,7 @@ to the Dock ("arrggghhh"). There is no armor-vs-damage-type interaction.
 ```
 1. Range gate:      dist = floorEuclid(shooter, targetTile);  if dist > 18 → "out of range"
 2. Angle gate:      target must be within the scan cone → else "angle blocked"
-3. LoS/cover:       walk path (seg87) → coverClass 1..4 (heights: terrain b0 vs posture height)
+3. LoS/cover:       walk path (seg87) → coverClass 1..4 (terrain sample + posture enum)
                     if a Wall fully blocks → no hit
 4. Hit roll:        score = coverInit[coverClass] + distanceBonus + targetTerrainAdd
                             + weaponAccAdd - posturePenalty ; clamp 0..19
@@ -1067,34 +1078,39 @@ that look like a stride-parity flag are actually **path-render** state (they dri
 `seg76:0x13F8`, a path-drawing routine) — a repeated offset-collision trap; the
 real move-cost parity lives on the robot's logic struct and is a separate trace.
 
-### Fire rate — **confirmed: fixed per-weapon interval, not alternating**
+### Fire rate — **confirmed: table-driven per-selector interval**
 
 The command-duration function **`seg13:0x08C5`** (called from seg5/6/7 as the
-canonical "how many clock units does this command take?") resolves a **fire**
-command's cost to the weapon's **`b1` column** at DGROUP **`0x7F5`** (the
-weapon-kind table, §7b) — read in exactly one place (`seg13:0x094E`). So the fire
-interval is a **fixed value per weapon, in 60ths of a second**:
+canonical "how many clock units does this command take?") resolves a fire
+selector's cost to its **`b1` column** at DGROUP **`0x7F5`** — read at
+`seg13:0x094E`. The 2026-07-12 audit corrected the indexed range: live fire uses
+selectors **5..12**, not rows 0..7.
 
-| weapon-kind | `b1` | interval |
+| selector | category | `b1` interval | `b2` |
 |---|---|---|
-| 0 | 0 | 0 (non-firing / melee?) |
-| 1, 3, 4, 7 | 20 | **0.33 s** (~3 shots/s) |
-| 2, 5, 6 | 30 | **0.5 s** (2 shots/s) |
+| 5 | 3 | 30 (0.50 s) | 96 |
+| 6 | 3 | 30 (0.50 s) | 112 |
+| 7 | 1 | 20 (0.33 s) | 28 |
+| 8 | 3 | 15 (0.25 s) | 96 |
+| 9 | 3 | 20 (0.33 s) | 112 |
+| 10 | 1 | 20 (0.33 s) | 32 |
+| 11 | 3 | 10 (0.17 s) | 96 |
+| 12 | 3 | 10 (0.17 s) | 112 |
 
-**This corrects a playtest assumption:** fire cadence is a *single fixed interval
-per weapon* (0.33 s or 0.5 s), **not** the alternating `0.7 / 0.3 s` the spec
-lists — that alternation was almost certainly movement's stride-parity misread
-onto firing. A Burst click still spawns 3 projectiles but costs **one** `b1`
-interval. The same function converts player-timed commands (scan-for-N-seconds,
+**This corrects both the playtest assumption and the earlier RE draft:** cadence
+is table-driven per selector and is not the old generic `0.7/0.3` parity, but a
+named weapon may use more than one selector. The weapon→selector mapping must be
+finished before claiming one exact interval per named weapon. The same function
+converts player-timed commands (scan-for-N-seconds,
 zap duration, bomb fuse) as **`param × 60`**, confirming again that game time is
-in 60ths. The **weapon-kind → weapon-name** map is the same open enum as the
+in 60ths. The **selector → weapon-name** map is the same open inventory mapping as the
 damage-slot labels (§7b / §13 #8) — so *which* weapon is 0.33 vs 0.5 s is
 provisional, but the two interval values and the mechanism are exact.
 
-> **Note:** the 4-byte weapon-kind rows at `0x7F4` are now `[category, fireInterval,
-> b2, flag]` — `b0` = 1 bullet / 3 explosive (§7b), `b1` = fire interval (here),
-> `b2` (read at `seg13` + `seg76:0x0F17`) still unidentified (range or animation
-> length), `b3` = 1 only for kind 3.
+> **Note:** the 4-byte selector rows at `0x7F4` are
+> `[category, fireInterval, b2, flag]`. For reachable live selectors 5..12,
+> category 1 follows the explosive/zero-direct-damage path and category 3 the
+> direct-fire path. `b2` is still unidentified.
 
 ---
 
@@ -1115,17 +1131,17 @@ sub-part remains).
 
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
-| 1 | **Weapon → damage-slot labels** — which roll is Rifle/Auto/Burst | Auto `8–23`, Rifle `10–17`, Burst `6–21`/bullet (inference) | weapon enum via `seg13:0x060E` → kind table `0x7F4`; decode inventory chain | 🟨 | P2 |
+| 1 | **Weapon → damage-slot labels** — which roll is Rifle/Auto/Burst | Auto `8–23`, Rifle `10–17`, Burst `6–21`/bullet (inference) | inventory via `seg13:0x060E` → selectors 5..12; decode name chain | 🟨 | P2 |
 | 2 | **2nd hit-score halving flag** `[bp+10h]` | unknown modifier | `seg6:0x35D1` @ `0x37F4` — trace the arg | 🟨 | P2 |
-| 3 | **Cover-flag per-terrain thresholds** — how the trace yields coverClass 1–4 | model = height-LoS (§15); classes map to confirmed hit/dmg tables | decode `seg87:0x1CE0` step loop | 🟨 | P2 |
-| 4 | **Explosive posture-cut → posture** — which posture = ×0.5/0.75/0.875 | Standing full, Crouch ×0.75 (guess) | `seg87:0x1BF8` output → `seg6:0x5FFD` | 🟥 | P2 |
+| 3 | **Diagonal/adjacent cover path sampling** | final posture/terrain class table resolved; exact beside-line sampling remains | finish `seg87:0x1CE0` step-loop edge cases | 🟨 | P2 |
+| 4 | **Explosive cover cut** | resolved by cover class: 1/2/3/4 → ×0.5/0.75/0.875/1 | `seg87:0x1BF8` → `seg6:0x5FFD` | 🟩 | P2 |
 | 5 | **Live vs preview hit table** — confirm `0x156E` governs real fire, `0x213A` only planner/AI | strongly implied by trace | check movie playback never calls `seg96:0x09AF` | 🟩 | P2 |
 
 ### Postures & cover
 
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
-| 6 | **Posture → height integers** (Upright/Duck/Crouch) | 4 / 3 / 2 on terrain-height scale (hypothesis) | value the Height tool writes; height read in `seg87:0x1CE0` | 🟨 | P1 |
+| 6 | **Posture values / cover mapping** | **resolved:** field `+0x50` = Upright 1 / Duck 2 / Crouch 3; final table in §15 | `seg87:0x1CE0` | 🟩 | P1 |
 | 7 | **Shooter posture affects own fire?** | inferred yes (symmetric LoS) — no separate constant found | same LoS trace | 🟨 | P2 |
 | 8 | **Keep 3 poses or trim to 2?** (design) | RE says keep all 3 — Ducking is meaningful (§14) | design call | 🟩 | P1 |
 
@@ -1134,7 +1150,7 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 9 | **Clock rate** | **60 units/s — CONFIRMED** (§19) | — | 🟩 | P1 |
-| 10 | **Fire interval per weapon** | `b1`: 0.33 s or 0.5 s, **fixed (confirmed)**; labels provisional (see #1) | `0x7F5` / `seg13:0x094E` | 🟩/🟨 | P1 |
+| 10 | **Fire interval per named weapon** | selector rows 5..12 confirmed: `30/30/20/15/20/20/10/10`; weapon→selector mapping open | `0x7F5` / `seg13:0x094E` + inventory chain | 🟩/🟨 | P1 |
 | 11 | **Move cost & alternation** | 0.3/0.7 s alternating (playtest ×60 = 18/42) — **but fire "alternation" was a myth, so verify move actually alternates** | move-cost path (separate from path-render `+0x42`); the logic-struct stride parity | 🟥 | P1 |
 | 12 | **Deploy / posture-step / scan-rotate costs** | 2.0 s / 0.1 s / 0.05 s (playtest ×60 = 120 / 6 / 3) | command-duration `seg13:0x08C5` param×60 paths; command enum | 🟨 | P1 |
 | 13 | **Weapon table `b2` column** | unidentified (16/28/50/80/96/112) — range? anim length? | reads in `seg13` + `seg76:0x0F17` | 🟥 | P3 |
@@ -1179,6 +1195,6 @@ sub-part remains).
   (build-mode, not sport-mode gated).
 
 **Fastest path to a faithful v1:** knock out the **P1** rows — most are a single
-debugger session each (posture heights #6, move cost/alternation #11, deploy/
-posture/scan costs #12, scan cone #22, Scan&Fire #23, arena coords #25/#26/#27).
+debugger session each (move cost/alternation #11, deploy/posture/scan costs #12,
+scan cone #22, Scan&Fire #23, arena coords #25/#26/#27).
 The combat core (damage, hit, cover model, fire rate, clock) is already exact.

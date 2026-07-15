@@ -10,6 +10,8 @@
  */
 
 export interface Rng {
+  /** Returns the next raw unsigned 32-bit value. */
+  nextUint32(): number;
   /** Returns a uniform float in [0, 1). */
   next(): number;
   /** Returns a uniform integer in [min, max] (inclusive both ends). */
@@ -35,15 +37,18 @@ const hashSeed = (seed: string): number => {
 export const createRng = (seed: string): Rng => {
   let state = hashSeed(seed) || 1; // never let state be 0
 
-  const next = (): number => {
+  const nextUint32 = (): number => {
     state = (state + 0x6d2b79f5) >>> 0;
     let t = state;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return (t ^ (t >>> 14)) >>> 0;
   };
 
+  const next = (): number => nextUint32() / 4294967296;
+
   return {
+    nextUint32,
     next,
     intInRange(min, max) {
       if (max < min) throw new Error(`intInRange: max (${max}) < min (${min})`);

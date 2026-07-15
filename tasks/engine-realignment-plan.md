@@ -1,9 +1,8 @@
 # Engine realignment to binary truth — execution plan
 
-**Status:** ready to execute. Written by Fable (planning pass, 2026-07-10) for a
-cheaper model to implement. All numbers below are transcribed from
-`docs/reverse-engineering.md` (RE) — the executor should NOT need to re-derive
-anything, but section refs are given for verification.
+**Status:** draft implementation complete 2026-07-12. Raw values are reproduced
+by `tools/re/verify_claims.py`; named weapon selectors, movement/action timing,
+and diagonal beside-line cover sampling remain isolated provisional mappings.
 
 **Goal:** replace the Phase-1 playtest-derived combat model in `src/engine/`
 with the exact model read from `ROBO.EXE`. This must land **before Phase 2**
@@ -29,24 +28,32 @@ Per RE §13 recommendations + spec banner:
    radius). `floor(sqrt(dx²+dy²))` — compute with integer inputs; `Math.sqrt`
    + `Math.floor` is fine (deterministic across platforms for these magnitudes;
    add a test asserting the 32×32 table values match RE §4 examples).
-4. **Keep 3 postures**: Upright / Ducking / Crouching (RE §14). Heights 4/3/2
-   (provisional — single constants, flagged `// PROVISIONAL RE §20 #6`).
+4. **Keep 3 postures**: Upright / Ducking / Crouching (RE §14). The focused
+   trace resolved the stored values as 1/2/3 and the final terrain/posture cover
+   table; do not synthesize 4/3/2 posture heights.
 5. **Cover = height-based LoS** producing `coverClass 1..4` (RE §15). Replaces
    flat per-terrain cover %.
 6. **Clock = 60 units/s.** Turn budget 15 s = 900 units.
 
-## Sequencing (each step = one commit, tests green after each)
+## Preflight — resolve or classify the mappings
+
+Before Step 1, attempt the focused traces for weapon labels/fire costs, cover
+class/posture mapping, and action costs. Anything still unresolved must be
+isolated in a table and tagged `PROVISIONAL RE §20 #N`. Do not bury a guess in
+control flow.
+
+## Sequencing (tests and typecheck green at each stable boundary)
 
 ### Step 1 — `constants.ts` + `types.ts`
 - `TICKS_PER_SECOND`: 20 → **60**. Rename tick-derived constants if misleading.
 - Add `WEAPON_MAX_RANGE = 18` (already?), `TURN_SECONDS = 15` → 900 units.
 - Action costs in 60ths (playtest ×60, RE §19 — mark `// playtest-derived, RE §20 #11-12`):
   move 18/42 alternating (verify-later), deploy 120, posture step 6, scan rotate 3.
-- **Fire intervals — fixed per weapon** (RE §19, corrects alternation myth):
-  fast weapons 20 units (0.33 s), slow 30 units (0.5 s). Provisional mapping:
-  Rifle 30? — labels open (RE §20 #1/#10); pick and flag.
-- Types: `Posture = "upright" | "ducking" | "crouching"`; posture heights
-  `{upright: 4, ducking: 3, crouching: 2}`; terrain heights from TIL b0:
+- **Fire intervals are fixed per live selector**, not a universal alternating
+  parity. Selectors 5..12 contain `30/30/20/15/20/20/10/10` units. Named
+  weapon→selector mapping remains provisional (RE §20 #1/#10); isolate it.
+- Types: `Posture = "upright" | "ducking" | "crouching"`; stored posture enum
+  is 1/2/3. Terrain heights from TIL b0:
   open/rough/bush/crevice = 2, lowWall = 3, wall = 4.
 - Add terrain type `fence` to the enum ONLY if trivially accommodated;
   otherwise add a `// RE §20 #11 fence deferred` note. Fence mechanics (chance
@@ -72,6 +79,7 @@ score += distance ladder:
   0..2:       + base + 2*(3 - dist) + 2
   where base = accuracyTier + 4  (Rifle 2, Burst/Missile/Stealth 1, Auto 0)
 score += target terrain: rough +2, (cover tiles -1/-3 per RE — map bush -1, lowWall -3)
+  otherwise add weaponAccTable[weaponKind] from DGROUP 0x1596
 score = clamp(score, 0, 19)
 if target not on aimed tile at resolution: score >>= 1   // RE §15, confirmed
 hit = rngInt(0,255) < HIT_TABLE[score]
@@ -79,6 +87,10 @@ hit = rngInt(0,255) < HIT_TABLE[score]
 
 Note: the `-posturePenalty` arg and second halving flag (RE §20 #2) are
 unresolved — omit, with a `// RE §20 #2` comment.
+
+`resolveFire` must receive the aimed tile separately from the actual target
+robot/tile. The occupancy penalty compares those values at fire-resolution
+time; it is not an in-flight projectile check.
 
 ### Step 4 — `firing.ts` / `catalog.ts`: damage model
 Replace brackets with (RE §7b, rolls exact, labels provisional):
@@ -109,14 +121,18 @@ postureCut by coverClass: {1: 0.5, 2: 0.75, 3: 0.875, 4: 1.0}
 - Index beyond table length → 0 damage. Missile radius = 2 effective.
 
 ### Step 6 — cover model (`geometry.ts` or new `cover.ts`)
-Height-LoS returning `coverClass 1..4` (RE §15). Bresenham shooter→target;
-compare intervening terrain height (b0) against the sightline between
-shooter height and target height (posture-derived). Wall (4) → fully blocked
-(no shot). Exact per-terrain thresholds are open (RE §20 #3) — implement the
-simple height-vs-sightline interpolation, calibrate so:
-crouch-behind-lowWall → class 1; duck-behind-lowWall → 2; upright-behind-lowWall
-→ 3/4 (pokes over); open ground → 4; bush covers only on-or-behind.
-Point-blank default = 4 (exposed). Flag the thresholds `// PROVISIONAL RE §20 #3`.
+Height-LoS returning `coverClass 1..4` (RE §15). The decoded final mapping is:
+
+| obstruction | Upright | Ducking | Crouching |
+|---|---:|---:|---:|
+| open/exposed | 4 | 4 | 3 |
+| bush / partial height 2 | 4 | 3 | 2 |
+| low wall / height 3 | 3 | 2 | 1 |
+
+Wall (4) is fully blocked by the LoS gate. Point-blank defaults to class 4.
+Implement the table exactly. The remaining provisional part is how the original
+samples tiles beside a diagonal/corner path (`PROVISIONAL RE §20 #3`); keep path
+sampling isolated from the final mapping.
 
 ### Step 7 — arenas + spec sync
 - Rubble Two: 25×25 → **24×24** (RE §10). Do NOT import extracted grids yet —
@@ -147,3 +163,5 @@ Point-blank default = 4 (exposed). Flag the thresholds `// PROVISIONAL RE §20 #
 - `TICKS_PER_SECOND = 60`; all cost constants integers.
 - Every provisional constant carries a `RE §20 #N` comment.
 - spec.md and constants.ts agree (code wins).
+- Hit scoring includes the `0x1596` weapon-table fallback for target terrain
+  values outside 1/2/3.

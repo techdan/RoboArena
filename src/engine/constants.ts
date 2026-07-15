@@ -1,106 +1,85 @@
 /**
- * Engine constants — single source of truth for every locked numerical value.
+ * Engine constants for the deterministic RoboArena simulation.
  *
- * Sourced from `docs/spec.md`.
- * If a number changes here, also update the spec; if the spec changes, update here.
+ * Binary-derived values cite `docs/reverse-engineering.md` (RE). Values that
+ * still depend on an unresolved selector or command mapping are explicitly
+ * marked PROVISIONAL with their RE §20 item.
  */
 
 // ──────────────────────────────────────────────────────────────────────────
 // Time
 
-/** Internal simulation tick rate. Smallest observable cost (scan rotation = 0.05 s) is exactly 1 tick. */
-export const TICKS_PER_SECOND = 20;
+/** RoboSport's internal time unit is one sixtieth of a second (RE §19). */
+export const TICKS_PER_SECOND = 60;
 
-/** Movie playback frame rate (decimated from sim ticks for the renderer). */
-export const MOVIE_FPS = 12;
+/** Renderer presentation default; independent from the engine RNG/tick rate. */
+export const MOVIE_FPS = 12; // PROVISIONAL RE §20 #28
 
-/** Beginner default turn budget. Configurable 1–40 s in other formations via Turn Length dialog. */
-export const TURN_DURATION_SECONDS_DEFAULT = 15.0;
+export const TURN_DURATION_SECONDS_DEFAULT = 15;
+export const TURN_DURATION_TICKS_DEFAULT = TURN_DURATION_SECONDS_DEFAULT * TICKS_PER_SECOND;
 
-/** Convert seconds to engine ticks (integer). */
-export const secondsToTicks = (s: number): number =>
-  Math.round(s * TICKS_PER_SECOND);
-
-// ──────────────────────────────────────────────────────────────────────────
-// Movement
-
-/** Single-tile move costs (alternating, persists across non-move commands). */
-export const MOVE_SINGLE_COST_TICKS = [
-  secondsToTicks(0.3), // parity 0
-  secondsToTicks(0.7), // parity 1
-] as const;
-
-/** Double-tile move costs (path-chunked into pairs by the planner). */
-export const MOVE_DOUBLE_COST_TICKS = [
-  secondsToTicks(0.4), // parity 0
-  secondsToTicks(0.8), // parity 1
-] as const;
-
-/** Deployment from Dock into Home Area (one-time per robot per match). */
-export const DEPLOY_COST_TICKS = secondsToTicks(2.0);
-
-/** Posture change per height step (standing↔crouching costs 2 of these in v1's 2-posture model). */
-export const POSTURE_STEP_COST_TICKS = secondsToTicks(0.1);
-
-/** Scan rotation per directional unit (8 directions; rotates through intermediates). */
-export const SCAN_ROTATION_COST_TICKS = secondsToTicks(0.05);
+/** Convert seconds to integer engine ticks. */
+export const secondsToTicks = (seconds: number): number => Math.round(seconds * TICKS_PER_SECOND);
 
 // ──────────────────────────────────────────────────────────────────────────
-// Combat — scan cone
+// Movement and command timing
 
-/** Firing arc half-width: ±90° from scan heading = 180° forward semicircle. Targets outside = "angle blocked". */
-export const SCAN_CONE_HALF_WIDTH_DEGREES = 90;
+/** PROVISIONAL RE §20 #11: playtest-derived; move alternation still untraced. */
+export const MOVE_SINGLE_COST_TICKS = [18, 42] as const;
 
-/** Black/optimum zone half-width: ±45° from scan heading = inner 90° of the cone. */
-export const SCAN_BLACK_ZONE_HALF_WIDTH_DEGREES = 45;
+/** PROVISIONAL RE §20 #11: playtest-derived; move alternation still untraced. */
+export const MOVE_DOUBLE_COST_TICKS = [24, 48] as const;
 
-/** Hit chance for a stationary target inside the BLACK (optimum) zone. Match 5: 5/5 hits. */
-export const HIT_CHANCE_BLACK = 1.0;
+/** PROVISIONAL RE §20 #12/#27. */
+export const DEPLOY_COST_TICKS = 120;
 
-/** Hit chance for a stationary target inside the GREY (peripheral) zone. Match 5 + prior: 2/11 ≈ 18% → 0.2. */
-export const HIT_CHANCE_GREY = 0.2;
+/** PROVISIONAL RE §20 #12. */
+export const POSTURE_STEP_COST_TICKS = 6;
+
+/** PROVISIONAL RE §20 #12. */
+export const SCAN_ROTATION_COST_TICKS = 3;
 
 // ──────────────────────────────────────────────────────────────────────────
-// Combat — damage
+// Combat
 
-/** Maximum range for all weapons (Aim & Fire). Confirmed via DOS cursor probe. */
+/** Uniform maximum range, confirmed in code and UI strings (RE §4/§6). */
 export const WEAPON_MAX_RANGE = 18;
 
-/**
- * P(full damage bracket) by distance: linear from ~1.0 at d=1 to 0.0 at d=17.
- * Above d=17, target is essentially out of full-bracket reach.
- */
-export const fullBracketProbability = (distance: number): number => {
-  return Math.max(0, Math.min(1, 1 - distance / 17));
+/** PROVISIONAL RE §20 #22: hard scan gate not yet decoded. */
+export const SCAN_CONE_HALF_WIDTH_DEGREES = 90;
+
+/** Live-fire score thresholds out of 256, DGROUP 0x156E (RE §7b). */
+export const LIVE_FIRE_HIT_THRESHOLDS = [
+  0, 4, 8, 16, 24, 32, 40, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240,
+] as const;
+
+export const COVER_CLASS_HIT_SCORE: Readonly<Record<1 | 2 | 3 | 4, number>> = {
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 18,
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// Combat — cover (only applies to crouching targets)
+export const COVER_CLASS_BULLET_DAMAGE_ADJUST: Readonly<Record<1 | 2 | 3 | 4, number>> = {
+  1: -4,
+  2: 0,
+  3: 0,
+  4: 4,
+};
 
-/** Target tile is a bush, target is crouching → miss chance. Match 6 confirmed ~30%. */
-export const COVER_BUSH_MISS_CHANCE = 0.3;
-
-/** Target tile is a low wall, target is crouching → miss chance. Match 7: 4/8 missed → ~50%. */
-export const COVER_LOW_WALL_ON_TILE_MISS_CHANCE = 0.5;
-
-/** Low wall in bullet path with a crouching target behind → miss chance. Match 7: 1/10 hit → ~90%. */
-export const COVER_LOW_WALL_IN_PATH_MISS_CHANCE = 0.9;
-
-/** Damage multiplier applied when target is on Rough Ground (vulnerable, all postures). */
-export const ROUGH_GROUND_DAMAGE_MULTIPLIER = 1.2;
+/** Weapon-property accuracy-add table at DGROUP 0x1596 (RE §7b). */
+export const WEAPON_ACCURACY_ADDS = [4, 7, 6, 5, 4, 3, 2, 1] as const;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Arena
 
-/** Confirmed arena dimensions per Game Length. */
 export const ARENA_DIMENSIONS = {
-  skirmish: { width: 16, height: 16 }, // PROPOSED — not yet measured in DOS
-  melee: { width: 25, height: 25 }, // CONFIRMED: Rubble Two
-  battle: { width: 32, height: 32 }, // CONFIRMED: Rubble Three
-  campaign: { width: 40, height: 40 }, // PROPOSED — not yet measured
+  skirmish: { width: 16, height: 16 },
+  melee: { width: 24, height: 24 },
+  battle: { width: 32, height: 32 },
+  campaign: { width: 40, height: 40 },
 } as const;
 
-/** Robots per team by Game Length. */
 export const ROBOTS_PER_TEAM_BY_LENGTH = {
   skirmish: 2,
   melee: 4,

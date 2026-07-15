@@ -8,25 +8,35 @@ RoboArena — a modern web-based clone of the 1991 Maxis tactical game *RoboSpor
 
 **v1 scope**: human-vs-human hot-seat only, no AI. Survival sport mode. Desktop-only (mouse + keyboard). Online lobby is post-MVP after resolver, replay, planner, and movie playback are stable. Personal-scale, not production-grade — see "Scope discipline" below.
 
-**Project state**: Phase 1 (engine primitives) draft complete with 75 passing tests. Phase 1.5 (toolchain) is the next phase. The full 14-phase plan is in `docs/implementation-plan.md`.
+**Project state**: Phase 1R engine realignment is draft-complete with 86 passing
+tests. Phase 1.5 lint/format/CI configuration is implemented locally; the first
+remote Actions run awaits a push. Named weapon-selector mappings and movement
+command timing remain provisional but isolated. Phase 2 resolver is next. See
+`tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (75 tests)
+npm test               # Run all engine unit tests (currently 86 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
+npm run lint           # ESLint + engine nondeterminism bans
+npm run format:check   # Prettier verification
 npx vitest run path/to/file.test.ts    # Single test file
-npx vitest run -t "BLACK zone"         # Tests matching a name
+npx vitest run -t "floored Euclidean"  # Tests matching a name
 ```
 
-Lint, format, dev server, and build scripts land in Phase 1.5 — not yet wired.
+Dev/build/start scripts remain deferred until the Next.js scaffold.
 
 ## Architecture
 
 The codebase is in two distinct phases of completion:
 
-**`src/engine/` (Phase 1, complete)** — pure-TypeScript deterministic simulation. No React, no DOM, no I/O. Layered: `constants.ts` → `types.ts` → primitives (`rng`, `geometry`, `movement`, `firing`, `blast`, `catalog`) → `index.ts`. Every probabilistic decision goes through a seedable RNG (`createRng(seed)`); replays = `{ initialState, seed, turnOrders[] }` re-run to byte-identical events.
+**`src/engine/` (Phase 1R draft-complete)** — pure-TypeScript deterministic
+simulation realigned to the audited binary structures above. Provisional named
+weapon cadence/accuracy mappings are centralized in `catalog.ts`; provisional
+movement/action costs remain in `constants.ts`. Every probabilistic decision
+goes through a seedable RNG (`createRng(seed)`).
 
 **Everything else (Phases 2-13, not yet built)** — turn resolver, projectiles, visibility, replay format, Next.js + PixiJS UI, planner, and later online lobby. Architecture sketched in `docs/implementation-plan.md` §1, repository layout in §2.
 
@@ -47,12 +57,13 @@ Match 1-7 empirical observations are codified into `constants.ts`. Don't change 
 ```
 docs/
   spec.md                  CANONICAL game spec (rules + numbers; current truth)
-  implementation-plan.md   14-phase execution roadmap with per-phase acceptance criteria
+  implementation-plan.md   long execution roadmap with per-phase acceptance criteria
   priority-tests.md        empirical research log (Match 1-7 results inform engine constants)
   empirical-tests.md       broader test catalog
   initial-plan.md          HISTORICAL — original planning log; superseded by spec.md
   archive/                 pre-empirical-research docs (superseded; kept for provenance)
-src/engine/                pure-TS simulation (Phase 1 complete)
+src/engine/                pure-TS simulation (Phase 1 draft; realign before resolver)
+tasks/core-build-plan.md    canonical near-term execution order and phase gates
 references/                source matrix mapping mechanics → evidence
 screenshots/               gitignored local original-game research captures
 RoboSport (1991)/          gitignored — original DOS distribution; local research only

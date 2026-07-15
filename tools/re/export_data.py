@@ -100,7 +100,9 @@ def main():
 
     # Bullet damage: rolled at FIRE time in seg6:0x35D1, stored on projectile +0x0F, applied at impact.
     #   damage = weaponRoll[slot] + postureAdjust + distanceAdjust, floored at 0 (0 => no damage).
-    # Weapon jump table seg6:0x38C5 selects the roll by (robotField_0x5C - 5):
+    # Weapon jump table seg6:0x38C5 selects by the weapon-property value passed
+    # to the resolver (seg13:0x060E / selector table 0x7F4), minus 5. Robot +0x5C is
+    # a sound/effect id, not the weapon selector (RE §7b).
     bullet_damage = {
         "_where": "seg6:0x35D1 (resolver) -> projectile +0x0F -> seg6:0x5A2B (apply)",
         "weapon_rolls_by_slot": {
@@ -116,8 +118,15 @@ def main():
         "posture_adjust_by_class": {"1": -4, "2": 0, "3": 0, "4": +4},   # seg6:0x38BD, class = seg87:0x1BF8 output
         "distance_adjust": {"lt5": +4, "gt12": -4},                     # dist<5 => +4, dist>12 => -4
         "floor": "if result < 1 => 0",
-        "weapon_selector": "weapon-property lookup seg13:0x060E + kind table 0x7F4 (bullet=1/explosive=3); slot = class-5",
-        "weapon_kind_table_0x7F4_col0": [1, 1, 1, 3, 1, 3, 3, 1],       # 1=direct-fire, 3=explosive
+        "weapon_selector": "weapon-property lookup seg13:0x060E; live-fire selectors are 5..12; slot = selector-5",
+        "weapon_property_rows_5_to_12": [
+            {"selector": selector,
+             "category": dg_u8(exe, 0x7F4 + selector * 4, 1)[0],
+             "fire_interval_60ths": dg_u8(exe, 0x7F5 + selector * 4, 1)[0],
+             "b2": dg_u8(exe, 0x7F6 + selector * 4, 1)[0],
+             "flag": dg_u8(exe, 0x7F7 + selector * 4, 1)[0]}
+            for selector in range(5, 13)
+        ],
         "slot_labels_provisional": {"rifle": "10-17", "auto": "8-23", "burst": "6-21 per bullet"},
     }
 

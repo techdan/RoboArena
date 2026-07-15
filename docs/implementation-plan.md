@@ -4,7 +4,11 @@ This is the action-focused execution roadmap from "engine primitives exist" to "
 
 **Audience**: any agent (human or AI) picking up a phase cold. Each phase is self-contained enough to execute independently once dependencies land.
 
-**v1 scope reminder**: human-vs-human hot-seat only, no AI. Survival sport mode only. 2 postures (Standing, Crouching). Stealth rules land with visibility; Quick Start does not need to expose every class until a preset requires it. Online lobby, other sport modes, Ducking, AI, audio, production persistence, and full help/tutorial systems are deferred.
+**v1 scope reminder**: human-vs-human hot-seat only, no AI. Survival sport mode
+only. Three postures (Upright, Ducking, Crouching). Stealth rules land with
+visibility; Quick Start does not need to expose every class until a preset
+requires it. Online lobby, other sport modes, AI, audio, production persistence,
+and full help/tutorial systems are deferred.
 
 **MVP trim decisions**:
 - Hot-seat Survival is the v1 finish line. Online lobby is v1.1/post-MVP after resolver, replay, planner, and movie playback are stable.
@@ -142,7 +146,7 @@ jobs:
 
 **Effort legend**: S = ≤ 1 session · M = 2-3 sessions · L = a week of evenings · XL = multi-week
 
-### Phase 1 — Engine primitives [✅ DRAFT COMPLETE]
+### Phase 1 — Engine primitives [✅ DRAFT COMPLETE, REALIGNMENT REQUIRED]
 
 **Goal**: pure-TS deterministic simulation primitives — RNG, geometry, movement costs, single-shot firing resolution, blast resolution, weapon/robot catalogs.
 
@@ -184,25 +188,45 @@ export const createRng: (seed: string) => Rng;
 
 ---
 
-### Phase 1.5 — Toolchain & determinism enforcement [⬜ NEXT]
+### Phase 1R — Binary-truth engine realignment [✅ DRAFT COMPLETE]
+
+**Goal**: replace the obsolete playtest-derived timing/combat model with the
+reproduced binary tables and mechanisms before downstream engine work begins.
+
+**Dependencies**: Phase 1 draft plus the timeboxed RE mapping pass in
+`tasks/core-build-plan.md` Milestone 0.
+
+**Execution and acceptance**: `tasks/engine-realignment-plan.md`. Confidence and
+reproducibility findings: `tasks/reverse-engineering-audit.md`.
+
+This phase owns 60 units/s, floored Euclidean combat distance, three postures,
+height/cover classes, live-fire hit scoring, wide damage rolls, exact blast
+tables, and synchronization of `docs/spec.md` with code/tests.
+
+**Effort**: M.
+
+---
+
+### Phase 1.5 — Toolchain & determinism enforcement [✅ LOCAL COMPLETE]
 
 **Goal**: lock in the dev toolchain so every Phase 2+ commit lands against a polished pipeline.
 
-**Dependencies**: Phase 1.
+**Dependencies**: Phase 1R.
 
 **Files**:
 - `eslint.config.mjs` — flat config; recommended TS + import-order; **custom rule** banning `Math.random` / `Date.now` / `setTimeout` / `setInterval` inside `src/engine/`
 - `.prettierrc.json` — defaults
 - `.nvmrc` — `22`
-- `package.json` — add `"engines": { "node": ">=22" }`; new scripts: `lint`, `lint:fix`, `format`, `format:check`, `dev`, `build`, `start`
+- `package.json` — add `"engines": { "node": ">=22" }`; new scripts: `lint`,
+  `lint:fix`, `format`, `format:check`. Dev/build/start wait for Next.js.
 - `.github/workflows/ci.yml` — typecheck + lint + test on push (Next.js build joins when UI lands)
 - `.husky/pre-commit` + `lint-staged` config — optional post-MVP convenience; do not block Phase 1.5 on hooks
 
 **Acceptance criteria**:
-- [ ] `npm run lint` green on existing engine code
-- [ ] `npm run format:check` green
-- [ ] CI workflow runs and passes on push
-- [ ] Adding `Math.random()` to any `src/engine/*.ts` fails lint
+- [x] `npm run lint` green on existing engine code
+- [x] `npm run format:check` green
+- [ ] CI workflow runs and passes on push (workflow committed locally; remote run pending)
+- [x] Adding `Math.random()` to any `src/engine/*.ts` fails lint
 - [ ] Pre-commit hook formats and lints staged files (optional; defer if it slows the MVP)
 
 **Effort**: S (~30-60 min).
@@ -213,7 +237,7 @@ export const createRng: (seed: string) => Rng;
 
 **Goal**: orchestrate per-tick simulation. Consume `MatchState + TurnOrders + seed`, emit `ResolutionEvent[]` and a new `MatchState`. Implements movement, posture, scan rotation, command timing, simultaneous damage, and death cleanup. Aim & Fire may be immediate only as a temporary internal scaffold; no playable milestone can depend on that behavior. Phase 3 must follow before UI gameplay is considered faithful.
 
-**Dependencies**: Phase 1.
+**Dependencies**: Phase 1R and Phase 1.5.
 
 **Files**:
 - `src/engine/commandInterpreter.ts` — `getActiveSegmentAt(timeline, tick) → segment | null` (with stride-parity tracking and command-time-cost arithmetic)
@@ -222,16 +246,16 @@ export const createRng: (seed: string) => Rng;
 - `src/engine/resolver.test.ts`
 - `src/engine/commandInterpreter.test.ts`
 
-**Per-tick phase order** (implemented in `resolver.ts`):
+**Time-boundary phase order** (implemented in `resolver.ts`; full decisions in
+`tasks/phase2-resolver-design.md`):
 ```
-for tick in 0..(turn ticks):
-  1. read each robot's active command at this tick
-  2. apply movement intents (no collision; each robot independent)
-  3. apply posture / scan-direction changes
-  4. apply Aim & Fire commands (temporary immediate scaffold only; Phase 3 replaces with projectile timing)
-  5. apply damage simultaneously (sum hits per target before death check)
-  6. cleanup deaths (move dead robots to dock, emit event)
-  7. emit per-tick events
+for boundary in 0..TURN_DURATION_UNITS:
+  1. gather due command completions from a boundary-start snapshot
+  2. apply deploy/move completions (robots may stack)
+  3. apply posture / scan-direction completions
+  4. resolve Aim & Fire in canonical actor order (temporary immediate impact)
+  5. batch damage and deaths
+  6. start each surviving robot's next command
 ```
 
 **Public API contract**:
@@ -250,14 +274,15 @@ export function resolveTurn(input: {
 
 **Tests required**:
 - single-robot move along open path → emits `move-step` events at correct ticks with alternating step costs
-- posture change → `posture-changed` event at correct tick; cost 0.1 s/step
-- scan rotation by 5 directional units → 5 `scan-rotated` events at 0.05s intervals
+- posture change → `posture-changed` event at the realigned completion boundary
+- scan rotation → `scan-rotated` event at the realigned completion boundary
 - 2 robots stack on same tile (no collision) — both end positions correct
 - crouching robot tries to walk onto bush → command rejected at planner; resolver receives only legal moves (negative test: malformed orders trigger `MalformedOrders` error, not silent corruption)
 - Aim & Fire on stationary target → emits `hit` or `miss` correctly under the temporary scaffold, with tests named so Phase 3 can replace them
 - two robots fire at each other on the same tick, both die from the exchange → both `destroyed` events emitted (simultaneous-damage rule)
 - 30-shot full turn with same seed → exact same `events` array twice
-- `nextState.lastKnownMarkers` updated correctly for losing-sight cases (note: visibility happens in Phase 4; for Phase 2, leave markers identical)
+- command completing exactly at the 900-unit boundary executes; later work does not
+- frozen input state/orders remain unchanged
 
 **Acceptance criteria**:
 - [ ] `resolveTurn` is a pure function (no side effects, no mutation of inputs)
@@ -274,17 +299,14 @@ export function resolveTurn(input: {
 
 **Effort**: L. This is the keystone phase.
 
-**Tooling deliverables this phase also adds**:
-- `.eslintrc` + `eslint.config.mjs` (flat config) — minimal, mostly TS-recommended + no-unused-vars
-- `.prettierrc.json` — single-quotes, no semis? trailing commas? (use boring defaults: prettier defaults are fine)
-- `package.json` `lint` script
-- `.github/workflows/ci.yml` — typecheck + lint + test on push
-
 ---
 
 ### Phase 3 — Projectiles in flight [⬜ MVP GATE]
 
-**Goal**: model multi-tick projectile travel. Aim & Fire creates a `TileProjectile` that travels along its path and resolves at the impact tick (calculated from distance and weapon-specific projectile speed). This phase locks the moving-target "shot went past" behavior and replaces any Phase 2 immediate-fire scaffold.
+**Goal**: model multi-tick projectile presentation and impact timing. Aim & Fire
+pre-rolls hit/damage when fire resolves, matching the binary, then carries that
+result on a `TileProjectile` until its impact boundary. This replaces the Phase
+2 immediate-impact scaffold without adding in-flight dodging.
 
 **Dependencies**: Phase 2.
 
@@ -318,8 +340,8 @@ export function advanceProjectiles(input: {
 **Tests required**:
 - bullet at d=4 launched at tick 50 impacts at tick 54 (1 tile/tick)
 - missile at d=8 launched at tick 50 impacts at tick 66 (0.5 tile/tick)
-- target moves out of impact tile before bullet arrives → bullet hits empty tile, emits `miss { reason: 'target-moved' }`
-- target stacks on impact tile mid-flight → all robots there take damage (validates "tile-targeted" rule)
+- target moves after the fire-time roll → pre-rolled result is unchanged
+- destroying the shooter after launch does not cancel the projectile
 - missile blast triggers `resolveBlast` at impact tick
 - two missiles collide at the same impact tile → both blast effects apply (simultaneous resolution)
 
@@ -370,7 +392,7 @@ export function isStealthVisibleTo(stealth, observer, movedThisTick): boolean;
 ```
 
 **Tests required**:
-- standing target at d=10 in BLACK zone with clear LoS → visible
+- upright target at d=10 inside the scan cone with clear LoS → visible
 - target behind a wall → NOT visible
 - target behind a low wall → still visible (low walls don't block sight, only weapons)
 - target behind a bush → NOT visible if observer's view passes through the bush AND target is on the bush (matches "blocks visibility when on tile")
@@ -485,7 +507,8 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 - `src/renderer/effects/` — sprite-life-cycle helpers for explosions, smoke trails, blast waves
 - `src/components/MovieControls.tsx` — play / pause / step / speed controls (mirrors original DOS transport bar)
 - `src/app/movie/[id]/page.tsx` — debug route that runs a canned `ReplayLog` from disk
-- `public/assets/robots/` — 10 robot SVGs (5 classes × 2 postures) + projectile/effect sprites per §5
+- `public/assets/robots/` — 15 robot SVG states (5 classes × 3 postures), or a
+  smaller layered equivalent, plus projectile/effect sprites per §5
 
 **Animation pipeline**: GSAP for tweens, Pixi for sprite + container management. One handler per `ResolutionEvent.kind` per the matrix in §5. Each handler returns a `Promise<void>` so the player can await visual completion if needed, but the playback clock advances on engine ticks (determinism) — animations are decorative.
 
@@ -746,7 +769,8 @@ Why SVG for v1:
 **Obstacle**:
 - `crate.svg` (the blue obstacles in Rubble arenas)
 
-**Robots** (5 classes × 2 postures = 10 SVGs; rotation done programmatically by Pixi):
+**Robots** (5 classes × 3 postures; prefer shared/layered SVG parts where this
+avoids 15 mostly duplicate files; rotation done programmatically by Pixi):
 - `rifle-standing.svg` · `rifle-crouching.svg`
 - `burst-standing.svg` · `burst-crouching.svg`
 - `auto-standing.svg` · `auto-crouching.svg`
@@ -1266,7 +1290,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Mobile / tablet playability | Out of v1 (locked §12) | Desktop-only with mouse + keyboard for v1; tablet/touch in v2 |
 | Server hosting cost | Post-MVP | Online lobby is v1.1/post-MVP; do not choose hosting before hot-seat is playable |
 | Replay format breaking changes | Phase 5 | `formatVersion` + migrations table (§9); CI gates on canned old replays passing `verifyReplay` |
-| Damage scaling with distance vs. binary hit/miss | Engine semantics | Currently: bracket model with `P(full)` over distance. Could prove false in playtest. Engine spec is testable; can swap without rewriting callers. |
+| Named weapon mapping for binary damage/fire tables | Phase 1R fidelity | Trace the weapon enum; until then isolate the inferred labels as `PROVISIONAL RE §20 #1/#10`. |
 | Sport modes beyond Survival | Out of v1 | All non-Survival modes deferred; engine reserves `sportType` field |
 | AI tiers | Out of v1 | Deferred to post-v1; add Stupid AI in Phase 14, more later |
 | Audio / SFX / music | Out of v1 | Deferred to post-MVP entirely |
@@ -1302,7 +1326,9 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 - **Aim & Fire**: tile-targeted single-shot fire mode. Bullet flies to a fixed tile; doesn't track target.
 - **Scan & Fire**: enemy-targeted wait-and-shoot mode. Robot watches a cone for an enemy; fires a tracking projectile.
 - **Stride parity**: per-robot 0/1 flag that flips each move and determines step cost (0.3/0.7 alt single, 0.4/0.8 alt double).
-- **BLACK / GREY zone**: scan-cone subdivision. Inner 90° = BLACK (1.0 hit chance); outer 45° each side = GREY (0.2 hit chance); outside 180° = "angle blocked".
+- **Scan alignment**: the scan cone is a hard firing/visibility gate; alignment,
+  distance, accuracy, terrain, and cover feed the live-fire score table. The
+  exact cone half-width remains `PROVISIONAL RE §20 #22` until traced.
 - **Cover**: terrain-based miss chance, only applies to crouching targets. Bush = 30% on tile; low wall = 50% on tile, 90% in path.
 - **Replay**: `{ initialState, seed, turnOrders[] }` — re-runs deterministically.
 - **Tile-targeted vs. tracking projectile**: Aim & Fire creates the former (target tile fixed); Scan & Fire creates the latter (target robot tracked).
@@ -1394,8 +1420,9 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 | Phase | Status | Effort | Goal |
 |---|---|---|---|
-| 1 | ✅ DRAFT COMPLETE | M | Engine primitives (RNG, geometry, movement, firing, blast, catalog) |
-| **1.5** | ⬜ NEXT | S | Toolchain: ESLint flat config + custom no-Math.random rule, Prettier, basic GitHub Actions CI |
+| 1 | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M | Engine skeleton and old-model primitives/tests |
+| **1R** | ✅ DRAFT COMPLETE | M | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth |
+| **1.5** | ✅ LOCAL COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; remote run pending |
 | 2 | ⬜ | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
 | 3 | ⬜ | M | Multi-tick projectiles in flight |
 | 4 | ⬜ | L | Scan & Fire mode + visibility resolver + Stealth class rule |
@@ -1410,4 +1437,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 12 | ⏸ POST-MVP / v1.1 | XL | Online lobby (WebSocket relay; host-creates / join-by-code) |
 | 13 | ⬜ | M | Polish — bug fixes, art swap-in, animation timing pass |
 
-**Critical path to v1 hot-seat MVP**: 1 → 1.5 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. Phase 13 polish runs only as needed for the playable hot-seat milestone. Phases 11.5 and 12 are post-MVP.
+**Critical path to v1 hot-seat MVP**: RE mapping pass → 1R → 1.5 → 2 → 3 →
+4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. The concise gate-by-gate sequence is in
+`tasks/core-build-plan.md`. Phase 13 polish runs only as needed for the playable
+hot-seat milestone. Phases 11.5 and 12 are post-MVP.

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "binary": {
+    "filename": "ROBO.EXE",
+    "sha256": "513e48101c373eccbfd141d6b54f8b9fae7559eaa87a01a8757ddb736329a9d4",
+    "segment_count": 101,
+    "dgroup_segment": 101
+  },
+  "data_claims": [
+    {
+      "id": "robot-stats",
+      "status": "confirmed",
+      "encoding": "u8",
+      "offset": "0x0ca8",
+      "values": [2, 140, 3, 20, 1, 120, 2, 18, 0, 100, 1, 25, 1, 100, 3, 20, 1, 120, 0, 0],
+      "semantic_evidence": "seg6 and seg1 call-site traces; armor cross-checks team-builder UI"
+    },
+    {
+      "id": "live-hit-thresholds",
+      "status": "confirmed",
+      "encoding": "u16le",
+      "offset": "0x156e",
+      "values": [0, 4, 8, 16, 24, 32, 40, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240],
+      "semantic_evidence": "seg6:0x3820 masks RNG to one byte and indexes 0x156e by clamped live score"
+    },
+    {
+      "id": "preview-hit-thresholds",
+      "status": "confirmed-bytes-mapped-role",
+      "encoding": "u8",
+      "offset": "0x213a",
+      "values": [0, 8, 16, 24, 32, 40, 48, 56, 64, 96, 128, 160, 208, 255],
+      "semantic_evidence": "seg96 preview/AI builder; must not be substituted for live fire"
+    },
+    {
+      "id": "weapon-accuracy-adds",
+      "status": "confirmed-bytes-provisional-labels",
+      "encoding": "u16le",
+      "offset": "0x1596",
+      "values": [4, 7, 6, 5, 4, 3, 2, 1],
+      "semantic_evidence": "seg6:0x3790 fallback branch; inventory-property index mapping remains open"
+    },
+    {
+      "id": "grenade-masks",
+      "status": "confirmed",
+      "encoding": "u16le",
+      "offset": "0x15ee",
+      "values": [31, 15, 7],
+      "semantic_evidence": "seg6:0x5f99 blast category 0"
+    },
+    {
+      "id": "grenade-bases",
+      "status": "confirmed-bytes-provisional-name",
+      "encoding": "u16le",
+      "offset": "0x15f4",
+      "values": [45, 25, 5],
+      "semantic_evidence": "seg6:0x5f99 category 0; Grenade label inferred"
+    },
+    {
+      "id": "missile-masks",
+      "status": "confirmed",
+      "encoding": "u16le",
+      "offset": "0x15fa",
+      "values": [31, 15, 7],
+      "semantic_evidence": "seg6:0x5fbb blast category 1"
+    },
+    {
+      "id": "missile-bases",
+      "status": "confirmed",
+      "encoding": "u16le",
+      "offset": "0x1600",
+      "values": [60, 40, 10],
+      "semantic_evidence": "seg6:0x5fbb category 1 plus Match 2 differential cross-check"
+    }
+  ],
+  "selector_claims": {
+    "status": "confirmed-rows-provisional-names",
+    "table_offset": "0x07f4",
+    "selectors": [5, 6, 7, 8, 9, 10, 11, 12],
+    "rows": [[3, 30, 96, 0], [3, 30, 112, 0], [1, 20, 28, 0], [3, 15, 96, 0], [3, 20, 112, 0], [1, 20, 32, 0], [3, 10, 96, 0], [3, 10, 112, 0]],
+    "semantic_evidence": "seg13:0x060e returns inventory selector; seg6:0x383b subtracts 5 before the 8-slot damage jump"
+  },
+  "code_slices": [
+    {"id": "live-hit-lookup", "segment": 6, "offset": "0x3820", "length": 25, "sha256": "4f990821d065d52dfb846a974dda003f89fce7effac647f43c31a7703de449f6"},
+    {"id": "direct-damage-rolls", "segment": 6, "offset": "0x3839", "length": 118, "sha256": "f6a2c555e29b8f48fff543a6573a7625cf59143e4dcdb33699273322498bc20c"},
+    {"id": "blast-roller", "segment": 6, "offset": "0x5f7e", "length": 171, "sha256": "fbded60b989bd5362331be52e73ae8b96db6844017525df840328b5e280a9136"},
+    {"id": "duration-lookup", "segment": 13, "offset": "0x08c5", "length": 144, "sha256": "bc8c41b3d7f9c0c410580f8c7f2054a2485e5b0072cc6621f3e878e10bef1f77"},
+    {"id": "cover-final-mapping", "segment": 87, "offset": "0x1e36", "length": 165, "sha256": "47b5a24b225a3be05bb6e7c63df4eef5acedc7feb3042193465d56a8a1679e09"}
+  ],
+  "arena_claims": {
+    "RUBBLE.TWN": [[16, 16], [24, 24], [32, 32], [40, 40], [48, 48], [44, 44], [40, 20], [32, 32]]
+  }
+}
