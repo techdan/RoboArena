@@ -207,7 +207,7 @@ tables, and synchronization of `docs/spec.md` with code/tests.
 
 ---
 
-### Phase 1.5 — Toolchain & determinism enforcement [✅ LOCAL COMPLETE]
+### Phase 1.5 — Toolchain & determinism enforcement [✅ COMPLETE]
 
 **Goal**: lock in the dev toolchain so every Phase 2+ commit lands against a polished pipeline.
 
@@ -233,15 +233,15 @@ tables, and synchronization of `docs/spec.md` with code/tests.
 
 ---
 
-### Phase 2 — Turn resolver core [⬜]
+### Phase 2 — Turn resolver core [✅ DRAFT COMPLETE]
 
 **Goal**: orchestrate per-tick simulation. Consume `MatchState + TurnOrders + seed`, emit `ResolutionEvent[]` and a new `MatchState`. Implements movement, posture, scan rotation, command timing, simultaneous damage, and death cleanup. Aim & Fire may be immediate only as a temporary internal scaffold; no playable milestone can depend on that behavior. Phase 3 must follow before UI gameplay is considered faithful.
 
 **Dependencies**: Phase 1R and Phase 1.5.
 
 **Files**:
-- `src/engine/commandInterpreter.ts` — `getActiveSegmentAt(timeline, tick) → segment | null` (with stride-parity tracking and command-time-cost arithmetic)
-- `src/engine/resolver.ts` — `resolveTurn({ state, orders, seed }) → { state, events }`
+- `src/engine/commandInterpreter.ts` — pure posture, scan-rotation, movement-step, deployment, and firing duration helpers
+- `src/engine/resolver.ts` — `resolveTurn({ state, orders, seed }) → Resolved | MalformedOrders`
 - `src/engine/__fixtures__/` — small canned `MatchState` builders for tests
 - `src/engine/resolver.test.ts`
 - `src/engine/commandInterpreter.test.ts`
@@ -261,15 +261,16 @@ for boundary in 0..TURN_DURATION_UNITS:
 **Public API contract**:
 ```ts
 export interface TurnResult {
+  readonly outcome: "resolved";
   readonly nextState: MatchState;
-  readonly events: ResolutionEvent[];
+  readonly events: readonly ResolutionEvent[];
 }
 
 export function resolveTurn(input: {
   state: MatchState;
   orders: TurnOrders;
   seed: string;
-}): TurnResult;
+}): TurnResult | MalformedOrders;
 ```
 
 **Tests required**:
@@ -285,12 +286,12 @@ export function resolveTurn(input: {
 - frozen input state/orders remain unchanged
 
 **Acceptance criteria**:
-- [ ] `resolveTurn` is a pure function (no side effects, no mutation of inputs)
-- [ ] Determinism: same `(state, orders, seed)` → byte-equal `events` and `nextState` across runs
-- [ ] All commands in `RobotCommandSegment` union are handled or explicitly stubbed with clear errors
-- [ ] Robot HP can never go negative or above `armor`
-- [ ] At least 15 unit tests covering single-robot, multi-robot, edge cases (mutual kill, missed shots, posture changes mid-walk)
-- [ ] `npm test` green; `npm run typecheck` green
+- [x] `resolveTurn` is a pure function (no side effects, no mutation of inputs)
+- [x] Determinism: same `(state, orders, seed)` → byte-equal `events` and `nextState` across runs
+- [x] All commands in `RobotCommandSegment` union are handled or explicitly rejected with typed errors
+- [x] Robot HP can never go negative or above `armor`
+- [x] 23 focused tests cover single-robot, multi-robot, and edge cases
+- [x] `npm test`, typecheck, lint, and format-check green locally
 
 **Risks**:
 - Stride parity edge cases (when does it reset? user observed quirks). Plan: ship strict alternation, document deviations as known.
@@ -1422,8 +1423,8 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 |---|---|---|---|
 | 1 | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M | Engine skeleton and old-model primitives/tests |
 | **1R** | ✅ DRAFT COMPLETE | M | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth |
-| **1.5** | ✅ LOCAL COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; remote run pending |
-| 2 | ⬜ | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
+| **1.5** | ✅ COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass |
+| 2 | ✅ DRAFT COMPLETE | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
 | 3 | ⬜ | M | Multi-tick projectiles in flight |
 | 4 | ⬜ | L | Scan & Fire mode + visibility resolver + Stealth class rule |
 | 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |

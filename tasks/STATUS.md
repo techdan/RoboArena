@@ -1,6 +1,6 @@
 # Project status — onboarding for the next agent
 
-**Updated:** 2026-07-12. Read this first, then the doc map below.
+**Updated:** 2026-07-15. Read this first, then the doc map below.
 
 ## TL;DR — you are here
 
@@ -11,10 +11,14 @@ review is in `tasks/reverse-engineering-audit.md`: the core tables are confirmed
 but several name/input mappings remain provisional. **Phase 1R is now in
 draft-complete:** the engine foundation, distance, three postures, cover table,
 live-fire scoring/damage, and blast tables have been realigned and verified.
+Phase 2 is also draft-complete: the engine now resolves immutable programmed
+turns with command validation, exact completion boundaries, stable event order,
+stacking movement, and batched immediate direct fire.
 
 Use `tasks/core-build-plan.md` as the coherent execution order. The immediate
-sequence is verify the first remote CI run, then implement Phase 2 resolver.
-Provisional selector/action mappings remain a focused parallel research track.
+sequence is Phase 3 projectile timing, preceded by a focused original-game
+timing check. Provisional selector/action mappings remain a focused parallel
+research track.
 
 **Critical gotcha:** named weapon→selector cadence/accuracy mappings and movement
 command timing are still provisional. Do not describe those labels as exact
@@ -22,12 +26,10 @@ until the focused trace or DOS differential tests close them.
 
 ## Repo state
 
-- Branch `main`; `HEAD` and `origin/main` are aligned as of this update.
-- The working tree contains the planning/audit edits described in the current
-  task until they are committed.
-- Recent commits: `c7b1218` RE doc + toolchain · `94b525f` engine-realignment
-  plan + lessons · `488c3f7` terrain + robot art candidates · `0004157` Phase 2
-  resolver design.
+- Branch `main`; Phase 1R checkpoint `19a53d3` is on `origin/main`.
+- The working tree contains the Phase 2 resolver implementation until its
+  requested follow-up checkpoint is committed.
+- GitHub Actions CI for `19a53d3` completed successfully.
 
 ## Phase state
 
@@ -36,9 +38,9 @@ until the focused trace or DOS differential tests close them.
 | Phase 1 — engine primitives | ✅ original skeleton superseded by Phase 1R |
 | **Reverse-engineering the original** | ✅ **complete & committed** — `docs/reverse-engineering.md` (21 sections) + `tools/re/` |
 | **RE implementation audit** | ✅ raw tables reproduced; remaining mappings classified in `tasks/reverse-engineering-audit.md` |
-| **Engine realignment to binary truth** | ✅ **DRAFT COMPLETE** — 86 tests; RE verifier checks 15 independent claims |
-| Phase 1.5 — toolchain | ✅ local checks/config complete; first GitHub Actions run pending push |
-| Phase 2 — turn resolver | 📋 corrected design ready; **NEXT implementation phase** |
+| **Engine realignment to binary truth** | ✅ **DRAFT COMPLETE** — RE verifier checks 15 independent claims |
+| Phase 1.5 — toolchain | ✅ **COMPLETE** — local checks and GitHub Actions pass |
+| Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — 23 focused tests; 109 engine tests total |
 | Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
 | Phases 3–13 (projectiles, visibility, UI, planner, online) | ⬜ not started; roadmap in `docs/implementation-plan.md` |
 
@@ -70,7 +72,7 @@ in-game x/y).
 |---|---|
 | **Binary-derived truth + offset map** | `docs/reverse-engineering.md` (RE) — §20 = master TBD list |
 | Canonical v1 spec (realigned mechanics + provisional labels) | `docs/spec.md` |
-| **Next task: realign engine** | `tasks/engine-realignment-plan.md` (8 steps, numbers transcribed) |
+| Engine realignment record | `tasks/engine-realignment-plan.md` (8 steps, numbers transcribed) |
 | **Canonical execution sequence** | `tasks/core-build-plan.md` |
 | RE reproducibility/confidence audit | `tasks/reverse-engineering-audit.md` |
 | Resolver architecture (Phase 2) | `tasks/phase2-resolver-design.md` |

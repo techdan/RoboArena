@@ -19,3 +19,5 @@ export * from "./catalog.js";
 export * from "./movement.js";
 export * from "./firing.js";
 export * from "./blast.js";
+export * from "./commandInterpreter.js";
+export * from "./resolver.js";

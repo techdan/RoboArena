@@ -1,7 +1,7 @@
 # Phase 2 turn resolver — design record
 
-**Status:** corrected 2026-07-12. Implement after Phase 1R engine realignment
-and Phase 1.5 tooling. Acceptance sequencing lives in
+**Status:** draft-complete 2026-07-15. Implemented after Phase 1R engine
+realignment and Phase 1.5 tooling. Acceptance sequencing lives in
 `tasks/core-build-plan.md`.
 
 ## Scope
@@ -52,6 +52,13 @@ At each boundary:
 
 Phase 3 inserts scheduled projectile impacts between steps 3 and 4/5 and moves
 damage application to impact boundaries without changing the fire-time roll.
+
+The implemented command union includes an explicit `deploy` command. Aim & Fire
+captures the canonical opposing robot on the aimed tile when that fire command
+starts, then compares that robot's settled position when the command completes.
+This preserves the confirmed off-aimed-tile score penalty. Replacement-target
+behavior when multiple robots cross the tile remains a focused parity question,
+not a hidden resolver-order dependency.
 
 ## Determinism contract
 
@@ -143,4 +150,8 @@ exception strategy); do not mix nulls, silent skips, and throws.
 - Every command union member is handled or rejected explicitly.
 - No projectile advancement, visibility, Stealth, or Scan & Fire code has leaked
   into Phase 2.
+
+All gates pass with 23 focused command-interpreter/resolver tests (109 engine
+tests total). Scan & Fire and explosive Aim & Fire return an explicit
+`unsupported-command` result until their scheduled phases.
 - `npm test`, `npm run typecheck`, lint, and format-check pass.

@@ -108,6 +108,7 @@ export interface WeaponDefinition {
 // Commands — what a robot is programmed to do during a turn
 
 export type RobotCommandSegment =
+  | { readonly kind: "deploy"; readonly to: TileCoord }
   | { readonly kind: "move"; readonly path: readonly TileCoord[]; readonly posture: Posture }
   | { readonly kind: "set-posture"; readonly posture: Posture }
   | { readonly kind: "set-scan-direction"; readonly heading: Heading }
@@ -140,59 +141,73 @@ export interface TurnOrders {
 // ──────────────────────────────────────────────────────────────────────────
 // Resolution events — what the renderer consumes
 
-export type ResolutionEvent =
-  | {
-      readonly kind: "move-step";
-      readonly tick: number;
-      readonly robotId: string;
-      readonly to: TileCoord;
-    }
-  | {
-      readonly kind: "posture-changed";
-      readonly tick: number;
-      readonly robotId: string;
-      readonly posture: Posture;
-    }
-  | {
-      readonly kind: "scan-rotated";
-      readonly tick: number;
-      readonly robotId: string;
-      readonly heading: Heading;
-    }
-  | {
-      readonly kind: "projectile-launched";
-      readonly tick: number;
-      readonly shooterId: string;
-      readonly projectile: Projectile;
-    }
-  | {
-      readonly kind: "projectile-impact";
-      readonly tick: number;
-      readonly impact: TileCoord;
-      readonly hitRobotIds: readonly string[];
-    }
-  | {
-      readonly kind: "hit";
-      readonly tick: number;
-      readonly targetId: string;
-      readonly damage: number;
-      readonly score: number;
-    }
-  | {
-      readonly kind: "miss";
-      readonly tick: number;
-      readonly targetTile: TileCoord;
-      readonly reason:
-        "out-of-range" | "angle-blocked" | "sight-blocked" | "hit-roll" | "no-target";
-    }
-  | { readonly kind: "destroyed"; readonly tick: number; readonly robotId: string }
-  | { readonly kind: "robot-returned-to-dock"; readonly tick: number; readonly robotId: string }
-  | {
-      readonly kind: "last-known-marker";
-      readonly tick: number;
-      readonly tile: TileCoord;
-      readonly observingTeamId: string;
-    };
+interface EventEnvelope {
+  readonly tick: number;
+  readonly seq: number;
+}
+
+export type ResolutionEvent = EventEnvelope &
+  (
+    | { readonly kind: "turn-start"; readonly turnNumber: number }
+    | {
+        readonly kind: "command-start";
+        readonly robotId: string;
+        readonly commandIndex: number;
+        readonly commandKind: RobotCommandSegment["kind"];
+      }
+    | {
+        readonly kind: "deployed";
+        readonly robotId: string;
+        readonly to: TileCoord;
+      }
+    | {
+        readonly kind: "move-step";
+        readonly robotId: string;
+        readonly to: TileCoord;
+      }
+    | {
+        readonly kind: "posture-changed";
+        readonly robotId: string;
+        readonly posture: Posture;
+      }
+    | {
+        readonly kind: "scan-rotated";
+        readonly robotId: string;
+        readonly heading: Heading;
+      }
+    | {
+        readonly kind: "fired";
+        readonly shooterId: string;
+        readonly commandIndex: number;
+        readonly weapon: WeaponId;
+        readonly target: TileCoord;
+      }
+    | {
+        readonly kind: "shot-missed";
+        readonly shooterId: string;
+        readonly shotIndex: number;
+        readonly target: TileCoord;
+        readonly reason:
+          "out-of-range" | "angle-blocked" | "sight-blocked" | "hit-roll" | "no-target";
+        readonly score?: number;
+      }
+    | {
+        readonly kind: "damaged";
+        readonly sourceId: string;
+        readonly shotIndex: number;
+        readonly targetId: string;
+        readonly damage: number;
+        readonly score: number;
+      }
+    | { readonly kind: "destroyed"; readonly robotId: string }
+    | {
+        readonly kind: "command-aborted";
+        readonly robotId: string;
+        readonly commandIndex: number;
+        readonly reason: "destroyed";
+      }
+    | { readonly kind: "turn-end"; readonly turnNumber: number }
+  );
 
 export type Projectile =
   | {

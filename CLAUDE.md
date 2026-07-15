@@ -8,16 +8,17 @@ RoboArena — a modern web-based clone of the 1991 Maxis tactical game *RoboSpor
 
 **v1 scope**: human-vs-human hot-seat only, no AI. Survival sport mode. Desktop-only (mouse + keyboard). Online lobby is post-MVP after resolver, replay, planner, and movie playback are stable. Personal-scale, not production-grade — see "Scope discipline" below.
 
-**Project state**: Phase 1R engine realignment is draft-complete with 86 passing
-tests. Phase 1.5 lint/format/CI configuration is implemented locally; the first
-remote Actions run awaits a push. Named weapon-selector mappings and movement
-command timing remain provisional but isolated. Phase 2 resolver is next. See
-`tasks/core-build-plan.md` and `docs/implementation-plan.md`.
+**Project state**: Phase 1R engine realignment and the Phase 2 deterministic
+resolver are draft-complete with 109 passing tests. Phase 1.5 lint/format/CI is
+complete and the first GitHub Actions run passed. Named weapon-selector
+mappings, movement command timing, and
+projectile presentation timing remain provisional or open. Phase 3 projectile
+timing is next. See `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 86 tests)
+npm test               # Run all engine unit tests (currently 109 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -32,11 +33,12 @@ Dev/build/start scripts remain deferred until the Next.js scaffold.
 
 The codebase is in two distinct phases of completion:
 
-**`src/engine/` (Phase 1R draft-complete)** — pure-TypeScript deterministic
-simulation realigned to the audited binary structures above. Provisional named
-weapon cadence/accuracy mappings are centralized in `catalog.ts`; provisional
-movement/action costs remain in `constants.ts`. Every probabilistic decision
-goes through a seedable RNG (`createRng(seed)`).
+**`src/engine/` (Phase 2 draft-complete)** — pure-TypeScript deterministic
+simulation realigned to the audited binary structures above, plus immutable
+turn scheduling, command validation, and immediate Aim & Fire resolution.
+Provisional named weapon cadence/accuracy mappings are centralized in
+`catalog.ts`; provisional movement/action costs remain in `constants.ts`.
+Every probabilistic decision goes through a seedable RNG (`createRng(seed)`).
 
 **Everything else (Phases 2-13, not yet built)** — turn resolver, projectiles, visibility, replay format, Next.js + PixiJS UI, planner, and later online lobby. Architecture sketched in `docs/implementation-plan.md` §1, repository layout in §2.
 

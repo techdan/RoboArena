@@ -1,7 +1,7 @@
 # RoboArena core build plan
 
 **Status:** canonical execution sequence for the hot-seat Survival MVP.
-**Updated:** 2026-07-12.
+**Updated:** 2026-07-15.
 
 This file answers one question: **what should be built next, in what order, and
 what must be true before moving on?** `docs/spec.md` remains the canonical game
@@ -11,9 +11,10 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phase 1 produced a useful deterministic-engine skeleton and 75 passing tests,
-but its combat and timing model predates the binary analysis and is known wrong.
-Treat it as **Phase 1 draft**, not as a stable dependency.
+Phase 1R and Phase 2 are draft-complete with 109 passing tests. The engine now
+has binary-realigned primitives plus a pure, completion-driven turn resolver.
+The next engine gate is Phase 3 projectile timing; projectile presentation
+timing should receive a focused original-game check before a default is locked.
 
 The immediate critical path is:
 
@@ -24,7 +25,8 @@ RE audit -> Phase 1R engine realignment -> Phase 1.5 toolchain
          -> renderer/setup/planner/end-turn vertical slice
 ```
 
-Do not start resolver implementation against the current engine model.
+Do not build planner or movie UI against the temporary immediate-impact scaffold;
+Phase 3 must replace only impact timing while preserving fire-time rolls.
 
 ## Confidence policy
 
@@ -95,7 +97,7 @@ may be smaller than the packages when type migration requires it.
 - Every unresolved mapping points to its RE §20 item.
 - `docs/spec.md`, constants, catalogs, and tests describe the same model.
 
-## Milestone 2 — Phase 1.5: enforce the toolchain [LOCAL COMPLETE]
+## Milestone 2 — Phase 1.5: enforce the toolchain [COMPLETE]
 
 Land the small toolchain phase before the resolver expands the codebase:
 
@@ -109,7 +111,7 @@ Pre-commit hooks remain optional.
 **Exit gate:** the four CI checks pass locally and in GitHub Actions; a temporary
 `Math.random()` in `src/engine/` is rejected by lint.
 
-## Milestone 3 — Phase 2: deterministic turn resolver core
+## Milestone 3 — Phase 2: deterministic turn resolver core [DRAFT COMPLETE]
 
 Implement the corrected architecture in `tasks/phase2-resolver-design.md`.
 Phase 2 owns:
@@ -130,6 +132,10 @@ Name those tests so Phase 3 can replace only the impact-timing behavior.
 **Exit gate:** at least the acceptance cases in the resolver design pass,
 including stack-on-same-tile, malformed orders, same-time mutual fire, turn-end
 boundary, input immutability, and same-input byte equality.
+
+**Result:** implemented in `commandInterpreter.ts` and `resolver.ts`; 23 focused
+tests cover all acceptance cases. Imported-order failures are discriminated
+`MalformedOrders` results. Phase 2 direct fire is intentionally immediate.
 
 ## Milestone 4 — Phase 3: projectile timing and impacts
 
@@ -194,8 +200,10 @@ playable end to end.
 
 ## Next actions
 
-1. Perform the timeboxed RE traces in Milestone 0 and update the audit ledger.
-2. Execute Phase 1R foundation + geometry first.
-3. Implement cover and combat from confirmed tables/mappings.
-4. Synchronize `docs/spec.md` and rewrite the 75 old-model tests.
-5. Land Phase 1.5, then begin the corrected Phase 2 resolver.
+1. Run a focused original-game projectile/movie timing check and classify
+   gameplay timing versus cosmetic presentation timing.
+2. Implement Phase 3 projectile launch, travel, impact, and blast scheduling
+   without rerolling fire-time outcomes.
+3. Preserve already launched projectiles when their shooter is destroyed and
+   batch same-boundary impacts deterministically.
+4. Then resolve Scan & Fire semantics before beginning Phase 4 visibility.

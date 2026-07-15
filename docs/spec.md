@@ -291,6 +291,20 @@ At end of each turn, for every team, record tiles where they last saw any enemy 
 
 Time is integer ticks throughout the engine. Conversions to/from seconds happen at UI boundaries only.
 
+### Resolver boundary order
+
+`resolveTurn({ state, orders, seed })` is a pure completion-driven simulation.
+At each integer boundary it applies deploy/movement, then posture/scan changes,
+then resolves Aim & Fire in canonical team/roster order, and finally batches
+direct damage and deaths. Robots may stack; same-boundary mutual kills are
+allowed. Events carry stable, gap-free `{ tick, seq }` values. Malformed or
+Phase-ineligible imported orders return a discriminated `MalformedOrders`
+result without mutating inputs.
+
+Phase 2 applies direct-fire results immediately as a scaffold. Phase 3 will
+preserve the fire-time hit/damage roll but schedule projectile launch and impact
+events. Scan & Fire remains an explicit unsupported command until Phase 4.
+
 ---
 
 ## 9. Arena structure
@@ -346,6 +360,7 @@ Re-running this through `resolveTurn` produces a **byte-identical** event stream
 | Robot class stats | `src/engine/catalog.ts` (`ROBOT_DEFINITIONS`) |
 | Combat resolution implementation | `src/engine/firing.ts`, `src/engine/blast.ts` |
 | Movement implementation | `src/engine/movement.ts` |
+| Turn scheduling and resolution | `src/engine/commandInterpreter.ts`, `src/engine/resolver.ts` |
 | Empirical research log | `docs/priority-tests.md` |
 | Implementation roadmap | `docs/implementation-plan.md` |
 | Original-game research | `docs/priority-tests.md`; local ignored source captures |
