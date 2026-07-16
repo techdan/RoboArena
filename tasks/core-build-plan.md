@@ -11,13 +11,14 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 7 are draft-complete with 192 passing tests. The engine now
+Phases 1R through 7 are draft-complete; Phase 8 is locally implemented with 201
+passing tests and its deployed WSS/two-network restart gate remains open. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
-arena imports and deterministic local movie playback are built; Phase 8
-authoritative room setup is next. Exact screen travel duration remains
-presentation tuning and is not an engine blocker.
+arena imports, deterministic local movie playback, and authoritative room/setup
+boundary are built. Phase 9 planner work follows the Phase 8 hosting gate. Exact
+screen travel duration remains presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
 
@@ -213,5 +214,6 @@ playable end to end.
 
 ## Next actions
 
-1. Establish the Phase 8 authoritative room
-   boundary before planner state is designed around local-only assumptions.
+1. Deploy the Phase 8 room service with a persistent volume and verify WSS,
+   restart recovery, and rejoin ownership from two real networks/devices.
+2. Begin Phase 9 planner work only after that external gate passes.

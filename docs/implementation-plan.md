@@ -572,7 +572,7 @@ export function MoviePlayer({
 
 ---
 
-### Phase 8 — Online room foundation + match setup [⬜]
+### Phase 8 — Online room foundation + match setup [🟨 LOCALLY COMPLETE — HOSTING GATE OPEN]
 
 **Goal**: establish the internet-first v1 architecture before planner work. A
 host creates a private room, 1-3 other humans join from separate devices, and
@@ -591,6 +591,8 @@ exactly one Team and every Team has a unique Side.
 - `src/app/room/[code]/page.tsx` — room roster, setup, readiness, share link
 - `src/components/setup/TeamRow.tsx` — own team name/color and assigned slot
 - `src/lib/setup/validate.ts` — shared `GameConfig` validation
+- `deploy/room-service.Dockerfile`, `docs/room-service-deployment.md` — portable
+  persistent-volume service and external WSS verification runbook
 
 **Room contract**:
 - short room code plus shareable deep link; no account required;
@@ -600,8 +602,9 @@ exactly one Team and every Team has a unique Side.
   status on return; closing the tab never withdraws locked orders;
 - 2-4 players, unique names/colors, and at least two players; the server assigns
   unique Sides and non-compacting Home slots when the match starts;
-- host chooses Survival length, Rubble arena, and supported formation; all
-  players can see configuration and ready status;
+- host chooses the supported Survival length; Melee/Battle select their verified
+  Rubble Two/Three arena defaults and v1 uses Beginner formation; all players
+  can see configuration and ready status;
 - starting freezes configuration and creates the canonical server MatchState;
 - server is the only authority for room membership, match state, seeds, order
   validation, resolution, visibility filtering, and turn advancement.
@@ -609,7 +612,8 @@ exactly one Team and every Team has a unique Side.
 **Protocol minimum**:
 `CreateRoom`, `JoinRoom`, `ResumeRoom`, `UpdatePlayer`, `UpdateConfig`, `SetReady`,
 `StartMatch`, `RoomSnapshot`, `ProtocolError`. Every message carries a protocol
-version and request ID; every mutation is authenticated by the rejoin token.
+version and request ID. After Create/Join issues a seat, every mutation is
+authenticated by its opaque rejoin token.
 
 **Tests required**:
 - runtime schemas reject unknown versions, oversized text, invalid enum values,
@@ -624,17 +628,22 @@ version and request ID; every mutation is authenticated by the rejoin token.
 - Melee/Battle defaults select the verified arena and formation data.
 
 **Acceptance criteria**:
-- [ ] Two, three, or four browsers can create/join a room by URL/code
-- [ ] Each browser controls one Team; v1 exposes no alliance/Side-sharing UI
-- [ ] Starting produces one canonical server match and navigates every client
+- [x] Two, three, or four browsers can create/join a room by URL/code
+- [x] Each browser controls one Team; v1 exposes no alliance/Side-sharing UI
+- [x] Starting produces one canonical server match and navigates every client
       to its private planning view
-- [ ] All clickable controls are keyboard reachable and use `cursor-pointer`
+- [x] All clickable controls are keyboard reachable and use `cursor-pointer`
 
 **Hosting gate**: before the phase closes, deploy a test instance on a platform
 that supports long-lived WSS connections plus durable storage and verify two
 real networks/devices. Keep each room owned by one server process in v1;
 cross-process distribution is post-v1, but ordinary process/deploy restart
 recovery is required for asynchronous play.
+
+**Current gate state**: the portable service image, health endpoint, SQLite WAL
+volume contract, graceful shutdown, local restart tests, and four-browser flow
+are verified. Deployment credentials and two external devices are not available
+in this workspace, so the real WSS/two-network restart check remains explicitly open.
 
 **Effort**: L.
 
@@ -1670,7 +1679,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 5 | ✅ DRAFT COMPLETE | S | Replay format (serialize/deserialize/verify) |
 | 6 | ✅ DRAFT COMPLETE | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ✅ DRAFT COMPLETE | L | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls |
-| 8 | ⬜ | L | Online room foundation, 2-4 player setup, and deployed WSS gate |
+| 8 | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains |
 | 9 | ⬜ | L | Planner UI: movement / posture / scan |
 | 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
 | 11 | ⬜ | XL | Authoritative two-player online turn loop, reconnect, results, replay |

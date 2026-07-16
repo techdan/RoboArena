@@ -157,6 +157,228 @@ canvas {
   opacity: 0.4;
 }
 
+.secondary-link,
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: 150ms ease;
+}
+
+.secondary-link {
+  border: 1px solid rgb(255 255 255 / 9%);
+  padding: 0.7rem 0.9rem;
+  color: rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 3%);
+}
+
+.primary-action,
+.secondary-action {
+  min-height: 2.8rem;
+  border: 1px solid rgb(190 242 100 / 60%);
+  padding: 0.75rem 1.1rem;
+}
+
+.primary-action {
+  color: #11170f;
+  background: #bef264;
+}
+
+.secondary-action {
+  color: #d9f99d;
+  background: rgb(190 242 100 / 9%);
+}
+
+.secondary-link:hover,
+.secondary-link:focus-visible,
+.primary-action:hover,
+.primary-action:focus-visible,
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  filter: brightness(1.12);
+  outline: 2px solid rgb(190 242 100 / 55%);
+  outline-offset: 2px;
+}
+
+.primary-action:disabled,
+.secondary-action:disabled {
+  cursor: not-allowed;
+  filter: none;
+  opacity: 0.35;
+}
+
+.mode-button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.7rem;
+  color: rgb(255 255 255 / 40%);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.mode-button[data-active="true"] {
+  color: white;
+  background: rgb(255 255 255 / 8%);
+}
+
+.setup-label {
+  display: block;
+  color: rgb(255 255 255 / 45%);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.setup-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  color: white;
+  background: rgb(0 0 0 / 25%);
+  font-size: 0.875rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.setup-input:focus {
+  border-color: rgb(190 242 100 / 50%);
+  outline: 2px solid rgb(190 242 100 / 14%);
+}
+
+.setup-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.color-choice {
+  display: grid;
+  height: 2.8rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.75rem;
+  background: rgb(0 0 0 / 18%);
+}
+
+.color-choice[data-active="true"] {
+  border-color: rgb(255 255 255 / 55%);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 10%);
+}
+
+.color-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.team-swatch {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 999px;
+}
+
+.team-swatch-red {
+  background: #ef5350;
+}
+.team-swatch-blue {
+  background: #4c8dff;
+}
+.team-swatch-green {
+  background: #42c77a;
+}
+.team-swatch-yellow {
+  background: #f2c94c;
+}
+
+.recent-room {
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.65rem;
+  color: rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 3%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  text-decoration: none;
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  background: rgb(0 0 0 / 15%);
+}
+
+.team-row[data-self="true"] {
+  border-color: rgb(190 242 100 / 24%);
+  background: rgb(190 242 100 / 4%);
+}
+
+.you-label,
+.ready-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 10%);
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.you-label {
+  padding: 0.2rem 0.4rem;
+}
+.ready-label {
+  padding: 0.35rem 0.5rem;
+}
+
+.setup-stat {
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  background: rgb(0 0 0 / 15%);
+}
+
+.setup-stat span {
+  display: block;
+  color: rgb(255 255 255 / 30%);
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.setup-stat strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: rgb(255 255 255 / 70%);
+  font-size: 0.7rem;
+}
+
 @media (max-width: 1279px) {
   body::before {
     content: "RoboArena’s planner and movie tools require a 1280 × 720 desktop display.";

@@ -18,20 +18,21 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 are
-draft-complete with 192 passing tests. Phase 1.5 lint/format/CI is
+draft-complete; Phase 8 is locally implemented with 201 passing tests and its
+external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 8 authoritative room setup is
-next; visual projectile travel speed remains renderer tuning. See
+alliance behavior is retained for v2. Phase 9 planner work follows the Phase 8
+hosting gate; visual projectile travel speed remains renderer tuning. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 192 tests)
+npm test               # Run all unit tests (currently 201 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -74,8 +75,12 @@ visual regression smoke test.
 robot and effect presentation, playback transport/scrub/speed/idle controls,
 and a production visual regression test.
 
-**Everything after Phase 7 (not yet built)** — planner and the v1 authoritative
-room service.
+**Phase 8 (locally complete; hosting gate open)** — versioned room protocol,
+hashed anonymous seat ownership, long-lived WebSockets, SQLite WAL persistence,
+2-4 player setup/start UI, and four-browser integration coverage.
+
+**Everything after Phase 8 (not yet built)** — planner and the authoritative
+online turn loop.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

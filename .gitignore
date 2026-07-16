@@ -45,6 +45,7 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+data/*.sqlite*
 .codex-*-review/
 .codex-*-review.zip
 

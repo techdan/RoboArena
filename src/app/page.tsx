@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { HomeSetup } from "../components/setup/HomeSetup";
 
 export default function HomePage() {
-  redirect("/preview");
+  return <HomeSetup />;
 }

@@ -17,7 +17,8 @@ turns with command validation, exact completion boundaries, stable event order,
 stacking movement, and batched immediate direct fire.
 
 Use `tasks/core-build-plan.md` as the coherent execution order. Phases 3-7 are
-draft-complete; the immediate sequence is Phase 8 authoritative room setup.
+draft-complete; Phase 8 is locally implemented with its deployed WSS/two-network
+restart gate still open.
 Visual projectile travel timing is
 renderer tuning. Stealth and all non-Survival sport logic are post-main-game
 Phases 14/15 and cannot enter the v1 critical path. v1 is now internet-first
@@ -34,7 +35,8 @@ are exact for the version-locked binary.
 ## Repo state
 
 - Branch `main`; trunk-based phase checkpoints continue.
-- Phase 7 is draft-complete and locally verified; Phase 8 room work is next.
+- Phase 8 room/setup is locally verified; deploy it with a persistent volume and
+  verify two real networks before beginning Phase 9 planner work.
 - The last recorded remote CI gate passed; run local gates for each checkpoint.
 
 ## Phase state
@@ -52,8 +54,9 @@ are exact for the version-locked binary.
 | Phase 5 — replay contract                       | ✅ **DRAFT COMPLETE** — per-turn seeds, strict versioned JSON validation, deterministic recorder/verifier, state/event digests, v1 golden fixture                      |
 | Phase 6 — arena renderer                        | ✅ **DRAFT COMPLETE** — Next.js 16/React 19/Tailwind shell, client-only PixiJS, verified 24×24 and 32×32 Rubble imports, production visual baseline; 188 tests total   |
 | Phase 7 — movie playback                        | ✅ **DRAFT COMPLETE** — deterministic snapshots, PixiJS/GSAP robots and effects, full transport/scrub/speed/idle controls, production visual baseline; 194 tests total |
+| Phase 8 — authoritative rooms                   | 🟨 **LOCALLY COMPLETE / HOSTING GATE OPEN** — strict v1 protocol, hashed rejoin ownership, SQLite WAL restart recovery, four-browser setup/start flow; 201 tests total |
 | Assets (terrain + robots + effects)             | ✅ **SHIPPED & INTEGRATED** (2026-07-16) — Foundry Plate production set: 5 classes × 3 postures + turrets (generated), 11 effects, 3 markers; movie renderer consumes them with per-team paint recolor. Contract: `docs/asset-manifest.md`; regenerate robots via `scripts/generate-robot-assets.mjs` |
-| Phases 8–13 (room server, UI/planner)           | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1                                                                  |
+| Phases 9–13 (UI/planner/turn loop)              | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1                                                                  |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival                                                                                                                   |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)
