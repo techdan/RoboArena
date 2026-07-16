@@ -5,8 +5,8 @@ four internet-connected players privately program robot teams, then watch the
 simultaneous resolution as a movie. Inspired by but not affiliated with the
 original.
 
-**Status**: deterministic engine/replay work and the static Next.js/PixiJS arena
-preview are built; movie playback, planner, and room server are next. v1 targets
+**Status**: deterministic engine/replay work, the Next.js/PixiJS arena renderer,
+and event-driven movie playback are built; room setup and planner are next. v1 targets
 online free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 
@@ -14,7 +14,7 @@ online free-for-all Survival. See
 
 - TypeScript strict mode
 - Next.js 16 + React 19 + Tailwind v4
-- PixiJS 8 static terrain renderer
+- PixiJS 8 terrain/movie renderer + GSAP presentation effects
 - Vitest 4 unit tests + Playwright visual smoke test
 - Long-lived WebSocket room service (v1, not yet scaffolded)
 
@@ -41,9 +41,9 @@ docs/
   initial-plan.md         HISTORICAL — superseded by spec.md
   archive/                pre-empirical-research docs (superseded)
 src/engine/               pure-TS deterministic simulation and replay codec
-src/app/                  Next.js routes (`/` redirects to `/preview`)
+src/app/                  Next.js routes (`/preview`, `/movie/demo`)
 src/lib/arenas/           verified generated Rubble Two/Three data
-src/renderer/             client-only PixiJS rendering boundary
+src/renderer/             client-only PixiJS arena and movie boundary
 public/assets/terrain/    original RoboArena SVG terrain art
 server/                   v1 authoritative room/resolver service (planned)
 references/               source matrix, screenshot index

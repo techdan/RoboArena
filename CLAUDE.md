@@ -17,21 +17,21 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-6 are
-draft-complete with 188 passing tests. Phase 1.5 lint/format/CI is
+**Project state**: Phase 1R engine realignment and Phases 2-7 are
+draft-complete with 192 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 7 event-driven movie playback is
+alliance behavior is retained for v2. Phase 8 authoritative room setup is
 next; visual projectile travel speed remains renderer tuning. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 188 tests)
+npm test               # Run all unit tests (currently 192 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -70,8 +70,12 @@ v1 golden replay.
 terrain renderer, source-locked Rubble Two/Three arena library, and production
 visual regression smoke test.
 
-**Everything after Phase 6 (not yet built)** — movie playback, planner, and the
-v1 authoritative room service.
+**Phase 7 (draft-complete)** — pure deterministic movie snapshots, PixiJS/GSAP
+robot and effect presentation, playback transport/scrub/speed/idle controls,
+and a production visual regression test.
+
+**Everything after Phase 7 (not yet built)** — planner and the v1 authoritative
+room service.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`
@@ -141,7 +145,7 @@ Don't surface these as gaps unless something has changed about scope.
 
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
 - Vitest 2.1 for tests
-- Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + Zustand
+- Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + GSAP; Zustand remains planned
 - Phase 8+: long-lived WebSocket room service plus SQLite WAL durable room
   storage; distributed/shared database and accounts remain post-v1
 

@@ -16,8 +16,8 @@ Phase 2 is also draft-complete: the engine now resolves immutable programmed
 turns with command validation, exact completion boundaries, stable event order,
 stacking movement, and batched immediate direct fire.
 
-Use `tasks/core-build-plan.md` as the coherent execution order. Phases 3-6 are
-draft-complete; the immediate sequence is Phase 7 movie playback.
+Use `tasks/core-build-plan.md` as the coherent execution order. Phases 3-7 are
+draft-complete; the immediate sequence is Phase 8 authoritative room setup.
 Visual projectile travel timing is
 renderer tuning. Stealth and all non-Survival sport logic are post-main-game
 Phases 14/15 and cannot enter the v1 critical path. v1 is now internet-first
@@ -34,7 +34,7 @@ are exact for the version-locked binary.
 ## Repo state
 
 - Branch `main`; trunk-based phase checkpoints continue.
-- Phase 6 is draft-complete and locally verified; Phase 7 movie work is next.
+- Phase 7 is draft-complete and locally verified; Phase 8 room work is next.
 - The last recorded remote CI gate passed; run local gates for each checkpoint.
 
 ## Phase state
@@ -51,8 +51,9 @@ are exact for the version-locked binary.
 | Phase 4 — visibility / Scan & Fire | ✅ **DRAFT COMPLETE** — per-Team contacts, last-known markers, exact scan-sight strength, deterministic acquisition/cooldown/ammo |
 | Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — per-turn seeds, strict versioned JSON validation, deterministic recorder/verifier, state/event digests, v1 golden fixture |
 | Phase 6 — arena renderer | ✅ **DRAFT COMPLETE** — Next.js 16/React 19/Tailwind shell, client-only PixiJS, verified 24×24 and 32×32 Rubble imports, production visual baseline; 188 tests total |
+| Phase 7 — movie playback | ✅ **DRAFT COMPLETE** — deterministic snapshots, PixiJS/GSAP robots and effects, full transport/scrub/speed/idle controls, production visual baseline; 192 tests total |
 | Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
-| Phases 7–13 (movie, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
+| Phases 8–13 (room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)

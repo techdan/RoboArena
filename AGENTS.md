@@ -43,19 +43,19 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phases 2-6 are draft complete; Phase 1.5 tooling is
+Phase 1R realignment and Phases 2-7 are draft complete; Phase 1.5 tooling is
 complete:
 
 - `src/engine/` contains pure TypeScript deterministic primitives.
 - Existing tests cover deterministic primitives, audited timing/combat/Survival
   rules, and the turn resolver.
 - The versioned replay recorder, JSON codec, verifier, and v1 golden fixture are built.
-- The Next.js shell, static PixiJS arena renderer, and verified Rubble Two/Three imports are built.
-- Movie playback, planner, and networking are not built yet.
-- Phase 7 event-driven movie playback is next.
+- The Next.js shell, PixiJS arena/movie renderer, and verified Rubble Two/Three imports are built.
+- Event-driven movie playback supports deterministic scrub/step/play, speed, and idle compression.
+- Planner and networking are not built yet; Phase 8 authoritative room setup is next.
 
-The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, and lucide-react;
-Zustand remains planned for interactive planner/movie state.
+The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
+Zustand remains planned for interactive planner state.
 
 ## Commands
 

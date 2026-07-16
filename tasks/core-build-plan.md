@@ -11,12 +11,13 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 6 are draft-complete with 188 passing tests. The engine now
+Phases 1R through 7 are draft-complete with 192 passing tests. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
-arena imports are built; Phase 7 movie playback is next. Exact screen travel
-duration is presentation tuning and is not an engine blocker.
+arena imports and deterministic local movie playback are built; Phase 8
+authoritative room setup is next. Exact screen travel duration remains
+presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
 
@@ -212,6 +213,5 @@ playable end to end.
 
 ## Next actions
 
-1. Add Phase 7 event-only movie playback over the replay event stream.
-2. Establish the Phase 8 authoritative room
+1. Establish the Phase 8 authoritative room
    boundary before planner state is designed around local-only assumptions.

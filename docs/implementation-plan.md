@@ -516,7 +516,7 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 
 ---
 
-### Phase 7 — Movie playback [⬜]
+### Phase 7 — Movie playback [✅ DRAFT COMPLETE]
 
 **Goal**: render robots and animate `ResolutionEvent[]` as a movie — play,
 pause, scrub, step forward/backward, compress idle spans, and select
@@ -527,15 +527,18 @@ presentation time independent from deterministic simulation ticks.
 
 **Files**:
 - `src/renderer/MoviePlayer.tsx` — React component that owns the playback state machine (playing / paused / current tick)
-- `src/renderer/animations.ts` — per-event animation handlers (full handler-per-event matrix in §5 Animation handlers)
-- `src/renderer/RobotSprite.tsx` — Pixi container per robot with posture-aware sprite swap + `tint` for team color
-- `src/renderer/effects/` — sprite-life-cycle helpers for explosions, smoke trails, blast waves
+- `src/renderer/animations.ts` — pure per-event snapshot reducer plus exhaustive visual-cue mapping
+- `src/renderer/RobotSprite.tsx` — compact layered Pixi container per robot with posture scale and team color
+- `src/renderer/effects/` — sprite-life-cycle helpers for projectiles, impacts, hit bursts, and explosions
 - `src/components/MovieControls.tsx` — play / pause / step / speed controls (mirrors original DOS transport bar)
-- `src/app/movie/[id]/page.tsx` — debug route that runs a canned `ReplayLog` from disk
-- `public/assets/robots/` — 12 robot SVG states (4 classes × 3 postures), or a
-  smaller layered equivalent, plus projectile/effect sprites per §5
+- `src/app/movie/[id]/page.tsx` — debug route that runs a canned event sequence
+- layered Pixi robot/effect primitives implement the smaller equivalent allowed by §5
 
-**Animation pipeline**: GSAP for tweens, Pixi for sprite + container management. One handler per `ResolutionEvent.kind` per the matrix in §5. Each handler returns a `Promise<void>` so the player can await visual completion if needed, but the playback clock advances on engine ticks (determinism) — animations are decorative.
+**Animation pipeline**: `buildMovieTimeline` reduces all events into immutable
+event-boundary snapshots up front and provides an exhaustive cue mapping for
+every `ResolutionEvent.kind`. React selects the authoritative snapshot; Pixi
+applies it and GSAP runs decorative, non-awaited tweens. Playback never waits on
+animation completion and speed/idle controls only change wall-clock delays.
 
 **Public API contract**:
 ```tsx
@@ -543,6 +546,7 @@ export function MoviePlayer({
   initialState,
   events,
   fps?: number; // default 12 to match original
+  initialTick?: number; // optional deep-link/scrub starting point
 }): JSX.Element;
 ```
 
@@ -554,14 +558,15 @@ export function MoviePlayer({
   playback; neither can affect server phase or game outcome
 
 **Acceptance criteria**:
-- [ ] Hand-crafted `ResolutionEvent[]` sequence (e.g., a robot walks 5 tiles east) renders correctly
-- [ ] Speech-bubble replacement (small explosion sprite on hit, larger on destroyed) visible
-- [ ] Play / pause / scrub / step / speed / skip-idle all work; no off-by-one on
+- [x] Hand-crafted `ResolutionEvent[]` sequence (a robot walks 5 tiles east) renders correctly
+- [x] Speech-bubble replacement (small explosion on hit, larger on destroyed) visible
+- [x] Play / pause / scrub / step / speed / skip-idle all work; no off-by-one on
       step direction
 
 **Risks**:
 - React state for "current tick" + Pixi's animation loop → easy to desync. Use a single source of truth (React state for tick; Pixi just reads).
-- Backward step requires re-running `resolveTurn` from initial state up to (tick - 1). Cache snapshots every N ticks if perf bites.
+- Backward step and scrubbing read the immutable event-boundary snapshot cache;
+  they never re-run or mutate the resolver.
 
 **Effort**: L.
 
@@ -1008,22 +1013,24 @@ Asset directory: `public/assets/`. Loaded via a single `assets.ts` registry that
 
 ### Animation handlers (per-event)
 
-Implementation: GSAP for tweens, Pixi sprite/container manipulation for state changes. One handler per `ResolutionEvent.kind` in `src/renderer/animations.ts`:
+Implementation: `animations.ts` exhaustively maps every event kind and reduces
+state-changing events into immutable snapshots. Pixi/GSAP visual handlers cover
+the cue-producing rows below; all other event kinds intentionally have no visual cue.
 
 | Event kind | Animation | Tools |
 |---|---|---|
-| `move-step` | tile-to-tile lerp over the step's tick budget; sprite faces movement direction | GSAP tween on `sprite.position` |
-| `posture-changed` | swap from `*-standing.svg` to `*-crouching.svg` (or reverse); brief scale tween for "feel" | sprite swap + GSAP scale tween |
-| `scan-rotated` | smooth rotation tween over the absolute command's 5-tick budget | GSAP tween on `sprite.rotation` |
-| `projectile-launched` (bullet/burst) | fast straight-line tween (1-2 ticks) | GSAP tween on a temporary sprite |
-| `projectile-launched` (missile) | medium-speed tween + smoke-trail particle emitter along path | GSAP tween + Pixi `ParticleContainer` |
+| `deployed` / `move-step` | place or tween the robot to its event-boundary tile | GSAP tween on `container.position` |
+| `posture-changed` | scale the layered robot silhouette for its posture | GSAP scale tween |
+| `scan-rotated` | smooth heading-needle rotation | GSAP tween on the scan needle |
+| `projectile-launched` (bullet/burst) | short-lived straight tracer | temporary Pixi `Graphics` |
+| `projectile-launched` (missile) | warm straight-line tracer from source to target | temporary Pixi `Graphics` |
 | `projectile-impacted` (bullet) | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle |
 | `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite | sprite life cycle |
-| `hit` | red flash on target sprite (~3 ticks) | tween on `sprite.tint` |
-| `miss` | optional small puff at impact tile | sprite life cycle |
+| `damaged` | compact hit burst on the target | sprite life cycle |
 | `destroyed` | rotating explosion + fade out + remove sprite | composed tween chain |
-| `robot-returned-to-dock` | fade in at dock tile | tween on `sprite.alpha` |
-| `last-known-marker` | static X glyph (drawn during planning, NOT during movie) | Pixi Graphics primitive |
+
+`shot-missed`, `last-known-marker`, and other planning/metadata events have no
+movie cue. Last-known X glyphs remain an Edit-phase responsibility.
 
 **Determinism note**: animations are *visual representations of events*; they do not affect engine state or timing. Movie player advances ticks based on `events[i].tick`, not on animation completion. If an animation runs longer than its tick budget (e.g., explosion fade), the next tick can start before it finishes; sprites just keep rendering.
 
@@ -1662,7 +1669,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 4 | ✅ DRAFT COMPLETE | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
 | 5 | ✅ DRAFT COMPLETE | S | Replay format (serialize/deserialize/verify) |
 | 6 | ✅ DRAFT COMPLETE | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
-| 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |
+| 7 | ✅ DRAFT COMPLETE | L | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls |
 | 8 | ⬜ | L | Online room foundation, 2-4 player setup, and deployed WSS gate |
 | 9 | ⬜ | L | Planner UI: movement / posture / scan |
 | 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
