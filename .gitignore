@@ -43,6 +43,8 @@ Thumbs.db
 *.tmp
 .cache/
 coverage/
+playwright-report/
+test-results/
 .codex-*-review/
 .codex-*-review.zip
 

@@ -5,6 +5,7 @@ export default tseslint.config(
   {
     ignores: [
       "node_modules/**",
+      ".next/**",
       "dist/**",
       "build/**",
       "coverage/**",
@@ -15,7 +16,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],

@@ -17,21 +17,21 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-5 of the deterministic
-engine are draft-complete with 183 passing tests. Phase 1.5 lint/format/CI is
+**Project state**: Phase 1R engine realignment and Phases 2-6 are
+draft-complete with 188 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 6 Next.js/PixiJS scaffolding and
-verified arena import are next; visual projectile travel speed remains renderer tuning. See
+alliance behavior is retained for v2. Phase 7 event-driven movie playback is
+next; visual projectile travel speed remains renderer tuning. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 183 tests)
+npm test               # Run all unit tests (currently 188 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -40,7 +40,8 @@ npx vitest run path/to/file.test.ts    # Single test file
 npx vitest run -t "floored Euclidean"  # Tests matching a name
 ```
 
-Dev/build/start scripts remain deferred until the Next.js scaffold.
+`dev`, `build`, and `start` run the Next.js application; `test:e2e` builds and
+runs the Playwright visual smoke test.
 
 ## Architecture
 
@@ -65,8 +66,12 @@ scan-sight strength, and fire-time result locking. Stealth remains deferred.
 byte-level event/state verification, deterministic digests, and a checked-in
 v1 golden replay.
 
-**Everything after Phase 5 (not yet built)** — Next.js + PixiJS UI, planner,
-and the v1 authoritative room service.
+**Phase 6 (draft-complete)** — Next.js/React/Tailwind shell, client-only PixiJS
+terrain renderer, source-locked Rubble Two/Three arena library, and production
+visual regression smoke test.
+
+**Everything after Phase 6 (not yet built)** — movie playback, planner, and the
+v1 authoritative room service.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

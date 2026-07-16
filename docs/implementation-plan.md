@@ -451,15 +451,15 @@ export function createReplayLog(input: {
 per-turn `{ seed, orders }` entries.
 Derived events are retained for direct movie playback and exact comparison;
 deterministic event and complete next-state digests detect corruption. Version 1
-embeds arena tiles because the named/checksummed arena library lands in Phase 6;
-moving to arena references requires a later versioned migration, not an implicit
-dependency on code that does not exist yet.
+embeds arena tiles. The Phase 6 named/checksummed arena library is now present,
+but moving existing replay storage to references still requires a later
+versioned migration.
 
 **Effort**: S.
 
 ---
 
-### Phase 6 — Next.js scaffold + arena renderer [⬜]
+### Phase 6 — Next.js scaffold + arena renderer [✅ DRAFT COMPLETE]
 
 **Goal**: initialize Next.js 16 app, integrate PixiJS, render an arena (tiles, walls, bushes, etc.) statically. No robots, no animation yet. Just "I can load the page and see Rubble Three".
 
@@ -471,13 +471,13 @@ Keep a visual review page as import QA.
 **Dependencies**: Phase 1 (types).
 
 **Files**:
-- `next.config.ts`, `app/layout.tsx`, `app/page.tsx` (landing)
+- `next.config.ts`, `src/app/layout.tsx`, `src/app/page.tsx` (redirects to usable preview)
 - `tools/re/export_data.py` — source-locked `.TWN` MAP exporter
 - `src/lib/arenas/` — generated `rubble-two.json`, `rubble-three.json`
 - `src/lib/arenas/index.ts` — `loadArena(name): Promise<Arena>` + JSON schema validator
 - `src/renderer/PixiArena.tsx` — React component wrapping a Pixi `Application` that renders an `Arena`
 - `src/renderer/assets.ts` — SVG asset registry (terrain × 7 + crate; see §5 Asset inventory)
-- `src/renderer/sprites/` — terrain SVG sprites under `public/assets/terrain/`
+- terrain SVG sprites under `public/assets/terrain/`
 - `src/components/ArenaPreview.tsx` — `<ArenaPreview arenaName="rubble-three" />`
 - `src/app/preview/page.tsx` — temporary debug page that shows all extracted arenas side-by-side
 
@@ -494,13 +494,14 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 
 **Tests required**:
 - arena JSON files validate against `Arena` type (write a `validateArena(arena): void` helper + tests)
-- `loadArena('rubble-two').width === 25` and `.height === 25`
-- Playwright smoke test: load `/preview`, confirm canvas mounted (Phase 11)
+- `loadArena('rubble-two').width === 24` and `.height === 24`
+- Playwright production smoke test: load `/preview`, confirm both canvases mount,
+  capture the visual baseline, and fail on browser errors
 
 **Acceptance criteria**:
-- [ ] Visiting `/preview` shows Rubble Two and Rubble Three rendered as Pixi canvases
-- [ ] Tiles render with correct visual styles per terrain type
-- [ ] No console errors / type errors
+- [x] Visiting `/preview` shows Rubble Two and Rubble Three rendered as Pixi canvases
+- [x] Tiles render with correct visual styles per terrain type
+- [x] No console errors / type errors
 
 **Sub-deliverables added in this phase**:
 - **Loading splash + asset preload progress bar**. PixiJS `Assets.load` for all SVGs in the Asset inventory (§5); show a branded splash with a progress bar while loading. Once cached by the browser, subsequent loads are instant.
@@ -1660,7 +1661,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 3 | ✅ DRAFT COMPLETE | M | Locked projectile/blast outcomes + deterministic presentation events |
 | 4 | ✅ DRAFT COMPLETE | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
 | 5 | ✅ DRAFT COMPLETE | S | Replay format (serialize/deserialize/verify) |
-| 6 | ⬜ | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
+| 6 | ✅ DRAFT COMPLETE | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |
 | 8 | ⬜ | L | Online room foundation, 2-4 player setup, and deployed WSS gate |
 | 9 | ⬜ | L | Planner UI: movement / posture / scan |

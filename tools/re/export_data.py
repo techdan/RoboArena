@@ -4,11 +4,14 @@ Reads ROBO.EXE (NE/Win16) DGROUP data segment and the *.TWN resource files,
 emits docs/extracted/robosport-data.json.
 
 Run from the ROBOWIN directory that contains ROBO.EXE and RUBBLE.TWN etc:
-    python export_data.py <path-to-ROBOWIN-dir> <out.json>
+    python export_data.py <path-to-ROBOWIN-dir> <out.json> [arena-output-dir]
+
+When arena-output-dir is supplied, the verified Rubble Two and Rubble Three
+MAP payloads are also emitted in the Phase 6 application schema.
 
 All offsets are documented in docs/reverse-engineering.md.
 """
-import struct, sys, json, os, math
+import struct, sys, json, os, math, hashlib
 
 def load(path):
     return open(path, 'rb').read()
@@ -75,9 +78,53 @@ def extract_town(d):
         out.append({"id": cid, "name": names[cid], "width": w, "height": h, "terrain": grid})
     return out
 
+def export_main_game_arenas(arenas, town_path, output_dir):
+    selected = {
+        "Rubble Two": ("rubble-two", "melee"),
+        "Rubble Three": ("rubble-three", "battle"),
+    }
+    source_hash = hashlib.sha256(load(town_path)).hexdigest()
+    os.makedirs(output_dir, exist_ok=True)
+    for arena in arenas:
+        selection = selected.get(arena["name"])
+        if selection is None:
+            continue
+        slug, size = selection
+        tiles = [
+            [
+                {"terrain": "outer-wall" if terrain == "special" else terrain.replace("_", "-")}
+                for terrain in row
+            ]
+            for row in arena["terrain"]
+        ]
+        unknown_tiles = [
+            {"x": x, "y": y}
+            for y, row in enumerate(arena["terrain"])
+            for x, terrain in enumerate(row)
+            if terrain == "unknown"
+        ]
+        output = {
+            "name": arena["name"],
+            "type": "rubble",
+            "size": size,
+            "width": arena["width"],
+            "height": arena["height"],
+            "tiles": tiles,
+            "metadata": {
+                "source": "version-locked RUBBLE.TWN MAP export",
+                "mapId": arena["id"],
+                "unknownTiles": unknown_tiles,
+                "sourceSha256": source_hash,
+            },
+        }
+        with open(os.path.join(output_dir, f"{slug}.json"), "w", newline="\n") as file:
+            json.dump(output, file, indent=2)
+            file.write("\n")
+
 def main():
     robowin = sys.argv[1] if len(sys.argv) > 1 else '.'
     out_path = sys.argv[2] if len(sys.argv) > 2 else 'robosport-data.json'
+    arena_output_dir = sys.argv[3] if len(sys.argv) > 3 else None
     exe = load(os.path.join(robowin, 'ROBO.EXE'))
 
     # Robot class stats: DGROUP 0x0CA8, 5 classes x 4 bytes [accTier, armor, col2, col3]
@@ -236,6 +283,12 @@ def main():
 
     with open(out_path, 'w') as f:
         json.dump(data, f, indent=2)
+    if arena_output_dir is not None:
+        export_main_game_arenas(
+            data["arenas"].get("rubble", []),
+            os.path.join(robowin, "RUBBLE.TWN"),
+            arena_output_dir,
+        )
     print(f"wrote {out_path}")
     print("robot_stats:", json.dumps(robot_stats, indent=2))
     print("preview hit thresholds/256:", hit_thresholds_preview)

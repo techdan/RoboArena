@@ -540,8 +540,9 @@ matching event and complete next-state digests. Divergence ticks are absolute
 across the match rather than resetting at each turn. The JSON codec validates
 the complete nested replay structure and explicitly preserves
 `lastKnownMarkers` maps. Version 1 embeds the arena in `initialState` so exports
-are self-contained; a later format may migrate to named/checksummed arena
-references after the Phase 6 arena library exists.
+are self-contained. The Phase 6 named/checksummed arena library is now
+available, but switching replay storage to references still requires an
+explicit later format migration.
 
 Determinism is enforced by:
 - Seedable RNG (mulberry32) for every probabilistic decision

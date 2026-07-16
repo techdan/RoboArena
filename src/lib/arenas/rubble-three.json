@@ -1,0 +1,3151 @@
+{
+  "name": "Rubble Three",
+  "type": "rubble",
+  "size": "battle",
+  "width": 32,
+  "height": 32,
+  "tiles": [
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      }
+    ],
+    [
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "crevice"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "low-wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "wall"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      }
+    ],
+    [
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "rough"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "bush"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      },
+      {
+        "terrain": "open"
+      }
+    ]
+  ],
+  "metadata": {
+    "source": "version-locked RUBBLE.TWN MAP export",
+    "mapId": 2,
+    "unknownTiles": [],
+    "sourceSha256": "3c74ab044de7ab98073a893b58f2949dad2206c5b3d84bc6445a20d9587203a2"
+  }
+}

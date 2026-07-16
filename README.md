@@ -5,32 +5,29 @@ four internet-connected players privately program robot teams, then watch the
 simultaneous resolution as a movie. Inspired by but not affiliated with the
 original.
 
-**Status**: deterministic engine work is underway; UI and room server are not
-built yet. v1 targets online free-for-all Survival. See
+**Status**: deterministic engine/replay work and the static Next.js/PixiJS arena
+preview are built; movie playback, planner, and room server are next. v1 targets
+online free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 
 ## Stack
 
 - TypeScript strict mode
-- Next.js 16 + React 19 + Tailwind v4 (UI, not yet scaffolded)
-- PixiJS (renderer, not yet scaffolded)
-- Vitest (engine tests)
+- Next.js 16 + React 19 + Tailwind v4
+- PixiJS 8 static terrain renderer
+- Vitest 4 unit tests + Playwright visual smoke test
 - Long-lived WebSocket room service (v1, not yet scaffolded)
 
 ## Quick start
 
 ```sh
 npm install
+npm run dev
 npm test
 npm run typecheck
 npm run lint
-```
-
-Once Phase 6 lands:
-
-```sh
-# Local dev with hot reload
-npm run dev
+npm run build
+npm run test:e2e
 ```
 
 ## Repository layout
@@ -43,9 +40,12 @@ docs/
   empirical-tests.md      broader test catalog
   initial-plan.md         HISTORICAL — superseded by spec.md
   archive/                pre-empirical-research docs (superseded)
-src/engine/               pure-TS deterministic simulation
+src/engine/               pure-TS deterministic simulation and replay codec
+src/app/                  Next.js routes (`/` redirects to `/preview`)
+src/lib/arenas/           verified generated Rubble Two/Three data
+src/renderer/             client-only PixiJS rendering boundary
+public/assets/terrain/    original RoboArena SVG terrain art
 server/                   v1 authoritative room/resolver service (planned)
-src/                      (everything else lands in Phases 2-13)
 references/               source matrix, screenshot index
 screenshots/              gitignored local original-game research captures
 RoboSport (1991)/         gitignored — original DOS distribution, local research only

@@ -1,6 +1,6 @@
 # Project status — onboarding for the next agent
 
-**Updated:** 2026-07-15. Read this first, then the doc map below.
+**Updated:** 2026-07-16. Read this first, then the doc map below.
 
 ## TL;DR — you are here
 
@@ -16,8 +16,8 @@ Phase 2 is also draft-complete: the engine now resolves immutable programmed
 turns with command validation, exact completion boundaries, stable event order,
 stacking movement, and batched immediate direct fire.
 
-Use `tasks/core-build-plan.md` as the coherent execution order. Phases 3-5 are
-draft-complete; the immediate sequence is Phase 6 renderer scaffolding and arena import.
+Use `tasks/core-build-plan.md` as the coherent execution order. Phases 3-6 are
+draft-complete; the immediate sequence is Phase 7 movie playback.
 Visual projectile travel timing is
 renderer tuning. Stealth and all non-Survival sport logic are post-main-game
 Phases 14/15 and cannot enter the v1 critical path. v1 is now internet-first
@@ -33,8 +33,8 @@ are exact for the version-locked binary.
 
 ## Repo state
 
-- Branch `main`; the Phase 5 replay checkpoint is `6914ba0`.
-- Phase 5 is draft-complete and locally verified; Phase 6 renderer work is next.
+- Branch `main`; trunk-based phase checkpoints continue.
+- Phase 6 is draft-complete and locally verified; Phase 7 movie work is next.
 - The last recorded remote CI gate passed; run local gates for each checkpoint.
 
 ## Phase state
@@ -49,9 +49,10 @@ are exact for the version-locked binary.
 | Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added |
 | Phase 3 — projectile/blast events | ✅ **DRAFT COMPLETE** — named missile/grenade blast dispatch, finite ammo, stable launch/impact cues; 149 engine tests total |
 | Phase 4 — visibility / Scan & Fire | ✅ **DRAFT COMPLETE** — per-Team contacts, last-known markers, exact scan-sight strength, deterministic acquisition/cooldown/ammo |
-| Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — versioned JSON codec, deterministic recorder/verifier, state/event digests, v1 golden fixture; 183 engine tests total |
+| Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — per-turn seeds, strict versioned JSON validation, deterministic recorder/verifier, state/event digests, v1 golden fixture |
+| Phase 6 — arena renderer | ✅ **DRAFT COMPLETE** — Next.js 16/React 19/Tailwind shell, client-only PixiJS, verified 24×24 and 32×32 Rubble imports, production visual baseline; 188 tests total |
 | Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
-| Phases 6–13 (renderer, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
+| Phases 7–13 (movie, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)

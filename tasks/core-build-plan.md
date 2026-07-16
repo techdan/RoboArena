@@ -1,7 +1,7 @@
 # RoboArena core build plan
 
 **Status:** canonical execution sequence for the online free-for-all Survival v1.
-**Updated:** 2026-07-15.
+**Updated:** 2026-07-16.
 
 This file answers one question: **what should be built next, in what order, and
 what must be true before moving on?** `docs/spec.md` remains the canonical game
@@ -11,12 +11,12 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 5 are draft-complete with 183 passing tests. The engine now
+Phases 1R through 6 are draft-complete with 188 passing tests. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
-replay recording/verification. Phase 6 Next.js/PixiJS scaffolding and verified
-arena import are next. Exact screen travel duration is presentation tuning and
-is not an engine blocker.
+replay recording/verification. The Next.js/PixiJS shell and verified Rubble
+arena imports are built; Phase 7 movie playback is next. Exact screen travel
+duration is presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
 
@@ -212,7 +212,6 @@ playable end to end.
 
 ## Next actions
 
-1. Implement the Phase 6 Next.js/PixiJS scaffold and verified row-major arena import.
-2. Add Phase 7 event-only movie playback over the replay event stream.
-3. Establish the Phase 8 authoritative room
+1. Add Phase 7 event-only movie playback over the replay event stream.
+2. Establish the Phase 8 authoritative room
    boundary before planner state is designed around local-only assumptions.

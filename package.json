@@ -2,27 +2,44 @@
   "name": "roboarena",
   "version": "0.0.1",
   "private": true,
-  "description": "RoboArena — a faithful modern clone of Maxis RoboSport (1991). Pure-TS deterministic engine package; Next.js + PixiJS UI to follow.",
+  "description": "RoboArena — a deterministic online robot tactics game built with Next.js and PixiJS.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "format": "prettier --write \"src/**/*.ts\" \"*.{json,mjs}\" \".github/**/*.yml\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"*.{json,mjs}\" \".github/**/*.yml\"",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "lucide-react": "^1.24.0",
+    "next": "^16.2.10",
+    "pixi.js": "^8.19.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^10.7.0",
+    "postcss": "^8.5.19",
     "prettier": "^3.9.5",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.63.0",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.10"
   }
 }

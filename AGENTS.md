@@ -43,17 +43,19 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phases 2-5 are draft complete; Phase 1.5 tooling is
+Phase 1R realignment and Phases 2-6 are draft complete; Phase 1.5 tooling is
 complete:
 
 - `src/engine/` contains pure TypeScript deterministic primitives.
 - Existing tests cover deterministic primitives, audited timing/combat/Survival
   rules, and the turn resolver.
 - The versioned replay recorder, JSON codec, verifier, and v1 golden fixture are built.
-- UI, PixiJS renderer, planner, and networking are not built yet.
-- Phase 6 Next.js/PixiJS scaffold and verified arena import are next.
+- The Next.js shell, static PixiJS arena renderer, and verified Rubble Two/Three imports are built.
+- Movie playback, planner, and networking are not built yet.
+- Phase 7 event-driven movie playback is next.
 
-The planned UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, Zustand, and lucide-react, but the current repository is still a pure TypeScript engine package.
+The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, and lucide-react;
+Zustand remains planned for interactive planner/movie state.
 
 ## Commands
 
@@ -76,8 +78,10 @@ Current scripts:
 - `npm run typecheck` - `tsc --noEmit`.
 - `npm run lint` - ESLint plus engine nondeterminism bans.
 - `npm run format:check` - Prettier verification.
-
-Not wired yet: `dev`, `build`, `start`. These land with the Next.js scaffold.
+- `npm run dev` - run the Next.js development server.
+- `npm run build` - build the production Next.js application.
+- `npm run start` - serve the production Next.js build.
+- `npm run test:e2e` - build and run the Playwright visual test.
 
 ## Architecture
 
