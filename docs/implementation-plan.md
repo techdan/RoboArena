@@ -79,17 +79,16 @@ RoboArena/
 │   │   ├── firing.ts
 │   │   ├── blast.ts
 │   │   ├── catalog.ts
-│   │   ├── projectiles.ts          (Phase 3)
+│   │   ├── resolver.ts             (Phases 2-3)
 │   │   ├── visibility.ts           (Phase 4)
-│   │   ├── resolver.ts             (Phase 2 core)
 │   │   ├── replay.ts               (Phase 5)
 │   │   ├── index.ts
 │   │   └── *.test.ts
 │   ├── renderer/           PixiJS arena & movie player (Phase 6-7)
-│   ├── planner/            turn-programming logic (Phase 8-10)
+│   ├── planner/            turn-programming logic (Phase 9-10)
 │   ├── ai/                 (deferred — AI = post-v1)
 │   ├── lib/
-│   │   ├── arenas/         arena .json files (Rubble Two/Three transcribed)
+│   │   ├── arenas/         generated row-major Rubble Two/Three arena data
 │   │   ├── net/            v1 WebSocket room client + shared protocol
 │   │   └── replay/         save/load helpers for browser
 │   ├── app/                Next.js 16 routes
@@ -150,43 +149,29 @@ jobs:
 
 **Effort legend**: S = ≤ 1 session · M = 2-3 sessions · L = a week of evenings · XL = multi-week
 
-### Phase 1 — Engine primitives [✅ DRAFT COMPLETE, REALIGNMENT REQUIRED]
+### Phase 1 — Engine primitives [✅ DRAFT COMPLETE / OBSOLETE MODEL]
 
 **Goal**: pure-TS deterministic simulation primitives — RNG, geometry, movement costs, single-shot firing resolution, blast resolution, weapon/robot catalogs.
 
-**Status**: shipped in commit `8fb5028`. 75 unit tests passing. `npm test` and `npm run typecheck` green.
+**Status**: shipped in commit `8fb5028`, then superseded by Phase 1R. This
+section records the original skeleton only; none of its former numerical model
+or API examples are current mechanics authority.
 
 **Files** (all under `src/engine/`):
-- `constants.ts` — every locked numerical value
-- `types.ts` — `TileCoord`, `Posture`, `Robot*`, `Weapon*`, `RobotCommandSegment` (discriminated union), `Projectile`, `ResolutionEvent`, `MatchState`, `Arena`, `ReplayLog`
+- `constants.ts` — initial centralized numerical tables
+- `types.ts` — core structural engine types and discriminated unions
 - `rng.ts` — mulberry32 seedable RNG
-- `geometry.ts` — `chebyshevDistance`, `bearingDegrees`, `classifyScanZone`, `tilesAlongLineExclusive`
-- `movement.ts` — `moveStepCostTicks`, `flipParity`, `canTraverse`
+- `geometry.ts` — initial distance, bearing, scan, and line helpers
+- `movement.ts` — initial movement cost and traversal helpers
 - `firing.ts` — `resolveFire`: pure function from `(shooter, target, weapon, terrain, rng)` → discriminated outcome
 - `blast.ts` — `resolveBlast`: per-target damage rolls in radius
 - `catalog.ts` — `WEAPONS`, `ROBOT_DEFINITIONS`, `DEFAULT_ROSTER_BY_LENGTH`
 - `index.ts` — public exports
 
-**Public API contract**:
-```ts
-export const resolveFire: (ctx: FireContext) => FireResolution;
-export const resolveBlast: (ctx: BlastContext) => BlastDamageRoll[];
-export const moveStepCostTicks: (size: 1 | 2, parity: 0 | 1) => number;
-export const canTraverse: (posture: Posture, terrain: Terrain) => boolean;
-export const classifyScanZone: (from, heading, to) => 'black' | 'grey' | 'blocked';
-export const createRng: (seed: string) => Rng;
-```
-
-**Acceptance criteria** (all met):
-- [x] BLACK 100% / GREY ≈ 20% hit rate verified by ≥5000-trial Monte Carlo tests
-- [x] Cover crouch+bush ≈ 30%, low-wall-in-path ≈ 90%, no-stack max-rule
-- [x] Damage brackets at d=1 (mostly full), d=17 (always partial)
-- [x] Crouching damage < standing damage on open ground
-- [x] Rough-ground 1.2× multiplier
-- [x] Missile blast curve 67.5/50/15 at radii 0/1/2; r≥3 excluded
-- [x] Same-seed replay determinism verified for both `resolveFire` and `resolveBlast`
-- [x] Bresenham line tracing exact for cardinal, diagonal, and reverse cases
-- [x] All public exports `readonly` where appropriate; no mutation surfaces
+**Supersession rule**: use Phase 1R below, `docs/spec.md`, and the current
+`src/engine/constants.ts` / `catalog.ts` for every mechanic and public API.
+The discarded BLACK/GREY probability model, damage brackets, terrain
+multipliers, Chebyshev combat range, and stride parity are historical only.
 
 **Effort**: M (delivered).
 
@@ -239,7 +224,7 @@ tables, and synchronization of `docs/spec.md` with code/tests.
 
 ### Phase 2 — Turn resolver core [✅ DRAFT COMPLETE]
 
-**Goal**: orchestrate per-tick simulation. Consume `MatchState + TurnOrders + seed`, emit `ResolutionEvent[]` and a new `MatchState`. Implements movement, posture, scan rotation, command timing, simultaneous damage, and death cleanup. Aim & Fire may be immediate only as a temporary internal scaffold; no playable milestone can depend on that behavior. Phase 3 must follow before UI gameplay is considered faithful.
+**Goal**: orchestrate per-tick simulation. Consume `MatchState + TurnOrders + seed`, emit `ResolutionEvent[]` and a new `MatchState`. Implements movement, posture, scan rotation, command timing, simultaneous damage, and death cleanup. Aim & Fire locks and applies its result at the fire boundary; Phase 3 adds the corresponding deterministic presentation cues and explosive dispatch.
 
 **Dependencies**: Phase 1R and Phase 1.5.
 
@@ -257,7 +242,7 @@ for boundary in 0..TURN_DURATION_UNITS:
   1. gather due command completions from a boundary-start snapshot
   2. apply deploy/move completions (robots may stack)
   3. apply posture / scan-direction completions
-  4. resolve Aim & Fire in canonical actor order (temporary immediate impact)
+  4. resolve Aim & Fire and emit presentation cues in canonical actor order
   5. batch damage and deaths
   6. start each surviving robot's next command
 ```
@@ -284,7 +269,7 @@ export function resolveTurn(input: {
 - scan rotation → `scan-rotated` event at the realigned completion boundary
 - 2 robots stack on same tile (no collision) — both end positions correct
 - crouching robot tries to walk onto bush → command rejected at planner; resolver receives only legal moves (negative test: malformed orders trigger `MalformedOrders` error, not silent corruption)
-- Aim & Fire on stationary target → emits `hit` or `miss` correctly under the temporary scaffold, with tests named so Phase 3 can replace them
+- Aim & Fire on stationary target → emits `hit` or `miss` correctly at the canonical fire boundary
 - two robots fire at each other on the same tick, both die from the exchange → both `destroyed` events emitted (simultaneous-damage rule)
 - 30-shot full turn with same seed → exact same `events` array twice
 - command completing exactly at the 900-unit boundary executes; later work does not
@@ -312,7 +297,7 @@ export function resolveTurn(input: {
 
 ---
 
-### Phase 3 — Projectile and blast event semantics [⬜ MVP GATE]
+### Phase 3 — Projectile and blast event semantics [✅ DRAFT COMPLETE]
 
 **Goal**: add missile/grenade blast resolution and emit deterministic projectile
 launch/impact cues. Aim & Fire locks hit and damage when fire resolves. The
@@ -338,15 +323,14 @@ exact screen duration is not required state for replay determinism.
 |---|---|---|---|
 | Current MVP | fire boundary | simplest resolver and replay | movie can show a projectile travelling toward a robot already damaged/destroyed; later same-turn commands differ from impact-authoritative play |
 | Strict original-timed | verified original impact tick | strongest parity and audiovisual causality | exact bullet/missile/grenade travel ticks are not yet audited; pending-impact queue and simultaneous-impact rules required |
-| Recommended hybrid | fire-time roll, clone-defined deterministic impact tick | causal movie, shooter death cannot cancel a locked shot, renderer and engine share one event authority | deliberate timing deviation until original travel constants are traced |
+| Optional hybrid | fire-time roll, clone-defined deterministic impact tick | causal movie, shooter death cannot cancel a locked shot, renderer and engine share one event authority | deliberate timing deviation until original travel constants are traced |
 
-Recommendation: use the hybrid if causal projectile timing is important enough
-to affect tactics; otherwise keep the current MVP rule. In either case, hit,
-damage, blast center, and target tile lock at fire time. Never reroll, retarget,
-or let renderer completion mutate engine state. If hybrid is approved, revise
-this phase before implementation to add `PendingImpact`, per-projectile travel
-constants, impact batching, and tests for actions occurring between fire and
-impact.
+Phase 3 adopts the current MVP rule: state mutation and both presentation cues
+share the fire boundary. The hybrid remains a possible later rules change, not
+unfinished Phase 3 work. Any future adoption must revise the spec first and add
+`PendingImpact`, explicit travel constants, impact batching, and tests for
+actions between fire and impact. Under either model, never reroll, retarget, or
+let renderer completion mutate engine state.
 
 **Tests required**:
 - target moves after the fire-time roll → pre-rolled result is unchanged
@@ -689,7 +673,7 @@ recovery is required for asynchronous play.
 - `src/components/planner/AimAndFireDialog.tsx`
 - `src/components/planner/ScanAndFireDialog.tsx`
 - `src/components/planner/FireBox.tsx` — buttons that open dialogs
-- `src/planner/firingHelpers.ts` — scan-cone visualization (black/grey/blocked overlays on Pixi)
+- `src/planner/firingHelpers.ts` — inclusive scan-gate visualization and authorized hit-score preview
 
 **Tests required**:
 - Aim & Fire dialog: target outside cone shows "angle blocked"; target out of weapon range shows "out of range"
@@ -700,7 +684,8 @@ recovery is required for asynchronous play.
 
 **Acceptance criteria**:
 - [ ] Both fire modes can be programmed; commands appear on timeline with correct durations
-- [ ] Visual scan-cone overlay (black/grey/blocked zones) renders during targeting
+- [ ] Visual scan-gate overlay distinguishes eligible and angle-blocked tiles;
+  authorized previews use the score table rather than BLACK/GREY combat zones
 - [ ] Targeting explains deterministic geometry/cover factors and labels
       probabilistic outcomes as estimates, without previewing the actual roll
 
@@ -1011,11 +996,11 @@ Implementation: GSAP for tweens, Pixi sprite/container manipulation for state ch
 |---|---|---|
 | `move-step` | tile-to-tile lerp over the step's tick budget; sprite faces movement direction | GSAP tween on `sprite.position` |
 | `posture-changed` | swap from `*-standing.svg` to `*-crouching.svg` (or reverse); brief scale tween for "feel" | sprite swap + GSAP scale tween |
-| `scan-rotated` | smooth rotation tween (0.05 s per direction unit) | GSAP tween on `sprite.rotation` |
+| `scan-rotated` | smooth rotation tween over the absolute command's 5-tick budget | GSAP tween on `sprite.rotation` |
 | `projectile-launched` (bullet/burst) | fast straight-line tween (1-2 ticks) | GSAP tween on a temporary sprite |
 | `projectile-launched` (missile) | medium-speed tween + smoke-trail particle emitter along path | GSAP tween + Pixi `ParticleContainer` |
-| `projectile-impact` (bullet) | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle |
-| `projectile-impact` (missile/grenade) | larger explosion + radial blast wave sprite | sprite life cycle |
+| `projectile-impacted` (bullet) | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle |
+| `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite | sprite life cycle |
 | `hit` | red flash on target sprite (~3 ticks) | tween on `sprite.tint` |
 | `miss` | optional small puff at impact tile | sprite life cycle |
 | `destroyed` | rotating explosion + fade out + remove sprite | composed tween chain |
@@ -1382,16 +1367,17 @@ interactive tutorial are post-v1.
 
 [bush sprite]
 
-Bushes provide cover to **crouching** robots that are *on the bush tile*.
-Standing robots see and shoot over bushes — no protection.
+Bushes can contribute endpoint cover from the target tile or a sampled neighbor
+toward the shooter. Upright / Ducking / Crouching resolve to cover class 4 / 3 / 2.
 
-**Movement**: standing robots cross at full speed. Crouching is blocked.
+**Movement**: Upright and Ducking robots may cross bushes, but bush waypoints
+cannot participate in a 40-tick two-tile command. Crouching is blocked.
 
-**Cover**: a crouching target on a bush has a 30% chance of evading any
-single shot. The cover does not reduce damage on a hit.
+**Cover**: cover class feeds the exact live-fire score table and damage
+adjustments. It is not a separate flat evasion percentage.
 
-Tip: bush cover does *not* protect robots standing one tile behind a bush —
-only robots directly on it.
+Tip: only the confirmed target-end samples matter; a remote bush elsewhere on
+the shot line is not generic path cover.
 ```
 
 (All copy short, scannable, paired with sprite + a screenshot when useful.)
@@ -1563,7 +1549,8 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 - **Scan alignment**: the scan cone is the inclusive forward semicircle
   (`dot >= 0`). Scan & Fire also subtracts 4/2/0 from score at alignment
   magnitudes `<=4` / `<=8` / `>8`; Aim & Fire passes 16.
-- **Cover**: terrain-based miss chance, only applies to crouching targets. Bush = 30% on tile; low wall = 50% on tile, 90% in path.
+- **Cover**: endpoint terrain samples plus posture produce cover class 1-4;
+  that class contributes to live-fire hit score and damage adjustment.
 - **Replay**: `{ initialState, seed, turnOrders[] }` — re-runs deterministically.
 - **Tile locking**: Aim & Fire uses the programmed tile; Scan & Fire acquires a
   robot but snapshots its current tile when firing. Neither supports in-flight
@@ -1633,9 +1620,9 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 | Animation | Duration | Notes |
 |---|---|---|
-| Move-step lerp | matches the step's tick budget (e.g., 0.3 s for parity-0 single move) | Engine-driven |
+| Move-step lerp | matches the selector budget: 0.50 s single / 0.67 s double | Engine-driven |
 | Posture sprite swap | 100 ms cross-fade | Decorative |
-| Scan rotation | 50 ms per directional unit (matches engine cost) | Engine-driven |
+| Scan rotation | 5 ticks / 83 ms for any changed absolute heading | Engine-driven |
 | Bullet projectile | 1 ms per pixel × distance, capped 200 ms | Decorative; impact tick is engine-driven |
 | Missile projectile + smoke trail | 80 ms per tile traveled | Smoke particles fade over 600 ms |
 | Hit flash (red tint on target) | 150 ms | Decorative |
@@ -1660,7 +1647,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | **1R** | ✅ DRAFT COMPLETE | M | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth |
 | **1.5** | ✅ COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass |
 | 2 | ✅ DRAFT COMPLETE | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
-| 3 | ⬜ | M | Locked projectile/blast outcomes + deterministic presentation events |
+| 3 | ✅ DRAFT COMPLETE | M | Locked projectile/blast outcomes + deterministic presentation events |
 | 4 | ⬜ | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
 | 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |
 | 6 | ⬜ | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |

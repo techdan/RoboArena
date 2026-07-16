@@ -59,7 +59,8 @@ RoboSport (1991)/         gitignored — original DOS distribution, local resear
 - **v1 roster**: four non-Stealth combat classes, three postures, Survival, the
   verified Rubble arenas, and 2-4 unique-Side players.
 
-For the full mechanic spec including damage brackets, scan-cone hit chance, cover model, and terrain effects: **[`docs/spec.md`](docs/spec.md)**.
+For the full mechanic spec including live-fire scoring, the inclusive scan gate,
+cover classes, and terrain effects, see **[`docs/spec.md`](docs/spec.md)**.
 
 ## v1 scope
 

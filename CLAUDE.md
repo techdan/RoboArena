@@ -17,21 +17,22 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and the Phase 2 deterministic
-resolver are draft-complete with 141 passing tests. Phase 1.5 lint/format/CI is
+**Project state**: Phase 1R engine realignment, the Phase 2 deterministic
+resolver, and Phase 3 projectile/blast semantics are draft-complete with 149
+passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 3
-projectile/blast event semantics are next; visual travel speed is renderer tuning. See
+alliance behavior is retained for v2. Phase 4 ordinary visibility and Scan &
+Fire are next; visual projectile travel speed remains renderer tuning. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 141 tests)
+npm test               # Run all engine unit tests (currently 149 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -53,9 +54,11 @@ Confirmed named weapon cadence/accuracy mappings are centralized in
 `catalog.ts`; confirmed movement/action costs remain in `constants.ts`.
 Every probabilistic decision goes through a seedable RNG (`createRng(seed)`).
 
-**Everything after Phase 2 (not yet built)** — projectile/blast events,
-visibility, replay format, Next.js + PixiJS UI, planner, and the v1 authoritative
-room service.
+**Phase 3 (draft-complete)** — named missile/grenade blast dispatch, finite
+explosive ammo, and deterministic fire-boundary launch/impact cues.
+
+**Everything after Phase 3 (not yet built)** — visibility, replay format,
+Next.js + PixiJS UI, planner, and the v1 authoritative room service.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

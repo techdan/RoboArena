@@ -16,8 +16,9 @@ Phase 2 is also draft-complete: the engine now resolves immutable programmed
 turns with command validation, exact completion boundaries, stable event order,
 stacking movement, and batched immediate direct fire.
 
-Use `tasks/core-build-plan.md` as the coherent execution order. The immediate
-sequence is Phase 3 projectile/blast events. Visual projectile travel timing is
+Use `tasks/core-build-plan.md` as the coherent execution order. Phase 3
+projectile/blast events are draft-complete; the immediate sequence is Phase 4
+ordinary visibility and Scan & Fire. Visual projectile travel timing is
 renderer tuning. Stealth and all non-Survival sport logic are post-main-game
 Phases 14/15 and cannot enter the v1 critical path. v1 is now internet-first
 free-for-all: 2-4 separate devices, one Team and unique Side per player.
@@ -32,10 +33,9 @@ are exact for the version-locked binary.
 
 ## Repo state
 
-- Branch `main`; Phase 1R checkpoint `19a53d3` is on `origin/main`.
-- The working tree contains the Phase 2 resolver implementation until its
-  requested follow-up checkpoint is committed.
-- GitHub Actions CI for `19a53d3` completed successfully.
+- Branch `main`; the Survival audit checkpoint is `bfe77b0`.
+- Phase 3 is implemented in the working tree pending its requested checkpoint.
+- The last recorded remote CI gate passed; run local gates for each checkpoint.
 
 ## Phase state
 
@@ -43,12 +43,13 @@ are exact for the version-locked binary.
 |---|---|
 | Phase 1 — engine primitives | ✅ original skeleton superseded by Phase 1R |
 | **Reverse-engineering the original** | ✅ **complete & committed** — `docs/reverse-engineering.md` (21 sections) + `tools/re/` |
-| **RE implementation audit** | ✅ raw tables reproduced; remaining mappings classified in `tasks/reverse-engineering-audit.md` |
+| **RE implementation audit** | ✅ 44 claim groups verified; deferred labels/content isolated in `tasks/reverse-engineering-audit.md` |
 | **Engine realignment to binary truth** | ✅ **DRAFT COMPLETE** — RE verifier checks 44 independent claim groups, including all 77 descriptor rows |
 | Phase 1.5 — toolchain | ✅ **COMPLETE** — local checks and GitHub Actions pass |
-| Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added; 136 engine tests total |
+| Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added |
+| Phase 3 — projectile/blast events | ✅ **DRAFT COMPLETE** — named missile/grenade blast dispatch, finite ammo, stable launch/impact cues; 149 engine tests total |
 | Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
-| Phases 3–13 (projectiles, visibility, replay, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
+| Phases 4–13 (visibility, replay, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)

@@ -1,14 +1,17 @@
 /**
- * Deterministic Phase 2 turn resolver.
+ * Deterministic Phase 2/3 turn resolver.
  *
  * Implements the completion-driven boundary order in
- * `tasks/phase2-resolver-design.md`. Projectile travel, Scan & Fire, and
- * visibility deliberately remain later phases.
+ * `tasks/phase2-resolver-design.md` and `docs/spec.md` §8. Projectile cues are
+ * presentation-only; Scan & Fire and visibility deliberately remain later phases.
  */
 
 import { TICKS_PER_SECOND } from "./constants.js";
 import { WEAPONS } from "./catalog.js";
+import { resolveBlast } from "./blast.js";
 import { commandDurationTicks, moveStepDurationTicks, moveStepSize } from "./commandInterpreter.js";
+import { resolveCover } from "./cover.js";
+import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
 import { canTraverseTile, isFullSpeedTile } from "./movement.js";
 import { createRng } from "./rng.js";
 import { resolveFire } from "./firing.js";
@@ -86,13 +89,23 @@ interface Cursor {
   active: ActiveCommand | null;
 }
 
-interface PendingDamage {
-  readonly sourceId: string;
-  readonly shotIndex: number;
-  readonly targetId: string;
-  readonly damage: number;
-  readonly score: number;
-}
+type PendingDamage =
+  | {
+      readonly damageKind: "direct";
+      readonly sourceId: string;
+      readonly shotIndex: number;
+      readonly targetId: string;
+      readonly damage: number;
+      readonly score: number;
+    }
+  | {
+      readonly damageKind: "blast";
+      readonly sourceId: string;
+      readonly shotIndex: number;
+      readonly targetId: string;
+      readonly damage: number;
+      readonly radius: number;
+    };
 
 type EventPayload = ResolutionEvent extends infer Event
   ? Event extends ResolutionEvent
@@ -399,10 +412,19 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         );
       }
       const weapon = (WEAPONS as Partial<Record<string, WeaponDefinition>>)[command.weapon];
-      if (!weapon || !robotOwnsWeapon(robot, weapon) || !weapon.damageRoll) {
+      if (!weapon || !robotOwnsWeapon(robot, weapon) || (!weapon.damageRoll && !weapon.blast)) {
         return malformed(
           "unsupported-command",
-          "Phase 2 Aim & Fire accepts only an owned direct-fire weapon.",
+          "Aim & Fire requires an owned, supported weapon.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      const ammo = robot.ammo[weapon.id];
+      if (ammo === undefined || (ammo !== "unlimited" && (!Number.isInteger(ammo) || ammo <= 0))) {
+        return malformed(
+          "illegal-command",
+          "Aim & Fire requires available ammo.",
           robot.id,
           commandIndex,
         );
@@ -535,25 +557,120 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     const pendingDamage: PendingDamage[] = [];
     for (const { actor, active } of due) {
       if (active.command.kind !== "aim-and-fire") continue;
+      const command = active.command;
       const shooter = robots.get(actor.robotId);
       const cursor = cursors.get(actor.robotId);
       if (!shooter || !cursor || shooter.hp <= 0 || !isTileCoord(shooter.position)) continue;
-      const weapon = WEAPONS[active.command.weapon];
+      const weapon = WEAPONS[command.weapon];
       emit(tick, {
         kind: "fired",
         shooterId: shooter.id,
         commandIndex: active.commandIndex,
         weapon: weapon.id,
-        target: active.command.target,
+        target: command.target,
       });
+      let updatedShooter = shooter;
+      const currentAmmo = shooter.ammo[weapon.id];
+      if (currentAmmo !== "unlimited") {
+        updatedShooter = {
+          ...updatedShooter,
+          ammo: { ...updatedShooter.ammo, [weapon.id]: Math.max(0, currentAmmo - 1) },
+        };
+      }
       const target = active.intendedTargetId ? robots.get(active.intendedTargetId) : undefined;
       for (let shotIndex = 0; shotIndex < weapon.bulletsPerClick; shotIndex += 1) {
+        const projectileId = `${state.turnNumber}:${shooter.id}:${active.commandIndex}:${tick}:${shotIndex}`;
+        emit(tick, {
+          kind: "projectile-launched",
+          projectileId,
+          shooterId: shooter.id,
+          shotIndex,
+          weapon: weapon.id,
+          from: shooter.position,
+          target: command.target,
+        });
+        if (weapon.blast) {
+          const distance = floorEuclideanDistance(shooter.position, command.target);
+          const trajectoryFailure =
+            distance > weapon.maxRange
+              ? "out-of-range"
+              : !isWithinScanCone(shooter.position, shooter.scanHeading, command.target)
+                ? "angle-blocked"
+                : resolveCover({
+                      from: shooter.position,
+                      to: command.target,
+                      targetPosture: "upright",
+                      arenaTileAt: (coord) => tileAt(state.arena, coord),
+                    }).outcome === "blocked"
+                  ? "sight-blocked"
+                  : null;
+          if (trajectoryFailure) {
+            emit(tick, {
+              kind: "projectile-impacted",
+              projectileId,
+              weapon: weapon.id,
+              target: command.target,
+              outcome: "miss",
+            });
+            emit(tick, {
+              kind: "shot-missed",
+              shooterId: shooter.id,
+              shotIndex,
+              target: command.target,
+              reason: trajectoryFailure,
+            });
+            continue;
+          }
+          const potentialTargets = actors.flatMap((candidate) => {
+            const robot = robots.get(candidate.robotId);
+            if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
+            const cover = resolveCover({
+              from: command.target,
+              to: robot.position,
+              targetPosture: robot.posture,
+              arenaTileAt: (coord) => tileAt(state.arena, coord),
+            });
+            if (cover.outcome === "blocked") return [];
+            return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
+          });
+          const blastRolls = resolveBlast({
+            impact: command.target,
+            weapon,
+            potentialTargets,
+            rng,
+          });
+          for (const roll of blastRolls) {
+            pendingDamage.push({
+              damageKind: "blast",
+              sourceId: shooter.id,
+              shotIndex,
+              targetId: roll.robotId,
+              damage: roll.damage,
+              radius: roll.radius,
+            });
+          }
+          emit(tick, {
+            kind: "projectile-impacted",
+            projectileId,
+            weapon: weapon.id,
+            target: command.target,
+            outcome: "blast",
+          });
+          continue;
+        }
         if (!target || target.hp <= 0 || !isTileCoord(target.position)) {
+          emit(tick, {
+            kind: "projectile-impacted",
+            projectileId,
+            weapon: weapon.id,
+            target: command.target,
+            outcome: "miss",
+          });
           emit(tick, {
             kind: "shot-missed",
             shooterId: shooter.id,
             shotIndex,
-            target: active.command.target,
+            target: command.target,
             reason: "no-target",
           });
           continue;
@@ -562,7 +679,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           shooterTile: shooter.position,
           shooterHeading: shooter.scanHeading,
           shooterAccuracy: shooter.definition.accuracy,
-          aimedTile: active.command.target,
+          aimedTile: command.target,
           targetTile: target.position,
           targetPosture: target.posture,
           weapon,
@@ -572,30 +689,48 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         });
         if (result.outcome === "hit") {
           pendingDamage.push({
+            damageKind: "direct",
             sourceId: shooter.id,
             shotIndex,
             targetId: target.id,
             damage: result.damage,
             score: result.score,
           });
+          emit(tick, {
+            kind: "projectile-impacted",
+            projectileId,
+            weapon: weapon.id,
+            target: command.target,
+            outcome: "hit",
+          });
         } else {
           const reason = result.outcome === "miss" ? "hit-roll" : result.outcome;
+          emit(tick, {
+            kind: "projectile-impacted",
+            projectileId,
+            weapon: weapon.id,
+            target: command.target,
+            outcome: "miss",
+          });
           emit(tick, {
             kind: "shot-missed",
             shooterId: shooter.id,
             shotIndex,
-            target: active.command.target,
+            target: command.target,
             reason,
             ...(result.outcome === "miss" ? { score: result.score } : {}),
           });
         }
       }
       if (shooter.damageStaggerActionsRemaining > 0) {
-        robots.set(shooter.id, {
-          ...shooter,
+        updatedShooter = {
+          ...updatedShooter,
           damageStaggerActionsRemaining: shooter.damageStaggerActionsRemaining - 1,
-        });
+        };
       }
+      robots.set(shooter.id, updatedShooter);
+      const remainingAmmo = updatedShooter.ammo[weapon.id];
+      if (command.repeat && remainingAmmo === 0) cursor.nextIndex += 1;
       finishActive(cursor);
     }
 

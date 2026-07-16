@@ -51,8 +51,9 @@ At each boundary:
 6. Start the next legal command for each surviving robot in canonical order.
 7. Emit `turnEnd` at boundary 900 after all allowed completions are processed.
 
-Phase 3 inserts scheduled projectile impacts between steps 3 and 4/5 and moves
-damage application to impact boundaries without changing the fire-time roll.
+Phase 3 retains steps 4/5 at the fire boundary and adds deterministic launch and
+impact presentation cues around the locked result. It does not add scheduled
+gameplay impacts; visual travel duration belongs to the renderer.
 
 The implemented command union includes an explicit `deploy` command. Aim & Fire
 captures the canonical opposing robot on the aimed tile when that fire command
@@ -100,9 +101,9 @@ When an Aim & Fire command completes:
 4. Roll hit and damage immediately using the Phase 1R model.
 5. Emit `fired` and the appropriate hit/miss/damage events at the same boundary.
 
-This immediate application is temporary. Phase 3 keeps steps 1–4 at fire time,
-emits a launch event carrying the pre-rolled result, and applies it at the
-scheduled impact boundary.
+This fire-boundary application is canonical for the current MVP. Phase 3 keeps
+steps 1–4 together and emits deterministic launch/impact cues at that same
+boundary; those cues never become a second combat authority.
 
 ## Minimum event vocabulary
 

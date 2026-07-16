@@ -11,10 +11,11 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phase 1R and Phase 2 are draft-complete with 141 passing tests. The engine now
-has binary-realigned primitives plus a pure, completion-driven turn resolver.
-The next engine gate is Phase 3 projectile/blast event semantics. Exact screen
-travel duration is presentation tuning and is not an engine blocker.
+Phases 1R, 2, and 3 are draft-complete with 149 passing tests. The engine now
+has binary-realigned primitives, a pure completion-driven turn resolver, and
+named projectile/blast event semantics. The next engine gate is Phase 4
+ordinary visibility and Scan & Fire. Exact screen travel duration is
+presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
 
@@ -207,11 +208,7 @@ playable end to end.
 
 ## Next actions
 
-1. Implement Phase 3 named blast resolution and deterministic projectile
-   presentation events without rerolling fire-time outcomes.
-2. Batch same-boundary results deterministically and retain the confirmed
-   damage-stagger counter.
-3. Implement ordinary visibility and Scan & Fire in Phase 4, explicitly without
+1. Implement ordinary visibility and Scan & Fire in Phase 4, explicitly without
    Stealth.
-4. Continue through replay, then establish the Phase 8 authoritative room
+2. Continue through replay, then establish the Phase 8 authoritative room
    boundary before planner state is designed around local-only assumptions.

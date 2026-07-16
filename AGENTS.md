@@ -65,7 +65,7 @@ npm run typecheck
 npm run lint
 npm run format:check
 npx vitest run path/to/file.test.ts
-npx vitest run -t "BLACK zone"
+npx vitest run -t "floored Euclidean"
 ```
 
 Current scripts:
@@ -134,13 +134,21 @@ Locked or current engine assumptions include:
 - Aim & Fire targets a tile, not a robot.
 - Bullets do not harm or block on friendlies.
 - Missile/grenade blasts can affect friendlies.
-- BLACK scan zone hit chance is 100%; GREY is approximately 20%.
-- Cover uses miss chances; crouching is required for bush/low-wall cover in the current engine model.
+- Live fire uses the exact 20-entry score threshold table; BLACK/GREY reticle
+  colors are UI approximations, not a two-zone combat model.
+- Cover uses endpoint terrain samples and posture to produce cover class 1-4;
+  it affects both hit score and direct/blast damage adjustments.
 - Missile blast radius is 2 with falloff at radius 0/1/2.
-- Movement on open ground alternates step costs by stride parity.
+- Movement costs are fixed at 30 ticks for one-tile selectors and 40 ticks for
+  two-tile selectors; slow terrain prevents two-step compression and there is
+  no stride-parity state.
 - Match 1-7 empirical observations are reflected in `src/engine/constants.ts`.
 
-Mechanics risk to preserve: the COMPUTE! review says hit outcomes depend on scan length and target speed. The current v1 spec models moving-target behavior through tile-targeted shots and projectile timing. Do not add a numeric target-speed modifier without a DOS empirical test and a matching spec update.
+Mechanics risk to preserve: the COMPUTE! review says hit outcomes depend on scan
+length and target speed. The live resolver has no independent numeric speed
+term; v1 models movement through command-boundary sampling, distance/cover, and
+the confirmed off-aimed-tile score halving. Do not add a numeric target-speed
+modifier without a DOS empirical test and a matching spec update.
 
 Empirical burden rule: DOS playtesting is slow. Prefer one-turn qualitative gates from `docs/priority-tests.md` over large sample studies unless the extra precision changes implementation. Record defaults for skipped or inconclusive tests instead of blocking unrelated work.
 

@@ -435,15 +435,16 @@ Time is integer ticks throughout the engine. Conversions to/from seconds happen 
 
 `resolveTurn({ state, orders, seed })` is a pure completion-driven simulation.
 At each integer boundary it applies deploy/movement, then posture/scan changes,
-then resolves Aim & Fire in canonical team/roster order, and finally batches
-direct damage and deaths. Robots may stack; same-boundary mutual kills are
+then resolves Aim & Fire in canonical Home-slot/roster order, and finally
+batches direct/blast damage and deaths. Robots may stack; same-boundary mutual kills are
 allowed. Events carry stable, gap-free `{ tick, seq }` values. Malformed or
 Phase-ineligible imported orders return a discriminated `MalformedOrders`
 result without mutating inputs.
 
-Direct-fire hit and damage are locked when the command fires; later projectile
-motion cannot reroll the result or enable in-flight dodging. RoboArena applies
-the state change at the fire boundary and emits renderer launch/impact cues;
+Direct-fire hit/damage and explosive blast center/damage are locked when the
+command fires; later projectile motion cannot reroll the result or enable
+in-flight dodging. RoboArena applies the state change at the fire boundary and
+emits `projectile-launched` / `projectile-impacted` renderer cues;
 exact on-screen travel duration is presentation tuning, not an unresolved
 business-rule gate. Scan & Fire remains unsupported until Phase 4.
 

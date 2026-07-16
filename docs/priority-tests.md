@@ -114,6 +114,14 @@ closes.
 
 ---
 
+## Archived Match 1-5 procedures
+
+The procedures below are retained as empirical provenance. Several hypotheses
+they were designed to test—including BLACK/GREY combat zones, damage brackets,
+terrain multipliers, and incremental scan-rotation timing—were superseded by
+the 2026-07-15 binary audit. Use `docs/spec.md` for current mechanics and the
+resolved gates above for any remaining qualitative regression work.
+
 ## Match 1 — Battle (Rubble Three, 32×32) — combined damage + accuracy
 
 **Goal**: in one match, get
@@ -171,7 +179,7 @@ Only Burst B's path passes through a friendly (Burst Hunter A). If our "bullets 
 #### Point-blank Hunters (Rifle A, Burst A, Auto) — for damage values
 
 1. Deploy out of Dock, walk into Home Area, walk to assigned firing position.
-2. **Set scan direction toward the target** (Shift+click in the target's direction). Required — without this the shot will be "**angle blocked**" because firing only works inside the robot's scan cone. Rotation costs 0.05 s per directional unit and the robot may already be facing the target after walking to position; check the Tools-panel Scan indicator and only rotate if needed.
+2. **Set scan direction toward the target** (Shift+click in the target's direction). Required — without this the shot will be "**angle blocked**" because firing only works inside the robot's scan cone. A changed absolute heading costs 5 ticks regardless of angular distance; check the Tools-panel Scan indicator and only rotate if needed.
 3. **Aim & Fire** the target tile **3 separate times** (just click 3 times, no Ctrl+Shift). 3 individual shots gives 3 clean per-shot damage samples — easier to read in movie playback than a 30-shot repeat-fire stream.
 4. Missile Hunter: skipped in Match 1 (covered by Match 2).
 
@@ -230,7 +238,7 @@ That's everything I need to lock damage ranges + accuracy curves for the 4 defau
 
 ---
 
-## Match 2 — Melee (Rubble Two, 25×25) — missile blast falloff
+## Match 2 — Melee (Rubble Two, 24×24) — missile blast falloff
 
 **Goal**: missile damage curve at radii 0, 1, 2, 3 from the impact tile. One missile shot per turn = one full curve sample. With 3 missiles in inventory, three turns of firing = three samples per radius (variance).
 
@@ -468,7 +476,7 @@ Battle's 2R + 2B roster covers all 4 pairs in one match: 2 controls (standing) +
 
 ### Why fixed-count Aim & Fire instead of Ctrl+Shift repeat-fire
 
-We need to **know exactly how many shots fired** for the test/control ratio. Repeat-fire is opaque — if a target dies mid-stream, total damage caps at HP and breaks the math. Manual Aim & Fire 10 times per Hunter = 10 known clicks. Pick a distance where the target survives all 10 clicks and the full damage signal is preserved.
+We need to **know exactly how many shots fired** for the test/control ratio. Repeat-fire is opaque — if a target dies mid-stream, total damage caps at HP and breaks the math. Manual Aim & Fire 10 times per Hunter = 10 known clicks. Pick a distance where the target survives all 10 clicks and the direct-damage roll signal is preserved.
 
 **At d=10**: Rifle hits ~20% × ~17 dmg/hit × 10 clicks ≈ 34 dmg. 140-HP target survives. ✓ Burst at d=10 is borderline, see fallback below.
 
@@ -577,7 +585,12 @@ Distance falloff, base accuracy, weapon-specific damage, and shot count all canc
 
 ---
 
-## Match 5 — Scan-cone hit chance (BLACK vs GREY reticle)
+## Match 5 — Scan-cone reticle sampling (HISTORICAL / SUPERSEDED)
+
+This test recorded original UI reticle colors, but the completed binary trace
+shows that live combat uses an exact score→threshold table rather than a
+two-zone BLACK/GREY probability rule. Retain the observations as provenance;
+do not use this section to tune the engine.
 
 **Goal**: lock the GREY-zone hit chance vs BLACK-zone. You already have 1/6 = 17% at d=5 grey. One more match locks it.
 

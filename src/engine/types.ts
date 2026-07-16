@@ -192,6 +192,23 @@ export type ResolutionEvent = EventEnvelope &
         readonly target: TileCoord;
       }
     | {
+        readonly kind: "projectile-launched";
+        readonly projectileId: string;
+        readonly shooterId: string;
+        readonly shotIndex: number;
+        readonly weapon: WeaponId;
+        readonly from: TileCoord;
+        readonly target: TileCoord;
+      }
+    | {
+        readonly kind: "projectile-impacted";
+        readonly projectileId: string;
+        readonly weapon: WeaponId;
+        readonly target: TileCoord;
+        /** Presentation-only summary of the already locked fire-boundary result. */
+        readonly outcome: "hit" | "miss" | "blast";
+      }
+    | {
         readonly kind: "shot-missed";
         readonly shooterId: string;
         readonly shotIndex: number;
@@ -202,11 +219,21 @@ export type ResolutionEvent = EventEnvelope &
       }
     | {
         readonly kind: "damaged";
+        readonly damageKind: "direct";
         readonly sourceId: string;
         readonly shotIndex: number;
         readonly targetId: string;
         readonly damage: number;
         readonly score: number;
+      }
+    | {
+        readonly kind: "damaged";
+        readonly damageKind: "blast";
+        readonly sourceId: string;
+        readonly shotIndex: number;
+        readonly targetId: string;
+        readonly damage: number;
+        readonly radius: number;
       }
     | { readonly kind: "destroyed"; readonly robotId: string }
     | {
@@ -217,15 +244,6 @@ export type ResolutionEvent = EventEnvelope &
       }
     | { readonly kind: "turn-end"; readonly turnNumber: number }
   );
-
-export type Projectile =
-  | {
-      readonly kind: "tile";
-      readonly target: TileCoord;
-      readonly impactTick: number;
-      readonly weapon: WeaponId;
-    }
-  | { readonly kind: "tracking"; readonly targetRobotId: string; readonly weapon: WeaponId };
 
 // ──────────────────────────────────────────────────────────────────────────
 // Match state and config
