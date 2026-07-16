@@ -523,8 +523,8 @@ A complete match is reconstructible from:
 ReplayLog = {
   formatVersion: 1,
   initialState: MatchState, // arena, teams, robots, config
-  seed: string,             // deterministic match seed
   turns: {
+    seed: string,             // authoritative seed for this turn
     orders: TurnOrders,
     events: ResolutionEvent[], // derived movie output, not authority
     eventDigest: string,
@@ -533,13 +533,15 @@ ReplayLog = {
 }
 ```
 
-`createReplayLog` records each resolved turn. `verifyReplay` re-runs the
-authoritative initial state, seed, and orders and requires byte-identical event
-streams plus matching event and complete next-state digests. Divergence ticks
-are absolute across the match rather than resetting at each turn. The JSON
-codec explicitly preserves `lastKnownMarkers` maps. Version 1 embeds the arena
-in `initialState` so exports are self-contained; a later format may migrate to
-named/checksummed arena references after the Phase 6 arena library exists.
+`createReplayLog` records each resolved turn with the seed chosen for that turn.
+`verifyReplay` re-runs the authoritative initial state and ordered
+`{ seed, orders }` entries and requires byte-identical event streams plus
+matching event and complete next-state digests. Divergence ticks are absolute
+across the match rather than resetting at each turn. The JSON codec validates
+the complete nested replay structure and explicitly preserves
+`lastKnownMarkers` maps. Version 1 embeds the arena in `initialState` so exports
+are self-contained; a later format may migrate to named/checksummed arena
+references after the Phase 6 arena library exists.
 
 Determinism is enforced by:
 - Seedable RNG (mulberry32) for every probabilistic decision

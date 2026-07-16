@@ -49,7 +49,7 @@ are exact for the version-locked binary.
 | Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added |
 | Phase 3 — projectile/blast events | ✅ **DRAFT COMPLETE** — named missile/grenade blast dispatch, finite ammo, stable launch/impact cues; 149 engine tests total |
 | Phase 4 — visibility / Scan & Fire | ✅ **DRAFT COMPLETE** — per-Team contacts, last-known markers, exact scan-sight strength, deterministic acquisition/cooldown/ammo |
-| Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — versioned JSON codec, deterministic recorder/verifier, state/event digests, v1 golden fixture; 181 engine tests total |
+| Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — versioned JSON codec, deterministic recorder/verifier, state/event digests, v1 golden fixture; 183 engine tests total |
 | Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
 | Phases 6–13 (renderer, room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival |

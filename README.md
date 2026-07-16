@@ -54,7 +54,8 @@ RoboSport (1991)/         gitignored — original DOS distribution, local resear
 ## Key design facts
 
 - **Deterministic engine**: every probabilistic decision goes through a seedable RNG. `Math.random()` and `Date.now()` are forbidden inside `src/engine/`.
-- **Replay format**: `{ initialState, seed, turnOrders[] }` re-runs to a byte-identical event stream on any machine.
+- **Replay format**: `{ initialState, turns: { seed, orders }[] }` re-runs to a
+  byte-identical event stream on any machine.
 - **No robot-vs-robot collision**: robots pass through each other; bullets only hit the target tile.
 - **v1 roster**: four non-Stealth combat classes, three postures, Survival, the
   verified Rubble arenas, and 2-4 unique-Side players.

@@ -18,7 +18,7 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-5 of the deterministic
-engine are draft-complete with 181 passing tests. Phase 1.5 lint/format/CI is
+engine are draft-complete with 183 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -31,7 +31,7 @@ verified arena import are next; visual projectile travel speed remains renderer 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 181 tests)
+npm test               # Run all engine unit tests (currently 183 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans

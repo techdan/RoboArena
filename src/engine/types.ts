@@ -348,11 +348,12 @@ export interface HomeArea {
 export interface ReplayLog {
   readonly formatVersion: 1;
   readonly initialState: MatchState;
-  readonly seed: string;
   readonly turns: readonly ReplayTurn[];
 }
 
 export interface ReplayTurn {
+  /** Authoritative seed chosen and persisted for this resolved turn. */
+  readonly seed: string;
   readonly orders: TurnOrders;
   /** Derived movie output retained for playback and byte-level verification. */
   readonly events: readonly ResolutionEvent[];

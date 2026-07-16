@@ -115,8 +115,8 @@ migrated during Phase 1R):
 `command-aborted`, `turn-end`.
 
 Events are the complete derived movie stream. They are **not** the canonical
-replay input; Phase 5 replays initial state + seed + turn orders and may compare
-an event digest.
+replay input; Phase 5 replays initial state plus ordered per-turn seed/order
+pairs and may compare an event digest.
 
 ## Validation boundary
 

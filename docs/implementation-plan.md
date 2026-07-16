@@ -61,7 +61,10 @@ Browser (one Team/player)                    Authoritative room service
   authoritative: clients never resolve shared turns or receive opponents'
   unsubmitted plans or hidden state.
 
-**Determinism contract**: every probabilistic decision in the engine goes through a seedable RNG (`createRng(seed)`). Replay = `{ initialMatchState, seed, turnOrders[] }` → identical event stream on any machine.
+**Determinism contract**: every probabilistic decision in the engine goes
+through a seedable RNG (`createRng(seed)`). Replay =
+`{ initialMatchState, turns: { seed, orders }[] }` → identical event stream on
+any machine.
 
 ---
 
@@ -430,18 +433,22 @@ export function deserializeReplay(json: string): ReplayLog;
 export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstDivergenceTick: number };
 export function createReplayLog(input: {
   initialState: MatchState;
-  seed: string;
-  turnOrders: readonly TurnOrders[];
+  turns: readonly { seed: string; orders: TurnOrders }[];
 }): ReplayLog;
 ```
 
 **Tests required**:
 - round-trip: serialize → deserialize → byte-equal
-- re-run: take a `ReplayLog`, run `resolveTurn` for each turn with the recorded seed and orders, compare events to the recorded events → byte-equal
-- intentional corruption: flip one byte in the seed → verify re-run diverges and `verifyReplay` returns the divergent tick
+- re-run: take a `ReplayLog`, run `resolveTurn` for each turn with that turn's
+  recorded seed and orders, compare events to the recorded events → byte-equal
+- intentional corruption: flip one byte in either turn seed → verify re-run
+  diverges and `verifyReplay` returns the absolute divergent tick
+- malformed nested replay data is rejected before a typed `ReplayLog` is
+  returned; `verifyReplay` never throws for bad imported data
 - schema versioning: replays carry a `formatVersion: 1` field; deserializer rejects unknown versions
 
-**Implemented contract**: replay authority is initial state + seed + orders.
+**Implemented contract**: replay authority is initial state plus ordered
+per-turn `{ seed, orders }` entries.
 Derived events are retained for direct movie playback and exact comparison;
 deterministic event and complete next-state digests detect corruption. Version 1
 embeds arena tiles because the named/checksummed arena library lands in Phase 6;
@@ -1301,14 +1308,16 @@ Server reads `X-Browser-Token` header; passes through on reads, requires on muta
 ### Replay format versioning
 
 Serialized replays carry `formatVersion`; the SQL storage column remains
-`format_version`. If/when the serialized format changes, add a migration entry
-to a small table:
+`format_version`. Version 1 rejects unknown versions. When a version 2 format
+actually exists, add a migration entry to a small table:
 ```ts
 const replayMigrations: Record<number, (data: any) => ReplayLog> = {
   // 1: identity
 };
 ```
-CI gate: a few canned replays must still pass `verifyReplay` after migration. Don't build the full migration framework now; add it when needed.
+CI must then gate a corpus of version 1 replays through migration and
+`verifyReplay`. Do not build the migration framework before a second format
+exists.
 
 ### Post-v1 shared-library API endpoints (detailed auth)
 
@@ -1327,19 +1336,6 @@ CI gate: a few canned replays must still pass `verifyReplay` after migration. Do
 - Sent as `X-Browser-Token` header on all API calls.
 - Server treats it as anonymous identity — not linked to email, no signup. Clearing localStorage = "forget me".
 - This is good enough for friend-scale shared persistence (no accounts, no recovery); promotable to real accounts later.
-
-### Replay format versioning
-
-Replays carry `formatVersion: 1`. Engine ships with a migration table:
-```ts
-const migrations: Record<number, (replay: any) => ReplayLog> = {
-  // 1: identity (current version)
-};
-```
-When `formatVersion` advances:
-- Add a `2:` entry that migrates from v1
-- Old replays still play
-- CI gates on a corpus of canned old replays passing `verifyReplay` after migration
 
 ---
 
@@ -1518,7 +1514,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Mobile / tablet playability | Out of v1 (locked §12) | Desktop-only with mouse + keyboard for v1; tablet/touch in v2 |
 | WebSocket hosting/reliability | Phase 8 onward | Validate WSS plus persistent-volume restart recovery on two real networks before planner integration; keep one authoritative room process in v1 |
 | Absent player stalls orders | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1 |
-| Replay format breaking changes | Phase 5 | `formatVersion` + migrations table (§9); CI gates on canned old replays passing `verifyReplay` |
+| Replay format breaking changes | Phase 5+ | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9) |
 | Named weapon mapping for binary damage/fire tables | Closed in Phase 1R | Selector dispatch and live callers are source-locked in the claim ledger |
 | Sport modes beyond Survival | Out of v1 | All non-Survival modes deferred; engine reserves `sportType` field |
 | AI tiers | Out of main game | Deferred until after the explicitly scheduled parity phases |
@@ -1564,7 +1560,8 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
   `<=4` / `<=8` / `>8`; Aim & Fire passes 16.
 - **Cover**: endpoint terrain samples plus posture produce cover class 1-4;
   that class contributes to live-fire hit score and damage adjustment.
-- **Replay**: `{ initialState, seed, turnOrders[] }` — re-runs deterministically.
+- **Replay**: `{ initialState, turns: { seed, orders }[] }` — re-runs
+  deterministically with the authoritative seed recorded per turn.
 - **Tile locking**: Aim & Fire uses the programmed tile; Scan & Fire acquires a
   robot but snapshots its current tile when firing. Neither supports in-flight
   dodge or impact-time retargeting.

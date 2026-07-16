@@ -11,7 +11,7 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 5 are draft-complete with 181 passing tests. The engine now
+Phases 1R through 5 are draft-complete with 183 passing tests. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. Phase 6 Next.js/PixiJS scaffolding and verified
@@ -169,10 +169,11 @@ target choice. Do not add Stealth cases here.
 
 ## Milestone 6 — Phase 5: replay contract
 
-The canonical replay input is `{ formatVersion, initialState, seed,
-turnOrders[] }`. `ResolutionEvent[]` is the derived movie output, not the sole
-replay source of truth. Version 1 retains derived events for playback and exact
-comparison plus required event and next-state digests for divergence detection.
+The canonical replay input is `{ formatVersion, initialState, turns: { seed,
+orders }[] }`. `ResolutionEvent[]` is the derived movie output, not the sole
+replay source of truth. Each authoritative turn seed is stored with its orders.
+Version 1 retains derived events for playback and exact comparison plus required
+event and next-state digests for divergence detection.
 
 **Exit gate:** serialize/deserialize/verify round trips; replaying the same input
 produces byte-identical state, events, and digest; at least one golden fixture is

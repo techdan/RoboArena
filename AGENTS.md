@@ -110,7 +110,8 @@ These are correctness rules, not style preferences:
 - No imports from `src/app/`, `src/components/`, `src/renderer/`, `src/planner/`, or browser-only APIs inside `src/engine/`.
 - Prefer integer arithmetic for game-state values. Distances, ticks, damage, HP, and tile coordinates are integers.
 - Keep engine functions pure: return new state/results and do not mutate inputs.
-- Replay determinism is required: `{ initialState, seed, turnOrders[] }` must re-run to byte-identical event streams.
+- Replay determinism is required: `{ initialState, turns: { seed, orders }[] }`
+  must re-run to byte-identical event streams.
 - Robot HP must never go below 0 or above armor.
 - All randomness must be seedable and passed through `Rng`.
 

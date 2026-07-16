@@ -27,7 +27,10 @@ const firingReplay = () => {
       },
     ],
   };
-  return createReplayLog({ initialState: state, seed: "phase5-golden", turnOrders: [orders] });
+  return createReplayLog({
+    initialState: state,
+    turns: [{ seed: "phase5-golden", orders }],
+  });
 };
 
 describe("Phase 5 replay format", () => {
@@ -39,8 +42,7 @@ describe("Phase 5 replay format", () => {
     };
     const replay = createReplayLog({
       initialState,
-      seed: base.seed,
-      turnOrders: base.turns.map((turn) => turn.orders),
+      turns: base.turns.map((turn) => ({ seed: turn.seed, orders: turn.orders })),
     });
 
     const serialized = serializeReplay(replay);
@@ -65,7 +67,12 @@ describe("Phase 5 replay format", () => {
 
   it("reports the first divergent replay tick after seed corruption", () => {
     const replay = firingReplay();
-    const corrupted: ReplayLog = { ...replay, seed: "phase5-corrupted" };
+    const [turn] = replay.turns;
+    if (turn === undefined) throw new Error("Expected replay turn.");
+    const corrupted: ReplayLog = {
+      ...replay,
+      turns: [{ ...turn, seed: "phase5-corrupted" }],
+    };
     expect(verifyReplay(corrupted)).toEqual({ ok: false, firstDivergenceTick: 30 });
   });
 
@@ -92,10 +99,16 @@ describe("Phase 5 replay format", () => {
     const first = firingReplay();
     const firstOrders = first.turns[0]?.orders;
     if (firstOrders === undefined) throw new Error("Expected first replay turn.");
+    const secondOrders: TurnOrders = {
+      ...firstOrders,
+      turnNumber: 2,
+    };
     const replay = createReplayLog({
       initialState: first.initialState,
-      seed: first.seed,
-      turnOrders: [firstOrders, { turnNumber: 2, timelines: [] }],
+      turns: [
+        { seed: "phase5-first-turn", orders: firstOrders },
+        { seed: "phase5-second-turn", orders: secondOrders },
+      ],
     });
     const recordedFirstTurn = replay.turns[0];
     const secondTurn = replay.turns[1];
@@ -110,11 +123,17 @@ describe("Phase 5 replay format", () => {
         turns: [recordedFirstTurn, { ...secondTurn, events: secondTurn.events.slice(1) }],
       }),
     ).toEqual({ ok: false, firstDivergenceTick: 900 });
+    expect(
+      verifyReplay({
+        ...replay,
+        turns: [recordedFirstTurn, { ...secondTurn, seed: "phase5-corrupted-second-turn" }],
+      }),
+    ).toEqual({ ok: false, firstDivergenceTick: 930 });
   });
 
   it("rejects invalid JSON, malformed payloads, and unknown versions", () => {
     expect(() => deserializeReplay("not-json")).toThrow("not valid JSON");
-    expect(() => deserializeReplay('{"formatVersion":1}')).toThrow("seed");
+    expect(() => deserializeReplay('{"formatVersion":1}')).toThrow("initialState");
     expect(() =>
       deserializeReplay(
         serializeReplay(firingReplay()).replace('"formatVersion":1', '"formatVersion":2'),
@@ -122,13 +141,62 @@ describe("Phase 5 replay format", () => {
     ).toThrow("Unsupported replay format version: 2");
   });
 
+  it("rejects malformed nested state, orders, markers, and events", () => {
+    interface MutableReplayProbe {
+      initialState: {
+        arena: { tiles: unknown[][] };
+        lastKnownMarkers: unknown;
+      };
+      turns: {
+        seed: unknown;
+        orders: { timelines: { segments: unknown[] }[] };
+        events: unknown[];
+      }[];
+    }
+    const mutate = (change: (payload: MutableReplayProbe) => void): string => {
+      const payload = JSON.parse(serializeReplay(firingReplay())) as MutableReplayProbe;
+      change(payload);
+      return JSON.stringify(payload);
+    };
+
+    expect(() =>
+      deserializeReplay(mutate((payload) => (payload.initialState.arena.tiles[0]![0] = null))),
+    ).toThrow("tiles[0][0]");
+    expect(() =>
+      deserializeReplay(
+        mutate((payload) => (payload.turns[0]!.orders.timelines[0]!.segments[0] = null)),
+      ),
+    ).toThrow("segments[0]");
+    expect(() =>
+      deserializeReplay(
+        mutate((payload) => (payload.initialState.lastKnownMarkers = [["team-1", [null]]])),
+      ),
+    ).toThrow("lastKnownMarkers");
+    expect(() =>
+      deserializeReplay(mutate((payload) => (payload.turns[0]!.events[0] = null))),
+    ).toThrow("events[0]");
+    expect(() => deserializeReplay(mutate((payload) => (payload.turns[0]!.seed = 42)))).toThrow(
+      "turn.seed",
+    );
+  });
+
+  it("returns a divergence instead of throwing for an invalid typed input", () => {
+    const replay = firingReplay();
+    const malformed = {
+      ...replay,
+      turns: [{ ...replay.turns[0], events: [null] }],
+    } as unknown as ReplayLog;
+
+    expect(() => verifyReplay(malformed)).not.toThrow();
+    expect(verifyReplay(malformed)).toEqual({ ok: false, firstDivergenceTick: 0 });
+  });
+
   it("rejects malformed orders when creating a canonical replay", () => {
     const state = makeMatch();
     expect(() =>
       createReplayLog({
         initialState: state,
-        seed: "bad-orders",
-        turnOrders: [{ turnNumber: 2, timelines: [] }],
+        turns: [{ seed: "bad-orders", orders: { turnNumber: 2, timelines: [] } }],
       }),
     ).toThrow("turn-number");
   });
