@@ -1,8 +1,8 @@
 # Engine realignment to binary truth — execution plan
 
-**Status:** draft implementation complete 2026-07-12. Raw values are reproduced
-by `tools/re/verify_claims.py`; named weapon selectors, movement/action timing,
-and diagonal beside-line cover sampling remain isolated provisional mappings.
+**Status:** draft implementation complete; focused RE gates completed 2026-07-15.
+`tools/re/verify_claims.py` now checks all 77 descriptor rows plus the named
+selector, timing, scan-boundary, and endpoint-cover code paths.
 
 **Goal:** replace the Phase-1 playtest-derived combat model in `src/engine/`
 with the exact model read from `ROBO.EXE`. This must land **before Phase 2**
@@ -47,11 +47,10 @@ control flow.
 ### Step 1 — `constants.ts` + `types.ts`
 - `TICKS_PER_SECOND`: 20 → **60**. Rename tick-derived constants if misleading.
 - Add `WEAPON_MAX_RANGE = 18` (already?), `TURN_SECONDS = 15` → 900 units.
-- Action costs in 60ths (playtest ×60, RE §19 — mark `// playtest-derived, RE §20 #11-12`):
-  move 18/42 alternating (verify-later), deploy 120, posture step 6, scan rotate 3.
-- **Fire intervals are fixed per live selector**, not a universal alternating
-  parity. Selectors 5..12 contain `30/30/20/15/20/20/10/10` units. Named
-  weapon→selector mapping remains provisional (RE §20 #1/#10); isolate it.
+- Exact action costs: one-/two-tile move 30/40 (no parity), deploy 120,
+  absolute posture 10, absolute scan heading 5.
+- Named Aim/Scan timing: Rifle 30/30, Burst 15/20, Automatic 10/10, Missile
+  30/20, Grenade 30/20.
 - Types: `Posture = "upright" | "ducking" | "crouching"`; stored posture enum
   is 1/2/3. Terrain heights from TIL b0:
   open/rough/bush/crevice = 2, lowWall = 3, wall = 4.
@@ -80,31 +79,33 @@ score += distance ladder:
   where base = accuracyTier + 4  (Rifle 2, Burst/Missile/Stealth 1, Auto 0)
 score += target terrain: rough +2, (cover tiles -1/-3 per RE — map bush -1, lowWall -3)
   otherwise add weaponAccTable[weaponKind] from DGROUP 0x1596
+score -= scan alignment: <=4 => 4, <=8 => 2, otherwise 0 (Aim passes 16)
 score = clamp(score, 0, 19)
+if damage-stagger count > 0: score >>= 1; consume one count per firing action
 if target not on aimed tile at resolution: score >>= 1   // RE §15, confirmed
 hit = rngInt(0,255) < HIT_TABLE[score]
 ```
 
-Note: the `-posturePenalty` arg and second halving flag (RE §20 #2) are
-unresolved — omit, with a `// RE §20 #2` comment.
+The formerly unnamed argument is Scan & Fire alignment, not posture. The first
+halving flag is the confirmed 1–4-action damage-stagger counter (`+0x1E`).
 
 `resolveFire` must receive the aimed tile separately from the actual target
 robot/tile. The occupancy penalty compares those values at fire-resolution
 time; it is not an in-flight projectile check.
 
 ### Step 4 — `firing.ts` / `catalog.ts`: damage model
-Replace brackets with (RE §7b, rolls exact, labels provisional):
+Replace brackets with (RE §7b, rolls and labels exact):
 
 ```
 weaponRoll: Rifle = 10 + rngInt(0,7)   // 10–17
-            Auto  = 8  + rngInt(0,15)  // 8–23
-            Burst = 6  + rngInt(0,15)  // 6–21 per bullet, 3 bullets
+            Burst = 8  + rngInt(0,15)  // 8–23 per bullet, 3 bullets
+            Auto  = 6  + rngInt(0,15)  // 6–21
 postureAdjust by coverClass: {1: -4, 2: 0, 3: 0, 4: +4}
 if dist > 12: -4 ;  if dist < 5: +4
 dmg = max(0, si)
 ```
 
-Mark the three labels `// PROVISIONAL mapping, RE §20 #1`.
+The labels are confirmed by `seg14:0x07B4` + `seg6:0x4CF2`.
 
 ### Step 5 — `blast.ts`: exact tables + Euclidean radius
 - radius = `floorEuclidean(center, robot)` (was Chebyshev).
@@ -130,13 +131,13 @@ Height-LoS returning `coverClass 1..4` (RE §15). The decoded final mapping is:
 | low wall / height 3 | 3 | 2 | 1 |
 
 Wall (4) is fully blocked by the LoS gate. Point-blank defaults to class 4.
-Implement the table exactly. The remaining provisional part is how the original
-samples tiles beside a diagonal/corner path (`PROVISIONAL RE §20 #3`); keep path
-sampling isolated from the final mapping.
+Implement the table exactly. Target cover samples the target, the major-axis
+neighbor toward the shooter at distance ≥2 (y-major ties), and the corner
+neighbor only when distance >1 and `abs(dx-dy)<2`.
 
 ### Step 7 — arenas + spec sync
-- Rubble Two: 25×25 → **24×24** (RE §10). Do NOT import extracted grids yet —
-  coordinate reconciliation is unresolved (RE §12); sizes only.
+- Rubble Two: 25×25 → **24×24** (RE §10). MAP grids import row-major as
+  `tiles[y][x]`; homes use the exact generated 6/8/12/16 spans (RE §12).
 - Update `docs/spec.md` in the same pass: replace corrected sections (distance,
   clock, hit, damage, blast, postures, fire rate), remove the "corrections
   pending" banner, keep 🟨/🟥 flags on still-provisional constants mirroring
@@ -153,8 +154,8 @@ sampling isolated from the final mapping.
 
 ## Explicitly OUT of scope
 - Fence mechanics, Grenade/TimeBomb/Zap gameplay, sport modes beyond Survival,
-  formation rosters, scoring points, stealth changes, arena grid import (§12),
-  scan-cone width change (keep playtest ±90°/±45°, RE §20 #22), Phase 1.5
+  formation rosters, stealth changes,
+  scan alignment/probability changes inside the confirmed closed ±90° hard gate, Phase 1.5
   toolchain.
 
 ## Acceptance

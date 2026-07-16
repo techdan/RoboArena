@@ -1,9 +1,8 @@
 /**
  * Canonical robot and weapon catalogs.
  *
- * Armor/accuracy and raw damage/blast rolls are binary-confirmed (RE §5/§7).
- * Named weapon→selector cadence mapping remains PROVISIONAL RE §20 #1/#10 and
- * is isolated in this file.
+ * Armor/accuracy, raw damage/blast rolls, and named command-selector mappings
+ * are binary-confirmed (RE §5/§7/§19).
  */
 
 import { WEAPON_MAX_RANGE } from "./constants.js";
@@ -15,43 +14,49 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Rifle",
     kind: "bullet",
     bulletsPerClick: 1,
-    firingIntervalTicks: 30, // PROVISIONAL selector mapping, RE §20 #1/#10
+    firingIntervalTicks: 30,
+    scanFiringIntervalTicks: 30,
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
     damageRoll: { base: 10, mask: 7 },
-    accuracyAddIndex: 0, // PROVISIONAL RE §20 #1
+    accuracyAddIndex: 0,
+    scanAccuracyAddIndex: 1,
   },
   "burst-gun": {
     id: "burst-gun",
     displayName: "Burst Gun",
     kind: "burst",
     bulletsPerClick: 3,
-    firingIntervalTicks: 10, // PROVISIONAL selector mapping, RE §20 #1/#10
+    firingIntervalTicks: 15,
+    scanFiringIntervalTicks: 20,
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
-    damageRoll: { base: 6, mask: 15 },
-    accuracyAddIndex: 0, // PROVISIONAL RE §20 #1
+    damageRoll: { base: 8, mask: 15 },
+    accuracyAddIndex: 3,
+    scanAccuracyAddIndex: 4,
   },
   "auto-rifle": {
     id: "auto-rifle",
     displayName: "Machine Gun",
     kind: "bullet",
     bulletsPerClick: 1,
-    firingIntervalTicks: 20, // PROVISIONAL RE §20 #1/#10: candidates use 15/20
+    firingIntervalTicks: 10,
+    scanFiringIntervalTicks: 10,
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
-    damageRoll: { base: 8, mask: 15 },
-    accuracyAddIndex: 0, // PROVISIONAL RE §20 #1
+    damageRoll: { base: 6, mask: 15 },
+    accuracyAddIndex: 6,
+    scanAccuracyAddIndex: 7,
   },
   "missile-launcher": {
     id: "missile-launcher",
     displayName: "Missile Launcher",
     kind: "explosive",
     bulletsPerClick: 1,
-    firingIntervalTicks: 20, // PROVISIONAL selector mapping, RE §20 #1/#10
+    firingIntervalTicks: 30,
+    scanFiringIntervalTicks: 20,
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: 3,
-    accuracyAddIndex: 0, // PROVISIONAL RE §20 #1
     blast: {
       radius: 2,
       damageAtRadius: [
@@ -66,12 +71,13 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Grenade Launcher",
     kind: "explosive",
     bulletsPerClick: 1,
-    firingIntervalTicks: 20, // PROVISIONAL selector mapping, RE §20 #1/#10
+    firingIntervalTicks: 30,
+    scanFiringIntervalTicks: 20,
     maxRange: WEAPON_MAX_RANGE,
-    startingAmmo: 3, // PROVISIONAL RE §20 #18
-    accuracyAddIndex: 0, // PROVISIONAL RE §20 #1
+    // Not granted by the main-game Beginner roster. Custom setup supplies 0–9.
+    startingAmmo: 0,
     blast: {
-      // Category 0 label is PROVISIONAL RE §20 #17.
+      // Projectile type 1 dispatches to blast category 0 (RE §7).
       radius: 2,
       damageAtRadius: [
         { base: 45, mask: 31 },

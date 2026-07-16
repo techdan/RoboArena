@@ -4,21 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-RoboArena — a modern web-based clone of the 1991 Maxis tactical game *RoboSport*. Two players program teams of robots, then watch the simultaneous resolution as a deterministic movie.
+RoboArena — a modern web-based clone of the 1991 Maxis tactical game
+*RoboSport*. Two to four internet-connected players privately program robot
+teams, then watch simultaneous resolution as a deterministic movie.
 
-**v1 scope**: human-vs-human hot-seat only, no AI. Survival sport mode. Desktop-only (mouse + keyboard). Online lobby is post-MVP after resolver, replay, planner, and movie playback are stable. Personal-scale, not production-grade — see "Scope discipline" below.
+**Main-game scope (Phases 1-11.6 + release polish)**: 2-4 humans on separate
+internet-connected devices, one Team and unique Side per player, free-for-all
+Survival, no AI. Desktop-only (mouse + keyboard). The v1 server is authoritative
+and supports private asynchronous orders, durable leave/return, and restart-safe
+resolution. Hot-seat, multiple Teams
+per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
+not become dependencies of the playable online FFA path. Personal-scale, not
+production-grade.
 
 **Project state**: Phase 1R engine realignment and the Phase 2 deterministic
-resolver are draft-complete with 109 passing tests. Phase 1.5 lint/format/CI is
-complete and the first GitHub Actions run passed. Named weapon-selector
-mappings, movement command timing, and
-projectile presentation timing remain provisional or open. Phase 3 projectile
-timing is next. See `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
+resolver are draft-complete with 141 passing tests. Phase 1.5 lint/format/CI is
+complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
+pass closed the **2-4 Team** Survival business-rule audit, including exact slow
+movement, damage stagger, Side-based combat/visibility/scoring, arena
+orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
+three-/four-player online integration remains the Phase 11.6 gate, while
+alliance behavior is retained for v2. Phase 3
+projectile/blast event semantics are next; visual travel speed is renderer tuning. See
+`tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 109 tests)
+npm test               # Run all engine unit tests (currently 141 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -36,11 +49,14 @@ The codebase is in two distinct phases of completion:
 **`src/engine/` (Phase 2 draft-complete)** — pure-TypeScript deterministic
 simulation realigned to the audited binary structures above, plus immutable
 turn scheduling, command validation, and immediate Aim & Fire resolution.
-Provisional named weapon cadence/accuracy mappings are centralized in
-`catalog.ts`; provisional movement/action costs remain in `constants.ts`.
+Confirmed named weapon cadence/accuracy mappings are centralized in
+`catalog.ts`; confirmed movement/action costs remain in `constants.ts`.
 Every probabilistic decision goes through a seedable RNG (`createRng(seed)`).
 
-**Everything else (Phases 2-13, not yet built)** — turn resolver, projectiles, visibility, replay format, Next.js + PixiJS UI, planner, and later online lobby. Architecture sketched in `docs/implementation-plan.md` §1, repository layout in §2.
+**Everything after Phase 2 (not yet built)** — projectile/blast events,
+visibility, replay format, Next.js + PixiJS UI, planner, and the v1 authoritative
+room service.
+Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`
 
@@ -90,14 +106,18 @@ Commit messages: short imperative subject; body explains *why* + lists tests add
 
 This is a "fun game with friends" project, not a production-grade SaaS. Many things that look like obvious gaps are explicit non-goals — they're deferred in `docs/implementation-plan.md` §14:
 
-- No accessibility work in v1
-- No security / abuse prevention beyond zod input validation
+- Accessibility basics in v1: keyboard-reachable controls, focus states,
+  readable/non-color-only status; full board screen-reader and touch support later
+- v1 security is bounded but real: schema/order validation, ownership checks,
+  hidden-state filtering, payload limits, and basic rate limits
 - No production observability (Sentry, metrics, alerts)
 - No internationalization, no analytics, no cookie banner, no license/legal text
-- No AI players (Survival vs another human only)
-- No online lobby in v1; hot-seat ships first
+- No AI players
+- Online rooms are v1; hot-seat and alliance/team modes are v2
 - No mobile / touch / tablet support
-- No account system; browser-token identity is only for post-MVP shared persistence
+- No account system; an opaque server-issued token restores one room seat
+- No Stealth or non-Survival sport implementation before the complete online
+  free-for-all Survival v1 gate
 
 Don't surface these as gaps unless something has changed about scope.
 
@@ -106,6 +126,7 @@ Don't surface these as gaps unless something has changed about scope.
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
 - Vitest 2.1 for tests
 - Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + Zustand
-- Post-MVP Phase 12: Postgres (local for dev, Supabase eventual) + WebSocket relay
+- Phase 8+: long-lived WebSocket room service plus SQLite WAL durable room
+  storage; distributed/shared database and accounts remain post-v1
 
 Parent project `C:\src\DevProjects\CLAUDE.md` adds rules across the workspace (e.g. all clickable elements get `cursor-pointer`, prefer Server Components by default).

@@ -5,6 +5,7 @@ Usage:
   disasm.py ROBO.EXE ctx <seg> <off> N  # print N instrs around seg:off
   disasm.py ROBO.EXE range <seg> <start> <end> # print an address range
   disasm.py ROBO.EXE mem 0x40 0x52      # find memory operands with displacements
+  disasm.py ROBO.EXE hash <seg> <off> <length> # SHA-256 a segment slice
   disasm.py ROBO.EXE bytes AABBCC       # find raw byte pattern in code segs
 """
 import struct, sys
@@ -78,6 +79,16 @@ elif cmd == 'mem':
         for ins in disasm_seg(segno, fofs, length):
             if (ins.memory_displacement & 0xFFFF) in targets:
                 print(f"seg{segno:3} +0x{ins.ip:04X} (file 0x{fofs + ins.ip:06X}): {fmt.format(ins)}")
+elif cmd == 'hash':
+    import hashlib
+    segno, offset, length = int(sys.argv[3]), int(sys.argv[4], 0), int(sys.argv[5], 0)
+    for sn, fofs, seg_length in SEGS:
+        if sn == segno:
+            if offset + length > seg_length:
+                raise ValueError('slice exceeds segment bounds')
+            digest = hashlib.sha256(data[fofs + offset:fofs + offset + length]).hexdigest()
+            print(f"seg{segno}:0x{offset:04X}+{length} {digest}")
+            break
 elif cmd == 'bytes':
     import re
     pat = bytes.fromhex(sys.argv[3])

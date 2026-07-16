@@ -38,7 +38,7 @@ TERRAIN_CLASS = {
     (3, 1, 1, 0):  "low_wall",
     (4, 0, 2, 0):  "wall",
     (2, 0, 0, 0):  "crevice",
-    (2, 2, 0, 15): "special",   # uniform tileset 315; fence/home candidate
+    (2, 2, 0, 15): "special",   # uniform tileset 315; no shipped MAP uses it
 }
 
 def extract_town(d):
@@ -100,18 +100,19 @@ def main():
 
     # Bullet damage: rolled at FIRE time in seg6:0x35D1, stored on projectile +0x0F, applied at impact.
     #   damage = weaponRoll[slot] + postureAdjust + distanceAdjust, floored at 0 (0 => no damage).
-    # Weapon jump table seg6:0x38C5 selects by the weapon-property value passed
-    # to the resolver (seg13:0x060E / selector table 0x7F4), minus 5. Robot +0x5C is
-    # a sound/effect id, not the weapon selector (RE §7b).
+    # Weapon jump table seg6:0x38C5 selects by the command selector returned by
+    # seg13:0x060E, minus 5. Named groups are mapped at seg14:0x07B4 and dispatched
+    # by seg6:0x4CF2. The descriptor's first byte is encoded command length.
+    command_descriptors = [dg_u8(exe, 0x7F4 + selector * 4, 4) for selector in range(77)]
     bullet_damage = {
         "_where": "seg6:0x35D1 (resolver) -> projectile +0x0F -> seg6:0x5A2B (apply)",
         "weapon_rolls_by_slot": {
             "0": {"expr": "(rand&7)+10",  "min": 10, "max": 17},
             "1": {"expr": "(rand&7)+10",  "min": 10, "max": 17},
-            "2": {"expr": "0", "min": 0, "max": 0, "note": "explosive: damage handled by blast"},
+            "2": {"expr": "0", "min": 0, "max": 0, "note": "Burst group header; not a fired command"},
             "3": {"expr": "(rand&0xF)+8", "min": 8,  "max": 23},
             "4": {"expr": "(rand&0xF)+8", "min": 8,  "max": 23},
-            "5": {"expr": "0", "min": 0, "max": 0, "note": "explosive: damage handled by blast"},
+            "5": {"expr": "0", "min": 0, "max": 0, "note": "Automatic group header; not a fired command"},
             "6": {"expr": "(rand&0xF)+6", "min": 6,  "max": 21},
             "7": {"expr": "(rand&0xF)+6", "min": 6,  "max": 21},
         },
@@ -119,15 +120,29 @@ def main():
         "distance_adjust": {"lt5": +4, "gt12": -4},                     # dist<5 => +4, dist>12 => -4
         "floor": "if result < 1 => 0",
         "weapon_selector": "weapon-property lookup seg13:0x060E; live-fire selectors are 5..12; slot = selector-5",
-        "weapon_property_rows_5_to_12": [
+        "command_descriptor_columns": [
+            "encoded_command_length", "duration_or_repeat_interval", "presentation_width", "flag"
+        ],
+        "command_descriptor_rows_0_to_76": command_descriptors,
+        "weapon_command_rows_5_to_12": [
             {"selector": selector,
-             "category": dg_u8(exe, 0x7F4 + selector * 4, 1)[0],
+             "encoded_command_length": dg_u8(exe, 0x7F4 + selector * 4, 1)[0],
              "fire_interval_60ths": dg_u8(exe, 0x7F5 + selector * 4, 1)[0],
-             "b2": dg_u8(exe, 0x7F6 + selector * 4, 1)[0],
+             "presentation_width": dg_u8(exe, 0x7F6 + selector * 4, 1)[0],
              "flag": dg_u8(exe, 0x7F7 + selector * 4, 1)[0]}
             for selector in range(5, 13)
         ],
-        "slot_labels_provisional": {"rifle": "10-17", "auto": "8-23", "burst": "6-21 per bullet"},
+        "named_direct_fire": {
+            "rifle": {"group": 4, "aim_selector": 5, "scan_selector": 6,
+                      "damage": "10+(rand&7)", "aim_ticks": 30, "scan_repeat_ticks": 30,
+                      "aim_accuracy_add_index": 0, "scan_accuracy_add_index": 1},
+            "burst": {"group": 7, "aim_selector": 8, "scan_selector": 9,
+                      "damage": "8+(rand&15)", "aim_ticks": 15, "scan_repeat_ticks": 20,
+                      "aim_accuracy_add_index": 3, "scan_accuracy_add_index": 4},
+            "automatic": {"group": 10, "aim_selector": 11, "scan_selector": 12,
+                          "damage": "6+(rand&15)", "aim_ticks": 10, "scan_repeat_ticks": 10,
+                          "aim_accuracy_add_index": 6, "scan_accuracy_add_index": 7},
+        },
     }
 
     # Explosive damage tables (seg6:0x5F7E). Each category: base[i] + (rnd & mask[i]).
@@ -137,9 +152,9 @@ def main():
         return [{"radius": i, "base": bases[i], "mask": masks[i],
                  "min": bases[i], "max": bases[i] + masks[i]} for i in range(n)]
     explosive = {
-        "category0_small":  pack(0x15EE, 0x15F4, 3),   # 45-76 / 25-40 / 5-12
+        "category0_grenade": pack(0x15EE, 0x15F4, 3),  # 45-76 / 25-40 / 5-12
         "category1_missile": pack(0x15FA, 0x1600, 3),  # 60-91 / 40-55 / 10-17
-        "category2_large":  pack(0x1606, 0x1610, 5),   # 120-151 ... 10-17 (radius 4)
+        "category2_time_bomb": pack(0x1606, 0x1610, 5),# 120-151 ... 10-17 (radius 4)
     }
     # posture/cover reduction applied after roll (seg6:0x5FFD): idx->multiplier
     posture_mult = {"0": 1.0, "1": 0.5, "2": 0.75, "3": 0.875}
@@ -178,11 +193,39 @@ def main():
             "score_range": [0, 19],
             "formula": ("score = (accTier+4)-based init by cover class {1:4,2:8,3:12,4:18} "
                         "+ distance weighting + target-terrain add + weapon add(0x1596) "
-                        "- posture penalty; clamp(0,19); hit = (rnd&0xFF) < table[score]"),
+                        "- alignment penalty; clamp(0,19); halve for damage stagger and "
+                        "again if target left aimed tile; hit = (rnd&0xFF) < table[score]"),
         },
         "bullet_damage": bullet_damage,
+        "command_timing": {
+            "tick_rate": 60,
+            "scan_heading": {"selectors": [24, 31], "ticks": 5},
+            "one_tile_move": {"selectors": [41, 48], "ticks": 30},
+            "two_tile_move": {"selectors": [49, 64], "ticks": 40},
+            "posture": {"selectors": [70, 72], "ticks": 10},
+            "deploy": {"selector": 74, "ticks": 120},
+        },
+        "damage_stagger": {
+            "field": "equipped command object +0x1E",
+            "assigned_after_damage": "(game_rng & 3) + 1",
+            "effect": "halve hit score for each remaining firing action",
+            "consumption": "one count per firing action, not per burst bullet",
+            "assign_func": "seg6:0x4060",
+        },
+        "movie_fps": {
+            "frame_divisors_dgroup_0x1028": dg_u16(exe, 0x1028, 8),
+            "choices": [20, 15, 12, 10, 6, 5, 4, 3],
+            "default": 12,
+        },
         "explosive_damage": explosive,
         "explosive_posture_multiplier": posture_mult,
+        "arena_grid_layout": {
+            "map_index": "body[y * width + x]",
+            "axis_transform": "none",
+            "display_border_tiles": 8,
+            "home_areas": "per-axis span <20:6, 20..31:8, 32..47:12, 48+:16; NW/NE/SE/SW",
+            "dock": "off-field robot state; not a MAP/INF coordinate",
+        },
         "arenas": {},
     }
 

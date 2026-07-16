@@ -86,6 +86,20 @@ describe("live-fire score", () => {
       }),
     ).toBe(9);
   });
+
+  it("halves the score while damage stagger is active", () => {
+    expect(
+      calculateLiveFireScore({
+        accuracy: 2,
+        distance: 10,
+        coverClass: 4,
+        targetTerrain: "open",
+        weapon: WEAPONS.rifle,
+        targetOnAimedTile: true,
+        damageStaggered: true,
+      }),
+    ).toBe(9);
+  });
 });
 
 describe("resolveFire", () => {

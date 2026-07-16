@@ -11,8 +11,9 @@ returns immutable `{ nextState, events }`.
 
 It includes command validation/scheduling, deployment, movement, posture, scan
 rotation, and an Aim & Fire scaffold using the realigned fire-time hit/damage
-roll. It excludes projectile travel/impact timing (Phase 3), Scan & Fire,
-visibility/Stealth (Phase 4), and replay serialization (Phase 5).
+roll. It excludes projectile/blast presentation events (Phase 3), Scan & Fire,
+ordinary visibility (Phase 4), and replay serialization (Phase 5). Stealth is
+post-main-game Phase 14, not a Phase 4 dependency.
 
 ## Clock and command model
 
@@ -78,6 +79,9 @@ not a hidden resolver-order dependency.
   Same-boundary moves are independent; no actor "wins" a destination.
 - Terrain and arena bounds still gate movement. Malformed/illegal orders return
   a typed resolver error rather than silently changing the path.
+- Two-tile movement steps retain the planner-selected intermediate waypoint so
+  validation checks the same route that was compressed, including mixed-axis
+  paths around slow or blocked terrain.
 - Aim & Fire observes positions after same-boundary movement/posture/scan
   completions. This makes the confirmed off-aimed-tile score penalty explicit.
 - Phase 2 batches same-boundary direct-fire damage so mutual kills are possible.
@@ -148,10 +152,10 @@ exception strategy); do not mix nulls, silent skips, and throws.
 
 - At least 15 focused tests cover the cases above.
 - Every command union member is handled or rejected explicitly.
-- No projectile advancement, visibility, Stealth, or Scan & Fire code has leaked
+- No projectile presentation, visibility, Stealth, or Scan & Fire code has leaked
   into Phase 2.
 
-All gates pass with 23 focused command-interpreter/resolver tests (109 engine
+All gates pass with 33 focused command-interpreter/resolver tests (141 engine
 tests total). Scan & Fire and explosive Aim & Fire return an explicit
 `unsupported-command` result until their scheduled phases.
 - `npm test`, `npm run typecheck`, lint, and format-check pass.

@@ -1,6 +1,8 @@
 # Empirical Test Cases — DOS RoboSport
 
-Goal: lock the remaining engine-blocking rules by direct observation in the working DOS install.
+Goal: dynamically cross-check rules that remain ambiguous after static analysis.
+The 2026-07-15 binary completion pass supersedes the earlier timeline readings
+below where they conflict with the command descriptor and live dispatcher.
 
 For each test:
 1. Set up the scenario in a Custom Game (Survival, Beginner formation, Melee length, Rubble Town).
@@ -13,10 +15,10 @@ For each test:
 
 ## Already confirmed (no need to re-test)
 
-- Movement step cost: alternates **0.3 s / 0.7 s** per tile, direction- and terrain-independent.
+- Movement command cost: **30 ticks per one-tile command / 40 ticks per two-tile command**; no parity.
 - Deployment cost: **2.0 s**.
-- Posture change: **0.1 s per height step**.
-- Scan rotation: **0.05 s per directional unit** (8 directions, rotates through intermediates).
+- Any absolute posture change: **10 ticks (1/6 s)**.
+- Any absolute scan-heading change: **5 ticks (1/12 s)**.
 - Crouch traversal: only flat/grass; blocked by low walls, bushes, rough ground, crevices, fences.
 - Standing vs ducking traversal: identical (no terrain restriction).
 - Turn budget: **15.0 s hard cutoff** (planner shows overflow greyed out).
@@ -27,16 +29,18 @@ For each test:
 
 ## P0 — Engine blockers
 
-### T1. Movement stride parity reset
+### T1. Movement timing regression (resolved statically)
 
-Confirms how the 0.3/0.7 alternation interacts with non-movement commands.
+Optional DOS regression only. The binary has fixed 30/40-tick movement
+selectors and no stride-parity state; the former alternatives are rejected.
 
 - **T1a**: Move 1 tile (cost 0.3) → change posture (cost 0.1) → move 1 tile. Is the next move 0.3 or 0.7?
 - **T1b**: Move 1 tile (0.3) → scan rotate 1 step (0.05) → move 1 tile. 0.3 or 0.7?
 - **T1c**: Move 1 tile → wait/idle for some time → move 1 tile. Same?
 - **T1d**: Robot enters Playing Field (deploy 2.0 s) → first step. Is it 0.3 or 0.7?
 
-**Why this matters**: tells us whether `strideParity` resets on non-move commands.
+**Resolved:** no `strideParity` exists; retain these only to diagnose the old
+timeline-reading discrepancy if desired.
 
 ### T2. Aim & Fire timeline cost
 
@@ -188,7 +192,10 @@ User-confirmed: robots pass through each other freely and can stack on the same 
 - **T10a**: Friendly robot stands in line between Rifle shooter and enemy. Does the bullet pass through, hit the friendly (no damage but stops), or miss the enemy?
 - **T10b**: Same with Missile (already known to harm friendlies — measure damage).
 
-### T11. Stealth visibility
+### T11. Stealth visibility — POST-MAIN-GAME PHASE 14
+
+Do not run this as a main-game blocker. Resume only after the Phase 11 complete
+Survival match and Phase 14 begins.
 
 Use 4-team Custom Game (Stealth in one team's roster):
 
@@ -217,12 +224,17 @@ Figure out the shape and range of the scan box:
 
 ### T14. Sides / alliance semantics
 
-4-team game with 2 teams per Side:
+**CLOSED STATICALLY.** The executable resolves the 4-team/2-per-Side cases:
 
-- **T14a**: Bullet from team A1 (Side 1) at team A2 (Side 1). Damage? Or treated as friendly?
-- **T14b**: Missile near same-side ally. Damage applied?
-- **T14c**: Shared visibility — does team A2 see what team A1 sees?
-- **T14d**: Scoring — is it per-Team or per-Side at the Final Ceremony?
+- **T14a**: direct fire and Scan & Fire skip same-Side A2.
+- **T14b**: missile/grenade blast damage still applies to same-Side A2.
+- **T14c**: allied robots are always visible, but A2 does not inherit A1's
+  visible-enemy contacts or last-known markers.
+- **T14d**: each Team contributes points, then every allied Team row receives
+  the aggregated Side total.
+
+Keep this setup as an optional end-to-end regression for Phase 11.6, not as a
+remaining research blocker.
 
 ### T15. Per-formation weapon loadouts
 
@@ -243,14 +255,16 @@ For each Game Length, start a match and check the coordinate range:
 
 Compare to confirmed Melee = 24×24.
 
-### T22. Slow-terrain step costs
+### T22. Slow-terrain step costs — CLOSED STATICALLY
 
-The 0.3/0.7 alternation applies to open ground only. Help text says rough ground / low walls / bushes are slower. Find the exact costs.
+There is no 0.3/0.7 alternation or terrain multiplier. The original path
+compressor pairs two entered Open Ground tiles into a 40-tick two-tile command.
+Rough, Bush, and Low Wall carry movement property 1 rather than full-speed 2,
+so the compressor retains each as a 30-tick one-tile waypoint. Two consecutive
+slow entries cost 60 ticks. Mixed and diagonal routes use the same selected
+unit-waypoint rule (`seg87:0x2901`, `0x0BF6..0x0D3D`).
 
-- **T22a — Rough Ground**: walk a chain of rough-ground tiles. Record cumulative timestamps after each step. Does the alternation still apply, just with bigger numbers? Or a fixed slower cost?
-- **T22b — Bush**: walk through a bush (upright/duck). Same observation pattern.
-- **T22c — Low Wall crossing**: walk over a low wall (one tile crossing). Cost per crossing?
-- **T22d — Mixed**: open → rough → open. Does parity continue across the rough tile? Is the rough-tile cost added to whatever parity slot it lands on?
+T22a-d remain optional display-clock regressions, not audit blockers.
 
 ### T23. Rough Ground "vulnerable" modifier
 

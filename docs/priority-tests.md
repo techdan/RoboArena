@@ -15,12 +15,12 @@ Working list. Order is value × ease — top first. Run from the top; stop when 
 
 **Confirmed arenas:**
 
-- Melee → **Rubble Two**, 25 × 25 tiles (indices 0-24).
+- Melee → **Rubble Two**, 24 × 24 tiles (indices 0-23).
 - Battle → **Rubble Three**, 32 × 32 tiles.
 
 ---
 
-## MVP empirical gates (run before Phase 3/4 if possible)
+## Historical empirical gates (static audit has closed the MVP blockers)
 
 These are intentionally low-burden. Stop after the qualitative answer is clear. Do not run large statistics unless a result would change implementation.
 
@@ -41,7 +41,9 @@ These are intentionally low-burden. Stop after the qualitative answer is clear. 
    - Approximate impact timing: same tick / visibly delayed / unknown.
    - SD HP before and after.
 
-**Default if skipped**: implement tile-targeted Aim & Fire with tunable projectile timing; do not claim original-game faithfulness until this gate is run.
+**Resolved statically 2026-07-15:** hit/damage lock at fire; off-aimed-tile
+occupancy halves score; later motion does not reroll or retarget. Visual travel
+duration is renderer tuning. Keep this only as an optional visual regression.
 
 ### Gate B — Scan & Fire trigger and tracking
 
@@ -61,7 +63,9 @@ These are intentionally low-burden. Stop after the qualitative answer is clear. 
    - Was ammo/shot count consumed when the shot fired?
    - SD HP before and after.
 
-**Default if skipped**: keep Scan & Fire behavior marked PROPOSED/TBD in the spec and implementation plan.
+**Resolved statically 2026-07-15:** the handler reacquires at named repeat
+intervals, filters by maximum distance, spends ammo at fire, and locks the
+aimed tile/result at fire time. Keep this as an optional dynamic regression.
 
 ### Gate C — Scan length and target speed first pass
 
@@ -79,11 +83,16 @@ Run this only after Gate B works. Use one or two paired trials, not a statistica
 - Compare a stationary SD in the cone to an SD that is moving through the cone.
 - Record only obvious differences: does moving make the shot visibly miss, delay, or do less damage?
 
-**Default if skipped or inconclusive**: no numeric target-speed modifier in v1. Model moving-target effects through tile targeting, projectile timing, and Scan & Fire trigger/tracking semantics only.
+**Resolved statically 2026-07-15:** Seconds controls command duration only; no
+separate numeric scan-length or target-speed modifier reaches live fire.
+Movement matters through off-aimed-tile score halving.
 
-### Gate D — Rubble arena transcription
+### Gate D — Rubble arena import review (resolved)
 
-**Goal**: create faithful-enough v1 arena data for Rubble Two and Rubble Three without screenshot extraction tooling.
+**Resolved statically 2026-07-15:** `.TWN` MAP cells are row-major
+`tiles[y][x]` with no flip/transpose. Rubble Two is 24×24. Export with
+`tools/re/export_data.py`; do not hand-transcribe terrain. Generate Home areas
+from the exact 6/8/12/16 per-axis thresholds; Dock is off-field state.
 
 **Terrain codes**:
 
@@ -99,27 +108,9 @@ Run this only after Gate B works. Use one or two paired trials, not a statistica
 | `K` | crate / blue obstacle |
 | `?` | unknown, needs review |
 
-**Workflow**:
-1. In DOS RoboSport, open the target Rubble map and click/probe each coordinate.
-2. Record rows left-to-right, top-to-bottom. Rubble Two is 25x25 (`x=0..24`, `y=0..24`); Rubble Three is 32x32 (`x=0..31`, `y=0..31`).
-3. Use this row template:
-
-```text
-map: Rubble Two
-size: 25x25
-y00: XXXXXXXXXXXXXXXXXXXXXXXXX
-y01: X???????????????????????X
-...
-y24: XXXXXXXXXXXXXXXXXXXXXXXXX
-
-notes:
-- (x,y): reason for any `?`
-```
-
-4. Convert the row strings into `src/lib/arenas/<name>.json`.
-5. Review only `?` tiles or tiles that block a planned test path.
-
-**Default if partially complete**: ship only the map(s) fully transcribed and keep the other out of the selectable v1 UI.
+INF contains dimensions/names/flags but no Home/Dock coordinates because homes
+are derived at runtime. Validate generated corner rectangles before Phase 6
+closes.
 
 ---
 
@@ -454,7 +445,11 @@ Mid-range total damage (repeat-fire, d=6):
 
 ### 🟢 Bonus while you're already in this match — movement re-validation
 
-Before sitting any SD, walk one of them through 5+ confirmed-open-ground tiles and record the timeline at each step. Should be 0.3, 1.0, 1.3, 2.0, 2.3 (cumulative timestamps, alternating step costs). If different, the original 0.3/0.7 model needs revision. **Costs nothing extra** — it's part of the SDs' walk to position anyway.
+Before sitting any SD, walk one through 5+ confirmed-open-ground tiles and
+record which destinations become distinct commands. The binary has 30-tick
+one-tile and 40-tick two-tile selectors; this optional regression can reveal
+how the original planner chunks a drawn path. **Costs nothing extra**—it's part
+of the SDs' walk to position anyway.
 
 ```
 Movement re-validation (one SD, all open ground):
@@ -629,9 +624,11 @@ Position 2 enemy robots on the same tile, shoot at the tile, observe whether bot
 
 Cross-shaped SD layout to test whether missile blast uses king-move or Euclidean distance. **Default if skipped**: Chebyshev.
 
-### Deferred — Stealth / Grenade / Sport modes
+### Post-main-game — Stealth / non-Survival sports
 
-Need Custom Game (Stealth class, Grenade-bearing formations) or playtesting. Not blocking v1 engine.
+Stealth is Phase 14; Treasure Hunt, Capture the Flag, Hostage, and Baseball are
+Phase 15. Do not run or implement these before the Phase 11 Survival game is
+complete. Grenade/extra-weapon parity may be investigated separately afterward.
 
 ---
 
@@ -645,7 +642,9 @@ After each match, paste the recording-template block (filled in) and I'll fold t
 - Movement step alternation — re-validated on confirmed open ground (Match 3 bonus).
 - Weapon max range — locked: **all 18 tiles** from cursor probe.
 
-Matches 1-3 gave the Phase 1 constants enough support to start the engine. They do not settle the Phase 3/4 gates above: projectile timing, moving-target misses, Scan & Fire tracking, scan length, target speed, or arena row data.
+Matches 1-3 supplied early evidence; the static completion audit has since
+closed moving-target behavior, Scan & Fire timing/acquisition, arena
+orientation, and the absence of a separate numeric target-speed term.
 
 ---
 
@@ -655,8 +654,13 @@ Matches 1-3 gave the Phase 1 constants enough support to start the engine. They 
 - **Missile blast curve**: r=0 ≈ 70, r=1 ≈ 50, r=2 ≈ 15, r=3+ = 0. blastRadius = 2.
 - **No collision system**: robots pass through each other; bullets pass through robots and only hit the target tile.
 - **Friendly fire**: bullets don't damage friendlies and don't get blocked by them.
-- **Stride parity persists** across non-movement commands (resets only at deployment).
-- **Firing arc**: directional cone gated by scan heading; "angle blocked" outside it.
+- **Alliance semantics**: `+0x28` is Side; direct/Scan fire excludes same-Side
+  Teams, blast damage includes them, allied robots are always visible while
+  enemy contacts/last-known markers stay per Team, and ceremony totals aggregate
+  by Side.
+- **Movement costs**: fixed 30-tick singles / 40-tick doubles; no stride state.
+- **Firing arc**: inclusive forward semicircle (`dot >= 0`).
 - **Terrain semantics** (from in-game help dialogs): walls = total cover + impassable, low walls = excellent cover + slow + crouch-blocked, bush = on-or-behind cover + slow + crouch-blocked, rough = no cover + vulnerable + slow + crouch-blocked, crevice = impassable but LoS-transparent, open = full speed + no cover.
-- **Stealth visibility** (Compute! review): invisible unless moving or scanned from adjacent square.
-- **v1 scope**: human-vs-human hot-seat only; no AI. Online lobby is post-MVP.
+- **Main-game scope**: 2-4 humans on separate internet-connected devices,
+  one Team/unique Side per player, free-for-all Survival, no AI. Hot-seat and
+  alliance modes are post-v1; Stealth and non-Survival sports are later phases.

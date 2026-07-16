@@ -14,11 +14,18 @@ Read these first when picking up a fresh session:
 
 ## Project
 
-RoboArena is a modern web-based clone inspired by Maxis RoboSport (1991). Two human players program robot teams, then watch simultaneous deterministic turn resolution as a movie.
+RoboArena is a modern web-based clone inspired by Maxis RoboSport (1991). Two
+to four internet-connected human players privately program robot teams, then
+watch simultaneous deterministic turn resolution as a movie.
 
 Important scope constraints:
 
-- v1 is human-vs-human hot-seat only. Online lobby is a later-version feature after the resolver, replay, planner, and movie playback are stable.
+- v1 is 2-4 human players on separate internet-connected devices in one room,
+  with one Team and unique Side per player (1v1, 1v1v1, or 1v1v1v1).
+- The v1 server is authoritative and durable. Private orders and hidden state
+  must never be exposed to opponents. Players may submit, leave, return later,
+  watch unseen turns, and then plan; ordinary service restart must recover.
+- Hot-seat and multiple Teams per Side/alliance modes are v2 features.
 - Survival sport mode only for v1.
 - Desktop-only, mouse + keyboard.
 - Audio, AI, mobile/touch, accounts, analytics, i18n, production observability, and production-grade abuse prevention are out of v1 scope.
@@ -26,18 +33,24 @@ Important scope constraints:
 
 ### RoboSport parity guard
 
-Original RoboSport had a wider feature set than RoboArena v1: Ducking, AI personalities, five sports, five formations, online/link play, and eight weapon systems. RoboArena v1 intentionally ships the Survival MVP: human-vs-human hot-seat, Survival, Standing/Crouching, the core combat/planner loop, deterministic replay, and deferred parity features.
+Original RoboSport had a wider feature set than RoboArena v1: AI personalities,
+five sports, five formations, local/link variants, and eight weapon systems.
+RoboArena v1 intentionally ships online free-for-all Survival with three
+postures, four non-Stealth combat classes, the core planner/movie loop,
+authoritative resolution, reconnect, and deterministic replay.
 
 Do not expand scope just because the original had a feature. Add original-game parity features only when `docs/implementation-plan.md` schedules them or the user explicitly changes v1 scope.
 
 ## Current State
 
-Phase 1, engine primitives, is draft complete:
+Phase 1R realignment and Phase 2 resolver are draft complete; Phase 1.5 tooling
+is complete:
 
 - `src/engine/` contains pure TypeScript deterministic primitives.
-- Existing tests cover RNG, geometry, movement, firing, blast, and catalog behavior.
-- UI, PixiJS renderer, planner, resolver, replay system, and networking are not built yet.
-- Phase 1.5, toolchain and determinism enforcement, is next.
+- Existing tests cover deterministic primitives, audited timing/combat/Survival
+  rules, and the turn resolver.
+- UI, PixiJS renderer, planner, replay system, and networking are not built yet.
+- Phase 3 projectile/blast event semantics are next.
 
 The planned UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, Zustand, and lucide-react, but the current repository is still a pure TypeScript engine package.
 
@@ -49,6 +62,8 @@ Use `npm.cmd` on Windows if PowerShell blocks `npm.ps1`.
 npm test
 npm run test:watch
 npm run typecheck
+npm run lint
+npm run format:check
 npx vitest run path/to/file.test.ts
 npx vitest run -t "BLACK zone"
 ```
@@ -58,8 +73,10 @@ Current scripts:
 - `npm test` - run Vitest engine tests.
 - `npm run test:watch` - Vitest watch mode.
 - `npm run typecheck` - `tsc --noEmit`.
+- `npm run lint` - ESLint plus engine nondeterminism bans.
+- `npm run format:check` - Prettier verification.
 
-Not wired yet: `lint`, `format`, `dev`, `build`, `start`. These land in Phase 1.5 / Phase 6.
+Not wired yet: `dev`, `build`, `start`. These land with the Next.js scaffold.
 
 ## Architecture
 
@@ -77,7 +94,8 @@ Future architecture:
 - `src/planner/` builds `TurnOrders` but does not run full turns.
 - `src/renderer/` consumes `ResolutionEvent[]` and animates the movie, likely through PixiJS.
 - `src/app/` and `src/components/` host the Next.js/React UI.
-- `src/lib/net/` owns post-MVP lobby and transport code.
+- `src/lib/net/` owns the v1 typed room protocol, WebSocket client, and reconnect
+  state; `server/` owns authoritative room/match orchestration.
 
 Dependency direction is one way: UI/planner/renderer may import engine code; engine must not import them.
 
@@ -178,6 +196,8 @@ When the Next.js UI lands:
 - Use lucide-react icons where a standard icon exists.
 - The first screen should be the usable game/setup experience, not a marketing landing page.
 - v1 targets desktop only. Small viewports should show a larger-screen message for planner/movie UI.
+- Setup/planner controls must be keyboard reachable with visible focus and
+  connection/readiness/team identity must not rely on color alone.
 
 ## Workflow
 

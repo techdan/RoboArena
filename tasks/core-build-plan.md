@@ -1,6 +1,6 @@
 # RoboArena core build plan
 
-**Status:** canonical execution sequence for the hot-seat Survival MVP.
+**Status:** canonical execution sequence for the online free-for-all Survival v1.
 **Updated:** 2026-07-15.
 
 This file answers one question: **what should be built next, in what order, and
@@ -11,22 +11,23 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phase 1R and Phase 2 are draft-complete with 109 passing tests. The engine now
+Phase 1R and Phase 2 are draft-complete with 141 passing tests. The engine now
 has binary-realigned primitives plus a pure, completion-driven turn resolver.
-The next engine gate is Phase 3 projectile timing; projectile presentation
-timing should receive a focused original-game check before a default is locked.
+The next engine gate is Phase 3 projectile/blast event semantics. Exact screen
+travel duration is presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
 
 ```text
 RE audit -> Phase 1R engine realignment -> Phase 1.5 toolchain
-         -> Phase 2 resolver -> Phase 3 projectile timing
+         -> Phase 2 resolver -> Phase 3 projectile/blast events
          -> Phase 4 visibility + Scan & Fire -> Phase 5 replay
-         -> renderer/setup/planner/end-turn vertical slice
+         -> renderer -> authoritative room/setup -> planner/online turn loop
+         -> 3-/4-player FFA hardening -> release polish
 ```
 
-Do not build planner or movie UI against the temporary immediate-impact scaffold;
-Phase 3 must replace only impact timing while preserving fire-time rolls.
+Phase 3 must preserve fire-time result locking and add deterministic
+launch/impact cues without turning renderer travel into gameplay state.
 
 ## Confidence policy
 
@@ -49,25 +50,19 @@ architecture. Numeric tuning behind a stable table-shaped interface may proceed.
 engineering into an open-ended side project.
 
 The reproducibility audit and confirmed-value inventory are recorded in
-`tasks/reverse-engineering-audit.md`. Run only the focused traces needed by the
-next two phases:
+`tasks/reverse-engineering-audit.md`. The 2026-07-15 completion pass resolved:
 
-1. Trace selector 5..12 -> named weapon for damage roll and cadence
-   (RE §20 #1/#10). Raw rows are confirmed; named mapping remains isolated.
-2. Decode `seg87:0x1BF8/0x1CE0` far enough to specify cover-class production,
-   posture values, and explosive cover cuts. Final mapping is confirmed; exact
-   beside-line sampling remains provisional (RE §20 #3).
-3. Trace command duration cases for move/deploy/posture/scan and determine
-   whether movement really alternates (RE §20 #11/#12/#27).
-4. Trace the hard scan-angle gate if it is cheap (RE §20 #22). If not, preserve
-   the existing cone as explicitly provisional.
+1. selector→named weapon, damage roll, accuracy indices, and Aim/Scan cadence;
+2. `seg87:0x1BF8/0x1CE0` endpoint, major-axis, and near-diagonal corner samples;
+3. fixed 30/40 movement, 120 deploy, 10 posture, and 5 scan-heading timing;
+4. the closed forward semicircle with inclusive perpendicular boundaries.
 
 **Timebox:** one focused RE session. If a mapping remains unresolved, record the
 working value and proceed through the confidence policy above.
 
-**Exit gate:** all constants needed by Phase 1R and Phase 2 are either CONFIRMED
-or isolated and tagged PROVISIONAL. Arena coordinates and Scan & Fire semantics
-remain later gates.
+**Exit gate:** satisfied. All constants needed by Phase 1R/2 are confirmed.
+The remaining Scan & Fire tie-break label is isolated to Phase 4; arena MAP
+orientation/import is now verified row-major.
 
 ## Milestone 1 — Phase 1R: realign engine primitives [DRAFT COMPLETE]
 
@@ -122,8 +117,9 @@ Phase 2 owns:
 - deterministic same-timestamp ordering and batched damage/death handling;
 - immutable `nextState` plus a complete derived event stream.
 
-Phase 2 explicitly does **not** own projectile travel, Scan & Fire, team
-visibility, stealth, or replay serialization. Robot movement has no collision:
+Phase 2 explicitly does **not** own projectile presentation, Scan & Fire, team
+visibility, or replay serialization. Stealth is post-main-game work, not a
+Phase 2/4 dependency. Robot movement has no collision:
 robots may pass through and stack.
 
 Aim & Fire may apply its pre-rolled result immediately as an internal scaffold.
@@ -133,37 +129,40 @@ Name those tests so Phase 3 can replace only the impact-timing behavior.
 including stack-on-same-tile, malformed orders, same-time mutual fire, turn-end
 boundary, input immutability, and same-input byte equality.
 
-**Result:** implemented in `commandInterpreter.ts` and `resolver.ts`; 23 focused
+**Result:** implemented in `commandInterpreter.ts` and `resolver.ts`; 33 focused
 tests cover all acceptance cases. Imported-order failures are discriminated
 `MalformedOrders` results. Phase 2 direct fire is intentionally immediate.
 
-## Milestone 4 — Phase 3: projectile timing and impacts
+## Milestone 4 — Phase 3: projectile/blast events
 
-Add deterministic, integer-scheduled projectile paths. Hit and damage remain
-pre-rolled when fire resolves; Phase 3 changes **when the result is displayed
-and applied**, not whether a target dodges in flight.
+Add named missile/grenade blast handling and deterministic launch/impact
+presentation events. Hit and damage remain locked and applied at the fire
+boundary; later visual travel never rerolls, retargets, or permits dodging.
 
-Before choosing timing values, inspect the original's projectile/movie timing.
-If exact gameplay timing cannot be derived because flight is cosmetic, choose a
-renderer-friendly schedule and label it a RoboArena presentation decision.
+Choose renderer travel durations in Phase 7. They are deliberately absent from
+the engine/replay contract.
 
-**Exit gate:** projectile launch/impact events are stable, blast impacts batch
-correctly, and destroying a shooter does not cancel an already launched shot.
+**Exit gate:** projectile launch/impact cues are stable, named blast effects
+batch correctly, and destroying a shooter after fire does not cancel the locked
+result.
 
 ## Milestone 5 — Phase 4: visibility and Scan & Fire
 
-First resolve RE §20 #23 with a focused trace or DOS test. Then add:
+The static trace closes RE §20 #23's architecture: evaluate/acquire at the
+scheduled command tick, reacquire after each named repeat interval, filter by
+player maximum distance, choose nearest adjusted-distance candidate, decrement
+ammo at fire, and lock the aimed tile/result at fire time. Implement:
 
 - per-team visibility and LoS;
 - last-known markers;
-- Stealth behavior (still provisional unless binary-confirmed);
-- Scan & Fire trigger, target selection, cadence, ammo timing, and engagement
-  limits.
+- Scan & Fire target filtering/reacquisition, deterministic tie-breaking,
+  confirmed cadence/ammo timing, and engagement limits.
 
 Keep visibility as a derived engine subsystem, never a renderer calculation.
 
 **Exit gate:** tests cover entering/leaving visibility, multiple simultaneous
-Scan & Fire candidates, hidden Stealth robots, and deterministic target choice.
+Scan & Fire candidates, ordinary visibility transitions, and deterministic
+target choice. Do not add Stealth cases here.
 
 ## Milestone 6 — Phase 5: replay contract
 
@@ -175,35 +174,44 @@ replay source of truth. Store an optional event digest for divergence detection.
 produces byte-identical state, events, and digest; at least one golden fixture is
 checked into tests.
 
-## Milestone 7 — playable vertical slice
+## Milestone 7 — online playable vertical slice
 
 After engine/replay stability, follow the product phases in this order:
 
-1. Next.js + Pixi scaffold and one hand-verified Rubble arena.
+1. Next.js + Pixi scaffold and one verified row-major imported Rubble arena.
 2. Event-only movie playback.
-3. Two-team Quick Start setup.
-4. Planner for move/posture/scan.
-5. Planner firing controls.
-6. Hot-seat handoff, end-turn loop, Team Data, and Survival victory.
+3. Durable authoritative WebSocket room foundation, restart-safe async state,
+   and 2-4 player unique-Side setup.
+4. Planner for move/posture/scan with exact timing and undo/redo.
+5. Planner firing controls with authorized conditional previews.
+6. Private lock/readiness, leave-and-return submission, exactly-once server
+   resolution, unseen-turn playback, Team Data, explanations, replay, and
+   Survival victory.
+7. Three-/four-player FFA integration plus multi-browser/network ship tests.
 
-Use one arena and preset roster until the complete match loop works. Add more
-arenas, roster flexibility, art polish, and online play only after that slice is
+Use one arena and preset roster until the complete online match loop works.
+Networking is part of the foundation, not a transport retrofit. Add more arenas,
+roster flexibility, and art polish only after the two-player internet slice is
 playable end to end.
 
 ## Deferred gates (do not block current work)
 
-- Arena coordinate reconciliation and Dock/Home metadata: required before the
-  first real arena in the renderer, not before the resolver.
+- Arena import review is required before the first renderer arena. Terrain is
+  row-major; homes use exact generated spans; Dock is off-field state.
 - Exact Scan & Fire behavior: required at Phase 4, not Phase 2.
-- Other sports, formations, AI, extra weapons, online lobby, onboarding, audio,
-  mobile, and production infrastructure: post-MVP or explicitly later phases.
+- Hot-seat and multiple Teams per Side/alliance modes are post-v1 Phase 12.
+- Stealth is Phase 14 and all non-Survival sports are Phase 15. Both are hard
+  gated on the complete online FFA Survival v1.
+- Other formations, AI, extra weapons, full help/tutorial, audio, mobile, and
+  production-scale infrastructure are post-v1 or explicitly later phases.
 
 ## Next actions
 
-1. Run a focused original-game projectile/movie timing check and classify
-   gameplay timing versus cosmetic presentation timing.
-2. Implement Phase 3 projectile launch, travel, impact, and blast scheduling
-   without rerolling fire-time outcomes.
-3. Preserve already launched projectiles when their shooter is destroyed and
-   batch same-boundary impacts deterministically.
-4. Then resolve Scan & Fire semantics before beginning Phase 4 visibility.
+1. Implement Phase 3 named blast resolution and deterministic projectile
+   presentation events without rerolling fire-time outcomes.
+2. Batch same-boundary results deterministically and retain the confirmed
+   damage-stagger counter.
+3. Implement ordinary visibility and Scan & Fire in Phase 4, explicitly without
+   Stealth.
+4. Continue through replay, then establish the Phase 8 authoritative room
+   boundary before planner state is designed around local-only assumptions.

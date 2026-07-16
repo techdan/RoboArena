@@ -54,8 +54,8 @@ export interface FireContext {
   readonly weapon: WeaponDefinition;
   readonly arenaTileAt: (tile: TileCoord) => ArenaTile | undefined;
   readonly rng: Rng;
-  /** PROVISIONAL RE §20 #2: unresolved first score-halving modifier. */
-  readonly additionalHalving?: boolean;
+  /** Damage stagger is active for this firing action (original field +0x1E). */
+  readonly damageStaggered?: boolean;
 }
 
 const clampScore = (score: number): number => Math.max(0, Math.min(19, score));
@@ -85,7 +85,7 @@ export const calculateLiveFireScore = (input: {
   readonly targetTerrain: ArenaTile["terrain"] | undefined;
   readonly weapon: WeaponDefinition;
   readonly targetOnAimedTile: boolean;
-  readonly additionalHalving?: boolean;
+  readonly damageStaggered?: boolean;
 }): number => {
   const accuracyBase = input.accuracy + 4;
   let score =
@@ -93,10 +93,10 @@ export const calculateLiveFireScore = (input: {
     distanceScoreAdjustment(input.distance, accuracyBase) +
     terrainScoreAdjustment(input.targetTerrain, input.weapon);
 
-  // The original also subtracts an unresolved posture/scan argument. Omitted
-  // intentionally until RE §20 #2 is decoded.
+  // Aim & Fire supplies alignment magnitude 16, so the live resolver's
+  // Scan & Fire-only alignment penalty (-4 at <=4, -2 at <=8) is zero here.
   score = clampScore(score);
-  if (input.additionalHalving) score >>= 1;
+  if (input.damageStaggered) score >>= 1;
   if (!input.targetOnAimedTile) score >>= 1;
   return score;
 };
@@ -142,7 +142,7 @@ export const resolveFire = (ctx: FireContext): FireResolution => {
     targetTerrain,
     weapon: ctx.weapon,
     targetOnAimedTile: ctx.aimedTile.x === ctx.targetTile.x && ctx.aimedTile.y === ctx.targetTile.y,
-    ...(ctx.additionalHalving === undefined ? {} : { additionalHalving: ctx.additionalHalving }),
+    ...(ctx.damageStaggered === undefined ? {} : { damageStaggered: ctx.damageStaggered }),
   });
   const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
   const roll = ctx.rng.nextUint32() & 0xff;

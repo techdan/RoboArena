@@ -5,7 +5,6 @@
  * and are shared by LoS, cover, and renderer path construction.
  */
 
-import { SCAN_CONE_HALF_WIDTH_DEGREES } from "./constants.js";
 import type { Heading, TileCoord } from "./types.js";
 
 /** Exact combat/range/blast metric for arena-sized integer coordinates. */
@@ -19,15 +18,15 @@ export const floorEuclideanDistance = (a: TileCoord, b: TileCoord): number => {
 export const chebyshevDistance = (a: TileCoord, b: TileCoord): number =>
   Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
-const HEADING_DEGREES: Readonly<Record<Heading, number>> = {
-  N: 0,
-  NE: 45,
-  E: 90,
-  SE: 135,
-  S: 180,
-  SW: 225,
-  W: 270,
-  NW: 315,
+const HEADING_VECTORS: Readonly<Record<Heading, readonly [x: number, y: number]>> = {
+  N: [0, -1],
+  NE: [1, -1],
+  E: [1, 0],
+  SE: [1, 1],
+  S: [0, 1],
+  SW: [-1, 1],
+  W: [-1, 0],
+  NW: [-1, -1],
 };
 
 export const bearingDegrees = (from: TileCoord, to: TileCoord): number => {
@@ -44,17 +43,20 @@ export const angleDelta = (a: number, b: number): number => {
   return delta > 180 ? 360 - delta : delta;
 };
 
-/** Hard firing gate. Cone width remains PROVISIONAL RE §20 #22. */
+/**
+ * Original hard firing gate: the closed forward semicircle. Integer dot
+ * product preserves the exact inclusive ±90° boundary without floating point.
+ */
 export const isWithinScanCone = (
   shooterTile: TileCoord,
   shooterHeading: Heading,
   target: TileCoord,
 ): boolean => {
   if (shooterTile.x === target.x && shooterTile.y === target.y) return true;
-  return (
-    angleDelta(bearingDegrees(shooterTile, target), HEADING_DEGREES[shooterHeading]) <=
-    SCAN_CONE_HALF_WIDTH_DEGREES
-  );
+  const [headingX, headingY] = HEADING_VECTORS[shooterHeading];
+  const targetX = target.x - shooterTile.x;
+  const targetY = target.y - shooterTile.y;
+  return headingX * targetX + headingY * targetY >= 0;
 };
 
 /** Tiles crossed by a Bresenham line, excluding both endpoints. */

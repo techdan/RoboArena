@@ -1,122 +1,208 @@
 # Reverse-engineering audit
 
-**Audit date:** 2026-07-12  
+**Completion date:** 2026-07-15
 **Binary:** `ROBO.EXE`, SHA-256
 `513E48101C373ECCBFD141D6B54F8B9FAE7559EAA87A01A8757DDB736329A9D4`
 
 ## Conclusion
 
-The reverse-engineering work is reproducible and reliable enough to drive the
-engine realignment, with one important qualification: several **raw tables and
-mechanisms are confirmed while their game-facing labels/inputs remain
-provisional**. Implement the confirmed structure now, but do not present the
-remaining mappings as exact RoboSport behavior.
+The original Windows code now supplies the business rules and numerical data
+needed for RoboArena's **2-4 Team** Survival combat/resolution core. The four
+explicitly provisional areas are closed with path + semantics evidence and
+engine boundary tests:
 
-## Reproduction performed
+1. named weapon-to-selector mappings;
+2. movement, deploy, posture, and scan-heading timing;
+3. the exact inclusive scan-cone boundary;
+4. diagonal beside-line endpoint-cover sampling.
 
-- Regenerated `robosport-data.json` from the local binary and three `.TWN`
-  files with `tools/re/export_data.py`.
-- Before the selector correction, regeneration was byte-identical to the
-  existing extract. After fixing live selectors from rows 0..7 to 5..12, the
-  corrected regenerated extract has SHA-256
-  `DD9FBB63B11C58DFF876466898E39E6AC97EE48C327922AF509E9C39E8FE4A05`.
-- Parsed the NE header independently enough to confirm 101 segments, autodata
-  segment 101, and the documented segment layout.
-- Used the relocation-aware disassembler to inspect the live-fire resolver,
-  damage jump tables, blast roller, command-duration lookup, and Euclidean
-  distance entry point.
-- Added an independent claim-ledger verifier; it currently checks 15 data,
-  selector, code-fingerprint, and arena claims without importing the exporter.
-- Ran the current baseline: 6 test files / 75 tests pass; strict TypeScript
-  typecheck passes.
+The completion pass also corrected an earlier audit error: byte 0 of each
+four-byte command descriptor is **encoded command-record length**, not a
+direct/explosive category. Selectors 7 and 10 are Burst and Automatic group
+headers, so their zero direct-damage jump slots are structural—not explosive
+classification evidence.
 
-## Confirmed for immediate engine use
+This is a complete audit for the main-game **2-4 Team, four-class** Survival
+rules scope, not a claim that every RoboSport feature has been cloned or that
+the 2-4 player product/UI is already implemented. RoboArena v1 consumes the
+unique-Side free-for-all subset; hot-seat and alliances are v2. The same pass
+also closed the remaining Survival-relevant gaps: damage stagger, live-vs-
+preview table usage, shooter posture, named explosive categories, Survival
+ceremony scoring, row-major arena import, exact generated Home areas, and the
+12 fps movie default. Stealth and all non-Survival sport logic are explicitly
+post-main-game Phases 14/15 and were not pulled into this audit.
 
-| Mechanic | Evidence checked | Confidence |
-|---|---|---|
-| Robot accuracy/armor rows | DGROUP `0x0CA8`; extract reproduces `2/140`, `1/120`, `0/100`, `1/100`, `1/120` | CONFIRMED |
-| Live-fire threshold table | `seg6:0x3820..0x3837` indexes word table at `0x156E` after `rand & 0xff` | CONFIRMED |
-| Hit thresholds | `0,4,8,16,24,32,40,48,64,80,96,112,128,144,160,176,192,208,224,240` over 256 | CONFIRMED |
-| Hit score clamp | `seg6:0x37C4..0x37F4` clamps to `0..19` | CONFIRMED |
-| Off-aimed-tile penalty | second conditional right shift at `seg6:0x380A`; source trace documented through `seg21:0x0F0A` | CONFIRMED in RE trace |
-| Bullet roll families | `seg6:0x384D..0x3876`: `10+(rand&7)`, `8+(rand&15)`, `6+(rand&15)` | CONFIRMED |
-| Cover-class damage adjustment | `seg6:0x3878..0x3892`: class 1 `-4`, class 4 `+4`, middle classes `0` | CONFIRMED |
-| Distance damage adjustment | `seg6:0x3892..0x389F`: distance `>12 => -4`, `<5 => +4` | CONFIRMED |
-| Blast rolls | `seg6:0x5F7E..0x5FFB` uses documented base/mask tables and radii | CONFIRMED |
-| Blast reductions | `seg6:0x5FFD..0x6025`: `1/2`, `3/4`, `7/8`, or full | CONFIRMED |
-| Weapon-selector command cost | `seg13:0x0947..0x0954` returns byte `[selector*4 + 0x7F5]`; live-fire selectors are `5..12` | CONFIRMED mechanism/table |
-| 60-unit parameter timing | `seg13:0x0928..0x0946` multiplies timed command parameters by `0x3c` | CONFIRMED |
-| Floored Euclidean distance | `seg56:0x02A0` absolute-delta routine and documented startup isqrt table | CONFIRMED |
-| Extracted arena dimensions | `.TWN` INF arrays, including Rubble Two `24x24` | CONFIRMED |
+A focused player-count trace then closed the original 3-/4-Team rules. Heap
+field `+0x28` is the Side index: direct fire and Scan & Fire exclude same-Side
+allies, blasts can damage them, allies are always mutually visible but do not
+pool enemy scan contacts/last-known markers, and Final Ceremony contributions
+aggregate by Side. Team Name boxes provide non-compacting Home slots and
+canonical Team order. Phase 11.6 therefore retains online three-/four-player
+free-for-all integration and end-to-end testing gates. The traced alliance
+behavior is retained for post-v1 Phase 12, with no known original-code
+business-rule gate.
 
-The regenerated live-fire and preview tables match the values printed in
-`docs/reverse-engineering.md` exactly.
+## Reproduction and independent checks
 
-## Confirmed mechanism, unresolved mapping
+- Re-parsed the NE header: 101 segments; autodata/DGROUP is segment 101.
+- Re-read the complete command descriptor table, rows 0..76 at DGROUP `0x07F4`.
+- Traced command record decoding, named weapon group mapping, live dispatcher,
+  duration lookup, scan-angle predicate, endpoint cover classifier, and Scan &
+  Fire acquisition/interval paths.
+- Expanded `references/re-claims.json` to schema 2. The independent verifier now
+  checks all 77 descriptor rows plus code fingerprints for the semantic paths.
+- Regenerated/exported data now names direct-fire rolls and emits exact command
+  timing instead of provisional labels.
+- Engine transcription has focused tests for mappings, timing, inclusive cone
+  edges, y-major diagonal ties, near-diagonal corners, remote non-cover, and
+  exact slow-terrain path chunking.
 
-These should be table-driven and tagged until the named mapping is traced:
+Run:
 
-1. **Named weapon -> bullet roll family** (RE §20 #1). The three roll families
-   are exact; Rifle/Auto/Burst labels remain inferred.
-2. **Named weapon -> selector(s) and fire interval** (RE §20 #10). The previous
-   audit incorrectly read rows `0..7`. Live fire uses selectors `5..12`, whose
-   exact intervals are `30,30,20,15,20,20,10,10` units. A named weapon may map
-   to more than one selector, so “fixed per weapon at only 20/30” was too strong.
-3. **Full path sampling around corners/adjacent tiles** (RE §20 #3). The final
-   posture/terrain cover table is now decoded, but the trace samples beside the
-   Bresenham line as well as the center path; reproduce those edge cases later.
-5. **First hit-score halving flag** (RE §20 #2). The shift exists; its gameplay
-   meaning remains unknown.
-6. **Terrain/weapon additions to hit score.** The disassembly confirms that a
-   target-terrain branch uses values at `0x15A2/0x15AA/0x15B2`, while the
-   fallback uses a weapon-indexed word table at `0x1596`. The engine plan must
-   include that fallback; robot accuracy alone is not the entire term.
+```powershell
+& 'C:\Users\manhe\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' `
+  tools/re/verify_claims.py 'RoboSport (1991)/games/RoboSpor/ROBOWIN'
+npm.cmd test
+npm.cmd run typecheck
+```
 
-## Newly resolved in the focused mapping pass
+## Five completed gates
 
-- Robot posture field `+0x50` uses `1=Upright`, `2=Ducking`, `3=Crouching`.
-  There is no need to invent posture heights `4/3/2`.
-- The cover classifier's final table is:
-  - exposed/open: Upright `4`, Ducking `4`, Crouching `3`;
-  - bush/partial height 2: Upright `4`, Ducking `3`, Crouching `2`;
-  - low wall/height 3: Upright `3`, Ducking `2`, Crouching `1`;
-  - complete wall protection is rejected by the separate LoS gate.
-- Selector rows `5..12` at DGROUP `0x7F4` are
-  `[category, interval, b2, flag]`:
-  `[[3,30,96,0],[3,30,112,0],[1,20,28,0],[3,15,96,0],`
-  `[3,20,112,0],[1,20,32,0],[3,10,96,0],[3,10,112,0]]`.
-  The zero-damage jump slots are selectors `7` and `10`, matching category `1`;
-  category `1` is therefore the explosive path and category `3` the direct-fire
-  path for these live selectors. The older opposite label was incorrect.
+### 1. Named weapon selectors, rolls, accuracy indices, and cadence
 
-## Still provisional and phase-gated
+`seg14:0x07B4` maps command groups to numeric weapon IDs; strings 605–611 name
+those IDs. `seg6:0x4CF2` proves which selectors reach Aim & Fire versus Scan &
+Fire handlers. `seg6:0x383B` uses `selector-5` for direct damage and
+`seg6:0x3790` uses the same index for the `0x1596` accuracy-add table.
 
-- Move alternation and move cost (Phase 1R/2 blocker).
-- Deploy, posture-step, and scan-rotation costs (Phase 2 blocker).
-- Scan cone hard gate (combat can proceed with a tagged provisional cone; must
-  be resolved before claiming parity).
-- Scan & Fire trigger/tracking (Phase 4 blocker).
-- Arena orientation and Dock/Home metadata (renderer/setup blocker).
-- Stealth rule (Phase 4; currently review-derived rather than binary-derived).
+| Weapon | Group | Aim | Scan | Direct roll | Aim/Scan ticks | Aim/Scan accuracy index |
+|---|---:|---:|---:|---|---:|---:|
+| Rifle | 4 | 5 | 6 | `10+(rng&7)` | 30 / 30 | 0 / 1 |
+| Burst | 7 | 8 | 9 | `8+(rng&15)` | 15 / 20 | 3 / 4 |
+| Automatic | 10 | 11 | 12 | `6+(rng&15)` | 10 / 10 | 6 / 7 |
+| Missile | 13 | 15 | 16 | blast path | 30 / 20 | specialized path |
+| Grenade | 17 | 19 | 20 | blast path | 30 / 20 | specialized path |
+| Prod | 1 | 2 | 3 | specialized path | table-driven | specialized path |
+| Bomb | 21 | 22 | 23 | blast path | table-driven | specialized path |
 
-## Corrections to apply to existing plans
+**Confidence:** SEMANTICS CONFIRMED; ENGINE VERIFIED for v1 catalog fields.
 
-- The current Phase 2 design's collision winner rule conflicts with the locked
-  no-collision/stacking mechanic and must be removed.
-- Projectile impacts and Scan & Fire evaluation do not belong in Phase 2; those
-  remain Phase 3 and Phase 4 gates.
-- The event stream is the derived movie. Replay truth remains initial state +
-  seed + turn orders; events may be verified with a digest.
-- `tasks/engine-realignment-plan.md` must include the weapon-table fallback in
-  the hit-score formula and must not call provisional cover interpolation
-  “exact binary truth.”
-- `tools/re/export_data.py` had a stale comment naming robot field `+0x5C` as
-  the weapon selector even though the code and RE document correctly identify
-  the `seg13:0x060E` weapon-property chain.
+### 2. Movement/deploy/posture/scan timing
 
-## Recommended next RE session
+`seg13:0x060E` proves descriptor byte 0 is record length. `seg13:0x08C5`
+returns byte 1 unless the selector uses a player parameter multiplied by 60.
+The live dispatcher and posture enum helpers identify these command groups:
 
-Trace only the remaining mappings that unblock Phase 1R/2: named weapon
-selectors and command-duration cases. The posture/cover table is resolved; only
-diagonal beside-line sampling remains provisional. Stop after the ledger can
-mark the remaining mappings CONFIRMED or deliberately PROVISIONAL.
+| Command | Selectors | Exact ticks |
+|---|---:|---:|
+| Absolute scan heading | 24..31 | 5 |
+| One-tile move | 41..48 | 30 |
+| Two-tile move | 49..64 | 40 |
+| Upright / Ducking / Crouching | 70 / 71 / 72 | 10 |
+| Deploy | 74 | 120 |
+
+There is no alternating stride cost or persisted stride-parity business state.
+Absolute posture and heading changes each consume one fixed command.
+
+**Confidence:** SEMANTICS CONFIRMED; ENGINE VERIFIED.
+
+### 3. Exact slow-terrain movement
+
+The terrain record's movement byte is a three-state classifier: Open Ground is
+`2` (full speed), Rough/Bush/Low Wall are `1` (slow/conditional), and blocked
+terrain is `0`. `seg87:0x2901` exposes the mode-1 predicate `movement == 2`.
+The path compressor at `seg87:0x0BF6..0x0D3D` uses that predicate while
+collapsing a unit-step route: it emits a two-tile endpoint only across eligible
+entered tiles, and retains the prior waypoint plus a property-1 destination.
+
+Therefore slow terrain has no independent duration multiplier. Entering each
+slow tile is a 30-tick one-tile selector, while two eligible Open Ground steps
+compress to one 40-tick selector. Mixed and diagonal routes apply the same rule
+to the selected unit waypoints; there is no stride state.
+
+**Confidence:** SEMANTICS CONFIRMED by TIL/help labels and path flow; ENGINE VERIFIED.
+
+### 4. Exact scan-cone boundary
+
+The targeting validator `seg76:0x0775` calls `seg21:0x0CCF`; failure produces
+status 634, “angle blocked,” before LoS and range checks. The predicate accepts
+same-tile and the closed forward semicircle for the robot's eight-way heading.
+
+Equivalent engine rule:
+
+```text
+dot(headingVector, target - shooter) >= 0
+```
+
+Both exact ±90° rays are legal. A tile one integer step behind either boundary
+is illegal. Integer dot product avoids floating-point boundary drift.
+
+**Confidence:** SEMANTICS CONFIRMED; ENGINE VERIFIED.
+
+### 5. Diagonal beside-line endpoint cover
+
+The live fire resolver calls `seg87:0x1BF8`, which computes axis deltas/signs,
+chooses x-major only when `dx>dy` (ties are y-major), and enables a corner
+sample when `abs(dx-dy)<2`. It calls `seg87:0x1CE0` from both endpoints; target
+cover uses the target-side result.
+
+Target-side samples are exactly:
+
+- target tile, always;
+- one neighbor toward the shooter on the major axis when distance ≥2;
+- the diagonal neighbor toward the shooter when distance >1 and
+  `abs(dx-dy)<2`.
+
+Remote intervening low walls do not become target cover merely because the
+center line crosses them. Complete walls still fail the separate LoS gate.
+The existing terrain/posture output table remains 4/4/3 exposed, 4/3/2 bush,
+and 3/2/1 low wall for Upright/Ducking/Crouching.
+
+**Confidence:** SEMANTICS CONFIRMED; ENGINE VERIFIED.
+
+## Other v1-relevant findings retained
+
+- 60 engine ticks/second; default 15-second turn is 900 ticks.
+- Slow movement is exact command chunking: Open+Open may cost 40 ticks as a
+  double; each entered Rough/Bush/Low-wall tile forces a 30-tick single.
+- Floored Euclidean distance; uniform weapon range 18.
+- Exact robot accuracy/armor rows and live 20-step hit threshold table.
+- Aim & Fire locks hit/damage at fire time; leaving the aimed tile halves score.
+- Successful damage assigns 1–4 later firing actions at half hit score; each
+  firing action consumes one count. Original field `+0x1E` is stagger, not ammo.
+- Shooter posture adds no independent hit/damage modifier; it only participates
+  in endpoint/LoS legality. Aim passes alignment 16 (zero penalty); Scan & Fire
+  uses the exact `<=4: -4`, `<=8: -2`, otherwise-zero alignment bands.
+- Exact bullet and blast rolls, cover/distance damage adjustments, and blast
+  cover cuts.
+- Grenade creates projectile type 1→blast category 0; Missile type 2→category
+  1; Time Bomb type 3→category 2.
+- Robots do not collide and may stack; direct bullets do not hit friendly bodies;
+  blasts can damage friendlies.
+- In 3-/4-Team matches, friendliness is Side-based. Allied robots are always
+  visible, but visible-enemy and last-known sets remain private to each Team.
+- Scan & Fire remains active for `seconds×60`, reacquires an eligible enemy at
+  the named weapon's repeat interval, honors player maximum distance, and uses
+  nearest adjusted-distance selection. The semantic name of its final tie-break
+  value remains documented but does not affect the four closed gates.
+- Survival ends with the last Side standing. Each Team contributes existing
+  score + 150 per survivor + 400 when that Team has any survivor; allied
+  contributions are summed and the Side total is shown on every allied row.
+- `.TWN` MAP terrain is `tiles[y][x]` without flip/transpose. Homes derive from
+  exact per-axis 6/8/12/16 thresholds; Dock is off-field state.
+- Original movie choices are 20/15/12/10/6/5/4/3 fps with 12 fps default.
+
+## Explicit scope boundary
+
+- Phase 14 owns Stealth setup, visibility, Scan & Fire interactions, assets, and
+  tests. None belongs in Phase 1–11.
+- Phase 15 owns Treasure Hunt, Capture the Flag, Hostage, Baseball, their setup
+  objects/commands, and their scoring.
+- Phase 11.6 owns 3-/4-player online FFA integration, explicit non-compacting
+  Home slots, private orders/reconnect, and four-player tests. Phase 12 owns the
+  later hot-seat adapter and already-closed alliance semantics.
+- AI, complete formation rosters, point-buy source, and extra weapon grants are
+  later parity work.
+- Exact projectile screen travel speed is a renderer tuning value. Combat
+  outcome is locked at fire and the main-game engine does not permit in-flight
+  reroll, dodge, or retargeting.

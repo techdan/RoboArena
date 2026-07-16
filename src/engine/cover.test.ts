@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coverClassForTerrain, resolveCover } from "./cover.js";
+import { coverClassForTerrain, resolveCover, targetCoverSamples } from "./cover.js";
 import type { ArenaTile, TileCoord } from "./types.js";
 
 describe("coverClassForTerrain", () => {
@@ -54,7 +54,7 @@ describe("resolveCover", () => {
     ).toEqual({ outcome: "cover", coverClass: 3 });
   });
 
-  it("uses the strongest intervening cover", () => {
+  it("does not treat remote intervening low walls as target cover", () => {
     expect(
       resolveCover({
         from: { x: 0, y: 0 },
@@ -62,7 +62,37 @@ describe("resolveCover", () => {
         targetPosture: "crouching",
         arenaTileAt: at({ "1,0": "bush", "2,0": "low-wall" }),
       }),
+    ).toEqual({ outcome: "cover", coverClass: 3 });
+  });
+
+  it("uses the major-axis neighbor immediately toward the shooter", () => {
+    expect(
+      resolveCover({
+        from: { x: 0, y: 0 },
+        to: { x: 4, y: 2 },
+        targetPosture: "crouching",
+        arenaTileAt: at({ "3,2": "low-wall" }),
+      }),
     ).toEqual({ outcome: "cover", coverClass: 1 });
+  });
+
+  it("samples the corner neighbor only for exact or near diagonals", () => {
+    expect(
+      resolveCover({
+        from: { x: 0, y: 0 },
+        to: { x: 3, y: 2 },
+        targetPosture: "crouching",
+        arenaTileAt: at({ "2,1": "low-wall" }),
+      }),
+    ).toEqual({ outcome: "cover", coverClass: 1 });
+    expect(
+      resolveCover({
+        from: { x: 0, y: 0 },
+        to: { x: 4, y: 2 },
+        targetPosture: "crouching",
+        arenaTileAt: at({ "3,1": "low-wall" }),
+      }),
+    ).toEqual({ outcome: "cover", coverClass: 3 });
   });
 
   it("reports the first blocking wall", () => {
@@ -74,5 +104,30 @@ describe("resolveCover", () => {
         arenaTileAt: at({ "2,0": "wall" }),
       }),
     ).toEqual({ outcome: "blocked", stoppedAt: { x: 2, y: 0 } });
+  });
+});
+
+describe("targetCoverSamples", () => {
+  it("uses a y-major tie-break for an exact diagonal", () => {
+    expect(targetCoverSamples({ x: 0, y: 0 }, { x: 2, y: 2 })).toEqual({
+      center: { x: 2, y: 2 },
+      major: { x: 2, y: 1 },
+      diagonal: { x: 1, y: 1 },
+    });
+  });
+
+  it("uses x-major plus the corner for a near diagonal", () => {
+    expect(targetCoverSamples({ x: 0, y: 0 }, { x: 3, y: 2 })).toEqual({
+      center: { x: 3, y: 2 },
+      major: { x: 2, y: 2 },
+      diagonal: { x: 2, y: 1 },
+    });
+  });
+
+  it("omits the corner outside the near-diagonal band", () => {
+    expect(targetCoverSamples({ x: 0, y: 0 }, { x: 4, y: 2 })).toEqual({
+      center: { x: 4, y: 2 },
+      major: { x: 3, y: 2 },
+    });
   });
 });

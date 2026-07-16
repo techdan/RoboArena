@@ -9,17 +9,18 @@
 import { TICKS_PER_SECOND } from "./constants.js";
 import { WEAPONS } from "./catalog.js";
 import { commandDurationTicks, moveStepDurationTicks, moveStepSize } from "./commandInterpreter.js";
-import { tilesAlongLineExclusive } from "./geometry.js";
-import { canTraverseTile, flipParity } from "./movement.js";
+import { canTraverseTile, isFullSpeedTile } from "./movement.js";
 import { createRng } from "./rng.js";
 import { resolveFire } from "./firing.js";
 import type {
   Arena,
   CommandTimeline,
   MatchState,
+  MovementStep,
   ResolutionEvent,
   RobotCommandSegment,
   RobotState,
+  TeamState,
   TileCoord,
   TurnOrders,
   WeaponDefinition,
@@ -68,6 +69,7 @@ interface Actor {
   readonly teamIndex: number;
   readonly rosterIndex: number;
   readonly side: number;
+  readonly homeSlot: TeamState["homeSlot"];
 }
 
 interface ActiveCommand {
@@ -122,6 +124,13 @@ const isInBounds = (arena: Arena, coord: unknown): coord is TileCoord =>
   coord.x < arena.width &&
   coord.y < arena.height;
 
+const isMovementStepValue = (step: unknown): step is MovementStep =>
+  typeof step === "object" &&
+  step !== null &&
+  "to" in step &&
+  isTileCoordValue(step.to) &&
+  (!("via" in step) || step.via === undefined || isTileCoordValue(step.via));
+
 const malformed = (
   code: MalformedOrders["code"],
   message: string,
@@ -142,15 +151,32 @@ const robotOwnsWeapon = (robot: RobotState, weapon: WeaponDefinition): boolean =
 const movementDestinationIsLegal = (
   arena: Arena,
   from: TileCoord,
-  to: unknown,
+  step: unknown,
   robot: RobotState,
 ): boolean => {
-  if (!isInBounds(arena, to) || moveStepSize(from, to) === null) return false;
-  const crossed = [...tilesAlongLineExclusive(from, to), to];
-  return crossed.every((coord) => {
-    const tile = tileAt(arena, coord);
-    return tile !== undefined && canTraverseTile(robot.posture, tile);
-  });
+  if (!isMovementStepValue(step) || !isInBounds(arena, step.to)) return false;
+  const stepSize = moveStepSize(from, step.to);
+  if (stepSize === null) return false;
+  if (stepSize === 1 && step.via !== undefined) return false;
+  if (
+    stepSize === 2 &&
+    (step.via === undefined ||
+      !isInBounds(arena, step.via) ||
+      moveStepSize(from, step.via) !== 1 ||
+      moveStepSize(step.via, step.to) !== 1)
+  ) {
+    return false;
+  }
+  const enteredCoords = step.via === undefined ? [step.to] : [step.via, step.to];
+  const enteredTiles = enteredCoords.map((coord) => tileAt(arena, coord));
+  if (enteredTiles.some((tile) => tile === undefined || !canTraverseTile(robot.posture, tile))) {
+    return false;
+  }
+  // Original TIL movement property 2 is required for every tile entered by a
+  // two-tile selector. Slow property-1 terrain must be encoded as singles.
+  return (
+    stepSize === 1 || enteredTiles.every((tile) => tile !== undefined && isFullSpeedTile(tile))
+  );
 };
 
 export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
@@ -167,7 +193,13 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const robots = new Map<string, RobotState>();
   state.teams.forEach((team, teamIndex) => {
     team.robots.forEach((robot, rosterIndex) => {
-      const actor = { robotId: robot.id, teamIndex, rosterIndex, side: team.side };
+      const actor = {
+        robotId: robot.id,
+        teamIndex,
+        rosterIndex,
+        side: team.side,
+        homeSlot: team.homeSlot,
+      };
       actors.push(actor);
       actorById.set(robot.id, actor);
       robots.set(robot.id, {
@@ -176,6 +208,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       });
     });
   });
+  // Original global Team order follows the non-compacting Team Name boxes.
+  actors.sort((a, b) => a.homeSlot - b.homeSlot || a.rosterIndex - b.rosterIndex);
 
   const timelines = new Map<string, CommandTimeline>();
   for (const timeline of orders.timelines) {
@@ -292,13 +326,13 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           commandIndex,
         );
       }
-      const duration = moveStepDurationTicks(robot.position, first, robot.strideParity);
+      const duration = moveStepDurationTicks(robot.position, first.to);
       if (duration === null) {
         return malformed("illegal-command", "Move step size is invalid.", robot.id, commandIndex);
       }
       completesAt = tick + duration;
     } else if (command.kind === "deploy") {
-      const home = state.arena.homeAreas[actor.teamIndex];
+      const home = state.arena.homeAreas[actor.homeSlot];
       if (
         !isInBounds(state.arena, command.to) ||
         !home?.tiles.some((tile) => sameTile(tile, command.to))
@@ -316,13 +350,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return malformed("illegal-command", "Posture value is invalid.", robot.id, commandIndex);
       }
       const duration = commandDurationTicks(command, robot);
-      if (duration === null || duration === 0) {
+      if (duration === null) {
         return malformed(
           "illegal-command",
-          "Posture command must change posture.",
+          "Posture command duration is invalid.",
           robot.id,
           commandIndex,
         );
+      }
+      if (duration === 0) {
+        cursor.nextIndex += 1;
+        return null;
       }
       completesAt = tick + duration;
     } else if (command.kind === "set-scan-direction") {
@@ -330,13 +368,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return malformed("illegal-command", "Scan heading is invalid.", robot.id, commandIndex);
       }
       const duration = commandDurationTicks(command, robot);
-      if (duration === null || duration === 0) {
+      if (duration === null) {
         return malformed(
           "illegal-command",
-          "Scan command must change heading.",
+          "Scan command duration is invalid.",
           robot.id,
           commandIndex,
         );
+      }
+      if (duration === 0) {
+        cursor.nextIndex += 1;
+        return null;
       }
       completesAt = tick + duration;
     } else {
@@ -344,6 +386,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return malformed(
           "illegal-command",
           "Aim target is outside the arena.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      if (typeof command.repeat !== "boolean") {
+        return malformed(
+          "illegal-command",
+          "Aim & Fire repeat must be a boolean.",
           robot.id,
           commandIndex,
         );
@@ -371,6 +421,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     return null;
   };
 
+  const startAvailableCommand = (actor: Actor, tick: number): MalformedOrders | null => {
+    const cursor = cursors.get(actor.robotId);
+    while (cursor && !cursor.active) {
+      const previousIndex = cursor.nextIndex;
+      const error = startCommand(actor, tick);
+      if (error || cursor.active || cursor.nextIndex === previousIndex) return error;
+    }
+    return null;
+  };
+
   const finishActive = (cursor: Cursor): void => {
     const active = cursor.active;
     if (!active) return;
@@ -382,7 +442,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   emit(0, { kind: "turn-start", turnNumber: state.turnNumber });
 
   for (const actor of actors) {
-    const error = startCommand(actor, 0);
+    const error = startAvailableCommand(actor, 0);
     if (error) return error;
   }
 
@@ -399,14 +459,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       if (!robot || !cursor || robot.hp <= 0) continue;
 
       if (active.command.kind === "deploy") {
-        robots.set(robot.id, { ...robot, position: active.command.to, strideParity: 0 });
+        robots.set(robot.id, { ...robot, position: active.command.to });
         emit(tick, { kind: "deployed", robotId: robot.id, to: active.command.to });
         finishActive(cursor);
         continue;
       }
 
-      const destination = active.command.path[active.moveIndex];
-      if (!destination || !isTileCoord(robot.position)) {
+      const step = active.command.path[active.moveIndex];
+      if (!step || !isTileCoord(robot.position)) {
         return malformed(
           "illegal-command",
           "Move cursor is invalid.",
@@ -416,18 +476,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       }
       const moved: RobotState = {
         ...robot,
-        position: destination,
-        strideParity: flipParity(robot.strideParity),
+        position: step.to,
       };
       robots.set(robot.id, moved);
-      emit(tick, { kind: "move-step", robotId: robot.id, to: destination });
+      emit(tick, { kind: "move-step", robotId: robot.id, to: step.to });
 
       const nextMoveIndex = active.moveIndex + 1;
-      const nextDestination = active.command.path[nextMoveIndex];
-      if (!nextDestination) {
+      const nextStep = active.command.path[nextMoveIndex];
+      if (!nextStep) {
         finishActive(cursor);
       } else {
-        if (!movementDestinationIsLegal(state.arena, destination, nextDestination, moved)) {
+        if (!movementDestinationIsLegal(state.arena, step.to, nextStep, moved)) {
           return malformed(
             "illegal-command",
             "Move path contains an out-of-bounds, non-adjacent, or untraversable step.",
@@ -435,7 +494,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
             active.commandIndex,
           );
         }
-        const duration = moveStepDurationTicks(destination, nextDestination, moved.strideParity);
+        const duration = moveStepDurationTicks(step.to, nextStep.to);
         if (duration === null) {
           return malformed(
             "illegal-command",
@@ -509,6 +568,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           weapon,
           arenaTileAt: (coord) => tileAt(state.arena, coord),
           rng,
+          damageStaggered: shooter.damageStaggerActionsRemaining > 0,
         });
         if (result.outcome === "hit") {
           pendingDamage.push({
@@ -530,14 +590,24 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           });
         }
       }
+      if (shooter.damageStaggerActionsRemaining > 0) {
+        robots.set(shooter.id, {
+          ...shooter,
+          damageStaggerActionsRemaining: shooter.damageStaggerActionsRemaining - 1,
+        });
+      }
       finishActive(cursor);
     }
 
     const damagedIds = new Set<string>();
     for (const damage of pendingDamage) {
       const target = robots.get(damage.targetId);
-      if (!target || target.hp <= 0) continue;
-      robots.set(target.id, { ...target, hp: Math.max(0, target.hp - damage.damage) });
+      if (!target) continue;
+      robots.set(target.id, {
+        ...target,
+        hp: Math.max(0, target.hp - damage.damage),
+        damageStaggerActionsRemaining: (rng.nextUint32() & 3) + 1,
+      });
       damagedIds.add(target.id);
       emit(tick, { kind: "damaged", ...damage });
     }
@@ -566,7 +636,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
     if (tick < turnDuration) {
       for (const actor of actors) {
-        const error = startCommand(actor, tick);
+        const error = startAvailableCommand(actor, tick);
         if (error) return error;
       }
     }

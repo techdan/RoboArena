@@ -4,50 +4,52 @@ This is the action-focused execution roadmap from "engine primitives exist" to "
 
 **Audience**: any agent (human or AI) picking up a phase cold. Each phase is self-contained enough to execute independently once dependencies land.
 
-**v1 scope reminder**: human-vs-human hot-seat only, no AI. Survival sport mode
-only. Three postures (Upright, Ducking, Crouching). Stealth rules land with
-visibility; Quick Start does not need to expose every class until a preset
-requires it. Online lobby, other sport modes, AI, audio, production persistence,
-and full help/tutorial systems are deferred.
+**Main-game scope reminder (Phases 1-11.6)**: 2-4 humans on separate
+internet-connected devices play free-for-all Survival, with one Team and one
+unique Side per player. There is no AI. Three postures (Upright, Ducking,
+Crouching) remain in scope. Hot-seat play, multiple Teams on one Side/alliance
+logic, Stealth, and every non-Survival sport begin only after the online
+free-for-all v1 gate. Reserved enum/catalog data for deferred modes must not
+create v1 implementation dependencies.
 
 **MVP trim decisions**:
-- Hot-seat Survival is the v1 finish line. Online lobby is v1.1/post-MVP after resolver, replay, planner, and movie playback are stable.
-- Rubble Two and Rubble Three should be hand-transcribed from DOS coordinate probes before renderer/planner work depends on arena data. Automated extraction is optional later tooling, not an MVP blocker.
-- Projectile timing and moving-target behavior must be clarified before gameplay is called faithful. Phase 3 owns this gate.
-- Scan & Fire trigger/tracking, scan length, and target-speed effects must stay PROPOSED/TBD until the focused DOS tests are run.
-- Full contextual help, first-time hints, Postgres/Supabase, deployment automation, reconnection UX, and observability are post-MVP.
+- Internet-room Survival is the v1 finish line: 2, 3, or 4 human players,
+  separate devices, one Team per player, and unique Sides (1v1, 1v1v1, or
+  1v1v1v1). Hot-seat and allied/multi-Team Sides move to v2.
+- Import Rubble Two and Rubble Three from the verified row-major `.TWN` MAP
+  payloads. Generate home rectangles with the exact dimension thresholds in
+  `src/engine/arena.ts`; Dock is off-field state.
+- Hit/damage lock at fire time. Exact projectile travel duration is renderer
+  presentation tuning and no longer blocks the deterministic gameplay engine.
+- Scan & Fire duration, reacquisition loop, maximum-distance filter, and named
+  repeat intervals are path-confirmed. Seconds is duration only and no separate
+  numeric scan-length/target-speed term reaches live fire. Stable original
+  candidate order is the main-game equal-distance fallback.
+- v1 includes durable asynchronous turns: private planning, ready/lock status,
+  leave-and-return room recovery, independently watched resolved turns,
+  deterministic replay, and a concise post-turn causality log. Accounts, push
+  notifications, full contextual-help corpus, deployment automation, and
+  production observability remain post-v1.
 
 ---
 
 ## 1. Architecture overview
 
-```
-                    ┌──────────────────────────────────────────────┐
-                    │  src/app/  (Next.js 16 routes)               │
-                    │  src/components/  (React UI)                 │
-                    └─────────────────┬────────────────────────────┘
-                                      │ uses
-                ┌─────────────────────┼──────────────────────┐
-                ▼                     ▼                      ▼
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │  src/planner/    │  │  src/renderer/   │  │  src/lib/net/    │
-  │  TurnOrders      │  │  PixiJS event    │  │  WebSocket lobby │
-  │  builder + UI    │  │  timeline player │  │  (post-MVP)     │
-  │  state           │  │                  │  │                  │
-  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-           │ produces            │ consumes            │
-           │ TurnOrders          │ ResolutionEvent[]   │ MatchState
-           │                     │                     │ + TurnOrders
-           ▼                     │                     │
-  ┌────────────────────────────────────────────────────────────────┐
-  │  src/engine/  (pure TypeScript, deterministic, no I/O)         │
-  │                                                                │
-  │  resolveTurn(MatchState, TurnOrders, seed)                     │
-  │    → { nextState: MatchState, events: ResolutionEvent[] }      │
-  │                                                                │
-  │  Primitives: rng, geometry, movement, firing, blast,           │
-  │  visibility, projectiles, command interpretation               │
-  └────────────────────────────────────────────────────────────────┘
+```text
+Browser (one Team/player)                    Authoritative room service
+┌──────────────────────────────┐            ┌────────────────────────────┐
+│ Next.js/React UI             │            │ server/ room phase machine │
+│ ├─ planner: own draft orders │──WSS──────▶│ validate + lock orders     │
+│ ├─ renderer: authorized movie│◀──WSS──────│ visibility projection      │
+│ └─ net: room/rejoin protocol │            │ canonical replay/state     │
+└──────────────┬───────────────┘            └──────────────┬─────────────┘
+               │ shared pure helpers                         │ only resolver
+               ▼                                             ▼ authority
+        ┌─────────────────────────────────────────────────────────────┐
+        │ src/engine/ — pure deterministic TypeScript, no I/O         │
+        │ resolveTurn(MatchState, all TurnOrders, seed)               │
+        │   → { nextState, ResolutionEvent[] }                        │
+        └─────────────────────────────────────────────────────────────┘
 ```
 
 **Boundary rules** (enforced by directory layout, later by ESLint config):
@@ -55,7 +57,9 @@ and full help/tutorial systems are deferred.
 - `src/renderer/` imports `engine/` types and consumes `ResolutionEvent[]`. Doesn't run the engine itself.
 - `src/planner/` imports `engine/` types and produces `TurnOrders`. May call lightweight engine helpers (path validity, scan-cone math) but does not run a full turn.
 - `src/app/`, `src/components/` are React UI. They orchestrate planner/renderer.
-- `src/lib/net/` is the post-MVP multiplayer transport layer (Phase 12).
+- `src/lib/net/` is the v1 room protocol and WebSocket client. The server is
+  authoritative: clients never resolve shared turns or receive opponents'
+  unsubmitted plans or hidden state.
 
 **Determinism contract**: every probabilistic decision in the engine goes through a seedable RNG (`createRng(seed)`). Replay = `{ initialMatchState, seed, turnOrders[] }` → identical event stream on any machine.
 
@@ -86,7 +90,7 @@ RoboArena/
 │   ├── ai/                 (deferred — AI = post-v1)
 │   ├── lib/
 │   │   ├── arenas/         arena .json files (Rubble Two/Three transcribed)
-│   │   ├── net/            WebSocket lobby client + protocol (post-MVP)
+│   │   ├── net/            v1 WebSocket room client + shared protocol
 │   │   └── replay/         save/load helpers for browser
 │   ├── app/                Next.js 16 routes
 │   │   ├── setup/
@@ -94,7 +98,7 @@ RoboArena/
 │   │   ├── replay/[id]/
 │   │   └── layout.tsx
 │   └── components/         React UI components
-├── server/                 (post-MVP Phase 12) tiny Node WebSocket relay
+├── server/                 v1 authoritative room + resolver service
 ├── docs/                   specs and plans
 ├── screenshots/            DOS reference captures
 ├── references/             source matrix
@@ -114,9 +118,9 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Test runner | Vitest 2.1 | Already configured. Fast, ESM-native, plays well with pure-TS engine. |
 | Linter | ESLint (flat config) | Standard for Next.js; large plugin ecosystem; widely understood by AI coding agents. |
 | Formatter | Prettier | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later. |
-| E2E test | Playwright | Deferred to Phase 11 (after planner UI is partly working). |
+| E2E test | Playwright | Added with the room flow, then expanded through the full 2-4 player online turn loop. |
 | CI | GitHub Actions | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands. |
-| Deploy | Vercel | Default for Next.js 16. Preview deploys per branch. Post-MVP WebSocket server deploys separately (Vercel doesn't support persistent WS — see Phase 12 §"Hosting"). |
+| Deploy | Web client + long-lived WebSocket service | Select and validate hosting in Phase 8; the v1 server must support persistent connections and one authoritative room process. |
 | Branching | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed. |
 | Commit style | Conventional-ish; first line ≤ 72 chars; bodies describe *why* + tests. Co-authored where AI-paired. |
 
@@ -220,7 +224,7 @@ tables, and synchronization of `docs/spec.md` with code/tests.
 - `package.json` — add `"engines": { "node": ">=22" }`; new scripts: `lint`,
   `lint:fix`, `format`, `format:check`. Dev/build/start wait for Next.js.
 - `.github/workflows/ci.yml` — typecheck + lint + test on push (Next.js build joins when UI lands)
-- `.husky/pre-commit` + `lint-staged` config — optional post-MVP convenience; do not block Phase 1.5 on hooks
+- `.husky/pre-commit` + `lint-staged` config — optional post-v1 convenience; do not block Phase 1.5 on hooks
 
 **Acceptance criteria**:
 - [x] `npm run lint` green on existing engine code
@@ -274,7 +278,8 @@ export function resolveTurn(input: {
 ```
 
 **Tests required**:
-- single-robot move along open path → emits `move-step` events at correct ticks with alternating step costs
+- single-robot move along open path → emits `move-step` events at exact fixed
+  30/40-tick one-/two-tile boundaries
 - posture change → `posture-changed` event at the realigned completion boundary
 - scan rotation → `scan-rotated` event at the realigned completion boundary
 - 2 robots stack on same tile (no collision) — both end positions correct
@@ -290,74 +295,95 @@ export function resolveTurn(input: {
 - [x] Determinism: same `(state, orders, seed)` → byte-equal `events` and `nextState` across runs
 - [x] All commands in `RobotCommandSegment` union are handled or explicitly rejected with typed errors
 - [x] Robot HP can never go negative or above `armor`
-- [x] 23 focused tests cover single-robot, multi-robot, and edge cases
+- [x] 33 focused command/resolver tests cover single-robot, multi-robot, and edge cases
 - [x] `npm test`, typecheck, lint, and format-check green locally
 
 **Risks**:
-- Stride parity edge cases (when does it reset? user observed quirks). Plan: ship strict alternation, document deviations as known.
-- Multi-step move chunking: planner submits a `move` segment with a path; resolver must charge alternating costs across the path. Risk: off-by-one on parity at segment boundaries.
+- Multi-step move chunking: planner submits a `move` segment with a path;
+  resolver charges 30 ticks for each one-tile command and 40 for each two-tile
+  command. **Closed:** `chunkMovementPath` pairs two unit steps only when both
+  entered tiles are full-speed Open Ground; Rough/Bush/Low-wall retain
+  30-tick one-tile waypoints. Encoded two-tile steps retain their selected
+  intermediate `via` waypoint, and the resolver rejects imported steps whose
+  exact route crosses slow or blocked terrain.
 - Tick assignment: if a command segment spans multiple ticks, where exactly do its events emit? Convention: events emit at tick the action *completes* (e.g. arrival tile), with `tick: number` the integer index.
 
 **Effort**: L. This is the keystone phase.
 
 ---
 
-### Phase 3 — Projectiles in flight [⬜ MVP GATE]
+### Phase 3 — Projectile and blast event semantics [⬜ MVP GATE]
 
-**Goal**: model multi-tick projectile presentation and impact timing. Aim & Fire
-pre-rolls hit/damage when fire resolves, matching the binary, then carries that
-result on a `TileProjectile` until its impact boundary. This replaces the Phase
-2 immediate-impact scaffold without adding in-flight dodging.
+**Goal**: add missile/grenade blast resolution and emit deterministic projectile
+launch/impact cues. Aim & Fire locks hit and damage when fire resolves. The
+renderer may animate travel afterward, but movement during that animation never
+rerolls, retargets, or dodges a locked result.
 
 **Dependencies**: Phase 2.
 
 **Files**:
-- `src/engine/projectiles.ts` — `advanceProjectiles(state, tick) → { hits, blastImpacts, stillInFlight }`
-- `src/engine/types.ts` — extend `MatchState` with `projectilesInFlight: Projectile[]` and `Projectile` with `launchTick: number`
-- `src/engine/resolver.ts` — call `advanceProjectiles` per tick
-- `src/engine/projectiles.test.ts`
+- `src/engine/resolver.ts` — resolve the locked direct/blast result and emit
+  launch/impact presentation events at a stable command boundary
+- `src/engine/blast.ts` — apply named Missile category 1 and, when later
+  granted by setup, Grenade category 0
+- `src/engine/projectiles.test.ts` — event/result-lock semantics
 
-**Empirical gate before locking values**: run the priority projectile timing test. If the DOS test is skipped, mark projectile speed PROPOSED and keep the implementation table easy to tune.
+Do not add a gameplay `projectileTilesPerTick` constant. Visual travel speed is
+a Phase 7 renderer setting; the original binary confirms result locking but the
+exact screen duration is not required state for replay determinism.
 
-**Per-weapon projectile speeds** (PROPOSED, tunable):
-- Bullet: use a tile-by-tile schedule; exact ticks-per-tile TBD by DOS test
-- Missile / Grenade: slower visible schedule; exact ticks-per-tile TBD by DOS test
+**Strict-impact decision analysis (not yet adopted):**
 
-These belong in `WEAPON_DEFINITIONS` as `projectileTilesPerTick: number` (add to Phase 1 catalog as part of this phase's setup).
+| Model | State mutation | Strength | Cost / fidelity risk |
+|---|---|---|---|
+| Current MVP | fire boundary | simplest resolver and replay | movie can show a projectile travelling toward a robot already damaged/destroyed; later same-turn commands differ from impact-authoritative play |
+| Strict original-timed | verified original impact tick | strongest parity and audiovisual causality | exact bullet/missile/grenade travel ticks are not yet audited; pending-impact queue and simultaneous-impact rules required |
+| Recommended hybrid | fire-time roll, clone-defined deterministic impact tick | causal movie, shooter death cannot cancel a locked shot, renderer and engine share one event authority | deliberate timing deviation until original travel constants are traced |
 
-**Public API contract**:
-```ts
-export function advanceProjectiles(input: {
-  projectiles: readonly Projectile[];
-  state: MatchState;
-  tick: number;
-  rng: Rng;
-}): {
-  remaining: Projectile[];
-  events: ResolutionEvent[];
-};
-```
+Recommendation: use the hybrid if causal projectile timing is important enough
+to affect tactics; otherwise keep the current MVP rule. In either case, hit,
+damage, blast center, and target tile lock at fire time. Never reroll, retarget,
+or let renderer completion mutate engine state. If hybrid is approved, revise
+this phase before implementation to add `PendingImpact`, per-projectile travel
+constants, impact batching, and tests for actions occurring between fire and
+impact.
 
 **Tests required**:
-- bullet at d=4 launched at tick 50 impacts at tick 54 (1 tile/tick)
-- missile at d=8 launched at tick 50 impacts at tick 66 (0.5 tile/tick)
 - target moves after the fire-time roll → pre-rolled result is unchanged
-- destroying the shooter after launch does not cancel the projectile
-- missile blast triggers `resolveBlast` at impact tick
-- two missiles collide at the same impact tile → both blast effects apply (simultaneous resolution)
+- destroying the shooter after fire does not cancel the locked result
+- missile triggers named category-1 `resolveBlast` at the command boundary
+- simultaneous missiles both apply in canonical batched order
+- launch/impact presentation events are deterministic and do not alter state
 
 **Risks**:
-- Floating-point creep: projectile position must be tracked in *integer fractional ticks* (e.g., `tilesPerTick * 2 = whole number`) or via a tile-by-tile schedule, never as floats. Use `path: TileCoord[]` + `impactTick: number` to keep replay deterministic.
+- Presentation events must never become a second combat authority. Engine state
+  changes only from the locked resolver result.
 
 **Effort**: M.
 
 ---
 
-### Phase 4 — Scan & Fire mode + visibility & stealth [⬜ MVP GATE]
+### Phase 4 — Scan & Fire mode + ordinary visibility [⬜ MVP GATE]
 
-**Goal**: implement the "wait-and-shoot" Scan & Fire firing mode and per-team visibility resolution including the Stealth class rule.
+**Goal**: implement the "wait-and-shoot" Scan & Fire firing mode and ordinary
+per-team visibility for the four main-game Survival classes. Stealth is an
+explicit post-main-game phase and must not be implemented here.
 
-Before locking behavior, run the focused Scan & Fire DOS tests. Keep these as explicit TBDs until then: trigger tick, target selection when multiple enemies enter the cone, whether Scan & Fire tracks target tile through impact, ammo consumption timing, and whether scan length or target speed changes hit probability.
+The static trace locks the implementation shape: evaluate at the scheduled
+command tick, reacquire after each named repeat interval, filter by maximum
+distance, choose nearest adjusted-distance candidate, decrement ammo when the
+shot is emitted, and lock the aimed tile/result at fire time (no impact-time
+tracking). The final equal-distance priority value's UI label remains isolated;
+use a stable original-order tie-break until it is named. The Seconds field is
+duration only; no separate numeric scan-length or target-speed term reaches the
+live hit resolver beyond the confirmed off-aimed-tile halving.
+
+For a stationary scanner versus a runner, movement completion is processed
+before a firing opportunity at the same tick. Acquisition observes the
+runner's resulting tile and current distance/alignment/terrain/cover. There is
+no speed statistic. A runner can cross the cone between weapon opportunities
+without being acquired; after acquisition, leaving later does not reroll the
+locked shot.
 
 These are bundled because both need scan-cone calculations against moving targets per tick. Splitting into two phases would duplicate the per-tick visibility-against-cone logic.
 
@@ -365,18 +391,12 @@ These are bundled because both need scan-cone calculations against moving target
 
 **Files**:
 - `src/engine/visibility.ts` — `computeVisibility(state, observingTeamId): VisibilityState` — set of tiles + visible-enemy-robot-ids, plus last-known markers
-- `src/engine/scanAndFire.ts` — per-tick check: does any enemy enter scan range × cone of a robot in S&F mode? if yes, emit `TrackingProjectile`
-- `src/engine/stealth.ts` — `isStealthVisibleTo(stealthRobot, observerRobot, didMoveThisTick): boolean` — Compute! review rule
+- `src/engine/scanAndFire.ts` — per-tick check: does any enemy enter scan range
+  × cone of a robot in S&F mode? If yes, lock its current tile/result and emit
+  the normal projectile presentation event
 - `src/engine/resolver.ts` — extend per-tick to call S&F watchdog and update visibility
 - `src/engine/types.ts` — add `VisibilityState`, `RobotState.scanAndFireConfig?: { weapon, maxDistance, secondsRemaining }`
 - tests
-
-**Stealth visibility rule** (locked from Compute! review):
-```ts
-isVisible(stealth, observer, stealthMovedThisTick) =
-  observer can see stealth's tile AND
-  (stealthMovedThisTick OR chebyshevDistance(observer.tile, stealth.tile) ≤ 1)
-```
 
 Last-known X markers: at the *end of each turn*, for every team, record tiles where they last saw any enemy that's no longer visible to them. Engine emits `last-known-marker` events; renderer draws Xs in Edit mode of the next turn.
 
@@ -389,7 +409,6 @@ export interface VisibilityState {
 }
 
 export function computeVisibility(state: MatchState, teamId: string): VisibilityState;
-export function isStealthVisibleTo(stealth, observer, movedThisTick): boolean;
 ```
 
 **Tests required**:
@@ -397,10 +416,8 @@ export function isStealthVisibleTo(stealth, observer, movedThisTick): boolean;
 - target behind a wall → NOT visible
 - target behind a low wall → still visible (low walls don't block sight, only weapons)
 - target behind a bush → NOT visible if observer's view passes through the bush AND target is on the bush (matches "blocks visibility when on tile")
-- stealth stationary at d=5 → invisible
-- stealth stationary, observer adjacent (d=1) → visible
-- stealth moves on tick X → visible to anyone with LoS during tick X
-- Scan & Fire watchdog: enemy enters scan cone at tick 80 → `TrackingProjectile` launched
+- Scan & Fire watchdog: enemy enters scan cone at tick 80 → current target tile
+  and result lock at tick 80
 - S&F runs out of `secondsRemaining` → mode terminates, no shot fired
 
 **Risks**:
@@ -445,16 +462,17 @@ export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstD
 
 **Goal**: initialize Next.js 16 app, integrate PixiJS, render an arena (tiles, walls, bushes, etc.) statically. No robots, no animation yet. Just "I can load the page and see Rubble Three".
 
-**Arena data policy**: v1 uses hand-transcribed Rubble Two and Rubble Three JSON from DOS coordinate probes. Automated screenshot extraction is deferred tooling; do not block the renderer on classifier work.
+**Arena data policy**: generate Rubble Two and Rubble Three JSON from the
+verified row-major `.TWN` MAP payload (`tiles[y][x]`; no flip/transpose).
+Generate homes with `createHomeAreas(width,height)`; Dock remains off-field.
+Keep a visual review page as import QA.
 
 **Dependencies**: Phase 1 (types).
 
 **Files**:
 - `next.config.ts`, `app/layout.tsx`, `app/page.tsx` (landing)
-- `tools/extract-arena.ts` — deferred optional tooling, not part of the MVP path
-- `tools/review-arena/` — deferred optional tooling
-- `screenshots/arena-extraction/` — optional reference captures if extraction tooling is revived later
-- `src/lib/arenas/` — `rubble-two.json`, `rubble-three.json` — hand-transcribed from DOS coordinate probes
+- `tools/re/export_data.py` — source-locked `.TWN` MAP exporter
+- `src/lib/arenas/` — generated `rubble-two.json`, `rubble-three.json`
 - `src/lib/arenas/index.ts` — `loadArena(name): Promise<Arena>` + JSON schema validator
 - `src/renderer/PixiArena.tsx` — React component wrapping a Pixi `Application` that renders an `Arena`
 - `src/renderer/assets.ts` — SVG asset registry (terrain × 7 + crate; see §5 Asset inventory)
@@ -462,7 +480,8 @@ export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstD
 - `src/components/ArenaPreview.tsx` — `<ArenaPreview arenaName="rubble-three" />`
 - `src/app/preview/page.tsx` — temporary debug page that shows all extracted arenas side-by-side
 
-**Arena transcription**: see `docs/priority-tests.md` for the manual coordinate-probe workflow. A simple CSV/grid transcription is sufficient for v1; extraction scripts and companion review tools are post-MVP.
+**Arena verification**: compare generated dimensions/checksums with the claim
+ledger and review the rendered map once. Do not hand-transcribe terrain.
 
 **Art**: terrain SVGs are the first deliverable from §5 Asset inventory. 7 simple SVGs (open / rough / low-wall / wall / bush / crevice / outer-wall) plus the crate obstacle. Hand-author or AI-generate to a coherent palette.
 
@@ -497,7 +516,10 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 
 ### Phase 7 — Movie playback [⬜]
 
-**Goal**: render robots and animate `ResolutionEvent[]` as a movie — play, pause, step forward/backward, change speed. Match the original's transport controls.
+**Goal**: render robots and animate `ResolutionEvent[]` as a movie — play,
+pause, scrub, step forward/backward, compress idle spans, and select
+0.5x/1x/2x/4x speed. Preserve the original's readable movie idea while making
+presentation time independent from deterministic simulation ticks.
 
 **Dependencies**: Phases 1, 2 (so we have `MatchState` + events to render).
 
@@ -508,7 +530,7 @@ export function loadArena(name: ArenaName): Promise<Arena>;
 - `src/renderer/effects/` — sprite-life-cycle helpers for explosions, smoke trails, blast waves
 - `src/components/MovieControls.tsx` — play / pause / step / speed controls (mirrors original DOS transport bar)
 - `src/app/movie/[id]/page.tsx` — debug route that runs a canned `ReplayLog` from disk
-- `public/assets/robots/` — 15 robot SVG states (5 classes × 3 postures), or a
+- `public/assets/robots/` — 12 robot SVG states (4 classes × 3 postures), or a
   smaller layered equivalent, plus projectile/effect sprites per §5
 
 **Animation pipeline**: GSAP for tweens, Pixi for sprite + container management. One handler per `ResolutionEvent.kind` per the matrix in §5. Each handler returns a `Promise<void>` so the player can await visual completion if needed, but the playback clock advances on engine ticks (determinism) — animations are decorative.
@@ -526,11 +548,14 @@ export function MoviePlayer({
 - step forward through a 10-tick movie → final robot positions match `nextState.teams[*].robots[*].position`
 - step backward returns the player to the previous state correctly (idempotency)
 - speed multiplier doesn't change which events fire, only their wall-clock pacing
+- idle compression and scrubbing reach the same tick snapshots as uninterrupted
+  playback; neither can affect server phase or game outcome
 
 **Acceptance criteria**:
 - [ ] Hand-crafted `ResolutionEvent[]` sequence (e.g., a robot walks 5 tiles east) renders correctly
 - [ ] Speech-bubble replacement (small explosion sprite on hit, larger on destroyed) visible
-- [ ] Play / pause / step / speed all work; no off-by-one on step direction
+- [ ] Play / pause / scrub / step / speed / skip-idle all work; no off-by-one on
+      step direction
 
 **Risks**:
 - React state for "current tick" + Pixi's animation loop → easy to desync. Use a single source of truth (React state for tick; Pixi just reads).
@@ -540,37 +565,71 @@ export function MoviePlayer({
 
 ---
 
-### Phase 8 — Match setup UI [⬜]
+### Phase 8 — Online room foundation + match setup [⬜]
 
-**Goal**: implement the Quick Start screen needed to launch a two-team hot-seat Survival match. v1 needs team names/colors, home corners, Beginner formation, game length, and Rubble arena selection. Custom Game, 2-4 team setup, AI brain selection, point-buy roster editing, and Team Rating budgets are post-MVP.
+**Goal**: establish the internet-first v1 architecture before planner work. A
+host creates a private room, 1-3 other humans join from separate devices, and
+the room starts a 2-4 player free-for-all Survival match. Each participant owns
+exactly one Team and every Team has a unique Side.
 
-**Dependencies**: Phases 1, 6.
+**Dependencies**: Phases 1, 5, 6.
 
 **Files**:
-- `src/app/page.tsx` — main menu (Quick Start / Replay)
-- `src/app/setup/quickstart/page.tsx`
-- `src/app/setup/custom/page.tsx` — post-MVP
-- `src/components/setup/TeamRow.tsx` — team name / color / side / home area
-- `src/components/setup/RobotPicker.tsx` — post-MVP class picker with point-buy budget bar
-- `src/lib/setup/validate.ts` — `validateMatchConfig(cfg): { ok, errors }`
+- `server/index.ts` — long-lived HTTP/WebSocket room service
+- `server/rooms.ts` — authoritative room lifecycle and participant ownership
+- `server/storage.ts` — transactional durable room/match/replay persistence
+- `src/lib/net/protocol.ts` — versioned, runtime-validated messages
+- `src/lib/net/client.ts` — typed WebSocket client and connection state
+- `src/app/page.tsx` — Create Room / Join Room / Replay
+- `src/app/room/[code]/page.tsx` — room roster, setup, readiness, share link
+- `src/components/setup/TeamRow.tsx` — own team name/color and assigned slot
+- `src/lib/setup/validate.ts` — shared `GameConfig` validation
 
-**UX cues from screenshots** (preserve the layout but modernize):
-- Quick Start: 2 columns, sport / formation / length / arena dropdowns on left; Team Roster on right
-- Custom Game: post-MVP; team list at top with Rating column, robot list below with class+name editable
-- Use modern Tailwind v4 styling, large touch targets, keyboard navigation
+**Room contract**:
+- short room code plus shareable deep link; no account required;
+- opaque participant/rejoin token proves ownership of exactly one Team and is
+  stored only in that player's browser;
+- the home page remembers room URLs/tokens locally and shows asynchronous room
+  status on return; closing the tab never withdraws locked orders;
+- 2-4 players, unique names/colors, and at least two players; the server assigns
+  unique Sides and non-compacting Home slots when the match starts;
+- host chooses Survival length, Rubble arena, and supported formation; all
+  players can see configuration and ready status;
+- starting freezes configuration and creates the canonical server MatchState;
+- server is the only authority for room membership, match state, seeds, order
+  validation, resolution, visibility filtering, and turn advancement.
+
+**Protocol minimum**:
+`CreateRoom`, `JoinRoom`, `ResumeRoom`, `UpdatePlayer`, `UpdateConfig`, `SetReady`,
+`StartMatch`, `RoomSnapshot`, `ProtocolError`. Every message carries a protocol
+version and request ID; every mutation is authenticated by the rejoin token.
 
 **Tests required**:
-- form validation: empty team name rejected with helpful message
-- Melee selects Rubble Two and the 4-robot Beginner roster
-- Battle selects Rubble Three and the 6-robot Beginner roster
-- unsupported options are hidden or disabled with a clear post-MVP label
+- runtime schemas reject unknown versions, oversized text, invalid enum values,
+  duplicate Sides/colors, and a fifth player;
+- integration test: four clients join one room, receive the same public room
+  snapshot, ready, start, and receive unique server-assigned Home slots/Sides;
+- a non-host cannot alter host configuration or start early;
+- refresh/reconnect with the valid token restores the same player seat; a
+  different token cannot claim it;
+- restart the room service after setup and after locked orders; durable state,
+  ownership, and request idempotency recover without duplicate resolution;
+- Melee/Battle defaults select the verified arena and formation data.
 
 **Acceptance criteria**:
-- [ ] User can configure a 2-team Survival Beginner Rubble match and click Start Game
-- [ ] State saved to URL or localStorage so refresh doesn't lose progress
-- [ ] All clickable elements have `cursor-pointer` (per CLAUDE.md project rule)
+- [ ] Two, three, or four browsers can create/join a room by URL/code
+- [ ] Each browser controls one Team; v1 exposes no alliance/Side-sharing UI
+- [ ] Starting produces one canonical server match and navigates every client
+      to its private planning view
+- [ ] All clickable controls are keyboard reachable and use `cursor-pointer`
 
-**Effort**: M.
+**Hosting gate**: before the phase closes, deploy a test instance on a platform
+that supports long-lived WSS connections plus durable storage and verify two
+real networks/devices. Keep each room owned by one server process in v1;
+cross-process distribution is post-v1, but ordinary process/deploy restart
+recovery is required for asynchronous play.
+
+**Effort**: L.
 
 ---
 
@@ -588,21 +647,33 @@ export function MoviePlayer({
 - `src/planner/state.ts` — Zustand store (or Context) for current `TurnOrders` being built
 - `src/planner/pathfind.ts` — A* on the arena tile grid for movement paths
 - `src/planner/segments.ts` — helpers to append/edit/delete `RobotCommandSegment`s
+- `src/planner/history.ts` — bounded undo/redo history for the local draft
 
 **Tests required**:
 - A* pathfinding: valid path between two open tiles, around a wall, respecting posture restrictions
 - click a wall tile → cursor shows "blocked" state (mirrors DOS UX)
 - click outside Home Area on first move → "out of home" error
-- timeline updates correctly when adding / deleting commands; stride-parity computed live
+- timeline updates correctly when adding/deleting commands using fixed 30/40
+  tick one-/two-tile move costs
+- route compression calls the shared `chunkMovementPath`: Open+Open may become
+  one 40-tick double, while entering Rough/Bush/Low-wall retains a 30-tick
+  single; include straight, mixed, and diagonal route tests
+- undo/redo restores byte-equivalent orders and projected positions
+- server snapshots never overwrite a newer unsent local draft without an
+  explicit conflict/recovery path
 
 **Acceptance criteria**:
 - [ ] Player can deploy a robot, walk it across the arena, change posture, set scan direction, all visible on the timeline
 - [ ] Multi-robot timeline preview works: planning robot B at tick X shows robot A's projected position at tick X (DOS-confirmed UX)
 - [ ] "Out of home", "blocked", "out of bounds" cursor states all surface
+- [ ] Every segment shows exact start/end ticks, route cost, remaining horizon,
+      and whether it creates a scan opportunity
+- [ ] Commands remain editable; undo/redo works until orders are locked
 
 **Risks**:
 - Pixi click handling vs. React state — same risk as Phase 7
-- A* with stride-parity-aware costs: if user wants to chunk into doubles, planner needs to find the cheapest stride pattern. v1 can use single-tile A* and skip optimization.
+- A* returns unit waypoints; shared exact chunking then minimizes fixed-cost
+  singles/doubles without jumping over slow terrain or inventing stride state.
 
 **Effort**: L.
 
@@ -624,129 +695,254 @@ export function MoviePlayer({
 - Aim & Fire dialog: target outside cone shows "angle blocked"; target out of weapon range shows "out of range"
 - Scan & Fire dialog: Max Distance defaults to weapon's `scanFireMaxDistance`; Seconds defaults to remaining-budget
 - Ctrl+Shift+click on target tile creates a `repeat: true` Aim & Fire segment
+- hit preview uses only information currently authorized for that player; it
+  never reveals an unseen robot, hidden enemy order, or unrevealed RNG result
 
 **Acceptance criteria**:
 - [ ] Both fire modes can be programmed; commands appear on timeline with correct durations
 - [ ] Visual scan-cone overlay (black/grey/blocked zones) renders during targeting
+- [ ] Targeting explains deterministic geometry/cover factors and labels
+      probabilistic outcomes as estimates, without previewing the actual roll
 
 **Effort**: M.
 
 ---
 
-### Phase 11 — End-turn flow + Team Data + persistent panels [⬜]
+### Phase 11 — Authoritative online turn loop + results [⬜]
 
-**Goal**: glue the match loop together. Each player edits their team → end turn → resolve → movie → next turn. Persistent Team Data panel (per the user direction: replace modal with side panel since we have screen real estate). Final Ceremony at end of match.
+**Goal**: complete the asynchronous private plan → lock → leave if desired →
+server resolve → return/watch → next-plan loop. The server receives immutable
+orders, resolves exactly once after every player locks, stores the canonical
+result durably, and sends each client only the state/events that player is
+allowed to know.
 
-**Dependencies**: Phases 7, 9, 10.
+**Dependencies**: Phases 7-10.
 
 **Files**:
+- `server/matches.ts` — authoritative phase machine, validation, resolution
+- `server/view.ts` — participant-specific state/event projection
+- `src/app/match/[id]/edit/page.tsx`
 - `src/app/match/[id]/movie/page.tsx`
-- `src/app/match/[id]/results/page.tsx` — Final Ceremony screen
-- `src/components/match/TeamDataPanel.tsx` — sidebar: per-team HP + Score, per-robot Type/HP/Position
-- `src/components/match/EndTurnDialog.tsx` — "Are you sure you want to generate the turn?"
-- `src/match/loop.ts` — orchestrator: edit phase → resolve → movie → loop
+- `src/app/match/[id]/results/page.tsx`
+- `src/components/match/TeamDataPanel.tsx` — authorized HP/score/contact data
+- `src/components/match/ReadyPanel.tsx` — submitted/waiting status only
+- `src/components/match/RoomStatus.tsx` — your-turn/waiting/result-ready state
+- `src/components/match/ConnectionOverlay.tsx` — reconnect/resume UX
+- `src/components/match/TurnExplanation.tsx` — concise post-turn causality log
+- `src/engine/survival.ts` — last-Side-standing and exact ceremony scoring
+
+**Turn protocol**:
+- a client may submit/replace its own draft until `LockOrders`; after lock the
+  orders are immutable and only ready/not-ready is public;
+- the server validates ownership, command legality, budget, and current phase;
+- after all locks, the server draws/records the turn seed, resolves once, stores
+  the full canonical replay entry, and projects authorized results per player;
+- movie playback is local and does not control simulation. Each client may
+  pause, step, scrub, or select 0.5x/1x/2x/4x. Resolution opens turn N+1 on the
+  server immediately; `TurnResultAcknowledged(N)` unlocks only that player's
+  N+1 planner, so playback never needs a synchronized global gate;
+- the player may close the app after locking. Resume sends the canonical room
+  turn, authorized snapshot, own locked/draft state, every unseen resolved turn,
+  and playback position. No AI takes over an absent player in v1;
+- the home/room status view derives `your turn`, `waiting for N`, `turn ready`,
+  or `finished` from durable server state. Optional push/email notification is
+  not required for v1.
+
+**Security/hidden-information gates**:
+- never broadcast opponents' orders before or after resolution unless an event
+  made the action observable under the visibility rules;
+- never send full enemy state as a convenient client payload;
+- do not disclose the current turn seed before resolution; validate all message
+  sizes and rates; reject duplicate/stale requests idempotently;
+- clients may simulate planner hints locally but never author shared outcomes.
+
+**Tests required**:
+- two-client integration: private drafts remain private, both lock, disconnect,
+  server emits one canonical resolution, and each returns/watches/plans on an
+  independent schedule;
+- simultaneous duplicate submissions/resolution triggers are idempotent;
+- close/reopen during planning, waiting, and movie restores the correct seat,
+  unseen-result queue, and per-player acknowledgement without advancing twice;
+- service restart after one lock and after resolution restores the room and
+  never duplicates RNG consumption, events, score, or replay entries;
+- visibility projection snapshots prove no unseen robot/order/seed leaks;
+- playback speeds and skip-idle produce the same final rendered state;
+- exported replay re-runs to byte-identical canonical events.
 
 **Acceptance criteria**:
-- [ ] Full hot-seat match playable end-to-end
-- [ ] Final Ceremony shows points, can return to main menu
-- [ ] Persistent Team Data panel updates live
-- [ ] Movie save/load works (via Phase 5 replay format)
+- [ ] A complete two-player internet match is playable end to end
+- [ ] Final Ceremony uses exact Survival points and returns to the room/menu
+- [ ] Ready state reveals no plan details; leave/return recovers current progress
+- [ ] A player can submit, close the browser, later see “turn ready,” watch it,
+      and submit the next turn without requiring simultaneous presence
+- [ ] Persistent Team Data and explanation panels show only authorized facts
+- [ ] Replay export/load works through the Phase 5 format
 
-**Effort**: M.
+**Effort**: XL.
 
-**Note**: this phase + Phase 9 + Phase 10 + Phase 6 + Phase 7 = a playable hot-seat MVP. Consider a soft-launch internal alpha at this point.
+**Milestone**: this is the two-player online vertical-slice alpha. It is not the
+v1 finish line until Phase 11.6 proves three- and four-player free-for-all play.
 
 ---
 
-### Phase 11.5 — Onboarding, contextual help, tooltips [⏸ POST-MVP]
+### Phase 11.5 — v1 explainability, onboarding, and replay UX [⬜]
 
-**Goal**: post-MVP help system. For v1, ship only minimal labels/tooltips needed to complete a hot-seat match.
+**Goal**: make the simultaneous-programming game understandable without
+changing its combat balance. Ship the high-value slice in v1; defer the large
+encyclopedic help corpus.
 
 **Dependencies**: Phases 8, 9, 10, 11 (so the things being explained exist).
 
 **Files** (full list in §10):
-- `src/components/help/Tooltip.tsx`, `HelpDialog.tsx`, `HelpCursorToggle.tsx`, `FirstTimeHint.tsx`, `HelpProvider.tsx`
+- `src/components/help/Tooltip.tsx`, `FirstTimeHint.tsx`, `HelpProvider.tsx`
 - `src/state/useHelpStore.ts` (with localStorage persistence)
-- `src/lib/help/topics/*.md` — markdown content per topic
-- `src/app/help/[topic]/page.tsx` — static help routes
-- `public/assets/help/` — sprites + screenshots embedded in dialogs
+- `src/components/match/TurnExplanation.tsx`
+- `src/components/replay/ReplayScrubber.tsx`, `EventInspector.tsx`
+- `src/lib/explain/events.ts` — engine-event-to-human-cause projection
 
 **Acceptance criteria**:
-- [ ] `?` key toggles help cursor mode; click any tile → help dialog with content (post-MVP)
-- [ ] Every clickable control in the planner / setup has a tooltip
-- [ ] First-time entry to Edit Mode shows the "Click to plan a move; Shift+click for scan direction" hint, dismissible, never shown again
-- [ ] `/help/bushes` (and ~20 other topics) renders correctly with sprite + description
+- [ ] Every planner/setup control has a concise tooltip and keyboard focus state
+- [ ] First planning visit teaches move, scan, timeline, lock, and hidden-order
+      concepts; hints are dismissible and do not recur
+- [ ] The timeline exposes exact tick costs, slow-terrain route boundaries,
+      remaining horizon, and scan/fire opportunity windows
+- [ ] After a turn, a player can answer “why did this hit/miss/damage happen?”
+      from authorized event causes without seeing hidden information
+- [ ] Replay viewer supports scrub, step, speed, idle compression, event filter,
+      and export of the deterministic replay file
+- [ ] Full topic pages, help cursor, and illustrated manual remain explicitly v2+
 
 **Effort**: M.
 
 ---
 
-### Phase 12 — Online lobby (WebSocket relay) [⏸ POST-MVP / v1.1]
+### Phase 11.6 — Three-/four-player online FFA hardening [⬜ MVP GATE]
 
-**Goal**: post-MVP remote play. One player creates a lobby with a 6-character code; the other joins by code. Server is a tiny Node WebSocket relay that holds match state and pumps `TurnOrders` between clients. Server runs the engine to prevent cheating (server-authoritative resolution).
+**Goal**: extend the proven two-player online loop to three and four independent
+human players. v1 supports only unique Sides: 1v1v1 and 1v1v1v1. The audited
+alliance rules below are preserved for v2 but do not create v1 UI/protocol paths.
 
-**Dependencies**: Phases 1-11 and a stable replay format from real hot-seat play.
+**Original-code parity gates — ✅ CLOSED 2026-07-15**:
 
-**Files**:
-- `server/index.ts` — Node WebSocket server (using `ws` package). Routes: `/lobby/create`, `/lobby/join/:code`, `/match/:id` (WS).
-- `src/lib/net/client.ts` — typed WebSocket client
-- `src/lib/net/protocol.ts` — message schemas (host / join / submit-orders / turn-resolved / disconnect)
-- `src/app/(lobby)/host/page.tsx` — create lobby, share code
-- `src/app/(lobby)/join/page.tsx` — enter code, join
+- `+0x28` is Side: direct fire and Scan & Fire exclude same-Side Teams;
+- explosives still damage same-Side allies;
+- allied robots are always visible, but enemy contacts and last-known markers
+  remain per Team and are not pooled across the Side;
+- each Team contributes its base/robot/survival points, then the Final Ceremony
+  aggregates the total by Side and repeats it on every allied Team row;
+- canonical actor/candidate order is non-compacting Team-box/Home-slot order,
+  then roster order;
+- Team Name boxes map NW/NE/SE/SW even when some boxes are empty.
 
-**Hosting**: Vercel doesn't support persistent WebSockets. Options:
-- **Railway** or **Fly.io** for the WebSocket server (simple Node deploy)
-- Or **Vercel Edge Functions** + Durable Objects (Cloudflare alternative) for serverless WS — more complex
-- Default: Railway. Single small server handles many lobbies (each lobby ≪ 1 KB state).
+**v1 implementation work**:
 
-**Protocol sketch**:
-```
-client → server: HostLobby { config: GameConfig }
-server → client: LobbyCreated { code: 'ABC123' }
-client → server: JoinLobby { code }
-server → both:   LobbyReady { hostTeam, joinerTeam, matchId }
-client → server: SubmitTurnOrders { matchId, orders }
-server (when both submitted): runs resolveTurn, sends TurnResolved { events, nextState } to both
-client → server: Disconnect
-```
+- carry the engine's explicit `homeSlot`/home-corner assignment through setup,
+  persistence, planner, and replay state; never derive it from compacted
+  `teams[]` index;
+- require one unique Side per connected player and reject 2v2/3v1/allied
+  configurations in the v1 room validator;
+- keep every player's orders and hidden information private while exposing only
+  connection and ready/locked status;
+- implement four per-Team enemy-contact/last-known visibility sets; exercise
+  four Home Areas, four-team deployment,
+  crossfire, simultaneous elimination, draw, last-Side-standing, replay, and
+  ceremony flows end to end.
+- test staggered asynchronous submission, leave/return, per-player unseen-turn
+  acknowledgement, resignation, and abandoned-room handling with three and four
+  clients, including nonadjacent Home slots.
 
-**Tests required**:
-- unit-test `protocol.ts` schemas (zod or similar)
-- integration: spin up server in test, two clients connect, run a 1-turn match, verify both received identical `events`
-- player disconnect mid-match: server holds state for 5 minutes; reconnect with same code resumes
+**Acceptance tests**: two-player regression, three-player free-for-all,
+four-player free-for-all, alliance configuration rejection, private orders and
+sensor contacts, nonadjacent occupied Home slots, same-tick four-way crossfire,
+simultaneous last-robot draw, disconnect/rejoin in every phase, independent
+unseen-turn playback without a global gate, durable restart recovery, and byte-identical
+replay for every supported configuration.
 
-**Acceptance criteria**:
-- [ ] User shares a lobby URL/code; second user joins; both can play a full match
-- [ ] No client can cheat by lying about turn outcomes (server resolves)
-- [ ] Reconnect works within a grace period
+**Ship gate**: run at least one full match on four separate browser sessions and
+one match across two real networks. No result or visibility divergence is
+acceptable.
 
-**Sub-deliverables added in this phase**:
-- **Reconnection UX** (per §11): exponential-backoff retry; "Reconnecting…" overlay; resume from server state on success; abort with friendly explanation on permanent failure.
-- **Schema validation** at server boundary using zod for all WebSocket messages and HTTP API requests (per §11).
-- **Server deployment** to Railway or Fly.io. Dockerfile + GitHub Actions deploy pipeline triggered on `main` push for the `server/` directory. Vercel deploys the Next.js app separately on the same push.
-- **Server monitoring**: structured logs to stdout (Pino); platform's log aggregation handles search. Sentry for error reporting (privacy-scrubbed — no IPs, no PII).
-- **API persistence layer**: SQLite (`better-sqlite3` Node binding) for replays + teams; in-memory map for active matches and lobbies. Schema in §9.
-- **Browser-token middleware**: read `X-Browser-Token` header; reject mutations if absent; pass through on read endpoints.
-
-**Risks**:
-- NAT / firewall / corporate proxies blocking WebSockets. Mitigation: server runs over HTTPS WSS on a standard port (443).
-- State management in server: keep simple in-memory map; if server restarts, active matches are lost. Acceptable for the first post-MVP online pass.
-- Cheating: server-authoritative resolution prevents most. The one residual concern: a malicious client could submit invalid `TurnOrders`. Server validates orders before resolving (path validity, scan-cone, etc.) and rejects malformed ones with `INVALID_ORDERS { reason }`.
-- Server restart loses active matches. Mitigation for the first online pass: deploy strategy aims for low restart frequency; matches are short (~5 turns × 2 minutes each = 10 minutes typical). Promote to persistent state store later if needed.
-
-**Effort**: XL.
+**Effort**: L.
 
 ---
 
-### Phase 13 — Polish, accessibility, art, soundscape [⬜ ⏸ partly deferred]
+### Phase 12 — v2 local/hot-seat and alliance modes [⏸ POST-v1]
 
-**Goal**: ship-quality. Real art (replace vector placeholders), keyboard navigation, screen reader support for menus, mobile-friendly layouts (or graceful "desktop only" message), perf budget enforcement, optional audio.
+**Goal**: add the modes intentionally excluded from the internet FFA v1:
+multiple local players sharing a device and multiple Teams sharing one Side.
+This phase consumes the original-code alliance audit without burdening the v1
+protocol or UI with unused branches.
 
-**Dependencies**: all prior.
+**Dependencies**: shipped Phase 11.6 and stable production telemetry from v1.
+
+**Implementation work**:
+- local/hot-seat room adapter that uses the same authoritative phase machine,
+  with a privacy handoff screen and per-player lock-in;
+- configuration UI for 2v2, 3v1, and other legal Side assignments;
+- same-Side direct-fire and Scan & Fire exclusion; explosive friendly damage;
+- allies always visible, but enemy contacts/last-known markers remain private to
+  each Team and are never pooled by Side;
+- Final Ceremony aggregates Team contributions by Side and repeats the shared
+  total on allied rows;
+- replay/protocol versioning that represents Team ownership separately from
+  Side without breaking v1 FFA files.
+
+**Acceptance tests**: v1 online FFA regression, 2v2 and 3v1, allied direct-fire
+immunity, allied blast damage, private allied contacts, Side-shared ceremony
+totals, hot-seat information handoff, nonadjacent Home slots, and deterministic
+replay for every configuration.
+
+**Effort**: L.
+
+---
+
+### Phase 13 — v1 release polish, accessibility basics, and art [⬜]
+
+**Goal**: ship-quality online FFA. Real art (replace vector placeholders),
+keyboard navigation and non-color-only status, graceful desktop-only viewport
+message, connection-state polish, and performance budget enforcement. Audio,
+touch/mobile, and full screen-reader game-board support remain later work.
+
+**Dependencies**: v1 Phases 1-11.6. Deferred Phase 12 is not a dependency.
 
 **Effort**: L.
 
 **Note**: audio explicitly deferred per user direction. Real art likely deferred too — playtest with placeholders first.
+
+---
+
+### Phase 14 — Stealth parity [⏸ POST-v1]
+
+**Hard gate**: the Phase 11.6 online FFA gate and Phase 13 v1 release must pass
+before any Phase 14 implementation begins. Deferred Phase 12 is not a
+dependency.
+
+**Goal**: add the original Stealth class end to end: Custom Game availability,
+visibility behavior, ordinary/Aim/Scan interactions, last-known markers,
+planner disclosure rules, assets, replay coverage, and focused binary/dynamic
+verification. Do not retrofit speculative Stealth branches during Phases 1–11.
+
+**Acceptance criteria**:
+- [ ] Stealth has an updated claim-ledger-backed behavior spec
+- [ ] Ordinary four-class Survival replays remain byte-identical
+- [ ] Setup, planner, resolver, renderer, and tests cover Stealth explicitly
+
+---
+
+### Phase 15 — Non-Survival sports [⏸ POST-v1]
+
+**Hard gate**: the online FFA Survival v1 must ship before any Phase 15
+implementation begins. This phase is independent of Stealth and hot-seat.
+
+**Goal**: audit and implement Treasure Hunt, Capture the Flag, Hostage, and
+Baseball, including their setup objects, planner verbs, resolver rules,
+scoring, ceremony output, replay schemas, UI, and tests. Add one sport at a
+time; Survival behavior must not be generalized speculatively beforehand.
+
+**Acceptance criteria per sport**:
+- [ ] Binary/manual claims and confidence labels are complete
+- [ ] Setup → planning → resolution → scoring → ceremony works end to end
+- [ ] Survival regression suite remains unchanged and green
 
 ---
 
@@ -770,13 +966,15 @@ Why SVG for v1:
 **Obstacle**:
 - `crate.svg` (the blue obstacles in Rubble arenas)
 
-**Robots** (5 classes × 3 postures; prefer shared/layered SVG parts where this
-avoids 15 mostly duplicate files; rotation done programmatically by Pixi):
+**Robots** (4 main-game classes × 3 postures; prefer shared/layered SVG parts
+where this avoids duplicate files; rotation done programmatically by Pixi):
 - `rifle-standing.svg` · `rifle-crouching.svg`
 - `burst-standing.svg` · `burst-crouching.svg`
 - `auto-standing.svg` · `auto-crouching.svg`
 - `missile-standing.svg` · `missile-crouching.svg`
-- `stealth-standing.svg` · `stealth-crouching.svg`
+
+Stealth assets belong to post-main-game Phase 14 and are not part of the
+Phase 7 preload or Phase 11 acceptance gate.
 
 Each robot SVG includes a directional indicator (small arrow or "muzzle") so rotation is meaningful. Color is applied via Pixi `tint` per team — SVG drawn in neutral grey, tinted at runtime to team color.
 
@@ -799,7 +997,9 @@ Each robot SVG includes a directional indicator (small arrow or "muzzle") so rot
 
 ### Production approach
 
-For v1: AI-assisted authoring. Generate concept SVGs via Claude or Midjourney (or hand-draw in Figma / Inkscape), iterate to a coherent palette. Each asset is small and self-contained — total v1 inventory is ~25 SVGs.
+For v1: AI-assisted authoring. Generate concept SVGs or hand-draw in a vector
+tool, then iterate to a coherent palette. Stealth is not included in this
+main-game asset count.
 
 Asset directory: `public/assets/`. Loaded via a single `assets.ts` registry that maps semantic names to URLs. Pixi's `Assets.load` handles the rest.
 
@@ -826,21 +1026,23 @@ Implementation: GSAP for tweens, Pixi sprite/container manipulation for state ch
 
 ---
 
-## 6. Arena transcription notes
+## 6. Arena import notes
 
-### v1 approach (locked: manual coordinate probe)
+### Main-game approach (locked: binary MAP import)
 
-Rubble Two and Rubble Three are small enough to hand-transcribe from the DOS game by clicking through x,y coordinates and recording terrain. This is lower risk than building a screenshot classifier before the renderer exists.
+The audited `.TWN` MAP payload is already a row-major terrain grid. Export it
+directly with `tools/re/export_data.py`; do not hand-transcribe it. The original
+display adds an 8-tile border but performs no coordinate flip or transpose.
 
-**Manual process**:
+**Import process**:
 
-1. Open the target map in DOS RoboSport.
-2. Probe coordinates in row-major order, y=0..height-1 and x=0..width-1.
-3. Record compact rows with the terrain codes from `docs/priority-tests.md`.
-4. Convert the row grid into `src/lib/arenas/<name>.json`.
-5. Review only unknown or suspicious tiles. Do not require screenshots, classifiers, or a separate review app for v1.
+1. Verify the source package hash through `tools/re/verify_claims.py`.
+2. Export MAP cells as `tiles[y][x]` and validate dimensions/checksums.
+3. Generate home rectangles from the exact 6/8/12/16 per-axis thresholds;
+   represent Dock as off-field robot state.
+4. Render one review view and inspect unknown/suspicious terrain codes.
 
-### Post-MVP optional extraction script
+### Post-v1 optional extraction script
 
 The previous screenshot-classifier plan is deferred tooling. Revive it only if manual coordinate probes become more painful than maintaining the tool.
 
@@ -904,41 +1106,42 @@ This tool could also become a scenario editor later. Original RoboSport had Scen
     [{"terrain":"outer-wall"}, {"terrain":"open"}, ...],  // y=1 row
     ...
   ],
-  "homeAreas": [
-    { "corner": "NW", "tiles": [{"x":1,"y":1}, ...] },
-    ...
-  ],
-  "dock": [...],
   "metadata": {
-    "source": "DOS coordinate probe",
+    "source": "version-locked TWN MAP export",
     "unknownTiles": [],
-    "reviewedAt": "2026-05-06T00:00:00Z"
+    "sourceSha256": "..."
   }
 }
 ```
 
+`loadArena` attaches `createHomeAreas(width,height)` after validating the JSON.
+Dock remains `RobotState.position === "dock"`, not an arena tile list.
+
 ### Per-arena requirements
 
 For each arena (Rubble Two/Three at minimum for v1; Suburbs/Computer Town deferred):
-- Fill the row-grid template in `docs/priority-tests.md`.
-- Convert the rows into `src/lib/arenas/<name>.json`.
+- Export MAP rows with `tools/re/export_data.py`.
+- Validate exact dimensions and generate homes with `createHomeAreas`.
 - Mark unknown tiles explicitly with notes; do not silently guess.
-- Commit the resulting arena JSON and the source transcription notes.
+- Commit the generated arena JSON with source hash/provenance, but no original
+  tile art.
 
 ---
 
 ## 7. State management architecture
 
-**Locked for v1: Zustand for client-side hot-seat state. Server-authoritative multiplayer state is post-MVP.**
+**Locked for v1: the durable server owns all shared room/match state. Zustand owns only
+client UI, local planner drafts, playback controls, settings, and connection
+snapshots.**
 
 ### State boundaries
 
 | State kind | Where it lives | Mutability | Notes |
 |---|---|---|---|
-| **Engine state** (`MatchState`, `TurnOrders`, `ReplayLog`) | Server (multiplayer) or client localStorage (hot-seat) | Immutable; engine returns new instances | Single source of truth for game progress |
-| **Server-authoritative match state** | Server in-memory map keyed by matchId | Mutated only by `resolveTurn` on the server | Post-MVP multiplayer cheat-prevention |
+| **Engine state** (`MatchState`, accepted `TurnOrders`, `ReplayLog`) | Server room process | Immutable; engine returns new instances | Canonical source of truth |
+| **Server-authoritative room/match state** | Server memory cache backed by transactional SQLite | Mutated only by validated protocol transitions | v1 authority, async recovery, and hidden-information boundary |
 | **Client UI state** (planner draft, selected robot, dialog open) | Zustand stores | Mutable; React subscribes via hooks | Per-tab, per-session |
-| **Client persistent state** (settings, last config; browser-token post-MVP) | Zustand + localStorage (`zustand/middleware/persist`) | Mutable; auto-synced to localStorage | Survives tab close |
+| **Client persistent state** (settings, rejoin token) | Zustand + localStorage (`zustand/middleware/persist`) | Mutable; auto-synced to localStorage | Token restores only the owned room seat |
 | **Renderer state** (Pixi sprite positions, tweens, current frame) | Pixi-internal | Mutable; React reads only via refs | Animation; not in Zustand |
 
 ### Stores
@@ -946,21 +1149,23 @@ For each arena (Rubble Two/Three at minimum for v1; Suburbs/Computer Town deferr
 ```ts
 // src/state/
 
-useMatchStore        // current MatchState + phase ('setup'|'edit'|'movie'|'results')
-                     //   + history of completed turns; localStorage in hot-seat
+useMatchStore        // latest authorized server snapshot + phase
 usePlannerStore      // draft TurnOrders for current turn, selected robotId,
                      //   command-being-edited, scan-direction preview
-useMoviePlayerStore  // currentTick, isPlaying, speed (1x|2x|4x), frame buffer
+useMoviePlayerStore  // currentTick, isPlaying, speed (.5x|1x|2x|4x), frame buffer
 useSettingsStore     // user preferences (animation speed, hide/show paths, panel layout);
                      //   persisted via zustand/middleware/persist
-useLobbyStore        // (post-MVP Phase 12) lobbyCode, players[], connectionStatus, hostFlag
+useRoomStore         // roomCode, public players/readiness, connection, own role
 useHelpStore         // (Phase 11.5) which first-time hints have been shown
 ```
 
 ### Sync patterns
 
-- **Hot-seat**: state lives in stores; debounced auto-persist to localStorage on every change. Refresh recovers via store hydration.
-- **Multiplayer** (post-MVP): server is authoritative. Client sends `TurnOrders` via WebSocket; server runs `resolveTurn`; broadcasts `{ events, nextState }` to both clients; both clients update `useMatchStore` from the broadcast. Client never trusts its own simulation result for shared state — only for optimistic UI hints during planning.
+- **Online v1**: server snapshots replace client shared state. A client submits
+  only its own orders; the server validates and resolves once all players lock,
+  then sends participant-specific events/state. Refresh or a later visit resumes
+  with the rejoin token and unseen-turn cursor. The client never treats a local
+  simulation as a shared result.
 - **Optimistic UI during planning**: `usePlannerStore` holds the draft `TurnOrders`. Lightweight engine helpers (path validity, scan-cone classification) run on the client to give live feedback without round-trips.
 
 ### Time-travel / debugging
@@ -974,8 +1179,8 @@ useHelpStore         // (Phase 11.5) which first-time hints have been shown
 - `src/state/usePlannerStore.ts`
 - `src/state/useMoviePlayerStore.ts`
 - `src/state/useSettingsStore.ts` (with `persist` middleware)
-- `src/state/useLobbyStore.ts` (post-MVP Phase 12)
-- `src/state/useHelpStore.ts` (post-MVP Phase 11.5)
+- `src/state/useRoomStore.ts` (Phase 8)
+- `src/state/useHelpStore.ts` (Phase 11.5)
 
 ---
 
@@ -985,55 +1190,60 @@ useHelpStore         // (Phase 11.5) which first-time hints have been shown
 
 | Path | Purpose | Auth | Notes |
 |---|---|---|---|
-| `/` | Start game / browse local replays | none | v1 hot-seat entry |
-| `/setup/quick` | Quick Start setup screen | none | Hot-seat or solo configuration |
-| `/setup/custom` | Custom Game team builder | none | Post-MVP |
-| `/lobby/host` | Create a multiplayer lobby | browser-token | Post-MVP |
-| `/lobby/join/:code` | Join via code (deep-link friendly) | browser-token | Post-MVP |
+| `/` | Create room / join room / open replay | none | v1 entry |
+| `/room/:code` | Join or resume room; setup and readiness | participant token after join | v1 deep link |
+| `/setup/custom` | Custom Game team builder | none | Post-v1 |
 | `/match/:matchId` | Active match (entry; redirects to current phase) | participant only | |
 | `/match/:matchId/edit` | Edit phase (turn programming) | participant only | |
 | `/match/:matchId/movie` | Movie playback for the just-resolved turn | participant only | `?t=N` deep-links to a tick |
 | `/match/:matchId/results` | Final Ceremony / scoring screen | participant only | |
-| `/replay/:replayId` | Replay viewer | none | v1 can load local replay data; public IDs are post-MVP |
-| `/replay/:replayId/share` | Embeddable share card / OG metadata | none | Post-MVP |
-| `/teams` | Saved team library | browser-token | Post-MVP unless local presets become needed |
+| `/replay/:replayId` | Replay viewer | none | v1 imports local replay data; public IDs are post-v1 |
+| `/replay/:replayId/share` | Embeddable share card / OG metadata | none | Post-v1 |
+| `/teams` | Saved team library | library token | Post-v1 |
 | `/settings` | User preferences | none | Persisted to localStorage |
-| `/help/:topic` | Static help articles (terrain, weapons, etc.) | none | Post-MVP full help |
+| `/help/:topic` | Static help articles (terrain, weapons, etc.) | none | Post-v1 full help |
 
 ### ID conventions
 
 - **Match IDs**: 10-character `nanoid` slug (e.g., `ZbV2Ch9rQp`). Private — only participants get the URL.
 - **Replay IDs**: 10-character `nanoid` slug. Public; URLs are shareable.
-- **Lobby codes**: 6-character uppercase alphanumeric (e.g., `ABC123`). Memorable; verbal-shareable. Maps internally to the matchId once both players join.
+- **Room codes**: 6-character uppercase alphanumeric (e.g., `ABC123`). Memorable and verbal-shareable; maps internally to a match after 2-4 players start.
 - **Tick deep-links**: query string `?t=N` on movie or replay routes; player loads paused at that tick.
 
 ### Sharing patterns
 
-- **Lobby invite**: full URL like `/lobby/join/ABC123` is shareable; alternatively the 6-char code is verbal.
+- **Room invite**: full URL like `/room/ABC123` is shareable; alternatively the 6-character code is verbal.
 - **Replay share**: full URL like `/replay/ZbV2Ch9rQp` with optional `?t=` for paused-at-tick.
 - Active matches are URL-private (only participants get the link).
 
 ---
 
-## 9. Persistence model (post-MVP shared persistence)
+## 9. Persistence model
 
-**v1 locked**: no database. Active hot-seat match state, settings, last-played config, and optional local replay/team data live in localStorage or exported JSON.
+**v1 locked**: no accounts, but asynchronous rooms require durable storage.
+Use SQLite in WAL mode on the authoritative server's persistent volume. Store
+room configuration/state, token hashes, accepted orders, per-player
+`seenThroughTurn`, canonical turn results, and replay digests transactionally.
+The browser stores only settings, room references, and opaque rejoin tokens;
+completed replays can be exported as JSON.
 
-**Post-MVP proposal**: Postgres for shared/persistent data (eventual home: Supabase). Local dev can use local Postgres. Client localStorage holds settings and an anonymous browser-token.
+**Post-v1 proposal**: migrate the storage interface to a distributed database
+only when multi-instance rooms, public replay libraries, accounts, or saved
+teams require it. Room semantics must not depend on SQLite-specific behavior.
 
 ### What lives where
 
 | Kind | Where | Lifetime |
 |---|---|---|
-| Active match state (multiplayer) | Server in-memory | Post-MVP; match duration; lost on server restart |
-| Active match state (hot-seat) | Client localStorage | Until user starts a new match |
-| Replays | v1: exported JSON or localStorage; post-MVP: Postgres `replays` table | Local until shared persistence lands |
-| Saved teams | v1: built-in presets or localStorage; post-MVP: Postgres `teams` table | Local until shared persistence lands |
+| Active rooms/matches | Server SQLite + memory cache | Until finished/abandoned and retention cleanup runs |
+| Own room rejoin token | Client localStorage | Until room expires or storage is cleared |
+| Canonical turn/replay data | Server SQLite; completed export JSON | Room lifetime; export is player-owned |
+| Saved teams | v1 built-in presets; post-v1 local/shared library | Presets only in v1 |
 | User settings | Client localStorage (`useSettingsStore` with `persist` middleware) | Until cleared |
-| Browser-token (anonymous identity) | Client localStorage | Until cleared; generated on first visit |
+| Participant token (anonymous room identity) | Client localStorage | Per room; opaque and server-issued |
 | Last-played-config | Client localStorage | Until overwritten |
 
-### Post-MVP schema (Postgres)
+### Post-v1 shared-storage schema sketch
 
 ```sql
 CREATE TABLE replays (
@@ -1059,9 +1269,17 @@ CREATE INDEX idx_replays_owner ON replays(owner_token);
 CREATE INDEX idx_teams_owner   ON teams(owner_token);
 ```
 
-Active matches and lobbies live in server memory — no DB persistence. If the server restarts mid-match, the match is lost. Acceptable for post-MVP "fun game with friends" scope.
+### v1 exactly-once resolution storage rule
 
-### Post-MVP local dev setup
+The final lock transaction stores every order, a chosen turn seed, and a unique
+resolution nonce before marking the turn `resolving`. Resolution may run outside
+the database transaction. Committing `{ nextState, events, digest }` uses a
+compare-and-set on that nonce and creates turn N+1 atomically. If the service
+crashes while `resolving`, restart re-runs the pure engine from the already
+stored state/orders/seed; deterministic output and the unique turn key prevent
+double RNG consumption, score, or replay entries.
+
+### Post-v1 local dev setup
 
 Connection string from `.env.local`:
 ```
@@ -1072,7 +1290,7 @@ Schema migrations: simple `.sql` files in `db/migrations/` applied via `psql` or
 
 When shared persistence exists, local dev can use a local Postgres instance. Production hosting (Supabase) is a swap of `DATABASE_URL` once we get there.
 
-### Post-MVP API endpoints
+### Post-v1 shared-library API endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -1082,8 +1300,6 @@ When shared persistence exists, local dev can use a local Postgres instance. Pro
 | `POST` | `/api/teams` | Save a team |
 | `GET` | `/api/teams` | List my teams |
 | `DELETE` | `/api/teams/:id` | Delete a team (owner check) |
-| `POST` | `/api/lobbies` | Create lobby → `{ code }` |
-| `GET` | `/api/lobbies/:code` | Lobby info (for join UX) |
 
 Server reads `X-Browser-Token` header; passes through on reads, requires on mutations. No real auth in the first shared-persistence pass — token is honor-system anonymous identity.
 
@@ -1097,7 +1313,7 @@ const replayMigrations: Record<number, (data: any) => ReplayLog> = {
 ```
 CI gate: a few canned replays must still pass `verifyReplay` after migration. Don't build the full migration framework now; add it when needed.
 
-### Post-MVP API endpoints (detailed auth)
+### Post-v1 shared-library API endpoints (detailed auth)
 
 | Method | Path | Purpose | Auth |
 |---|---|---|---|
@@ -1107,8 +1323,6 @@ CI gate: a few canned replays must still pass `verifyReplay` after migration. Do
 | `POST` | `/api/teams` | Save a team | browser-token |
 | `GET` | `/api/teams` | List my teams | browser-token |
 | `DELETE` | `/api/teams/:id` | Delete a team | browser-token (owner check) |
-| `POST` | `/api/lobbies` | Create lobby → `{ code }` | browser-token |
-| `GET` | `/api/lobbies/:code` | Lobby info (for join UX) | none |
 
 ### Browser-token identity
 
@@ -1132,28 +1346,34 @@ When `formatVersion` advances:
 
 ---
 
-## 10. Onboarding, contextual help, tooltips (post-MVP)
+## 10. Onboarding, explanation, and help
 
-**v1 locked**: minimal labels and tooltips only where needed to complete a hot-seat match. Full contextual help, first-time hints, help cursor, and help articles are post-MVP.
+**v1 locked**: concise tooltips, first-use planning guidance, exact timeline
+feedback, post-turn cause explanations, and replay inspection are part of the
+main-game finish line. The help cursor, illustrated topic library, and
+interactive tutorial are post-v1.
 
-### Post-MVP help system components
+### Component split
 
-1. **Tooltips** — every non-obvious UI control has hover/focus tooltip. Build a `<Tooltip>` primitive that wraps content; positions via Floating UI.
-2. **Help cursor** — replicate the original's "Cmd+click any element → help dialog" mechanic. Toggle via `?` key or button. Click any tile, robot, or control → modal with title, sprite, description, and rules.
-3. **First-time hints** — small dismissible toasts that appear once per feature. E.g., "Hold Shift while clicking to set scan direction" the first time the player opens the planner.
-4. **Help articles** — markdown-driven static pages at `/help/:topic`. Indexed by topic (terrain, weapons, postures, sport modes, etc.).
+1. **v1 tooltips** — every non-obvious control has hover/focus help.
+2. **v1 first-time hints** — small dismissible guidance for planning, locking,
+   ready status, hidden orders, and movie controls.
+3. **v1 explanations** — authorized event causes translate hit, miss, damage,
+   cover, timing, and elimination events into concise text.
+4. **post-v1 help cursor/articles** — indexed illustrated reference material.
 
-### Files (post-MVP Phase 11.5)
+### Files
 
 - `src/components/help/Tooltip.tsx` — primitive (Floating UI under the hood)
-- `src/components/help/HelpDialog.tsx` — contextual help modal
-- `src/components/help/HelpCursorToggle.tsx` — button + `?` key handler
+- `src/components/help/HelpDialog.tsx` — post-v1 contextual help modal
+- `src/components/help/HelpCursorToggle.tsx` — post-v1 button + `?` key handler
 - `src/components/help/FirstTimeHint.tsx` — toast component with auto-dismiss
 - `src/components/help/HelpProvider.tsx` — context that exposes `useHelp()`
 - `src/state/useHelpStore.ts` — tracks `hintsShown: Set<string>`, persists to localStorage
-- `src/lib/help/topics/` — markdown files: `open-ground.md`, `bushes.md`, `low-walls.md`, `walls.md`, `crevices.md`, `rifle.md`, `burst-gun.md`, `auto-rifle.md`, `missile-launcher.md`, `grenade-launcher.md`, `standing.md`, `crouching.md`, `aim-and-fire.md`, `scan-and-fire.md`, `scan-cone.md`, `team-rating.md`, `formations.md`, `game-lengths.md`, `arena-types.md`
-- `src/app/help/[topic]/page.tsx` — route for the help articles
-- `public/assets/help/` — sprite + screenshot assets shown in dialogs
+- `src/components/match/TurnExplanation.tsx` — v1 authorized cause log
+- `src/lib/explain/events.ts` — v1 structured explanation projection
+- `src/lib/help/topics/`, `src/app/help/[topic]/page.tsx`, and
+  `public/assets/help/` — post-v1 illustrated reference
 
 ### Content — terrain help dialog example
 
@@ -1178,36 +1398,44 @@ only robots directly on it.
 
 ### Tutorial deferred
 
-A proper interactive tutorial (port of the original's Hunters vs. Sitting Ducks walkthrough) is a v2 deliverable. Post-MVP can ship the help system above plus a static `/help` index page. v1 should avoid building this unless the planner is otherwise unplayable.
+A proper interactive tutorial is a v2 deliverable. v1 should teach the actual
+online FFA loop in place and avoid copying original scenario content or assets.
 
 ---
 
 ## 11. Error handling & resilience
 
-Scoped for "fun game with friends." Pragmatic failure handling, no production observability.
+Scoped for friend-group internet play. Pragmatic failure handling, with room
+integrity and hidden-information boundaries treated as correctness requirements.
 
 **Required v1 patterns**:
 - **React Error Boundaries** wrap major UI sections (planner, movie). Fallback = error message + reload button.
-- **Schema validation at local boundaries** using zod where data crosses storage/import boundaries, especially arena JSON and replay JSON.
+- **Schema validation at every trust boundary** including WebSocket messages,
+  orders, arena JSON, and replay JSON.
 - **Discriminated unions for outcome types** (`FireResolution` etc.) — no silent failures, no `null`-means-"failed".
 - **localStorage corruption fallback**: parse errors on hydrate → prompt user to reset; wipe key.
-- **Engine errors** (`resolveTurn` throws): try/catch around local resolution; stop the turn, show a clear error, and log to console.
+- **Engine errors** (`resolveTurn` throws): the server stops the room transition,
+  preserves the previous canonical state, returns a safe error ID, and logs the
+  structured cause without leaking hidden data.
+- **Reconnect state machine** distinguishes connecting, retrying, resumed,
+  room-expired, seat-forfeited, and incompatible-protocol outcomes.
+- **Idempotency** protects start, lock, resolve, acknowledge, and resume from
+  retries/duplicate messages.
 
-**Out of v1 scope** (deferred to post-MVP):
-- WebSocket reconnect and lobby recovery
-- Schema validation for API requests and WebSocket messages
+**Out of v1 scope** (deferred to post-v1):
 - Sentry / third-party error reporting
-- Automatic retry for transient API failures
-- Distinguishing "network down" vs "server down" vs "session expired"
-- Match-state divergence detection / repair
+- multi-instance room migration and distributed-state repair
 - Tab-collision detection ("match open in another tab")
+- push/email notifications and background service workers
 
-If something breaks in a friend match, the user reloads. That's fine for v1.
+Transient connection failure and ordinary infrastructure restart must recover
+in v1. Missing/corrupt durable state is a fatal room error and must be reported
+plainly rather than guessed or reconstructed from a client.
 
 **Files**:
 - `src/components/errors/ErrorBoundary.tsx`
-- `src/lib/net/protocol.ts` (post-MVP Phase 12)
-- `src/lib/net/reconnect.ts` (post-MVP Phase 12)
+- `src/lib/net/protocol.ts` (Phase 8)
+- `src/lib/net/reconnect.ts` (Phase 11)
 
 ---
 
@@ -1238,7 +1466,7 @@ Ported from the original's keyboard reference where modern equivalents exist:
 
 | Key | Action |
 |---|---|
-| `?` or `H` | Toggle help cursor mode (post-MVP; v1 may reserve the shortcut) |
+| `?` or `H` | Toggle help cursor mode (post-v1; v1 reserves the shortcut) |
 | `Cmd/Ctrl + S` | Save match (manual save anchor) |
 | `Cmd/Ctrl + E` | End turn |
 | `Cmd/Ctrl + D` | Toggle Team Data panel |
@@ -1271,7 +1499,8 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Integration | Vitest | Full `resolveTurn` runs against canned `MatchState`s — `src/engine/__integration__/` |
 | Replay regression | Vitest | Curated `ReplayLog`s verify byte-equal across engine refactors — `src/engine/__golden__/` |
 | Component | Vitest + @testing-library | React components — colocated `*.test.tsx` |
-| E2E | Playwright | Full hot-seat match flow — `e2e/` (Phase 11) |
+| Protocol | Vitest | Runtime schemas, authorization, idempotency, visibility projections |
+| E2E | Playwright | Create/join plus full 2-4 browser online match flow — `e2e/` (Phases 8-11.6) |
 
 ### Documentation conventions
 
@@ -1285,29 +1514,30 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 
 | Question | Impact | Resolution path |
 |---|---|---|
-| Per-weapon projectile speed | Phase 3 numbers | Default values shipped; tune in playtest |
-| Stealth × Scan-and-Fire interaction | Phase 4 edge case | Default: stealth that becomes visible mid-turn triggers S&F watchdogs that have LoS in that tick. Test in playtest. |
-| Arena tile transcription accuracy | Phase 6 | Hand-probe Rubble Two and Rubble Three from DOS coordinates; automated extraction deferred |
+| Projectile screen speed | Phase 7 presentation | Tune animation without changing engine outcomes or replay state |
+| Stealth × Scan-and-Fire interaction | Post-main-game Phase 14 | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate |
+| Arena import accuracy | Phase 6 | Verify generated row-major MAP output and exact generated home rectangles |
 | Mobile / tablet playability | Out of v1 (locked §12) | Desktop-only with mouse + keyboard for v1; tablet/touch in v2 |
-| Server hosting cost | Post-MVP | Online lobby is v1.1/post-MVP; do not choose hosting before hot-seat is playable |
+| WebSocket hosting/reliability | Phase 8 onward | Validate WSS plus persistent-volume restart recovery on two real networks before planner integration; keep one authoritative room process in v1 |
+| Absent player stalls orders | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1 |
 | Replay format breaking changes | Phase 5 | `formatVersion` + migrations table (§9); CI gates on canned old replays passing `verifyReplay` |
-| Named weapon mapping for binary damage/fire tables | Phase 1R fidelity | Trace the weapon enum; until then isolate the inferred labels as `PROVISIONAL RE §20 #1/#10`. |
+| Named weapon mapping for binary damage/fire tables | Closed in Phase 1R | Selector dispatch and live callers are source-locked in the claim ledger |
 | Sport modes beyond Survival | Out of v1 | All non-Survival modes deferred; engine reserves `sportType` field |
-| AI tiers | Out of v1 | Deferred to post-v1; add Stupid AI in Phase 14, more later |
-| Audio / SFX / music | Out of v1 | Deferred to post-MVP entirely |
+| AI tiers | Out of main game | Deferred until after the explicitly scheduled parity phases |
+| Audio / SFX / music | Out of v1 | Deferred to post-v1 entirely |
 | Localization | Out of v1 | English only; not building i18n hooks |
-| Accessibility | Out of v1 | Not a priority for "fun with friends" scope |
-| Security / abuse prevention | Out of v1 | Trust-based personal-use scope. Post-MVP server validates inputs (zod) but no rate limiting, DDoS protection, replay tampering checks, or abuse handling |
-| Privacy / analytics / cookie policy | Out of v1 | No third-party analytics; no cookie banner. Browser-token appears only if post-MVP shared persistence lands |
+| Accessibility | Partial v1 | Keyboard-reachable setup/planner controls, focus states, readable status and non-color-only team cues; full screen-reader/touch support later |
+| Security / abuse prevention | Bounded v1 | Server validation, ownership checks, payload limits, basic rate limits, hidden-state filtering; DDoS/abuse operations remain post-v1 |
+| Privacy / analytics / cookie policy | Out of v1 | No third-party analytics; participant tokens identify only a room seat |
 | License / legal disclaimers | Out of v1 | Defer until shared publicly |
 | Production observability | Out of v1 | Console logs are fine for personal use; no Sentry / metrics / alerts |
-| Full help/tutorial system | Post-MVP | v1 only needs minimal labels/tooltips required to play |
-| Account system | Out of v1 | No accounts in v1; browser-token honor-system identity is enough for post-MVP shared persistence |
+| Full help/tutorial system | Post-v1 | v1 includes tooltips, first-use loop guidance, event explanations, and replay inspection |
+| Account system | Out of v1 | No accounts; opaque server-issued rejoin token owns one room seat |
 | Achievements / progression | Out of v1 | Original had none; matches are standalone |
 | Visual regression testing | Out of v1 | Add when art breakage actually causes pain |
-| Server scaling | Out of v1 | Single-process Node, single-instance Postgres. Friend-scale only |
+| Server scaling | Out of v1 | Single authoritative process, SQLite WAL, and memory cache; friend-scale only |
 | Spectator / live spectating | Out of v1 | Public replay URLs cover the main case |
-| Hosting platform swap | Phase 12+ | v1 = local dev only. Production shared persistence later = Vercel + Supabase. `DATABASE_URL` env-var swap |
+| Hosting platform choice | Phase 8 | Benchmark current long-lived WSS options; avoid coupling room semantics to the vendor |
 | Original-game source files | Cleanup | Keep manual dumps, screenshots, and original packages local and gitignored; publish summarized research notes only |
 
 ---
@@ -1325,14 +1555,19 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 
 **Key terminology**:
 - **Aim & Fire**: tile-targeted single-shot fire mode. Bullet flies to a fixed tile; doesn't track target.
-- **Scan & Fire**: enemy-targeted wait-and-shoot mode. Robot watches a cone for an enemy; fires a tracking projectile.
-- **Stride parity**: per-robot 0/1 flag that flips each move and determines step cost (0.3/0.7 alt single, 0.4/0.8 alt double).
-- **Scan alignment**: the scan cone is a hard firing/visibility gate; alignment,
-  distance, accuracy, terrain, and cover feed the live-fire score table. The
-  exact cone half-width remains `PROVISIONAL RE §20 #22` until traced.
+- **Scan & Fire**: enemy-acquired wait-and-shoot mode. Robot watches a cone,
+  selects an eligible enemy, then locks that enemy's current tile/result at the
+  fire boundary.
+- **Movement cost**: fixed 30-tick one-tile and 40-tick two-tile selector costs;
+  the original movement resolver has no stride-parity state.
+- **Scan alignment**: the scan cone is the inclusive forward semicircle
+  (`dot >= 0`). Scan & Fire also subtracts 4/2/0 from score at alignment
+  magnitudes `<=4` / `<=8` / `>8`; Aim & Fire passes 16.
 - **Cover**: terrain-based miss chance, only applies to crouching targets. Bush = 30% on tile; low wall = 50% on tile, 90% in path.
 - **Replay**: `{ initialState, seed, turnOrders[] }` — re-runs deterministically.
-- **Tile-targeted vs. tracking projectile**: Aim & Fire creates the former (target tile fixed); Scan & Fire creates the latter (target robot tracked).
+- **Tile locking**: Aim & Fire uses the programmed tile; Scan & Fire acquires a
+  robot but snapshots its current tile when firing. Neither supports in-flight
+  dodge or impact-time retargeting.
 
 ---
 
@@ -1425,20 +1660,25 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | **1R** | ✅ DRAFT COMPLETE | M | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth |
 | **1.5** | ✅ COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass |
 | 2 | ✅ DRAFT COMPLETE | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
-| 3 | ⬜ | M | Multi-tick projectiles in flight |
-| 4 | ⬜ | L | Scan & Fire mode + visibility resolver + Stealth class rule |
+| 3 | ⬜ | M | Locked projectile/blast outcomes + deterministic presentation events |
+| 4 | ⬜ | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
 | 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |
-| 6 | ⬜ | M | Next.js + PixiJS scaffold; static arena renderer; hand-transcribed Rubble arena JSON |
+| 6 | ⬜ | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |
-| 8 | ⬜ | M | Quick Start setup UI for two-team hot-seat Survival |
+| 8 | ⬜ | L | Online room foundation, 2-4 player setup, and deployed WSS gate |
 | 9 | ⬜ | L | Planner UI: movement / posture / scan |
 | 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
-| 11 | ⬜ | M | End-turn flow + Team Data + Final Ceremony — hot-seat MVP playable |
-| 11.5 | ⏸ POST-MVP | M | Full onboarding, contextual help, tooltips (§10) |
-| 12 | ⏸ POST-MVP / v1.1 | XL | Online lobby (WebSocket relay; host-creates / join-by-code) |
-| 13 | ⬜ | M | Polish — bug fixes, art swap-in, animation timing pass |
+| 11 | ⬜ | XL | Authoritative two-player online turn loop, reconnect, results, replay |
+| 11.5 | ⬜ | M | v1 explainability, onboarding, and replay inspection (§10) |
+| 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
+| 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
+| 13 | ⬜ | L | v1 release polish — online UX, art, performance, accessibility basics |
+| 14 | ⏸ POST-MAIN-GAME | L | Stealth class, visibility, Scan & Fire interactions, setup, assets, tests |
+| 15 | ⏸ POST-MAIN-GAME | XL | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring |
 
-**Critical path to v1 hot-seat MVP**: RE mapping pass → 1R → 1.5 → 2 → 3 →
-4 → 5 → 6 → 7 → 8 → 9 → 10 → 11. The concise gate-by-gate sequence is in
-`tasks/core-build-plan.md`. Phase 13 polish runs only as needed for the playable
-hot-seat milestone. Phases 11.5 and 12 are post-MVP.
+**Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
+5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 13. The concise gate-by-gate
+sequence is in `tasks/core-build-plan.md`. Phase 12 hot-seat/alliance work is
+post-v1 and is not on this path. Phases 14 and 15 are hard-gated on the shipped
+online Survival v1: neither Stealth nor any non-Survival sport may enter the
+main-game critical path first.

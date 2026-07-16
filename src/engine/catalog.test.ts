@@ -46,8 +46,8 @@ describe("robot catalog", () => {
 describe("weapon catalog", () => {
   it("uses the three exact direct-fire roll families", () => {
     expect(WEAPONS.rifle.damageRoll).toEqual({ base: 10, mask: 7 });
-    expect(WEAPONS["auto-rifle"].damageRoll).toEqual({ base: 8, mask: 15 });
-    expect(WEAPONS["burst-gun"].damageRoll).toEqual({ base: 6, mask: 15 });
+    expect(WEAPONS["burst-gun"].damageRoll).toEqual({ base: 8, mask: 15 });
+    expect(WEAPONS["auto-rifle"].damageRoll).toEqual({ base: 6, mask: 15 });
   });
 
   it("uses exact missile base/mask rows", () => {
@@ -81,8 +81,38 @@ describe("weapon catalog", () => {
     }
   });
 
+  it("maps named Aim & Fire and Scan & Fire selector timing", () => {
+    expect(WEAPONS.rifle).toMatchObject({
+      firingIntervalTicks: 30,
+      scanFiringIntervalTicks: 30,
+      accuracyAddIndex: 0,
+      scanAccuracyAddIndex: 1,
+    });
+    expect(WEAPONS["burst-gun"]).toMatchObject({
+      firingIntervalTicks: 15,
+      scanFiringIntervalTicks: 20,
+      accuracyAddIndex: 3,
+      scanAccuracyAddIndex: 4,
+    });
+    expect(WEAPONS["auto-rifle"]).toMatchObject({
+      firingIntervalTicks: 10,
+      scanFiringIntervalTicks: 10,
+      accuracyAddIndex: 6,
+      scanAccuracyAddIndex: 7,
+    });
+    expect(WEAPONS["missile-launcher"]).toMatchObject({
+      firingIntervalTicks: 30,
+      scanFiringIntervalTicks: 20,
+    });
+    expect(WEAPONS["grenade-launcher"]).toMatchObject({
+      firingIntervalTicks: 30,
+      scanFiringIntervalTicks: 20,
+    });
+  });
+
   it("limits missile ammunition", () => {
     expect(WEAPONS["missile-launcher"].startingAmmo).toBe(3);
+    expect(WEAPONS["grenade-launcher"].startingAmmo).toBe(0);
   });
 
   it("corrects Rubble Two to 24x24", () => {

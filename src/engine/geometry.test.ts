@@ -56,9 +56,25 @@ describe("headings and scan gate", () => {
     expect(angleDelta(90, 270)).toBe(180);
   });
 
-  it("accepts targets inside the provisional forward semicircle", () => {
+  it("accepts targets inside the exact closed forward semicircle", () => {
     expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: 4, y: 0 })).toBe(true);
     expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: 0, y: -4 })).toBe(true);
+  });
+
+  it("includes both perpendicular boundary rays", () => {
+    expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: 0, y: -8 })).toBe(true);
+    expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: 0, y: 8 })).toBe(true);
+  });
+
+  it("blocks the first integer tile behind either boundary", () => {
+    expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: -1, y: -8 })).toBe(false);
+    expect(isWithinScanCone({ x: 0, y: 0 }, "E", { x: -1, y: 8 })).toBe(false);
+  });
+
+  it("uses the same inclusive boundaries for diagonal headings", () => {
+    expect(isWithinScanCone({ x: 0, y: 0 }, "NE", { x: 4, y: 4 })).toBe(true);
+    expect(isWithinScanCone({ x: 0, y: 0 }, "NE", { x: -4, y: -4 })).toBe(true);
+    expect(isWithinScanCone({ x: 0, y: 0 }, "NE", { x: 3, y: 4 })).toBe(false);
   });
 
   it("blocks targets behind the shooter", () => {

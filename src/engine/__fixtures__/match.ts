@@ -3,6 +3,7 @@
 import { ROBOT_DEFINITIONS, WEAPONS } from "../catalog.js";
 import type {
   Arena,
+  HomeSlot,
   MatchState,
   RobotClass,
   RobotState,
@@ -30,14 +31,27 @@ export const makeOpenArena = (width = 8, height = 8): Arena => ({
       ],
     },
     {
+      corner: "NE",
+      tiles: [
+        { x: width - 1, y: 0 },
+        { x: width - 2, y: 0 },
+      ],
+    },
+    {
       corner: "SE",
       tiles: [
         { x: width - 1, y: height - 1 },
         { x: width - 2, y: height - 1 },
       ],
     },
+    {
+      corner: "SW",
+      tiles: [
+        { x: 0, y: height - 1 },
+        { x: 1, y: height - 1 },
+      ],
+    },
   ],
-  dock: [],
 });
 
 export const makeRobot = (
@@ -45,7 +59,9 @@ export const makeRobot = (
   teamId: string,
   robotClass: RobotClass,
   position: TileCoord | "dock",
-  overrides: Partial<Pick<RobotState, "hp" | "posture" | "scanHeading" | "strideParity">> = {},
+  overrides: Partial<
+    Pick<RobotState, "hp" | "posture" | "scanHeading" | "damageStaggerActionsRemaining">
+  > = {},
 ): RobotState => {
   const definition = ROBOT_DEFINITIONS[robotClass];
   return {
@@ -56,18 +72,24 @@ export const makeRobot = (
     hp: overrides.hp ?? definition.armor,
     posture: overrides.posture ?? "upright",
     scanHeading: overrides.scanHeading ?? "E",
-    strideParity: overrides.strideParity ?? 0,
+    damageStaggerActionsRemaining: overrides.damageStaggerActionsRemaining ?? 0,
     ammo: Object.fromEntries(
       ALL_WEAPONS.map((weaponId) => [weaponId, WEAPONS[weaponId].startingAmmo]),
     ) as Readonly<Record<WeaponId, number | "unlimited">>,
   };
 };
 
-const makeTeam = (id: string, side: 1 | 2, robots: readonly RobotState[]): TeamState => ({
+export const makeTeam = (
+  id: string,
+  side: TeamState["side"],
+  robots: readonly RobotState[],
+  homeSlot: HomeSlot,
+): TeamState => ({
   id,
   name: id,
   color: side === 1 ? "red" : "blue",
   side,
+  homeSlot,
   brain: "human",
   robots,
   score: 0,
@@ -94,11 +116,13 @@ export const makeMatch = (input?: {
       "team-1",
       1,
       input?.teamOneRobots ?? [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 })],
+      0,
     ),
     makeTeam(
       "team-2",
       2,
       input?.teamTwoRobots ?? [makeRobot("r2", "team-2", "rifle", { x: 6, y: 6 })],
+      2,
     ),
   ],
   arena: input?.arena ?? makeOpenArena(),

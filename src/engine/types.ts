@@ -12,6 +12,12 @@ export interface TileCoord {
   readonly y: number;
 }
 
+/** One encoded movement selector; two-tile selectors retain their chosen intermediate waypoint. */
+export interface MovementStep {
+  readonly to: TileCoord;
+  readonly via?: TileCoord;
+}
+
 /** 8-direction compass. Used for scan headings and movement direction. */
 export type Heading = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
@@ -62,11 +68,10 @@ export interface RobotState {
   readonly posture: Posture;
   readonly scanHeading: Heading;
   /**
-   * Stride parity for movement-cost alternation. Persists across non-move
-   * commands; resets on deployment. 0 = next move costs the lower value
-   * (0.3 s single, 0.4 s double); 1 = next move costs the higher value.
+   * Original field +0x1E: damage assigns 1–4 future firing actions whose
+   * hit score is halved. Each firing action consumes one count.
    */
-  readonly strideParity: 0 | 1;
+  readonly damageStaggerActionsRemaining: number;
   /** Per-weapon ammo counter for explosives. Bullets are unlimited. */
   readonly ammo: Readonly<Record<WeaponId, number | "unlimited">>;
 }
@@ -88,14 +93,18 @@ export interface WeaponDefinition {
   readonly bulletsPerClick: number;
   /** Fixed cost for the selected firing command, in 60 Hz ticks. */
   readonly firingIntervalTicks: number;
+  /** Repeat interval while Scan & Fire remains active. */
+  readonly scanFiringIntervalTicks: number;
   /** v1: all weapons cap at 18. */
   readonly maxRange: number;
   /** Bullet weapons have unlimited ammo; explosives are limited. */
   readonly startingAmmo: number | "unlimited";
   /** Direct-fire base + (random & mask), before cover/distance adjustments. */
   readonly damageRoll?: RandomMaskRoll;
-  /** Index into the exact 0x1596 add table; mapping is still provisional. */
+  /** Aim & Fire selector index into the exact 0x1596 add table. */
   readonly accuracyAddIndex?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  /** Scan & Fire selector index into the exact 0x1596 add table. */
+  readonly scanAccuracyAddIndex?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** For explosives: blast radius and per-radius damage curve. */
   readonly blast?: {
     readonly radius: number;
@@ -109,7 +118,7 @@ export interface WeaponDefinition {
 
 export type RobotCommandSegment =
   | { readonly kind: "deploy"; readonly to: TileCoord }
-  | { readonly kind: "move"; readonly path: readonly TileCoord[]; readonly posture: Posture }
+  | { readonly kind: "move"; readonly path: readonly MovementStep[]; readonly posture: Posture }
   | { readonly kind: "set-posture"; readonly posture: Posture }
   | { readonly kind: "set-scan-direction"; readonly heading: Heading }
   | {
@@ -229,6 +238,9 @@ export type GameLength = "skirmish" | "melee" | "battle" | "campaign";
 
 export type ArenaType = "rubble" | "suburbs" | "computer";
 
+/** Original Team Name box position: 0=NW, 1=NE, 2=SE, 3=SW. */
+export type HomeSlot = 0 | 1 | 2 | 3;
+
 export interface GameConfig {
   readonly sportType: SportType;
   readonly formation: Formation;
@@ -243,6 +255,8 @@ export interface TeamState {
   readonly name: string;
   readonly color: string;
   readonly side: 1 | 2 | 3 | 4;
+  /** Non-compacting Team Name box/Home Area assignment. */
+  readonly homeSlot: HomeSlot;
   readonly brain: "human" | "stupid"; // v1: "human" only
   readonly robots: readonly RobotState[];
   readonly score: number;
@@ -264,7 +278,6 @@ export interface Arena {
   readonly height: number;
   readonly tiles: ReadonlyArray<ReadonlyArray<ArenaTile>>; // tiles[y][x]
   readonly homeAreas: readonly HomeArea[];
-  readonly dock: readonly TileCoord[];
 }
 
 export interface HomeArea {

@@ -99,12 +99,28 @@ def main() -> None:
 
     selector_claim = claims["selector_claims"]
     table_offset = int(selector_claim["table_offset"], 0)
-    actual_rows = []
-    for selector in selector_claim["selectors"]:
-        start = dgroup_base + table_offset + selector * 4
-        actual_rows.append(list(exe[start : start + 4]))
-    if actual_rows != selector_claim["rows"]:
-        fail(f"live selector rows mismatch: expected {selector_claim['rows']}, got {actual_rows}")
+    checked_rows = 0
+    for group in selector_claim["row_groups"]:
+        if "range" in group:
+            first, last = group["range"]
+            selectors = list(range(first, last + 1))
+            expected_rows = [group["row"] for _ in selectors]
+        else:
+            selectors = group["selectors"]
+            expected_rows = group["rows"]
+        actual_rows = []
+        for selector in selectors:
+            start = dgroup_base + table_offset + selector * 4
+            actual_rows.append(list(exe[start : start + 4]))
+        if actual_rows != expected_rows:
+            fail(
+                f"selector rows {selectors[0]}..{selectors[-1]} mismatch: "
+                f"expected {expected_rows}, got {actual_rows}"
+            )
+        checked_rows += len(selectors)
+    expected_count = selector_claim.get("row_count")
+    if expected_count is not None and checked_rows != expected_count:
+        fail(f"selector row coverage mismatch: expected {expected_count}, checked {checked_rows}")
     checked += 1
 
     for claim in claims["code_slices"]:

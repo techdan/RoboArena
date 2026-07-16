@@ -12,8 +12,11 @@
 /** RoboSport's internal time unit is one sixtieth of a second (RE §19). */
 export const TICKS_PER_SECOND = 60;
 
-/** Renderer presentation default; independent from the engine RNG/tick rate. */
-export const MOVIE_FPS = 12; // PROVISIONAL RE §20 #28
+/** Original movie-rate choices derived from 60 Hz frame divisors (RE §19). */
+export const MOVIE_FPS_OPTIONS = [20, 15, 12, 10, 6, 5, 4, 3] as const;
+
+/** Original default (choice index 2); independent from engine simulation ticks. */
+export const MOVIE_FPS = 12;
 
 export const TURN_DURATION_SECONDS_DEFAULT = 15;
 export const TURN_DURATION_TICKS_DEFAULT = TURN_DURATION_SECONDS_DEFAULT * TICKS_PER_SECOND;
@@ -24,20 +27,29 @@ export const secondsToTicks = (seconds: number): number => Math.round(seconds * 
 // ──────────────────────────────────────────────────────────────────────────
 // Movement and command timing
 
-/** PROVISIONAL RE §20 #11: playtest-derived; move alternation still untraced. */
-export const MOVE_SINGLE_COST_TICKS = [18, 42] as const;
+/** One-tile movement command, selectors 41..48 (RE §19). */
+export const MOVE_SINGLE_COST_TICKS = 30;
 
-/** PROVISIONAL RE §20 #11: playtest-derived; move alternation still untraced. */
-export const MOVE_DOUBLE_COST_TICKS = [24, 48] as const;
+/** Two-tile movement command, selectors 49..64 (RE §19). */
+export const MOVE_DOUBLE_COST_TICKS = 40;
 
-/** PROVISIONAL RE §20 #12/#27. */
+/** Deploy command, selector 74 (RE §19). */
 export const DEPLOY_COST_TICKS = 120;
 
-/** PROVISIONAL RE §20 #12. */
-export const POSTURE_STEP_COST_TICKS = 6;
+/** Any absolute posture-setting command, selectors 70..72 (RE §19). */
+export const POSTURE_CHANGE_COST_TICKS = 10;
 
-/** PROVISIONAL RE §20 #12. */
-export const SCAN_ROTATION_COST_TICKS = 3;
+/** Any absolute scan-heading command, selectors 24..31 (RE §19). */
+export const SCAN_DIRECTION_COST_TICKS = 5;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Survival ceremony
+
+/** Final Ceremony points for each surviving robot (RE §16). */
+export const SURVIVAL_ROBOT_BONUS = 150;
+
+/** Final Ceremony points when the team has at least one survivor (RE §16). */
+export const SURVIVAL_TEAM_BONUS = 400;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Combat
@@ -45,7 +57,7 @@ export const SCAN_ROTATION_COST_TICKS = 3;
 /** Uniform maximum range, confirmed in code and UI strings (RE §4/§6). */
 export const WEAPON_MAX_RANGE = 18;
 
-/** PROVISIONAL RE §20 #22: hard scan gate not yet decoded. */
+/** The hard scan gate includes both perpendicular boundary rays (RE §18). */
 export const SCAN_CONE_HALF_WIDTH_DEGREES = 90;
 
 /** Live-fire score thresholds out of 256, DGROUP 0x156E (RE §7b). */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { makeMatch, makeOpenArena, makeRobot } from "./__fixtures__/match.js";
+import { makeMatch, makeOpenArena, makeRobot, makeTeam } from "./__fixtures__/match.js";
 import { resolveTurn, type ResolveTurnResult, type TurnResult } from "./resolver.js";
 import type { CommandTimeline, MatchState, ResolutionEvent, TurnOrders } from "./types.js";
 
@@ -32,7 +32,7 @@ const deepFreeze = <Value>(value: Value): Value => {
 };
 
 describe("resolveTurn", () => {
-  it("emits alternating open-path arrivals at exact completion boundaries", () => {
+  it("emits fixed-cost open-path arrivals at exact completion boundaries", () => {
     const state = makeMatch();
     const result = requireResolved(
       resolveTurn({
@@ -45,11 +45,7 @@ describe("resolveTurn", () => {
               {
                 kind: "move",
                 posture: "upright",
-                path: [
-                  { x: 2, y: 1 },
-                  { x: 3, y: 1 },
-                  { x: 4, y: 1 },
-                ],
+                path: [{ to: { x: 2, y: 1 } }, { to: { x: 3, y: 1 } }, { to: { x: 4, y: 1 } }],
               },
             ],
           },
@@ -58,11 +54,122 @@ describe("resolveTurn", () => {
     );
 
     expect(eventsOf(result.events, "move-step").map(({ tick, to }) => ({ tick, to }))).toEqual([
-      { tick: 18, to: { x: 2, y: 1 } },
+      { tick: 30, to: { x: 2, y: 1 } },
       { tick: 60, to: { x: 3, y: 1 } },
-      { tick: 78, to: { x: 4, y: 1 } },
+      { tick: 90, to: { x: 4, y: 1 } },
     ]);
-    expect(result.nextState.teams[0]?.robots[0]?.strideParity).toBe(1);
+  });
+
+  it("accepts a two-tile open command at 40 ticks", () => {
+    const state = makeMatch();
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "open-double",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              {
+                kind: "move",
+                posture: "upright",
+                path: [{ to: { x: 3, y: 1 }, via: { x: 2, y: 1 } }],
+              },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "move-step")).toMatchObject([
+      { tick: 40, robotId: "r1", to: { x: 3, y: 1 } },
+    ]);
+  });
+
+  it("validates a two-tile command through its selected intermediate waypoint", () => {
+    const arena = makeOpenArena();
+    const tiles = arena.tiles.map((row) => row.slice());
+    const row = tiles[0]?.slice();
+    if (!row) throw new Error("fixture row missing");
+    row[1] = { terrain: "wall" };
+    tiles[0] = row;
+    const robot = makeRobot("r1", "team-1", "rifle", { x: 0, y: 0 });
+    const state = makeMatch({ teamOneRobots: [robot], arena: { ...arena, tiles } });
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "selected-via",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              {
+                kind: "move",
+                posture: "upright",
+                path: [{ to: { x: 2, y: 1 }, via: { x: 1, y: 1 } }],
+              },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "move-step")).toMatchObject([
+      { tick: 40, robotId: "r1", to: { x: 2, y: 1 } },
+    ]);
+  });
+
+  it("requires slow terrain to be entered with 30-tick one-tile commands", () => {
+    const arena = makeOpenArena();
+    const tiles = arena.tiles.map((row) => row.slice());
+    const row = tiles[1]?.slice();
+    if (!row) throw new Error("fixture row missing");
+    row[2] = { terrain: "rough" };
+    tiles[1] = row;
+    const state = makeMatch({ arena: { ...arena, tiles } });
+
+    const illegalDouble = resolveTurn({
+      state,
+      seed: "slow-double",
+      orders: ordersFor(state, [
+        {
+          robotId: "r1",
+          segments: [
+            {
+              kind: "move",
+              posture: "upright",
+              path: [{ to: { x: 3, y: 1 }, via: { x: 2, y: 1 } }],
+            },
+          ],
+        },
+      ]),
+    });
+    expect(illegalDouble).toMatchObject({
+      outcome: "malformed-orders",
+      code: "illegal-command",
+      robotId: "r1",
+    });
+
+    const singles = requireResolved(
+      resolveTurn({
+        state,
+        seed: "slow-singles",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              {
+                kind: "move",
+                posture: "upright",
+                path: [{ to: { x: 2, y: 1 } }, { to: { x: 3, y: 1 } }],
+              },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(singles.events, "move-step").map(({ tick, to }) => ({ tick, to }))).toEqual([
+      { tick: 30, to: { x: 2, y: 1 } },
+      { tick: 60, to: { x: 3, y: 1 } },
+    ]);
   });
 
   it("allows two robots to complete onto and remain on the same tile", () => {
@@ -76,11 +183,11 @@ describe("resolveTurn", () => {
         orders: ordersFor(state, [
           {
             robotId: "a",
-            segments: [{ kind: "move", posture: "upright", path: [{ x: 2, y: 2 }] }],
+            segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 2, y: 2 } }] }],
           },
           {
             robotId: "b",
-            segments: [{ kind: "move", posture: "upright", path: [{ x: 2, y: 2 }] }],
+            segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 2, y: 2 } }] }],
           },
         ]),
       }),
@@ -92,7 +199,7 @@ describe("resolveTurn", () => {
     ]);
   });
 
-  it("completes adjacent posture changes at 6 ticks", () => {
+  it("completes an absolute posture change at 10 ticks", () => {
     const state = makeMatch();
     const result = requireResolved(
       resolveTurn({
@@ -104,8 +211,35 @@ describe("resolveTurn", () => {
       }),
     );
     expect(eventsOf(result.events, "posture-changed")).toMatchObject([
-      { tick: 6, robotId: "r1", posture: "ducking" },
+      { tick: 10, robotId: "r1", posture: "ducking" },
     ]);
+  });
+
+  it("skips unchanged posture and scan commands without delaying the next command", () => {
+    const state = makeMatch();
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "absolute-no-ops",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              { kind: "set-posture", posture: "upright" },
+              { kind: "set-scan-direction", heading: "E" },
+              { kind: "set-posture", posture: "ducking" },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "command-start")).toMatchObject([
+      { tick: 0, robotId: "r1", commandIndex: 2, commandKind: "set-posture" },
+    ]);
+    expect(eventsOf(result.events, "posture-changed")).toMatchObject([
+      { tick: 10, robotId: "r1", posture: "ducking" },
+    ]);
+    expect(eventsOf(result.events, "scan-rotated")).toEqual([]);
   });
 
   it("completes scan rotation on its derived boundary", () => {
@@ -121,12 +255,12 @@ describe("resolveTurn", () => {
       }),
     );
     expect(eventsOf(result.events, "scan-rotated")).toMatchObject([
-      { tick: 12, robotId: "r1", heading: "W" },
+      { tick: 5, robotId: "r1", heading: "W" },
     ]);
   });
 
   it("deploys a docked robot into its home area after 120 ticks", () => {
-    const robot = makeRobot("r1", "team-1", "rifle", "dock", { strideParity: 1 });
+    const robot = makeRobot("r1", "team-1", "rifle", "dock");
     const state = makeMatch({ teamOneRobots: [robot] });
     const result = requireResolved(
       resolveTurn({
@@ -140,10 +274,35 @@ describe("resolveTurn", () => {
     expect(eventsOf(result.events, "deployed")).toMatchObject([
       { tick: 120, robotId: "r1", to: { x: 0, y: 0 } },
     ]);
-    expect(result.nextState.teams[0]?.robots[0]).toMatchObject({
-      position: { x: 0, y: 0 },
-      strideParity: 0,
-    });
+    expect(result.nextState.teams[0]?.robots[0]).toMatchObject({ position: { x: 0, y: 0 } });
+  });
+
+  it("uses the non-compacting Home slot rather than the compacted teams array index", () => {
+    const docked = makeRobot("r1", "team-1", "rifle", "dock");
+    const base = makeMatch({ teamOneRobots: [docked] });
+    const first = base.teams[0];
+    const second = base.teams[1];
+    if (!first || !second) throw new Error("fixture teams missing");
+    const state: MatchState = {
+      ...base,
+      teams: [
+        { ...first, homeSlot: 2 },
+        { ...second, homeSlot: 0 },
+      ],
+    };
+    const destination = { x: state.arena.width - 1, y: state.arena.height - 1 };
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "non-compacting-home",
+        orders: ordersFor(state, [
+          { robotId: "r1", segments: [{ kind: "deploy", to: destination }] },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "deployed")).toMatchObject([
+      { tick: 120, robotId: "r1", to: destination },
+    ]);
   });
 
   it("returns MalformedOrders for crouching traversal onto a bush", () => {
@@ -161,7 +320,7 @@ describe("resolveTurn", () => {
       orders: ordersFor(state, [
         {
           robotId: "r1",
-          segments: [{ kind: "move", posture: "crouching", path: [{ x: 2, y: 1 }] }],
+          segments: [{ kind: "move", posture: "crouching", path: [{ to: { x: 2, y: 1 } }] }],
         },
       ]),
     });
@@ -236,6 +395,27 @@ describe("resolveTurn", () => {
     });
   });
 
+  it("rejects a non-boolean imported repeat value", () => {
+    const state = makeMatch();
+    const orders = {
+      turnNumber: state.turnNumber,
+      timelines: [
+        {
+          robotId: "r1",
+          segments: [
+            { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "rifle", repeat: "false" },
+          ],
+        },
+      ],
+    } as unknown as TurnOrders;
+    expect(resolveTurn({ state, orders, seed: "bad-repeat" })).toMatchObject({
+      outcome: "malformed-orders",
+      code: "illegal-command",
+      robotId: "r1",
+      commandIndex: 0,
+    });
+  });
+
   it("resolves stationary Aim & Fire at the catalog interval", () => {
     const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { scanHeading: "W" });
     const state = makeMatch({ teamTwoRobots: [target] });
@@ -261,6 +441,75 @@ describe("resolveTurn", () => {
     ).toBe(1);
   });
 
+  it("treats another Team on the shooter's Side as friendly in a four-Team match", () => {
+    const shooter = makeRobot("a1", "team-a", "rifle", { x: 1, y: 1 });
+    const ally = makeRobot("a2", "team-b", "rifle", { x: 2, y: 1 });
+    const enemy = makeRobot("b1", "team-c", "rifle", { x: 3, y: 1 });
+    const reserve = makeRobot("b2", "team-d", "rifle", { x: 6, y: 6 });
+    const base = makeMatch();
+    const state: MatchState = {
+      ...base,
+      teams: [
+        makeTeam("team-a", 1, [shooter], 0),
+        makeTeam("team-b", 1, [ally], 1),
+        makeTeam("team-c", 2, [enemy], 2),
+        makeTeam("team-d", 2, [reserve], 3),
+      ],
+    };
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "four-team-friendly",
+        orders: ordersFor(state, [
+          {
+            robotId: "a1",
+            segments: [
+              { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "rifle", repeat: false },
+              { kind: "aim-and-fire", target: { x: 3, y: 1 }, weapon: "rifle", repeat: false },
+            ],
+          },
+        ]),
+      }),
+    );
+    const allyShot = eventsOf(result.events, "shot-missed").find((event) => event.tick === 30);
+    expect(allyShot).toMatchObject({ shooterId: "a1", reason: "no-target" });
+    expect(result.nextState.teams[1]?.robots[0]?.hp).toBe(ally.definition.armor);
+    const enemyResolution = result.events.find(
+      (event) => event.tick === 60 && (event.kind === "damaged" || event.kind === "shot-missed"),
+    );
+    expect(enemyResolution).not.toMatchObject({ kind: "shot-missed", reason: "no-target" });
+  });
+
+  it("uses Home-slot then roster order as the canonical four-Team actor order", () => {
+    const base = makeMatch();
+    const teams = [
+      makeTeam("team-sw", 4, [makeRobot("sw", "team-sw", "rifle", { x: 1, y: 6 })], 3),
+      makeTeam("team-ne", 2, [makeRobot("ne", "team-ne", "rifle", { x: 6, y: 1 })], 1),
+      makeTeam("team-se", 3, [makeRobot("se", "team-se", "rifle", { x: 6, y: 6 })], 2),
+      makeTeam("team-nw", 1, [makeRobot("nw", "team-nw", "rifle", { x: 1, y: 1 })], 0),
+    ] as const;
+    const state: MatchState = { ...base, teams };
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "team-box-order",
+        orders: ordersFor(
+          state,
+          teams.map((team) => ({
+            robotId: team.robots[0]?.id ?? "missing",
+            segments: [{ kind: "set-posture" as const, posture: "ducking" as const }],
+          })),
+        ),
+      }),
+    );
+    expect(eventsOf(result.events, "command-start").map((event) => event.robotId)).toEqual([
+      "nw",
+      "ne",
+      "se",
+      "sw",
+    ]);
+  });
+
   it("settles same-boundary movement before applying the off-aimed-tile score halving", () => {
     const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { scanHeading: "W" });
     const state = makeMatch({ teamTwoRobots: [target] });
@@ -277,10 +526,7 @@ describe("resolveTurn", () => {
           },
           {
             robotId: "r2",
-            segments: [
-              { kind: "set-posture", posture: "crouching" },
-              { kind: "move", posture: "crouching", path: [{ x: 3, y: 1 }] },
-            ],
+            segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 3, y: 1 } }] }],
           },
         ]),
       }),
@@ -289,6 +535,42 @@ describe("resolveTurn", () => {
     const combatEvent =
       eventsOf(result.events, "damaged")[0] ?? eventsOf(result.events, "shot-missed")[0];
     expect(combatEvent && "score" in combatEvent ? combatEvent.score : undefined).toBe(9);
+  });
+
+  it("consumes one damage-stagger count per firing action", () => {
+    const shooter = makeRobot(
+      "r1",
+      "team-1",
+      "rifle",
+      { x: 1, y: 1 },
+      { damageStaggerActionsRemaining: 2 },
+    );
+    const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 });
+    const state = makeMatch({ teamOneRobots: [shooter], teamTwoRobots: [target] });
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "damage-stagger",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: Array.from({ length: 3 }, () => ({
+              kind: "aim-and-fire" as const,
+              target: { x: 2, y: 1 },
+              weapon: "rifle" as const,
+              repeat: false,
+            })),
+          },
+        ]),
+      }),
+    );
+    const scores = result.events.flatMap((event) =>
+      (event.kind === "damaged" || event.kind === "shot-missed") && "score" in event
+        ? [event.score]
+        : [],
+    );
+    expect(scores).toEqual([9, 9, 19]);
+    expect(result.nextState.teams[0]?.robots[0]?.damageStaggerActionsRemaining).toBe(0);
   });
 
   it("batches same-boundary lethal fire so both robots are destroyed", () => {
@@ -300,14 +582,14 @@ describe("resolveTurn", () => {
         robotId: "r1",
         segments: [
           { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "rifle", repeat: false },
-          { kind: "move", posture: "upright", path: [{ x: 2, y: 1 }] },
+          { kind: "move", posture: "upright", path: [{ to: { x: 2, y: 1 } }] },
         ],
       },
       {
         robotId: "r2",
         segments: [
           { kind: "aim-and-fire", target: { x: 1, y: 1 }, weapon: "rifle", repeat: false },
-          { kind: "move", posture: "upright", path: [{ x: 1, y: 1 }] },
+          { kind: "move", posture: "upright", path: [{ to: { x: 1, y: 1 } }] },
         ],
       },
     ]);
@@ -326,6 +608,33 @@ describe("resolveTurn", () => {
       eventsOf(result?.events ?? [], "command-start").filter((event) => event.commandIndex === 1),
     ).toEqual([]);
     expect(eventsOf(result?.events ?? [], "command-aborted")).toHaveLength(2);
+  });
+
+  it("applies every pre-collected burst hit before death cleanup", () => {
+    const shooter = makeRobot("r1", "team-1", "burst", { x: 1, y: 1 });
+    const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { hp: 1 });
+    const state = makeMatch({ teamOneRobots: [shooter], teamTwoRobots: [target] });
+    const orders = ordersFor(state, [
+      {
+        robotId: "r1",
+        segments: [
+          { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "burst-gun", repeat: false },
+        ],
+      },
+    ]);
+
+    let result: TurnResult | undefined;
+    for (let seed = 0; seed < 100 && !result; seed += 1) {
+      const candidate = requireResolved(
+        resolveTurn({ state, orders, seed: `burst-batch-${seed}` }),
+      );
+      if (eventsOf(candidate.events, "damaged").length === 3) result = candidate;
+    }
+    expect(result).toBeDefined();
+    expect(eventsOf(result?.events ?? [], "damaged").map((event) => event.shotIndex)).toEqual([
+      0, 1, 2,
+    ]);
+    expect(eventsOf(result?.events ?? [], "destroyed")).toHaveLength(1);
   });
 
   it("executes a repeat shot completing exactly at tick 900 and starts nothing there", () => {
@@ -356,7 +665,7 @@ describe("resolveTurn", () => {
       {
         robotId: "r1",
         segments: [
-          { kind: "move", posture: "upright", path: [{ x: 2, y: 1 }] },
+          { kind: "move", posture: "upright", path: [{ to: { x: 2, y: 1 } }] },
           { kind: "aim-and-fire", target: { x: 6, y: 6 }, weapon: "rifle", repeat: true },
         ],
       },
@@ -373,7 +682,7 @@ describe("resolveTurn", () => {
       ordersFor(state, [
         {
           robotId: "r1",
-          segments: [{ kind: "move", posture: "upright", path: [{ x: 2, y: 1 }] }],
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 2, y: 1 } }] }],
         },
       ]),
     );

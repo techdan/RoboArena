@@ -12,6 +12,8 @@
 
 export * from "./types.js";
 export * from "./constants.js";
+export * from "./arena.js";
+export * from "./survival.js";
 export * from "./rng.js";
 export * from "./geometry.js";
 export * from "./cover.js";

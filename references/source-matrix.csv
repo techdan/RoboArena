@@ -1,14 +1,24 @@
 mechanic,status,source,notes
 Simultaneous programmed turns,CONFIRMED,Lemon Amiga manual; MobyGames; Macintosh Repository,Players program robots then watch generated turn/movie
-15-second timeline,HIGH_CONFIDENCE,Lemon/manual screenshots; YouTube video,Exact version/mode scope should be checked
-Up to four teams,CONFIRMED,Lemon Amiga manual; Macintosh Repository,Network/multiplayer supported
+15-second timeline,CONFIRMED,ROBO.EXE seg76:0x1027; command duration table,60 ticks/second; default 900-tick turn
+Up to four teams,CONFIRMED,Lemon Amiga manual; ROBO.EXE Side/visibility/combat/score traces,Player count; non-compacting Team-box/Home slots; same-Side semantics closed; Phase 11.6 implementation remains
 Variable robot counts by game length,CONFIRMED,Lemon Amiga manual,Skirmish/Melee/Battle/Campaign counts
-Postures standing ducking crouching,CONFIRMED,Lemon Amiga manual,Posture affects hit difficulty and traversal
-Scan box / scan direction,CONFIRMED,Lemon Amiga manual,Needed for aiming/visibility
-Weapons: rifle burst automatic missile grenade,CONFIRMED,Lemon Amiga manual,Exact stats unknown
-Bullet friendly-fire immunity,CONFIRMED,Lemon Amiga manual,Open: whether friendly blocks bullet
-Explosive friendly fire,CONFIRMED,Lemon Amiga manual,Exact damage/radius unknown
-Collision rules,UNKNOWN,None yet,Need full reference or empirical testing
-Damage formulas,UNKNOWN,None yet,Need manual/reference or empirical testing
-Weapon firing rates,UNKNOWN,None yet,Need manual/reference or empirical testing
-Objective details for all modes,PARTIAL,Lemon Amiga manual; screenshots,Need full reference
+Postures standing ducking crouching,CONFIRMED,ROBO.EXE seg87:0x1CE0; seg14:0x0819,Stored 1/2/3; absolute command cost 10 ticks
+Scan box / scan direction,CONFIRMED,ROBO.EXE seg21:0x0CCF; selectors 24..31,Closed forward semicircle including boundary; absolute command cost 5 ticks
+Weapons: rifle burst automatic missile grenade,CONFIRMED,ROBO.EXE seg14:0x07B4; strings 605-611; seg6 dispatcher,Named group Aim and Scan selectors mapped
+Bullet friendly-fire immunity,CONFIRMED,Lemon Amiga manual; ROBO.EXE seg6:0x3261,Direct tile fire excludes every robot with the shooter's Side; same-Side allied Teams are immune
+Explosive friendly fire,CONFIRMED,ROBO.EXE seg6:0x5D73/0x5F7E,Exact radius damage and cover cuts decoded; shared damage call applies to same-Side allied Teams
+Collision rules,CONFIRMED,DOS playtest; canonical spec,Robots pass through and may stack
+Damage formulas,CONFIRMED,ROBO.EXE seg6:0x35D1/0x5F7E,Named bullet rolls plus exact blast and cover/distance adjustments
+Damage stagger,CONFIRMED,ROBO.EXE seg6:0x4060 plus fire handlers,Damage assigns 1-4 future firing actions at half score; field +0x1E is not ammo
+Named explosive categories,CONFIRMED,ROBO.EXE named create handlers plus seg6:0x55BF,Projectile type 1 Grenade/category 0; type 2 Missile/category 1; type 3 Time Bomb/category 2
+Weapon firing rates,CONFIRMED,ROBO.EXE DGROUP 0x07F4; seg13:0x08C5; seg14:0x07B4,Named Aim/Scan intervals Rifle 30/30 Burst 15/20 Auto 10/10 Missile 30/20 Grenade 30/20
+Movement and deploy timing,CONFIRMED,ROBO.EXE DGROUP 0x07F4; live dispatcher,One-tile 30 two-tile 40 deploy 120; no stride parity
+Slow-terrain movement,CONFIRMED,ROBO.EXE seg87:0x2901/0x0BF6..0x0D3D; TIL/help labels,Open movement property 2 permits two-unit pairing; Rough/Bush/Low-wall property 1 retain 30-tick single waypoints
+Diagonal endpoint cover,CONFIRMED,ROBO.EXE seg87:0x1BF8/0x1CE0,Endpoint plus major neighbor plus corner only when abs(dx-dy)<2; y-major ties
+Survival scoring,CONFIRMED,ROBO.EXE seg42:0x09D1,Each Team contributes existing score plus 150 per survivor plus 400 if any; contributions aggregate by Side and last Side standing wins
+Alliance visibility,CONFIRMED,ROBO.EXE seg95:0x0952; seg96:0x0AAC,All same-Side robots always visible; enemy contacts and last-known state remain per observing Team rather than pooled by Side
+Arena grid and home areas,CONFIRMED,ROBO.EXE seg81:0x092F/0x09F2; seg87:0x1F32,MAP is row-major tiles[y][x]; homes use exact 6/8/12/16 spans in NW/NE/SE/SW order; Dock is off-field
+Movie playback rate,CONFIRMED,ROBO.EXE DGROUP 0x1028; seg7:0x26B1/0x2A26,Choices 20/15/12/10/6/5/4/3 fps; default 12
+Objective details for non-Survival modes,DEFERRED,Lemon Amiga manual; screenshots,Post-main-game Phase 15
+Stealth behavior,DEFERRED,Compute! review; future binary trace,Post-main-game Phase 14
