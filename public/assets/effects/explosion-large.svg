@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" class="effect explosion-large" data-anchor="48 48">
+  <desc>Large explosion for `destroyed` and explosive `projectile-impacted` blast centers. Multi-lobe faceted burst with steel debris chunks; renderer scales 0.3 to 1.6 over ~0.5s, pairs with blast-ring.svg and smoke-puff.svg.</desc>
+  <defs>
+    <radialGradient id="xl-core" cx="50%" cy="46%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="30%" stop-color="#fff7d6"/>
+      <stop offset="65%" stop-color="#ffd24a"/>
+      <stop offset="100%" stop-color="#ff8a3a"/>
+    </radialGradient>
+  </defs>
+  <polygon fill="#7e2c14" opacity="0.85"
+    points="48,4 55,26 70,10 66,30 88,22 74,40 92,48 74,56 88,74 66,66 70,86 55,70 48,92 41,70 26,86 30,66 8,74 22,56 4,48 22,40 8,22 30,30 26,10 41,26"/>
+  <polygon fill="#b83a1e"
+    points="48,10 54,28 66,16 62,32 80,27 70,42 86,48 70,54 80,69 62,64 66,80 54,68 48,86 42,68 30,80 34,64 16,69 26,54 10,48 26,42 16,27 34,32 30,16 42,28"/>
+  <polygon fill="url(#xl-core)"
+    points="48,18 53,32 62,24 59,36 72,34 64,44 76,48 64,52 72,62 59,60 62,72 53,64 48,78 43,64 34,72 37,60 24,62 32,52 20,48 32,44 24,34 37,36 34,24 43,32"/>
+  <polygon fill="#fff7d6" points="48,28 51,38 58,34 54,42 62,45 54,48 60,56 51,53 48,64 45,53 36,56 42,48 34,45 42,42 38,34 45,38"/>
+  <circle cx="48" cy="47" r="6" fill="#ffffff"/>
+  <polygon points="70,20 74,24 69,27" fill="#454d58" stroke="#22272f" stroke-width="0.8"/>
+  <polygon points="22,64 27,66 23,70" fill="#454d58" stroke="#22272f" stroke-width="0.8"/>
+  <polygon points="66,72 70,74 68,78" fill="#3a414b" stroke="#22272f" stroke-width="0.8"/>
+  <polygon points="26,24 30,22 30,27" fill="#3a414b" stroke="#22272f" stroke-width="0.8"/>
+  <circle cx="80" cy="38" r="1.6" fill="#e0742f"/>
+  <circle cx="16" cy="42" r="1.4" fill="#e0742f"/>
+  <circle cx="58" cy="12" r="1.4" fill="#e0742f"/>
+  <circle cx="40" cy="84" r="1.4" fill="#e0742f"/>
+</svg>

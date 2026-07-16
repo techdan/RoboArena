@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Application, Texture } from "pixi.js";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
 import type { MatchState, ResolutionEvent, Terrain, TileCoord } from "../engine/types";
-import { TERRAIN_ASSETS, TERRAIN_ASSET_URLS } from "./assets";
+import { EFFECT_ASSET_URLS, MARKER_ASSET_URLS, TERRAIN_ASSETS, TERRAIN_ASSET_URLS } from "./assets";
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
 import { renderMovieEffects } from "./effects/effects";
+import { loadRobotTextures, robotTextureKey } from "./robotTextures";
 import {
   createRobotSprite,
   MOVIE_TILE_SIZE,
@@ -94,6 +95,11 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
           TERRAIN_ASSET_URLS.map(async (url) => [url, await Assets.load<Texture>(url)] as const),
         ),
       );
+      // Effect/marker textures are read synchronously via Assets.get during
+      // per-tick effect rendering, so they must be cached before playback.
+      await Promise.all(
+        [...EFFECT_ASSET_URLS, ...MARKER_ASSET_URLS].map((url) => Assets.load<Texture>(url)),
+      );
       for (let y = 0; y < initialState.arena.height; y += 1) {
         for (let x = 0; x < initialState.arena.width; x += 1) {
           const terrain = initialState.arena.tiles[y]?.[x]?.terrain;
@@ -114,8 +120,12 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
       const visuals = new Map<string, RobotVisual>();
       const firstSnapshot = timeline.snapshots[0];
       if (firstSnapshot === undefined) throw new Error("Movie has no initial snapshot.");
+      const robotTextures = await loadRobotTextures(Object.values(firstSnapshot.robots));
+      if (disposed) return;
       for (const robot of Object.values(firstSnapshot.robots)) {
-        const visual = createRobotSprite(robot);
+        const textureSet = robotTextures.get(robotTextureKey(robot.robotClass, robot.teamColor));
+        if (textureSet === undefined) throw new Error(`Missing robot textures for ${robot.id}.`);
+        const visual = createRobotSprite(robot, textureSet);
         visuals.set(robot.id, visual);
         robotLayer.addChild(visual.container);
       }

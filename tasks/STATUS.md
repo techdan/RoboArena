@@ -4,7 +4,7 @@
 
 ## TL;DR — you are here
 
-RoboArena is a web clone of Maxis *RoboSport* (1991). We reverse-engineered the
+RoboArena is a web clone of Maxis _RoboSport_ (1991). We reverse-engineered the
 original `ROBO.EXE` to recover the combat/gameplay model and raw tables, and
 documented it in `docs/reverse-engineering.md` (the RE doc). A reproducibility
 review is in `tasks/reverse-engineering-audit.md`: the v1 combat tables,
@@ -39,22 +39,22 @@ are exact for the version-locked binary.
 
 ## Phase state
 
-| Phase | State |
-|---|---|
-| Phase 1 — engine primitives | ✅ original skeleton superseded by Phase 1R |
-| **Reverse-engineering the original** | ✅ **complete & committed** — `docs/reverse-engineering.md` (21 sections) + `tools/re/` |
-| **RE implementation audit** | ✅ 44 claim groups verified; deferred labels/content isolated in `tasks/reverse-engineering-audit.md` |
-| **Engine realignment to binary truth** | ✅ **DRAFT COMPLETE** — RE verifier checks 44 independent claim groups, including all 77 descriptor rows |
-| Phase 1.5 — toolchain | ✅ **COMPLETE** — local checks and GitHub Actions pass |
-| Phase 2 — turn resolver | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added |
-| Phase 3 — projectile/blast events | ✅ **DRAFT COMPLETE** — named missile/grenade blast dispatch, finite ammo, stable launch/impact cues; 149 engine tests total |
-| Phase 4 — visibility / Scan & Fire | ✅ **DRAFT COMPLETE** — per-Team contacts, last-known markers, exact scan-sight strength, deterministic acquisition/cooldown/ammo |
-| Phase 5 — replay contract | ✅ **DRAFT COMPLETE** — per-turn seeds, strict versioned JSON validation, deterministic recorder/verifier, state/event digests, v1 golden fixture |
-| Phase 6 — arena renderer | ✅ **DRAFT COMPLETE** — Next.js 16/React 19/Tailwind shell, client-only PixiJS, verified 24×24 and 32×32 Rubble imports, production visual baseline; 188 tests total |
-| Phase 7 — movie playback | ✅ **DRAFT COMPLETE** — deterministic snapshots, PixiJS/GSAP robots and effects, full transport/scrub/speed/idle controls, production visual baseline; 192 tests total |
-| Assets (terrain + robots) | 🎨 in progress — terrain SVGs done; robot direction = **Foundry Plate** (turret=class, paint=team) |
-| Phases 8–13 (room server, UI/planner) | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1 |
-| Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival |
+| Phase                                           | State                                                                                                                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 — engine primitives                     | ✅ original skeleton superseded by Phase 1R                                                                                                                            |
+| **Reverse-engineering the original**            | ✅ **complete & committed** — `docs/reverse-engineering.md` (21 sections) + `tools/re/`                                                                                |
+| **RE implementation audit**                     | ✅ 44 claim groups verified; deferred labels/content isolated in `tasks/reverse-engineering-audit.md`                                                                  |
+| **Engine realignment to binary truth**          | ✅ **DRAFT COMPLETE** — RE verifier checks 44 independent claim groups, including all 77 descriptor rows                                                               |
+| Phase 1.5 — toolchain                           | ✅ **COMPLETE** — local checks and GitHub Actions pass                                                                                                                 |
+| Phase 2 — turn resolver                         | ✅ **DRAFT COMPLETE** — exact slow-terrain validation and Survival audit added                                                                                         |
+| Phase 3 — projectile/blast events               | ✅ **DRAFT COMPLETE** — named missile/grenade blast dispatch, finite ammo, stable launch/impact cues; 149 engine tests total                                           |
+| Phase 4 — visibility / Scan & Fire              | ✅ **DRAFT COMPLETE** — per-Team contacts, last-known markers, exact scan-sight strength, deterministic acquisition/cooldown/ammo                                      |
+| Phase 5 — replay contract                       | ✅ **DRAFT COMPLETE** — per-turn seeds, strict versioned JSON validation, deterministic recorder/verifier, state/event digests, v1 golden fixture                      |
+| Phase 6 — arena renderer                        | ✅ **DRAFT COMPLETE** — Next.js 16/React 19/Tailwind shell, client-only PixiJS, verified 24×24 and 32×32 Rubble imports, production visual baseline; 188 tests total   |
+| Phase 7 — movie playback                        | ✅ **DRAFT COMPLETE** — deterministic snapshots, PixiJS/GSAP robots and effects, full transport/scrub/speed/idle controls, production visual baseline; 194 tests total |
+| Assets (terrain + robots + effects)             | ✅ **SHIPPED & INTEGRATED** (2026-07-16) — Foundry Plate production set: 5 classes × 3 postures + turrets (generated), 11 effects, 3 markers; movie renderer consumes them with per-team paint recolor. Contract: `docs/asset-manifest.md`; regenerate robots via `scripts/generate-robot-assets.mjs` |
+| Phases 8–13 (room server, UI/planner)           | ⬜ not started; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1                                                                  |
+| Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival                                                                                                                   |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)
 
@@ -81,18 +81,18 @@ alliance semantics move to v2 and other deferred rows are later parity content.
 
 ## Document map
 
-| Need | File |
-|---|---|
-| **Binary-derived truth + offset map** | `docs/reverse-engineering.md` (RE) — §20 = master TBD list |
-| Canonical v1 spec (realigned mechanics + confidence labels) | `docs/spec.md` |
-| Engine realignment record | `tasks/engine-realignment-plan.md` (8 steps, numbers transcribed) |
-| **Canonical execution sequence** | `tasks/core-build-plan.md` |
-| RE reproducibility/confidence audit | `tasks/reverse-engineering-audit.md` |
-| Resolver architecture (Phase 2) | `tasks/phase2-resolver-design.md` |
-| Corrections we've been given | `tasks/lessons.md` (e.g. body color = team, not class) |
-| 15-phase roadmap | `docs/implementation-plan.md` |
-| Post-parity design alternatives and timing analysis | `docs/design-improvements.md` |
-| RE extraction scripts (need `pip install iced-x86`) | `tools/re/*.py` |
+| Need                                                        | File                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Binary-derived truth + offset map**                       | `docs/reverse-engineering.md` (RE) — §20 = master TBD list         |
+| Canonical v1 spec (realigned mechanics + confidence labels) | `docs/spec.md`                                                     |
+| Engine realignment record                                   | `tasks/engine-realignment-plan.md` (8 steps, numbers transcribed)  |
+| **Canonical execution sequence**                            | `tasks/core-build-plan.md`                                         |
+| RE reproducibility/confidence audit                         | `tasks/reverse-engineering-audit.md`                               |
+| Resolver architecture (Phase 2)                             | `tasks/phase2-resolver-design.md`                                  |
+| Corrections we've been given                                | `tasks/lessons.md` (e.g. body color = team, not class)             |
+| 15-phase roadmap                                            | `docs/implementation-plan.md`                                      |
+| Post-parity design alternatives and timing analysis         | `docs/design-improvements.md`                                      |
+| RE extraction scripts (need `pip install iced-x86`)         | `tools/re/*.py`                                                    |
 | Machine-readable extracted tables (git-ignored, regenerate) | `docs/extracted/robosport-data.json` via `tools/re/export_data.py` |
 
 ## Conventions (from `CLAUDE.md`)

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="marker selection-ring" data-anchor="64 101">
+  <desc>Selection indicator ring. Per the locked 2026-07-08 encoding, the ground ring means SELECTION ONLY (team identity lives in the chassis paint). Tint via the --team CSS variable or Pixi tint; place under the robot body at the shadow line (64,101).</desc>
+  <ellipse cx="64" cy="101" rx="49" ry="13" fill="none" stroke="var(--team, #2ec9ff)" stroke-width="5" opacity="0.22"/>
+  <ellipse cx="64" cy="101" rx="49" ry="13" fill="none" stroke="var(--team, #2ec9ff)" stroke-width="1.8" opacity="0.9"/>
+</svg>

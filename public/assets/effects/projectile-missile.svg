@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 56" class="effect projectile-missile" data-anchor="12 20" data-points="N">
+  <desc>Missile in flight for `projectile-launched` (missile-launcher). Points N with exhaust flame at the rear; anchor on the airframe center (12,20). Rotate to the flight heading; the engine stores no mid-flight position — travel is renderer interpolation only.</desc>
+  <defs>
+    <linearGradient id="pm-body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#39404a"/>
+      <stop offset="45%" stop-color="#9aa5b1"/>
+      <stop offset="58%" stop-color="#c7d0d8"/>
+      <stop offset="100%" stop-color="#2c323b"/>
+    </linearGradient>
+    <radialGradient id="pm-flame" cx="50%" cy="25%" r="80%">
+      <stop offset="0%" stop-color="#fff7d6"/>
+      <stop offset="45%" stop-color="#ffd24a"/>
+      <stop offset="100%" stop-color="#ff8a3a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M12 2 L16 10 L16 12 L8 12 L8 10 Z" fill="#e0742f" stroke="#8a3d12" stroke-width="0.8"/>
+  <rect x="8" y="11" width="8" height="22" rx="1.6" fill="url(#pm-body)" stroke="#14181e" stroke-width="0.8"/>
+  <rect x="8" y="16" width="8" height="1.4" fill="#22272f"/>
+  <rect x="8" y="26" width="8" height="1.4" fill="#22272f"/>
+  <polygon points="8,28 3,36 8,34" fill="#454d58" stroke="#14181e" stroke-width="0.7"/>
+  <polygon points="16,28 21,36 16,34" fill="#454d58" stroke="#14181e" stroke-width="0.7"/>
+  <rect x="9.2" y="33" width="5.6" height="3" rx="1" fill="#22272f"/>
+  <ellipse cx="12" cy="44" rx="5.5" ry="10" fill="url(#pm-flame)"/>
+  <ellipse cx="12" cy="40" rx="2.6" ry="5" fill="#fff7d6" opacity="0.9"/>
+</svg>

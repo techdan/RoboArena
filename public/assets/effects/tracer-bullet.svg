@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 32" class="effect tracer-bullet" data-anchor="4 4" data-points="N">
+  <desc>Bullet tracer streak for `projectile-launched` (bullet/burst weapons). Bright head at the top (anchor 4,4), tail fades; rotate to the flight heading and sweep from shooter to target. Stretch the tail, never the head.</desc>
+  <defs>
+    <linearGradient id="tb-streak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff7d6"/>
+      <stop offset="30%" stop-color="#ffd24a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ff8a3a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="2.6" y="2" width="2.8" height="29" rx="1.4" fill="url(#tb-streak)"/>
+  <circle cx="4" cy="4" r="2.4" fill="#fff7d6"/>
+  <circle cx="4" cy="4" r="1.2" fill="#ffffff"/>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="effect muzzle-flash" data-anchor="16 30" data-points="N">
+  <desc>Muzzle flash for the `fired` event. Anchor at the barrel mouth (16,30), flame points N; rotate to the shot heading and flash for 2-3 frames.</desc>
+  <defs>
+    <radialGradient id="mf-core" cx="50%" cy="80%" r="75%">
+      <stop offset="0%" stop-color="#fff7d6"/>
+      <stop offset="45%" stop-color="#ffd24a"/>
+      <stop offset="100%" stop-color="#ff8a3a"/>
+    </radialGradient>
+  </defs>
+  <polygon fill="#ff8a3a" opacity="0.85"
+    points="16,2 19,14 26,10 21,18 28,22 20,22 22,30 16,24 10,30 12,22 4,22 11,18 6,10 13,14"/>
+  <polygon fill="url(#mf-core)"
+    points="16,7 18,15 23,13 19.5,19 24,22 18.5,21.5 16,28 13.5,21.5 8,22 12.5,19 9,13 14,15"/>
+  <polygon fill="#fff7d6" points="16,11 17.4,17 20,19 17,20.5 16,26 15,20.5 12,19 14.6,17"/>
+</svg>

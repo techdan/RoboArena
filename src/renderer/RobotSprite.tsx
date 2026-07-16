@@ -1,18 +1,17 @@
-/** Layered Pixi robot visuals: one compact equivalent to the 12 planned posture SVGs. */
+/** Textured Foundry Plate robot visuals: posture-aware body swap + rotating class turret. */
 
 import { gsap } from "gsap";
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Sprite } from "pixi.js";
 import type { Heading, Posture } from "../engine/types";
 import type { MovieRobotSnapshot } from "./animations";
+import { ROBOT_SPRITE_GEOMETRY } from "./assets";
+import type { RobotTextureSet } from "./robotTextures";
 
 export const MOVIE_TILE_SIZE = 20;
 
-const TEAM_COLORS: Readonly<Record<string, number>> = {
-  red: 0xf05252,
-  blue: 0x4c8dff,
-  green: 0x42c77a,
-  yellow: 0xf2c94c,
-};
+/** Slightly over one tile so the chassis reads at 20px movie tiles. */
+const BODY_SIZE = MOVIE_TILE_SIZE * 1.15;
+const TURRET_SIZE = BODY_SIZE * (ROBOT_SPRITE_GEOMETRY.turretBox / ROBOT_SPRITE_GEOMETRY.bodyBox);
 
 const HEADING_RADIANS: Readonly<Record<Heading, number>> = {
   N: -Math.PI / 2,
@@ -25,46 +24,46 @@ const HEADING_RADIANS: Readonly<Record<Heading, number>> = {
   NW: (-3 * Math.PI) / 4,
 };
 
-const POSTURE_SCALE: Readonly<Record<Posture, number>> = {
-  upright: 1,
-  ducking: 0.86,
-  crouching: 0.72,
-};
+/** Turret art points N at rotation 0; headings are E-based angles. */
+const headingRotation = (heading: Heading) => HEADING_RADIANS[heading] + Math.PI / 2;
 
-const CLASS_LABEL = { rifle: "R", burst: "B", auto: "A", missile: "M", stealth: "S" } as const;
+/** The turret mount drops as the hull hunkers; offset from the body center. */
+const turretOffsetY = (posture: Posture) =>
+  ((ROBOT_SPRITE_GEOMETRY.turretPivotY[posture] - ROBOT_SPRITE_GEOMETRY.bodyBox / 2) /
+    ROBOT_SPRITE_GEOMETRY.bodyBox) *
+  BODY_SIZE;
 
 export interface RobotVisual {
   readonly container: Container;
-  readonly body: Graphics;
-  readonly scanNeedle: Graphics;
+  readonly body: Sprite;
+  readonly turret: Sprite;
+  readonly textures: RobotTextureSet;
   destroyed: boolean;
 }
 
-export const createRobotSprite = (robot: MovieRobotSnapshot): RobotVisual => {
+export const createRobotSprite = (
+  robot: MovieRobotSnapshot,
+  textures: RobotTextureSet,
+): RobotVisual => {
   const container = new Container();
   container.label = `robot:${robot.id}`;
 
-  const shadow = new Graphics().ellipse(0, 6, 7, 3).fill({ color: 0x000000, alpha: 0.35 });
-  const body = new Graphics()
-    .roundRect(-7, -7, 14, 14, 4)
-    .fill({ color: TEAM_COLORS[robot.teamColor] ?? 0xe8e8e8 })
-    .stroke({ color: 0xffffff, alpha: 0.5, width: 1 });
-  const core = new Graphics().circle(0, 0, 3).fill({ color: 0x111914 });
-  const label = new Text({
-    text: CLASS_LABEL[robot.robotClass],
-    style: { fill: 0xffffff, fontFamily: "monospace", fontSize: 7, fontWeight: "700" },
-  });
-  label.anchor.set(0.5);
-  const scanNeedle = new Graphics()
-    .moveTo(5, 0)
-    .lineTo(10, 0)
-    .stroke({ color: 0xb7ff79, alpha: 0.9, width: 2 });
+  const body = new Sprite(robot.destroyed ? textures.wreck : textures.bodies[robot.posture]);
+  body.anchor.set(0.5);
+  body.width = BODY_SIZE;
+  body.height = BODY_SIZE;
 
-  container.addChild(shadow, body, core, label, scanNeedle);
+  const turret = new Sprite(textures.turret);
+  turret.anchor.set(0.5);
+  turret.width = TURRET_SIZE;
+  turret.height = TURRET_SIZE;
+  turret.position.set(0, turretOffsetY(robot.posture));
+  turret.rotation = headingRotation(robot.scanHeading);
+  turret.visible = !robot.destroyed;
+
+  container.addChild(body, turret);
   placeRobot(container, robot);
-  container.scale.set(POSTURE_SCALE[robot.posture]);
-  scanNeedle.rotation = HEADING_RADIANS[robot.scanHeading];
-  return { container, body, scanNeedle, destroyed: robot.destroyed };
+  return { container, body, turret, textures, destroyed: robot.destroyed };
 };
 
 const placeRobot = (container: Container, robot: MovieRobotSnapshot) => {
@@ -91,17 +90,23 @@ export const updateRobotSprite = (
   visual.container.visible = true;
   const x = robot.position.x * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2;
   const y = robot.position.y * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2;
-  const scale = POSTURE_SCALE[robot.posture];
-  gsap.killTweensOf([visual.container.position, visual.container.scale, visual.scanNeedle]);
+  const turretY = turretOffsetY(robot.posture);
+  const turretRotation = headingRotation(robot.scanHeading);
+
+  visual.body.texture = robot.destroyed
+    ? visual.textures.wreck
+    : visual.textures.bodies[robot.posture];
+  visual.turret.visible = !robot.destroyed;
+  visual.destroyed = robot.destroyed;
+
+  gsap.killTweensOf([visual.container.position, visual.turret.position, visual.turret]);
   if (animate) {
     gsap.to(visual.container.position, { x, y, duration: 0.18, ease: "power1.inOut" });
-    gsap.to(visual.container.scale, { x: scale, y: scale, duration: 0.16 });
-    gsap.to(visual.scanNeedle, { rotation: HEADING_RADIANS[robot.scanHeading], duration: 0.16 });
+    gsap.to(visual.turret.position, { y: turretY, duration: 0.16 });
+    gsap.to(visual.turret, { rotation: turretRotation, duration: 0.16 });
   } else {
     visual.container.position.set(x, y);
-    visual.container.scale.set(scale);
-    visual.scanNeedle.rotation = HEADING_RADIANS[robot.scanHeading];
+    visual.turret.position.set(0, turretY);
+    visual.turret.rotation = turretRotation;
   }
-  visual.container.alpha = robot.destroyed ? 0 : 1;
-  visual.destroyed = robot.destroyed;
 };

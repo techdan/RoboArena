@@ -1,5 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="effect explosion-small">
-  <polygon class="burst" fill="#ff8a3a"
-    points="12,4 13.76,9.57 19.61,9.53 14.85,12.93 16.70,18.47 12,15 7.30,18.47 9.15,12.93 4.39,9.53 10.24,9.57"/>
-  <circle class="core" cx="12" cy="12" r="2.5" fill="#ffd24a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="effect explosion-small" data-anchor="24 24">
+  <desc>Small explosion — the speech-bubble replacement for `damaged` (a hit that connects but does not kill). Faceted Foundry starburst; renderer scales 0.3 to 1.2 and fades over ~0.3s.</desc>
+  <defs>
+    <radialGradient id="xs-core" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#fff7d6"/>
+      <stop offset="55%" stop-color="#ffd24a"/>
+      <stop offset="100%" stop-color="#ff8a3a"/>
+    </radialGradient>
+  </defs>
+  <polygon fill="#b83a1e" opacity="0.9"
+    points="24,3 28,16 40,9 33,19 45,24 33,29 40,39 28,32 24,45 20,32 8,39 15,29 3,24 15,19 8,9 20,16"/>
+  <polygon fill="url(#xs-core)"
+    points="24,8 27,17 35,13 30,21 39,24 30,27 35,35 27,31 24,40 21,31 13,35 18,27 9,24 18,21 13,13 21,17"/>
+  <polygon fill="#fff7d6" points="24,14 26,20 31,18 28,23 33,24 28,25 31,30 26,28 24,34 22,28 17,30 20,25 15,24 20,23 17,18 22,20"/>
+  <circle cx="24" cy="24" r="3.2" fill="#ffffff"/>
+  <circle cx="38" cy="14" r="1.3" fill="#e0742f"/>
+  <circle cx="10" cy="33" r="1.1" fill="#e0742f"/>
+  <circle cx="36" cy="36" r="1" fill="#454d58"/>
+  <circle cx="12" cy="12" r="1" fill="#454d58"/>
 </svg>

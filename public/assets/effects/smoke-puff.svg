@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="effect smoke-puff" data-anchor="24 28">
+  <desc>Smoke puff for explosion aftermath and wreck idle smoke. Renderer drifts it upward while scaling up slightly and fading; spawn 2-3 with random small offsets.</desc>
+  <g fill="#6a7480">
+    <circle cx="18" cy="30" r="9" opacity="0.55"/>
+    <circle cx="29" cy="27" r="11" opacity="0.5"/>
+    <circle cx="24" cy="18" r="8" opacity="0.45"/>
+    <circle cx="35" cy="20" r="6" opacity="0.4"/>
+    <circle cx="13" cy="21" r="5.5" opacity="0.4"/>
+  </g>
+  <g fill="#8b95a1">
+    <circle cx="26" cy="22" r="5" opacity="0.35"/>
+    <circle cx="19" cy="26" r="4.5" opacity="0.3"/>
+  </g>
+</svg>

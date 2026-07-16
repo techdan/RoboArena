@@ -23,6 +23,13 @@ export default tseslint.config(
     },
   },
   {
+    // Node-run build scripts (asset generation etc.).
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly", URL: "readonly" },
+    },
+  },
+  {
     files: ["src/engine/**/*.ts"],
     rules: {
       "no-restricted-properties": [

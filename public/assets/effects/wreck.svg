@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="effect wreck" data-anchor="64 64">
+  <desc>Destroyed robot husk for the `destroyed` end state — charred Foundry Plate carapace with broken leg stumps on a scorch mark. Class-agnostic; replaces the body sprite (hide the turret). Same footprint as body files: ground anchor (64,93), shadow line y=101.</desc>
+  <defs>
+    <linearGradient id="wk-char" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a4440"/>
+      <stop offset="55%" stop-color="#2b2724"/>
+      <stop offset="100%" stop-color="#16130f"/>
+    </linearGradient>
+    <radialGradient id="wk-scorch" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#100d0a" stop-opacity="0.85"/>
+      <stop offset="70%" stop-color="#1c1712" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1c1712" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="64" cy="99" rx="52" ry="16" fill="url(#wk-scorch)"/>
+  <polygon points="24,84 13.5,86.5 16,90.5 26,89.5" fill="#22201d" stroke="#0e0c0a" stroke-width="1"/>
+  <polygon points="104,84 114.5,86.5 112,90.5 102,89.5" fill="#22201d" stroke="#0e0c0a" stroke-width="1"/>
+  <polygon points="31,63.5 26.5,65.5 22,76 27,77" fill="#2b2724" stroke="#0e0c0a" stroke-width="1"/>
+  <polygon points="97,63.5 101.5,65.5 106,76 101,77" fill="#2b2724" stroke="#0e0c0a" stroke-width="1"/>
+  <polygon points="38,94 32.5,95.5 29,103 34,104" fill="#2b2724" stroke="#0e0c0a" stroke-width="1"/>
+  <polygon points="90,94 95.5,95.5 99,103 94,104" fill="#2b2724" stroke="#0e0c0a" stroke-width="1"/>
+  <path d="M40 78 Q41 64 48 59 Q56 54 66 55 Q76 56 83 62 Q88 67 88 78 Q86 88 78 92 Q70 96 62 95 Q52 94 46 89 Q40 84 40 78 Z"
+        fill="url(#wk-char)" stroke="#0e0c0a" stroke-width="1.4"/>
+  <path d="M50 62 L58 70 L54 76 L62 82" fill="none" stroke="#0e0c0a" stroke-width="1.6"/>
+  <path d="M72 60 L70 68 L78 74" fill="none" stroke="#0e0c0a" stroke-width="1.4"/>
+  <polygon points="60,55 66,52 70,56 66,58" fill="#3a352f" stroke="#0e0c0a" stroke-width="0.8"/>
+  <polygon points="84,64 92,60 94,65 88,68" fill="#2b2724" stroke="#0e0c0a" stroke-width="0.8"/>
+  <circle cx="57" cy="73" r="2.6" fill="#e0742f" opacity="0.85"/>
+  <circle cx="57" cy="73" r="1.2" fill="#ffd24a"/>
+  <circle cx="71" cy="84" r="1.8" fill="#e0742f" opacity="0.7"/>
+  <circle cx="71" cy="84" r="0.8" fill="#ffd24a" opacity="0.9"/>
+  <g fill="#6a7480" opacity="0.5">
+    <circle cx="62" cy="44" r="5"/>
+    <circle cx="68" cy="37" r="4"/>
+    <circle cx="64" cy="30" r="3"/>
+  </g>
+  <polygon points="34,96 40,98 38,102 32,100" fill="#3a352f" stroke="#0e0c0a" stroke-width="0.8"/>
+  <polygon points="90,94 96,92 98,96 92,98" fill="#3a352f" stroke="#0e0c0a" stroke-width="0.8"/>
+</svg>

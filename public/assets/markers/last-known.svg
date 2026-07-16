@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="marker last-known" data-anchor="64 64">
+  <desc>Last-known-position ghost for `enemy-lost` / `last-known-marker` events — a dashed hollow of the quadruped silhouette with a query glyph. Neutral steel; render at ~55% alpha on the tile where the contact was last confirmed.</desc>
+  <ellipse cx="64" cy="101" rx="40" ry="10" fill="none" stroke="#8b95a1" stroke-width="1.6" stroke-dasharray="7 5" opacity="0.6"/>
+  <path d="M38 73 Q39 58 46 54 Q54 48.5 64 48.5 Q74 48.5 82 54 Q89 58 90 73 Q89 83 80 89.5 Q72 94.5 64 94.5 Q56 94.5 48 89.5 Q39 83 38 73 Z"
+        fill="#22272f" fill-opacity="0.35" stroke="#8b95a1" stroke-width="2" stroke-dasharray="6 4"/>
+  <path d="M47 66 L28 70 M81 66 L100 70 M50 86 L34 98 M78 86 L94 98" stroke="#8b95a1" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"/>
+  <circle cx="64" cy="42" r="10" fill="none" stroke="#8b95a1" stroke-width="1.8" stroke-dasharray="5 4" opacity="0.8"/>
+  <path d="M58.5 68.5 Q58.5 62.5 64 62.5 Q69.5 62.5 69.5 67 Q69.5 70.5 66 71.8 Q64.6 72.4 64.6 74.5 L64.6 76.5"
+        fill="none" stroke="#cfd6dd" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="64.6" cy="82.5" r="2.3" fill="#cfd6dd"/>
+</svg>
