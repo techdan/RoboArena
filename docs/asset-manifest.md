@@ -38,15 +38,20 @@ script; tune there and regenerate.
   stamps `data-turret-pivot="64 <y>"`: the turret mount for that posture —
   **42** upright, **50** ducking, **54** crouching (the hull drops as it
   hunkers). Mirrored in `ROBOT_SPRITE_GEOMETRY` (`src/renderer/assets.ts`).
+  Posture silhouettes are deliberately distinct (user-directed 2026-07-16):
+  upright = legs straight down-and-out; ducking = legs rise to a sharp HIGH
+  knee then drop steeply; crouching = a ball on four short downward stub
+  legs, no knee joints.
 - **Turret files** — viewBox `0 0 96 96`, drawn top-down pointing **N**, pivot
   at the exact center (48,48) so a Pixi sprite with `anchor 0.5` rotates
   correctly. The 1.18× small-size readability scale is **baked in**
   (`data-scale-baked`).
-- **Team paint hooks** — recolorable hexes shared by every generated file:
-  `#d8453a / #a3241f / #5f1213` (fp-paint gradient stops), `#c8362e` (accent),
-  `#ff9d8c` (edge). `src/renderer/robotTextures.ts` string-replaces these per
-  team and rasterizes to a cached canvas texture. Do NOT use Pixi `tint` for
-  team color — it multiplies the steel greys too.
+- **Team paint hooks** — recolorable hexes shared by the generated set:
+  `#d8453a / #a3241f / #5f1213` (fp-paint gradient stops) appear in bodies and
+  turrets, `#c8362e` is the turret accent, and `#ff9d8c` is the body edge.
+  `src/renderer/robotTextures.ts` string-replaces these per team and rasterizes
+  to a cached canvas texture. Do NOT use Pixi `tint` for team color — it
+  multiplies the steel greys too.
 - **Wreck** — `effects/wreck.svg` is the class-agnostic destroyed state on the
   same 128 footprint; swap it in for the body and hide the turret.
 
@@ -62,7 +67,7 @@ coordinate-derived rotation = `atan2(dy, dx) + π/2`.
 | ResolutionEvent kind | Asset(s) | Treatment |
 |---|---|---|
 | `fired` | muzzle-flash | at shooter, rotated to target, ~2-frame flash |
-| `projectile-launched` (bullet/burst) | tracer (procedural line, `#ffd24a`) | 0.28s fade |
+| `projectile-launched` (bullet/burst) | tracer-bullet | rotated sweep from shooter to target |
 | `projectile-launched` (missile) | projectile-missile | position tween from→to, rotated |
 | `projectile-launched` (grenade) | projectile-grenade | tween + mid-flight scale swell (fake lob) |
 | `projectile-impacted` (explosive) | explosion-large + blast-ring + smoke-puff | pop 0.3→1.25, ring 0.35→1.5 |
@@ -77,10 +82,10 @@ coordinate-derived rotation = `atan2(dy, dx) + π/2`.
 
 ## Renderer integration notes
 
-- **Preload**: effect + marker textures are read synchronously via
+- **Preload**: effect + movie-marker textures are read synchronously via
   `Assets.get` inside the per-tick effect pass, so `MoviePlayer` awaits
-  `EFFECT_ASSET_URLS` + `MARKER_ASSET_URLS` before ready. Add new effects to
-  `EFFECT_ASSETS` or they will silently not render.
+  `EFFECT_ASSET_URLS` + `MOVIE_MARKER_ASSET_URLS` before ready. Add new effects
+  to `EFFECT_ASSETS` or they will silently not render.
 - **Robot textures** load through `loadRobotTextures()` (fetch → recolor →
   canvas rasterize → cache per file+team). Known palettes: red, blue, green,
   yellow; unknown team colors fall back to red paint.
@@ -88,8 +93,9 @@ coordinate-derived rotation = `atan2(dy, dx) + π/2`.
   `createImageBitmap`; a single XML error (e.g. a raw `&` in a `<desc>`)
   fails the whole texture load and the movie renderer errors out. Keep SVG
   text XML-escaped; `data-*` metadata is fine.
-- Tile size is 20px in the movie — sprites were designed to read at that
-  size (that's what the baked 1.18× turret scale is for). The visual baseline
+- Tile size is 28px in the movie (`MOVIE_TILE_SIZE`; raised from the 20px
+  placeholder size for stance readability — the baked 1.18× turret scale
+  serves the same goal). The visual baseline
   is `tests/visual/movie.spec.ts-snapshots/`; any deliberate art change must
   regenerate it via Playwright `--update-snapshots` and be eyeballed.
 

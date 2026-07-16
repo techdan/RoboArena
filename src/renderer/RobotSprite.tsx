@@ -7,9 +7,11 @@ import type { MovieRobotSnapshot } from "./animations";
 import { ROBOT_SPRITE_GEOMETRY } from "./assets";
 import type { RobotTextureSet } from "./robotTextures";
 
-export const MOVIE_TILE_SIZE = 20;
+/** 28px tiles: 20px (Phase 6/7 placeholder size) proved too small to read
+ *  robot stances on a desktop display; 24×24 and 32×32 arenas still fit. */
+export const MOVIE_TILE_SIZE = 28;
 
-/** Slightly over one tile so the chassis reads at 20px movie tiles. */
+/** Slightly over one tile so the chassis fills its footprint on the board. */
 const BODY_SIZE = MOVIE_TILE_SIZE * 1.15;
 const TURRET_SIZE = BODY_SIZE * (ROBOT_SPRITE_GEOMETRY.turretBox / ROBOT_SPRITE_GEOMETRY.bodyBox);
 

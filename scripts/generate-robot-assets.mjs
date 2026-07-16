@@ -111,6 +111,75 @@ const LEGS = `    <g class="leg rear-left">
       <path d="M101 109.5 99.5 113.5" stroke="#0f1318" stroke-width="1.1"/>
     </g>`;
 
+/** Ducking legs — the "ready stance": the upper segment rises from the hip to
+ *  a HIGH knee (above the hull line), then the lower segment drops steeply to
+ *  a foot planted close in. The knee spike is the posture's silhouette tell,
+ *  readable even at one game tile. Drawn to match the ducking hull drop. */
+const LEGS_DUCKING = `    <g class="leg rear-left">
+      <polygon points="47,63.5 47,70.5 27,59.5 27,53.5" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <path d="M44 64.5 31 57" stroke="#eef2f5" stroke-width="1" opacity="0.6"/>
+      <polygon points="26,58 30.5,59.5 23,87 19,85" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M27.5 63 22 82" stroke="#b9c2cb" stroke-width="1.4" opacity="0.9"/>
+      <circle cx="28" cy="56.5" r="4" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <circle cx="28" cy="56.5" r="1.4" fill="#22272f"/>
+      <polygon points="23,84.5 12.5,87 15,91 25.5,90" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+      <path d="M18.5 87 19.5 90.5" stroke="#0f1318" stroke-width="1.1"/>
+    </g>
+    <g class="leg rear-right">
+      <polygon points="81,63.5 81,70.5 101,59.5 101,53.5" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <path d="M84 64.5 97 57" stroke="#eef2f5" stroke-width="1" opacity="0.6"/>
+      <polygon points="102,58 97.5,59.5 105,87 109,85" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M100.5 63 106 82" stroke="#b9c2cb" stroke-width="1.4" opacity="0.9"/>
+      <circle cx="100" cy="56.5" r="4" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <circle cx="100" cy="56.5" r="1.4" fill="#22272f"/>
+      <polygon points="105,84.5 115.5,87 113,91 102.5,90" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+      <path d="M109.5 87 108.5 90.5" stroke="#0f1318" stroke-width="1.1"/>
+    </g>
+    <g class="leg front-left">
+      <polygon points="51,81.5 48,88 31,73.5 33,68.5" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <path d="M47.5 83 36 73.5" stroke="#eef2f5" stroke-width="1" opacity="0.6"/>
+      <polygon points="31,73 35.5,74 30,105.5 26,103.5" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M32.5 78 28.5 100" stroke="#b9c2cb" stroke-width="1.4" opacity="0.9"/>
+      <circle cx="33" cy="71.5" r="4.3" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <circle cx="33" cy="71.5" r="1.5" fill="#22272f"/>
+      <polygon points="30,103 19,106.5 22.5,110.5 33,108.5" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+      <path d="M25.5 106.5 27 110" stroke="#0f1318" stroke-width="1.1"/>
+    </g>
+    <g class="leg front-right">
+      <polygon points="77,81.5 80,88 97,73.5 95,68.5" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <path d="M80.5 83 92 73.5" stroke="#eef2f5" stroke-width="1" opacity="0.6"/>
+      <polygon points="97,73 92.5,74 98,105.5 102,103.5" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M95.5 78 99.5 100" stroke="#b9c2cb" stroke-width="1.4" opacity="0.9"/>
+      <circle cx="95" cy="71.5" r="4.3" fill="url(#fp-steel)" stroke="#22272f" stroke-width="1"/>
+      <circle cx="95" cy="71.5" r="1.5" fill="#22272f"/>
+      <polygon points="98,103 109,106.5 105.5,110.5 95,108.5" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+      <path d="M102.5 106.5 101 110" stroke="#0f1318" stroke-width="1.1"/>
+    </g>`;
+
+/** Crouching legs — fully RETRACTED: a ball on four SHORT downward stub legs
+ *  (no knee joints). The hull hovers low and the stubs drop nearly straight
+ *  to compact foot pads tucked close under it. */
+const LEGS_CROUCHING = `    <g class="leg rear-left">
+      <polygon points="40,85 46,87 40,100 34,98" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M42 88 37.5 97" stroke="#b9c2cb" stroke-width="1.2" opacity="0.8"/>
+      <polygon points="32,97 25.5,99.5 28,103.5 37,101" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+    </g>
+    <g class="leg rear-right">
+      <polygon points="88,85 82,87 88,100 94,98" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M86 88 90.5 97" stroke="#b9c2cb" stroke-width="1.2" opacity="0.8"/>
+      <polygon points="96,97 102.5,99.5 100,103.5 91,101" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+    </g>
+    <g class="leg front-left">
+      <polygon points="52,91 58,92.5 54,105 48,103.5" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M54 94 51 102" stroke="#b9c2cb" stroke-width="1.2" opacity="0.8"/>
+      <polygon points="46,102.5 40,105 43,108.5 51,106.5" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+    </g>
+    <g class="leg front-right">
+      <polygon points="76,91 70,92.5 74,105 80,103.5" fill="url(#fp-iron)" stroke="#181d24" stroke-width="1"/>
+      <path d="M74 94 77 102" stroke="#b9c2cb" stroke-width="1.2" opacity="0.8"/>
+      <polygon points="82,102.5 88,105 85,108.5 77,106.5" fill="url(#fp-iron)" stroke="#14181e" stroke-width="1"/>
+    </g>`;
+
 /** Hull interiors per class (drawn in rifle hull space; class transform bakes
  *  the silhouette variant around the ground anchor (64,93)). */
 const HULLS = {
@@ -332,30 +401,31 @@ const TURRETS = {
 };
 
 /**
- * Posture rig. Legs fold via transforms around the ground line (y=101) so
- * feet stay planted while knees splay; the hull drops and flattens around its
- * belly line (y=94.5). The turret pivot is the hull mount point mapped
- * through the hull posture transform — recompute it if you tune these:
+ * Posture rig. Each posture has its own hand-authored leg set (silhouette is
+ * the differentiator: straight-down / high-knee / retracted) while the hull
+ * drops and flattens around its belly line (y=94.5). The turret pivot is the
+ * hull mount point mapped through the hull posture transform — recompute it
+ * if you tune these:
  *   pivotY = round(dropY + 94.5 - (94.5 - 42) * flattenY)
  */
 const POSTURES = {
   upright: {
-    legsTransform: "",
+    legs: LEGS,
     bodyTransform: "",
     pivot: [64, 42],
-    desc: "full height; standard travel posture",
+    desc: "full height; legs angle straight down-and-out from the hip",
   },
   ducking: {
-    legsTransform: "translate(64 101) scale(1.04 0.82) translate(-64 -101)",
+    legs: LEGS_DUCKING,
     bodyTransform: "translate(0 6) translate(64 94.5) scale(1 0.96) translate(-64 -94.5)",
     pivot: [64, 50],
-    desc: "combat hunker; knees bent, hull dropped ~6px, same traversal as upright",
+    desc: "combat hunker; legs rise to a sharp high knee then drop steeply, hull down ~6px, same traversal as upright",
   },
   crouching: {
-    legsTransform: "translate(64 101) scale(1.14 0.5) translate(-64 -101)",
-    bodyTransform: "translate(0 4) translate(64 94.5) scale(1 0.85) translate(-64 -94.5)",
+    legs: LEGS_CROUCHING,
+    bodyTransform: "translate(64 94.5) scale(1 0.78) translate(-64 -94.5)",
     pivot: [64, 54],
-    desc: "near-prone; legs splayed flat, belly at the ground line, best cover class",
+    desc: "turtled down; a ball on four short downward stub legs (no knee joints), hull hovering just off the deck, best cover class",
   },
 };
 
@@ -365,15 +435,12 @@ function bodyFile(className, postureName) {
   const posture = POSTURES[postureName];
   const transform = [posture.bodyTransform, hull.transform].filter(Boolean).join(" ");
   const bodyOpen = transform ? `  <g class="body" transform="${transform}">` : `  <g class="body">`;
-  const legsOpen = posture.legsTransform
-    ? `  <g class="legs" stroke-linejoin="round" transform="${posture.legsTransform}">`
-    : `  <g class="legs" stroke-linejoin="round">`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="robot-body ${className}" data-class="${className}" data-posture="${postureName}" data-turret-pivot="${posture.pivot[0]} ${posture.pivot[1]}" role="img" aria-label="${className} bot body, ${postureName}">
   <desc>Foundry Plate ${className} chassis, ${postureName} posture (${posture.desc}). Layers: shadow, legs, body. Turret ships separately in turret.svg and mounts at data-turret-pivot. Generated by scripts/generate-robot-assets.mjs — do not hand-edit.</desc>
 ${DEFS}
 ${SHADOW}
-${legsOpen}
-${LEGS}
+  <g class="legs" stroke-linejoin="round">
+${posture.legs}
   </g>
 ${bodyOpen}
 ${hull.body}

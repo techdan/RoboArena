@@ -87,3 +87,4 @@ export const MARKER_ASSETS = {
 
 export const EFFECT_ASSET_URLS = Object.values(EFFECT_ASSETS);
 export const MARKER_ASSET_URLS = Object.values(MARKER_ASSETS);
+export const MOVIE_MARKER_ASSET_URLS = [MARKER_ASSETS.lastKnown, MARKER_ASSETS.scanLock];
