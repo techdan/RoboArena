@@ -1197,7 +1197,7 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 22 | **Scan cone hard boundary** | closed ±90° forward semicircle; boundary included | `seg76:0x0775` → `seg21:0x0CCF` | 🟩 | P1 |
-| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; nearest adjusted distance; equal candidates use stable original candidate order until the unnamed priority UI label is needed | `seg6:0x1F74`; `seg18:0x072C`; `seg6:0x3D79` | 🟩 mechanism | P1 |
+| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; exact cone-boundary distance adjustment `+2`; equal adjusted candidates use stable original candidate order until the scan-grid priority value's UI label is needed | `seg6:0x1F74`; `seg18:0x072C..0x0888`; `seg21:0x0CCF`; `seg96:0x1FC5`; `seg6:0x3D79` | 🟩 mechanism / 🟨 value label | P1 |
 | 24 | **Aim & Fire moving-target** | **confirmed**: off-aimed-tile halves hit (§15, `seg21:0x0F0A`) | — | 🟩 | P1 |
 | 25 | **Arena coordinate reconciliation** | MAP=`body[y*width+x]`; no flip/transpose; display border +8 | `seg81:0x092F/0x09F2` | 🟩 | P1 |
 | 26 | **Home Area / Dock positions per arena** | homes use exact 6/8/12/16 dimension thresholds at NW/NE/SE/SW; Team Name box fixes home slot without compaction; Dock is off-field | `seg87:0x1F32`; manual; complete INF/MAP parse | 🟩 | P1 |

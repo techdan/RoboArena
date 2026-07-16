@@ -56,6 +56,10 @@ export interface FireContext {
   readonly rng: Rng;
   /** Damage stagger is active for this firing action (original field +0x1E). */
   readonly damageStaggered?: boolean;
+  /** Selects the named accuracy table column and alignment penalty. Defaults to Aim & Fire. */
+  readonly fireMode?: "aim" | "scan";
+  /** Scan & Fire centering magnitude (0..16); Aim & Fire always behaves as 16. */
+  readonly alignmentMagnitude?: number;
 }
 
 const clampScore = (score: number): number => Math.max(0, Math.min(19, score));
@@ -70,11 +74,15 @@ export const distanceScoreAdjustment = (distance: number, accuracyBase: number):
 const terrainScoreAdjustment = (
   terrain: ArenaTile["terrain"] | undefined,
   weapon: WeaponDefinition,
+  fireMode: "aim" | "scan",
 ): number => {
   if (terrain === "rough") return 2;
   if (terrain === "bush") return -1;
   if (terrain === "low-wall") return -3;
-  const index = weapon.accuracyAddIndex ?? 0;
+  const index =
+    fireMode === "scan"
+      ? (weapon.scanAccuracyAddIndex ?? weapon.accuracyAddIndex ?? 0)
+      : (weapon.accuracyAddIndex ?? 0);
   return WEAPON_ACCURACY_ADDS[index];
 };
 
@@ -86,15 +94,19 @@ export const calculateLiveFireScore = (input: {
   readonly weapon: WeaponDefinition;
   readonly targetOnAimedTile: boolean;
   readonly damageStaggered?: boolean;
+  readonly fireMode?: "aim" | "scan";
+  readonly alignmentMagnitude?: number;
 }): number => {
   const accuracyBase = input.accuracy + 4;
+  const fireMode = input.fireMode ?? "aim";
+  const alignmentMagnitude = fireMode === "scan" ? (input.alignmentMagnitude ?? 16) : 16;
+  const alignmentPenalty = alignmentMagnitude <= 4 ? 4 : alignmentMagnitude <= 8 ? 2 : 0;
   let score =
     COVER_CLASS_HIT_SCORE[input.coverClass] +
     distanceScoreAdjustment(input.distance, accuracyBase) +
-    terrainScoreAdjustment(input.targetTerrain, input.weapon);
+    terrainScoreAdjustment(input.targetTerrain, input.weapon, fireMode) -
+    alignmentPenalty;
 
-  // Aim & Fire supplies alignment magnitude 16, so the live resolver's
-  // Scan & Fire-only alignment penalty (-4 at <=4, -2 at <=8) is zero here.
   score = clampScore(score);
   if (input.damageStaggered) score >>= 1;
   if (!input.targetOnAimedTile) score >>= 1;
@@ -143,6 +155,8 @@ export const resolveFire = (ctx: FireContext): FireResolution => {
     weapon: ctx.weapon,
     targetOnAimedTile: ctx.aimedTile.x === ctx.targetTile.x && ctx.aimedTile.y === ctx.targetTile.y,
     ...(ctx.damageStaggered === undefined ? {} : { damageStaggered: ctx.damageStaggered }),
+    ...(ctx.fireMode === undefined ? {} : { fireMode: ctx.fireMode }),
+    ...(ctx.alignmentMagnitude === undefined ? {} : { alignmentMagnitude: ctx.alignmentMagnitude }),
   });
   const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
   const roll = ctx.rng.nextUint32() & 0xff;

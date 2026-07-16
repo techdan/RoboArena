@@ -351,7 +351,7 @@ describe("resolveTurn", () => {
     expect(unknown).toMatchObject({ outcome: "malformed-orders", code: "unknown-robot" });
   });
 
-  it("explicitly rejects Scan & Fire until Phase 4", () => {
+  it("accepts a valid Scan & Fire command", () => {
     const state = makeMatch();
     const result = resolveTurn({
       state,
@@ -363,7 +363,7 @@ describe("resolveTurn", () => {
         },
       ]),
     });
-    expect(result).toMatchObject({ outcome: "malformed-orders", code: "unsupported-command" });
+    expect(result).toMatchObject({ outcome: "resolved" });
   });
 
   it("returns MalformedOrders for unknown imported commands and weapons", () => {
@@ -707,7 +707,8 @@ describe("resolveTurn", () => {
     const result = requireResolved(
       resolveTurn({ state, orders: ordersFor(state, []), seed: "seq" }),
     );
-    expect(result.events.map((event) => event.seq)).toEqual([0, 1]);
-    expect(result.events.map((event) => event.kind)).toEqual(["turn-start", "turn-end"]);
+    expect(result.events.map((event) => event.seq)).toEqual(result.events.map((_, index) => index));
+    expect(result.events[0]?.kind).toBe("turn-start");
+    expect(result.events.at(-1)?.kind).toBe("turn-end");
   });
 });

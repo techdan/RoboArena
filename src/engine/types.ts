@@ -147,6 +147,15 @@ export interface TurnOrders {
   readonly timelines: readonly CommandTimeline[];
 }
 
+export interface VisibilityState {
+  /** Arena coordinates encoded as stable `x,y` keys. */
+  readonly visibleTiles: ReadonlySet<string>;
+  /** Enemy robot ids visible specifically to the observing Team. */
+  readonly visibleEnemies: ReadonlySet<string>;
+  /** Markers carried into this visibility snapshot from the previous turn. */
+  readonly lastKnownMarkers: readonly TileCoord[];
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Resolution events — what the renderer consumes
 
@@ -185,11 +194,30 @@ export type ResolutionEvent = EventEnvelope &
         readonly heading: Heading;
       }
     | {
+        readonly kind: "enemy-spotted";
+        readonly teamId: string;
+        readonly enemyId: string;
+        readonly at: TileCoord;
+      }
+    | {
+        readonly kind: "enemy-lost";
+        readonly teamId: string;
+        readonly enemyId: string;
+        readonly lastSeenAt: TileCoord;
+      }
+    | {
+        readonly kind: "scan-target-acquired";
+        readonly shooterId: string;
+        readonly targetId: string;
+        readonly distance: number;
+      }
+    | {
         readonly kind: "fired";
         readonly shooterId: string;
         readonly commandIndex: number;
         readonly weapon: WeaponId;
         readonly target: TileCoord;
+        readonly fireMode: "aim" | "scan";
       }
     | {
         readonly kind: "projectile-launched";
@@ -236,6 +264,12 @@ export type ResolutionEvent = EventEnvelope &
         readonly radius: number;
       }
     | { readonly kind: "destroyed"; readonly robotId: string }
+    | {
+        readonly kind: "last-known-marker";
+        readonly teamId: string;
+        readonly enemyId: string;
+        readonly at: TileCoord;
+      }
     | {
         readonly kind: "command-aborted";
         readonly robotId: string;
@@ -286,7 +320,12 @@ export interface MatchState {
   readonly teams: readonly TeamState[];
   readonly arena: Arena;
   /** Last-known enemy positions per observing team, from the previous turn end. */
-  readonly lastKnownMarkers: ReadonlyMap<string, readonly TileCoord[]>;
+  readonly lastKnownMarkers: ReadonlyMap<string, readonly LastKnownMarker[]>;
+}
+
+export interface LastKnownMarker {
+  readonly enemyId: string;
+  readonly at: TileCoord;
 }
 
 export interface Arena {

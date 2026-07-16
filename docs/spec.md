@@ -355,6 +355,13 @@ independent score or damage modifier beyond endpoint/LoS legality. ✅
   the weapon's Scan repeat interval. The final equal-distance priority value's
   UI meaning remains isolated; it does not change the timing/filter pipeline. ✅/🟨
 
+The acquisition adjustment is exact: a candidate on the inclusive cone boundary
+adds 2 to its floored-Euclidean distance; other candidates use raw distance.
+Equal adjusted distances retain Home-slot/roster candidate order in v1. The
+live-fire alignment bands are exact; RoboArena reconstructs their 0..16 input
+from normalized heading/target centering while the original scan-grid value's
+UI label remains unnamed. ✅ adjustment / 🔵 alignment-input reconstruction
+
 #### Stationary scanner versus a moving target
 
 Scan & Fire is sampled at deterministic firing opportunities, not continuously
@@ -379,7 +386,8 @@ Friendly bodies do **not** block bullets and do not take damage from friendly bu
 
 ## 7. Visibility
 
-Per-team visibility is computed each tick. A team sees:
+Per-team visibility is semantically current every tick and is recomputed at each
+boundary that can change position, posture, heading, or survival. A team sees:
 - All robots on its Side (allies are always visible)
 - Tiles within any of its own robots' scan cone × range with unobstructed LoS
 - Enemy robots in those visible tiles (with caveats below)
@@ -446,7 +454,7 @@ command fires; later projectile motion cannot reroll the result or enable
 in-flight dodging. RoboArena applies the state change at the fire boundary and
 emits `projectile-launched` / `projectile-impacted` renderer cues;
 exact on-screen travel duration is presentation tuning, not an unresolved
-business-rule gate. Scan & Fire remains unsupported until Phase 4.
+business-rule gate. Scan & Fire uses the same fire-boundary result authority.
 
 Strict impact timing is a separate product decision from result locking. The
 current MVP rule above is fire-boundary state mutation. A proposed fidelity

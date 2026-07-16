@@ -11,10 +11,10 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R, 2, and 3 are draft-complete with 149 passing tests. The engine now
+Phases 1R through 4 are draft-complete with 170 passing tests. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
-named projectile/blast event semantics. The next engine gate is Phase 4
-ordinary visibility and Scan & Fire. Exact screen travel duration is
+named projectile/blast events, per-Team visibility, and Scan & Fire. The next
+engine gate is Phase 5 replay format/verification. Exact screen travel duration is
 presentation tuning and is not an engine blocker.
 
 The immediate critical path is:
@@ -62,8 +62,9 @@ The reproducibility audit and confirmed-value inventory are recorded in
 working value and proceed through the confidence policy above.
 
 **Exit gate:** satisfied. All constants needed by Phase 1R/2 are confirmed.
-The remaining Scan & Fire tie-break label is isolated to Phase 4; arena MAP
-orientation/import is now verified row-major.
+The unnamed Scan & Fire equal-distance priority is contained by Phase 4's
+stable original-order fallback and remains a non-blocking research label;
+arena MAP orientation/import is verified row-major.
 
 ## Milestone 1 — Phase 1R: realign engine primitives [DRAFT COMPLETE]
 
@@ -208,7 +209,6 @@ playable end to end.
 
 ## Next actions
 
-1. Implement ordinary visibility and Scan & Fire in Phase 4, explicitly without
-   Stealth.
-2. Continue through replay, then establish the Phase 8 authoritative room
+1. Implement the Phase 5 replay contract and golden determinism gate.
+2. Establish the Phase 8 authoritative room
    boundary before planner state is designed around local-only assumptions.

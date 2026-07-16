@@ -182,9 +182,10 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
 - In 3-/4-Team matches, friendliness is Side-based. Allied robots are always
   visible, but visible-enemy and last-known sets remain private to each Team.
 - Scan & Fire remains active for `seconds×60`, reacquires an eligible enemy at
-  the named weapon's repeat interval, honors player maximum distance, and uses
-  nearest adjusted-distance selection. The semantic name of its final tie-break
-  value remains documented but does not affect the four closed gates.
+  the named weapon's repeat interval, honors player maximum distance, and adds
+  2 to candidate distance only on the exact inclusive cone boundary. The
+  semantic name of its final scan-grid tie-break value remains documented but
+  does not affect the four closed gates.
 - Survival ends with the last Side standing. Each Team contributes existing
   score + 150 per survivor + 400 when that Team has any survivor; allied
   contributions are summed and the Side total is shown on every allied row.

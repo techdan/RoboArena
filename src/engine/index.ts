@@ -17,6 +17,8 @@ export * from "./survival.js";
 export * from "./rng.js";
 export * from "./geometry.js";
 export * from "./cover.js";
+export * from "./visibility.js";
+export * from "./scanAndFire.js";
 export * from "./catalog.js";
 export * from "./movement.js";
 export * from "./firing.js";

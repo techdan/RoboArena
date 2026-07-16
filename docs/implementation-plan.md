@@ -347,7 +347,7 @@ let renderer completion mutate engine state.
 
 ---
 
-### Phase 4 — Scan & Fire mode + ordinary visibility [⬜ MVP GATE]
+### Phase 4 — Scan & Fire mode + ordinary visibility [✅ DRAFT COMPLETE]
 
 **Goal**: implement the "wait-and-shoot" Scan & Fire firing mode and ordinary
 per-team visibility for the four main-game Survival classes. Stealth is an
@@ -379,7 +379,7 @@ These are bundled because both need scan-cone calculations against moving target
   × cone of a robot in S&F mode? If yes, lock its current tile/result and emit
   the normal projectile presentation event
 - `src/engine/resolver.ts` — extend per-tick to call S&F watchdog and update visibility
-- `src/engine/types.ts` — add `VisibilityState`, `RobotState.scanAndFireConfig?: { weapon, maxDistance, secondsRemaining }`
+- `src/engine/types.ts` — add `VisibilityState` and typed visibility/acquisition events; active Scan & Fire runtime state remains resolver-local
 - tests
 
 Last-known X markers: at the *end of each turn*, for every team, record tiles where they last saw any enemy that's no longer visible to them. Engine emits `last-known-marker` events; renderer draws Xs in Edit mode of the next turn.
@@ -1648,7 +1648,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | **1.5** | ✅ COMPLETE | S | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass |
 | 2 | ✅ DRAFT COMPLETE | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
 | 3 | ✅ DRAFT COMPLETE | M | Locked projectile/blast outcomes + deterministic presentation events |
-| 4 | ⬜ | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
+| 4 | ✅ DRAFT COMPLETE | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
 | 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |
 | 6 | ⬜ | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |

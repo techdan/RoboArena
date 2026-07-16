@@ -43,14 +43,14 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phase 2 resolver are draft complete; Phase 1.5 tooling
-is complete:
+Phase 1R realignment and Phases 2-4 are draft complete; Phase 1.5 tooling is
+complete:
 
 - `src/engine/` contains pure TypeScript deterministic primitives.
 - Existing tests cover deterministic primitives, audited timing/combat/Survival
   rules, and the turn resolver.
 - UI, PixiJS renderer, planner, replay system, and networking are not built yet.
-- Phase 3 projectile/blast event semantics are next.
+- Phase 5 replay serialization/verification is next.
 
 The planned UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, Zustand, and lucide-react, but the current repository is still a pure TypeScript engine package.
 

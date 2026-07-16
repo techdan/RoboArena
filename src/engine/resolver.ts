@@ -15,9 +15,12 @@ import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
 import { canTraverseTile, isFullSpeedTile } from "./movement.js";
 import { createRng } from "./rng.js";
 import { resolveFire } from "./firing.js";
+import { findScanAndFireTarget } from "./scanAndFire.js";
+import { computeVisibility, visibilityTileKey } from "./visibility.js";
 import type {
   Arena,
   CommandTimeline,
+  LastKnownMarker,
   MatchState,
   MovementStep,
   ResolutionEvent,
@@ -26,6 +29,7 @@ import type {
   TeamState,
   TileCoord,
   TurnOrders,
+  VisibilityState,
   WeaponDefinition,
 } from "./types.js";
 
@@ -81,6 +85,7 @@ interface ActiveCommand {
   readonly completesAt: number;
   readonly moveIndex: number;
   readonly intendedTargetId: string | null;
+  readonly nextScanAt: number | null;
 }
 
 interface Cursor {
@@ -288,14 +293,6 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       );
     }
 
-    if (command.kind === "scan-and-fire") {
-      return malformed(
-        "unsupported-command",
-        "Scan & Fire is intentionally deferred to Phase 4.",
-        robot.id,
-        commandIndex,
-      );
-    }
     if (robot.position === "dock" && command.kind !== "deploy") {
       return malformed(
         "illegal-command",
@@ -315,6 +312,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
     let completesAt: number;
     let intendedTargetId: string | null = null;
+    let nextScanAt: number | null = null;
     if (command.kind === "move") {
       if (
         !Array.isArray(command.path) ||
@@ -394,6 +392,42 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return null;
       }
       completesAt = tick + duration;
+    } else if (command.kind === "scan-and-fire") {
+      const weapon = (WEAPONS as Partial<Record<string, WeaponDefinition>>)[command.weapon];
+      if (!weapon || !robotOwnsWeapon(robot, weapon) || (!weapon.damageRoll && !weapon.blast)) {
+        return malformed(
+          "unsupported-command",
+          "Scan & Fire requires an owned, supported weapon.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      if (
+        !Number.isInteger(command.maxDistance) ||
+        command.maxDistance < 1 ||
+        command.maxDistance > weapon.maxRange ||
+        !Number.isInteger(command.seconds) ||
+        command.seconds < 1 ||
+        command.seconds > 40
+      ) {
+        return malformed(
+          "illegal-command",
+          "Scan & Fire distance must be within weapon range and duration must be 1-40 seconds.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      const ammo = robot.ammo[weapon.id];
+      if (ammo === undefined || (ammo !== "unlimited" && (!Number.isInteger(ammo) || ammo <= 0))) {
+        return malformed(
+          "illegal-command",
+          "Scan & Fire requires available ammo.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      completesAt = tick + command.seconds * TICKS_PER_SECOND;
+      nextScanAt = tick;
     } else {
       if (!isInBounds(state.arena, command.target)) {
         return malformed(
@@ -433,7 +467,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       intendedTargetId = findTargetAt(actor, command.target);
     }
 
-    cursor.active = { commandIndex, command, completesAt, moveIndex: 0, intendedTargetId };
+    cursor.active = {
+      commandIndex,
+      command,
+      completesAt,
+      moveIndex: 0,
+      intendedTargetId,
+      nextScanAt,
+    };
     emit(tick, {
       kind: "command-start",
       robotId: robot.id,
@@ -453,6 +494,339 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     return null;
   };
 
+  const resolveFiringAction = (input: {
+    readonly actor: Actor;
+    readonly commandIndex: number;
+    readonly tick: number;
+    readonly weapon: WeaponDefinition;
+    readonly targetTile: TileCoord;
+    readonly target?: RobotState & { readonly position: TileCoord };
+    readonly fireMode: "aim" | "scan";
+    readonly alignmentMagnitude?: number;
+    readonly pendingDamage: PendingDamage[];
+  }): number | "unlimited" => {
+    const shooter = robots.get(input.actor.robotId);
+    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) {
+      return input.weapon.startingAmmo;
+    }
+    emit(input.tick, {
+      kind: "fired",
+      shooterId: shooter.id,
+      commandIndex: input.commandIndex,
+      weapon: input.weapon.id,
+      target: input.targetTile,
+      fireMode: input.fireMode,
+    });
+
+    let updatedShooter = shooter;
+    const currentAmmo = shooter.ammo[input.weapon.id];
+    if (currentAmmo !== "unlimited") {
+      updatedShooter = {
+        ...updatedShooter,
+        ammo: { ...updatedShooter.ammo, [input.weapon.id]: Math.max(0, currentAmmo - 1) },
+      };
+    }
+
+    for (let shotIndex = 0; shotIndex < input.weapon.bulletsPerClick; shotIndex += 1) {
+      const projectileId = `${state.turnNumber}:${shooter.id}:${input.commandIndex}:${input.tick}:${shotIndex}`;
+      emit(input.tick, {
+        kind: "projectile-launched",
+        projectileId,
+        shooterId: shooter.id,
+        shotIndex,
+        weapon: input.weapon.id,
+        from: shooter.position,
+        target: input.targetTile,
+      });
+
+      if (input.weapon.blast) {
+        const distance = floorEuclideanDistance(shooter.position, input.targetTile);
+        const trajectoryFailure =
+          distance > input.weapon.maxRange
+            ? "out-of-range"
+            : !isWithinScanCone(shooter.position, shooter.scanHeading, input.targetTile)
+              ? "angle-blocked"
+              : resolveCover({
+                    from: shooter.position,
+                    to: input.targetTile,
+                    targetPosture: "upright",
+                    arenaTileAt: (coord) => tileAt(state.arena, coord),
+                  }).outcome === "blocked"
+                ? "sight-blocked"
+                : null;
+        if (trajectoryFailure) {
+          emit(input.tick, {
+            kind: "projectile-impacted",
+            projectileId,
+            weapon: input.weapon.id,
+            target: input.targetTile,
+            outcome: "miss",
+          });
+          emit(input.tick, {
+            kind: "shot-missed",
+            shooterId: shooter.id,
+            shotIndex,
+            target: input.targetTile,
+            reason: trajectoryFailure,
+          });
+          continue;
+        }
+        const potentialTargets = actors.flatMap((candidate) => {
+          const robot = robots.get(candidate.robotId);
+          if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
+          const cover = resolveCover({
+            from: input.targetTile,
+            to: robot.position,
+            targetPosture: robot.posture,
+            arenaTileAt: (coord) => tileAt(state.arena, coord),
+          });
+          if (cover.outcome === "blocked") return [];
+          return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
+        });
+        const blastRolls = resolveBlast({
+          impact: input.targetTile,
+          weapon: input.weapon,
+          potentialTargets,
+          rng,
+        });
+        for (const roll of blastRolls) {
+          input.pendingDamage.push({
+            damageKind: "blast",
+            sourceId: shooter.id,
+            shotIndex,
+            targetId: roll.robotId,
+            damage: roll.damage,
+            radius: roll.radius,
+          });
+        }
+        emit(input.tick, {
+          kind: "projectile-impacted",
+          projectileId,
+          weapon: input.weapon.id,
+          target: input.targetTile,
+          outcome: "blast",
+        });
+        continue;
+      }
+
+      if (!input.target || input.target.hp <= 0) {
+        emit(input.tick, {
+          kind: "projectile-impacted",
+          projectileId,
+          weapon: input.weapon.id,
+          target: input.targetTile,
+          outcome: "miss",
+        });
+        emit(input.tick, {
+          kind: "shot-missed",
+          shooterId: shooter.id,
+          shotIndex,
+          target: input.targetTile,
+          reason: "no-target",
+        });
+        continue;
+      }
+
+      const result = resolveFire({
+        shooterTile: shooter.position,
+        shooterHeading: shooter.scanHeading,
+        shooterAccuracy: shooter.definition.accuracy,
+        aimedTile: input.targetTile,
+        targetTile: input.target.position,
+        targetPosture: input.target.posture,
+        weapon: input.weapon,
+        arenaTileAt: (coord) => tileAt(state.arena, coord),
+        rng,
+        damageStaggered: shooter.damageStaggerActionsRemaining > 0,
+        fireMode: input.fireMode,
+        ...(input.alignmentMagnitude === undefined
+          ? {}
+          : { alignmentMagnitude: input.alignmentMagnitude }),
+      });
+      if (result.outcome === "hit") {
+        input.pendingDamage.push({
+          damageKind: "direct",
+          sourceId: shooter.id,
+          shotIndex,
+          targetId: input.target.id,
+          damage: result.damage,
+          score: result.score,
+        });
+        emit(input.tick, {
+          kind: "projectile-impacted",
+          projectileId,
+          weapon: input.weapon.id,
+          target: input.targetTile,
+          outcome: "hit",
+        });
+      } else {
+        const reason = result.outcome === "miss" ? "hit-roll" : result.outcome;
+        emit(input.tick, {
+          kind: "projectile-impacted",
+          projectileId,
+          weapon: input.weapon.id,
+          target: input.targetTile,
+          outcome: "miss",
+        });
+        emit(input.tick, {
+          kind: "shot-missed",
+          shooterId: shooter.id,
+          shotIndex,
+          target: input.targetTile,
+          reason,
+          ...(result.outcome === "miss" ? { score: result.score } : {}),
+        });
+      }
+    }
+
+    if (shooter.damageStaggerActionsRemaining > 0) {
+      updatedShooter = {
+        ...updatedShooter,
+        damageStaggerActionsRemaining: shooter.damageStaggerActionsRemaining - 1,
+      };
+    }
+    robots.set(shooter.id, updatedShooter);
+    return updatedShooter.ammo[input.weapon.id];
+  };
+
+  const resolveScanOpportunities = (tick: number, pendingDamage: PendingDamage[]): void => {
+    for (const actor of actors) {
+      const cursor = cursors.get(actor.robotId);
+      const active = cursor?.active;
+      if (
+        !cursor ||
+        !active ||
+        active.command.kind !== "scan-and-fire" ||
+        active.nextScanAt === null ||
+        tick < active.nextScanAt ||
+        tick >= active.completesAt
+      ) {
+        continue;
+      }
+      const shooter = robots.get(actor.robotId);
+      if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) continue;
+      const weapon = WEAPONS[active.command.weapon];
+      const acquired = findScanAndFireTarget({
+        arena: state.arena,
+        shooter: { ...shooter, position: shooter.position },
+        shooterSide: actor.side,
+        candidates: actors.flatMap((candidate) => {
+          const robot = robots.get(candidate.robotId);
+          return robot ? [{ side: candidate.side, robot }] : [];
+        }),
+        maxDistance: Math.min(active.command.maxDistance, weapon.maxRange),
+      });
+      if (!acquired) {
+        cursor.active = { ...active, nextScanAt: tick + 1 };
+        continue;
+      }
+      emit(tick, {
+        kind: "scan-target-acquired",
+        shooterId: shooter.id,
+        targetId: acquired.robot.id,
+        distance: acquired.distance,
+      });
+      const remainingAmmo = resolveFiringAction({
+        actor,
+        commandIndex: active.commandIndex,
+        tick,
+        weapon,
+        targetTile: acquired.robot.position,
+        target: acquired.robot,
+        fireMode: "scan",
+        alignmentMagnitude: acquired.alignmentMagnitude,
+        pendingDamage,
+      });
+      if (remainingAmmo === 0) {
+        cursor.nextIndex += 1;
+        cursor.active = null;
+      } else {
+        cursor.active = {
+          ...active,
+          nextScanAt: tick + weapon.scanFiringIntervalTicks,
+        };
+      }
+    }
+  };
+
+  const applyPendingDamageAndDeaths = (tick: number, pendingDamage: PendingDamage[]): void => {
+    const damagedIds = new Set<string>();
+    for (const damage of pendingDamage) {
+      const target = robots.get(damage.targetId);
+      if (!target) continue;
+      robots.set(target.id, {
+        ...target,
+        hp: Math.max(0, target.hp - damage.damage),
+        damageStaggerActionsRemaining: (rng.nextUint32() & 3) + 1,
+      });
+      damagedIds.add(target.id);
+      emit(tick, { kind: "damaged", ...damage });
+    }
+
+    for (const actor of actors) {
+      if (!damagedIds.has(actor.robotId)) continue;
+      const robot = robots.get(actor.robotId);
+      if (!robot || robot.hp > 0) continue;
+      robots.set(robot.id, { ...robot, hp: 0, position: "dock" });
+      emit(tick, { kind: "destroyed", robotId: robot.id });
+      const cursor = cursors.get(robot.id);
+      if (cursor) {
+        const abortedIndex = cursor.active?.commandIndex ?? cursor.nextIndex;
+        if (cursor.active || cursor.timeline.segments[abortedIndex]) {
+          emit(tick, {
+            kind: "command-aborted",
+            robotId: robot.id,
+            commandIndex: abortedIndex,
+            reason: "destroyed",
+          });
+        }
+        cursor.active = null;
+        cursor.nextIndex = cursor.timeline.segments.length;
+      }
+    }
+  };
+
+  const latestVisibility = new Map<string, VisibilityState>();
+  const lastSeenByTeam = new Map<string, Map<string, TileCoord>>();
+
+  const snapshotState = (): MatchState => ({
+    ...state,
+    teams: state.teams.map((team) => ({
+      ...team,
+      robots: team.robots.map((robot) => robots.get(robot.id) ?? robot),
+    })),
+  });
+
+  const updateVisibility = (tick: number): void => {
+    const snapshot = snapshotState();
+    for (const team of state.teams) {
+      const next = computeVisibility(snapshot, team.id);
+      const previous = latestVisibility.get(team.id);
+      const lastSeen = lastSeenByTeam.get(team.id) ?? new Map<string, TileCoord>();
+
+      for (const enemyId of next.visibleEnemies) {
+        const enemy = robots.get(enemyId);
+        if (!enemy || !isTileCoord(enemy.position)) continue;
+        lastSeen.set(enemyId, enemy.position);
+        if (!previous?.visibleEnemies.has(enemyId)) {
+          emit(tick, { kind: "enemy-spotted", teamId: team.id, enemyId, at: enemy.position });
+        }
+      }
+      if (previous) {
+        for (const enemyId of previous.visibleEnemies) {
+          if (next.visibleEnemies.has(enemyId)) continue;
+          const lastSeenAt = lastSeen.get(enemyId);
+          if (lastSeenAt) {
+            emit(tick, { kind: "enemy-lost", teamId: team.id, enemyId, lastSeenAt });
+          }
+        }
+      }
+
+      lastSeenByTeam.set(team.id, lastSeen);
+      latestVisibility.set(team.id, next);
+    }
+  };
+
   const finishActive = (cursor: Cursor): void => {
     const active = cursor.active;
     if (!active) return;
@@ -463,6 +837,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const turnDuration = Math.round(state.config.turnLengthSeconds * TICKS_PER_SECOND);
   emit(0, { kind: "turn-start", turnNumber: state.turnNumber });
 
+  for (const actor of actors) {
+    const error = startAvailableCommand(actor, 0);
+    if (error) return error;
+  }
+
+  updateVisibility(0);
+  const initialScanDamage: PendingDamage[] = [];
+  resolveScanOpportunities(0, initialScanDamage);
+  applyPendingDamageAndDeaths(0, initialScanDamage);
+  updateVisibility(0);
   for (const actor of actors) {
     const error = startAvailableCommand(actor, 0);
     if (error) return error;
@@ -554,227 +938,83 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       finishActive(cursor);
     }
 
+    if (
+      due.some(({ active }) =>
+        ["deploy", "move", "set-posture", "set-scan-direction"].includes(active.command.kind),
+      )
+    ) {
+      updateVisibility(tick);
+    }
     const pendingDamage: PendingDamage[] = [];
     for (const { actor, active } of due) {
       if (active.command.kind !== "aim-and-fire") continue;
       const command = active.command;
-      const shooter = robots.get(actor.robotId);
       const cursor = cursors.get(actor.robotId);
-      if (!shooter || !cursor || shooter.hp <= 0 || !isTileCoord(shooter.position)) continue;
+      if (!cursor) continue;
       const weapon = WEAPONS[command.weapon];
-      emit(tick, {
-        kind: "fired",
-        shooterId: shooter.id,
+      const intendedTarget = active.intendedTargetId
+        ? robots.get(active.intendedTargetId)
+        : undefined;
+      const target =
+        intendedTarget && isTileCoord(intendedTarget.position)
+          ? { ...intendedTarget, position: intendedTarget.position }
+          : undefined;
+      const remainingAmmo = resolveFiringAction({
+        actor,
         commandIndex: active.commandIndex,
-        weapon: weapon.id,
-        target: command.target,
+        tick,
+        weapon,
+        targetTile: command.target,
+        ...(target === undefined ? {} : { target }),
+        fireMode: "aim",
+        pendingDamage,
       });
-      let updatedShooter = shooter;
-      const currentAmmo = shooter.ammo[weapon.id];
-      if (currentAmmo !== "unlimited") {
-        updatedShooter = {
-          ...updatedShooter,
-          ammo: { ...updatedShooter.ammo, [weapon.id]: Math.max(0, currentAmmo - 1) },
-        };
-      }
-      const target = active.intendedTargetId ? robots.get(active.intendedTargetId) : undefined;
-      for (let shotIndex = 0; shotIndex < weapon.bulletsPerClick; shotIndex += 1) {
-        const projectileId = `${state.turnNumber}:${shooter.id}:${active.commandIndex}:${tick}:${shotIndex}`;
-        emit(tick, {
-          kind: "projectile-launched",
-          projectileId,
-          shooterId: shooter.id,
-          shotIndex,
-          weapon: weapon.id,
-          from: shooter.position,
-          target: command.target,
-        });
-        if (weapon.blast) {
-          const distance = floorEuclideanDistance(shooter.position, command.target);
-          const trajectoryFailure =
-            distance > weapon.maxRange
-              ? "out-of-range"
-              : !isWithinScanCone(shooter.position, shooter.scanHeading, command.target)
-                ? "angle-blocked"
-                : resolveCover({
-                      from: shooter.position,
-                      to: command.target,
-                      targetPosture: "upright",
-                      arenaTileAt: (coord) => tileAt(state.arena, coord),
-                    }).outcome === "blocked"
-                  ? "sight-blocked"
-                  : null;
-          if (trajectoryFailure) {
-            emit(tick, {
-              kind: "projectile-impacted",
-              projectileId,
-              weapon: weapon.id,
-              target: command.target,
-              outcome: "miss",
-            });
-            emit(tick, {
-              kind: "shot-missed",
-              shooterId: shooter.id,
-              shotIndex,
-              target: command.target,
-              reason: trajectoryFailure,
-            });
-            continue;
-          }
-          const potentialTargets = actors.flatMap((candidate) => {
-            const robot = robots.get(candidate.robotId);
-            if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
-            const cover = resolveCover({
-              from: command.target,
-              to: robot.position,
-              targetPosture: robot.posture,
-              arenaTileAt: (coord) => tileAt(state.arena, coord),
-            });
-            if (cover.outcome === "blocked") return [];
-            return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
-          });
-          const blastRolls = resolveBlast({
-            impact: command.target,
-            weapon,
-            potentialTargets,
-            rng,
-          });
-          for (const roll of blastRolls) {
-            pendingDamage.push({
-              damageKind: "blast",
-              sourceId: shooter.id,
-              shotIndex,
-              targetId: roll.robotId,
-              damage: roll.damage,
-              radius: roll.radius,
-            });
-          }
-          emit(tick, {
-            kind: "projectile-impacted",
-            projectileId,
-            weapon: weapon.id,
-            target: command.target,
-            outcome: "blast",
-          });
-          continue;
-        }
-        if (!target || target.hp <= 0 || !isTileCoord(target.position)) {
-          emit(tick, {
-            kind: "projectile-impacted",
-            projectileId,
-            weapon: weapon.id,
-            target: command.target,
-            outcome: "miss",
-          });
-          emit(tick, {
-            kind: "shot-missed",
-            shooterId: shooter.id,
-            shotIndex,
-            target: command.target,
-            reason: "no-target",
-          });
-          continue;
-        }
-        const result = resolveFire({
-          shooterTile: shooter.position,
-          shooterHeading: shooter.scanHeading,
-          shooterAccuracy: shooter.definition.accuracy,
-          aimedTile: command.target,
-          targetTile: target.position,
-          targetPosture: target.posture,
-          weapon,
-          arenaTileAt: (coord) => tileAt(state.arena, coord),
-          rng,
-          damageStaggered: shooter.damageStaggerActionsRemaining > 0,
-        });
-        if (result.outcome === "hit") {
-          pendingDamage.push({
-            damageKind: "direct",
-            sourceId: shooter.id,
-            shotIndex,
-            targetId: target.id,
-            damage: result.damage,
-            score: result.score,
-          });
-          emit(tick, {
-            kind: "projectile-impacted",
-            projectileId,
-            weapon: weapon.id,
-            target: command.target,
-            outcome: "hit",
-          });
-        } else {
-          const reason = result.outcome === "miss" ? "hit-roll" : result.outcome;
-          emit(tick, {
-            kind: "projectile-impacted",
-            projectileId,
-            weapon: weapon.id,
-            target: command.target,
-            outcome: "miss",
-          });
-          emit(tick, {
-            kind: "shot-missed",
-            shooterId: shooter.id,
-            shotIndex,
-            target: command.target,
-            reason,
-            ...(result.outcome === "miss" ? { score: result.score } : {}),
-          });
-        }
-      }
-      if (shooter.damageStaggerActionsRemaining > 0) {
-        updatedShooter = {
-          ...updatedShooter,
-          damageStaggerActionsRemaining: shooter.damageStaggerActionsRemaining - 1,
-        };
-      }
-      robots.set(shooter.id, updatedShooter);
-      const remainingAmmo = updatedShooter.ammo[weapon.id];
       if (command.repeat && remainingAmmo === 0) cursor.nextIndex += 1;
       finishActive(cursor);
     }
 
-    const damagedIds = new Set<string>();
-    for (const damage of pendingDamage) {
-      const target = robots.get(damage.targetId);
-      if (!target) continue;
-      robots.set(target.id, {
-        ...target,
-        hp: Math.max(0, target.hp - damage.damage),
-        damageStaggerActionsRemaining: (rng.nextUint32() & 3) + 1,
-      });
-      damagedIds.add(target.id);
-      emit(tick, { kind: "damaged", ...damage });
+    resolveScanOpportunities(tick, pendingDamage);
+
+    for (const { actor, active } of due) {
+      if (active.command.kind !== "scan-and-fire") continue;
+      const cursor = cursors.get(actor.robotId);
+      if (cursor?.active === active) finishActive(cursor);
     }
 
-    for (const actor of actors) {
-      if (!damagedIds.has(actor.robotId)) continue;
-      const robot = robots.get(actor.robotId);
-      if (!robot || robot.hp > 0) continue;
-      robots.set(robot.id, { ...robot, hp: 0, position: "dock" });
-      emit(tick, { kind: "destroyed", robotId: robot.id });
-      const cursor = cursors.get(robot.id);
-      if (cursor) {
-        const abortedIndex = cursor.active?.commandIndex ?? cursor.nextIndex;
-        if (cursor.active || cursor.timeline.segments[abortedIndex]) {
-          emit(tick, {
-            kind: "command-aborted",
-            robotId: robot.id,
-            commandIndex: abortedIndex,
-            reason: "destroyed",
-          });
-        }
-        cursor.active = null;
-        cursor.nextIndex = cursor.timeline.segments.length;
-      }
-    }
+    applyPendingDamageAndDeaths(tick, pendingDamage);
+    if (pendingDamage.length > 0) updateVisibility(tick);
 
     if (tick < turnDuration) {
       for (const actor of actors) {
         const error = startAvailableCommand(actor, tick);
         if (error) return error;
       }
+      const postStartScanDamage: PendingDamage[] = [];
+      resolveScanOpportunities(tick, postStartScanDamage);
+      applyPendingDamageAndDeaths(tick, postStartScanDamage);
+      if (postStartScanDamage.length > 0) updateVisibility(tick);
     }
+  }
+
+  const nextLastKnownMarkers = new Map<string, readonly LastKnownMarker[]>();
+  for (const team of state.teams) {
+    const visibility = latestVisibility.get(team.id);
+    const markerByEnemy = new Map<string, LastKnownMarker>();
+    for (const marker of state.lastKnownMarkers.get(team.id) ?? []) {
+      if (
+        !visibility?.visibleEnemies.has(marker.enemyId) &&
+        !visibility?.visibleTiles.has(visibilityTileKey(marker.at))
+      ) {
+        markerByEnemy.set(marker.enemyId, marker);
+      }
+    }
+    for (const [enemyId, at] of lastSeenByTeam.get(team.id) ?? []) {
+      const enemy = robots.get(enemyId);
+      if (!enemy || enemy.hp <= 0 || visibility?.visibleEnemies.has(enemyId)) continue;
+      markerByEnemy.set(enemyId, { enemyId, at });
+      emit(turnDuration, { kind: "last-known-marker", teamId: team.id, enemyId, at });
+    }
+    nextLastKnownMarkers.set(team.id, [...markerByEnemy.values()]);
   }
 
   emit(turnDuration, { kind: "turn-end", turnNumber: state.turnNumber });
@@ -785,6 +1025,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       ...team,
       robots: team.robots.map((robot) => robots.get(robot.id) ?? robot),
     })),
+    lastKnownMarkers: nextLastKnownMarkers,
   };
   return { outcome: "resolved", nextState, events };
 };
