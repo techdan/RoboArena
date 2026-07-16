@@ -1,9 +1,9 @@
 /**
- * Deterministic Phase 2/3 turn resolver.
+ * Deterministic Phase 2-4 turn resolver.
  *
  * Implements the completion-driven boundary order in
  * `tasks/phase2-resolver-design.md` and `docs/spec.md` §8. Projectile cues are
- * presentation-only; Scan & Fire and visibility deliberately remain later phases.
+ * presentation-only; ordinary visibility and Scan & Fire resolve as engine state.
  */
 
 import { TICKS_PER_SECOND } from "./constants.js";

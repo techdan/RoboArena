@@ -17,21 +17,21 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-4 of the deterministic
-engine are draft-complete with 170 passing tests. Phase 1.5 lint/format/CI is
+**Project state**: Phase 1R engine realignment and Phases 2-5 of the deterministic
+engine are draft-complete with 178 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 5 replay format and verification are
-next; visual projectile travel speed remains renderer tuning. See
+alliance behavior is retained for v2. Phase 6 Next.js/PixiJS scaffolding and
+verified arena import are next; visual projectile travel speed remains renderer tuning. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 170 tests)
+npm test               # Run all engine unit tests (currently 178 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -60,8 +60,12 @@ explosive ammo, and deterministic fire-boundary launch/impact cues.
 transitions/last-known markers, and Scan & Fire acquisition, cooldown, ammo,
 alignment, and fire-time result locking. Stealth remains deferred.
 
-**Everything after Phase 4 (not yet built)** — replay format, Next.js + PixiJS
-UI, planner, and the v1 authoritative room service.
+**Phase 5 (draft-complete)** — versioned replay recording, JSON transport,
+byte-level event/state verification, deterministic digests, and a checked-in
+v1 golden replay.
+
+**Everything after Phase 5 (not yet built)** — Next.js + PixiJS UI, planner,
+and the v1 authoritative room service.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

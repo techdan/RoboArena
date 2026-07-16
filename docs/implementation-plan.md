@@ -412,7 +412,7 @@ export function computeVisibility(state: MatchState, teamId: string): Visibility
 
 ---
 
-### Phase 5 — Replay format [⬜]
+### Phase 5 — Replay format [✅ DRAFT COMPLETE]
 
 **Goal**: serialize a `ReplayLog` to JSON; deserialize and re-run; verify byte-equal event stream. Replays are the foundation for movie sharing, multiplayer sync verification, and debugging.
 
@@ -427,6 +427,11 @@ export function computeVisibility(state: MatchState, teamId: string): Visibility
 export function serializeReplay(log: ReplayLog): string;
 export function deserializeReplay(json: string): ReplayLog;
 export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstDivergenceTick: number };
+export function createReplayLog(input: {
+  initialState: MatchState;
+  seed: string;
+  turnOrders: readonly TurnOrders[];
+}): ReplayLog;
 ```
 
 **Tests required**:
@@ -435,8 +440,12 @@ export function verifyReplay(log: ReplayLog): { ok: true } | { ok: false; firstD
 - intentional corruption: flip one byte in the seed → verify re-run diverges and `verifyReplay` returns the divergent tick
 - schema versioning: replays carry a `formatVersion: 1` field; deserializer rejects unknown versions
 
-**Risks**:
-- Big arena tile data inflates replays. Mitigation: arena referenced by name (`"Rubble Three"`) and tile data loaded from the arena library, not embedded in the replay. Replay = config + seed + orders, not initial tiles.
+**Implemented contract**: replay authority is initial state + seed + orders.
+Derived events are retained for direct movie playback and exact comparison;
+deterministic event and complete next-state digests detect corruption. Version 1
+embeds arena tiles because the named/checksummed arena library lands in Phase 6;
+moving to arena references requires a later versioned migration, not an implicit
+dependency on code that does not exist yet.
 
 **Effort**: S.
 
@@ -1290,7 +1299,9 @@ Server reads `X-Browser-Token` header; passes through on reads, requires on muta
 
 ### Replay format versioning
 
-Replays carry `format_version`. If/when the format changes, add a migration entry to a small table:
+Serialized replays carry `formatVersion`; the SQL storage column remains
+`format_version`. If/when the serialized format changes, add a migration entry
+to a small table:
 ```ts
 const replayMigrations: Record<number, (data: any) => ReplayLog> = {
   // 1: identity
@@ -1649,7 +1660,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 2 | ✅ DRAFT COMPLETE | L | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation |
 | 3 | ✅ DRAFT COMPLETE | M | Locked projectile/blast outcomes + deterministic presentation events |
 | 4 | ✅ DRAFT COMPLETE | L | Scan & Fire mode + ordinary visibility resolver (no Stealth) |
-| 5 | ⬜ | S | Replay format (serialize/deserialize/verify) |
+| 5 | ✅ DRAFT COMPLETE | S | Replay format (serialize/deserialize/verify) |
 | 6 | ⬜ | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ⬜ | L | Movie playback — animate `ResolutionEvent[]`; transport controls |
 | 8 | ⬜ | L | Online room foundation, 2-4 player setup, and deployed WSS gate |

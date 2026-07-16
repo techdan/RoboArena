@@ -25,3 +25,4 @@ export * from "./firing.js";
 export * from "./blast.js";
 export * from "./commandInterpreter.js";
 export * from "./resolver.js";
+export * from "./replay.js";

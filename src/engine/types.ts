@@ -346,12 +346,18 @@ export interface HomeArea {
 // Replay
 
 export interface ReplayLog {
-  readonly formatVersion: number;
+  readonly formatVersion: 1;
   readonly initialState: MatchState;
   readonly seed: string;
-  readonly turns: readonly {
-    readonly orders: TurnOrders;
-    /** Optional digest of derived events; events are not replay source-of-truth. */
-    readonly eventDigest?: string;
-  }[];
+  readonly turns: readonly ReplayTurn[];
+}
+
+export interface ReplayTurn {
+  readonly orders: TurnOrders;
+  /** Derived movie output retained for playback and byte-level verification. */
+  readonly events: readonly ResolutionEvent[];
+  /** Deterministic, non-cryptographic digest of `events`. */
+  readonly eventDigest: string;
+  /** Digest of the complete state after this turn. */
+  readonly nextStateDigest: string;
 }
