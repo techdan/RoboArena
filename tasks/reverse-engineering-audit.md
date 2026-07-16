@@ -171,8 +171,9 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
 - Successful damage assigns 1–4 later firing actions at half hit score; each
   firing action consumes one count. Original field `+0x1E` is stagger, not ammo.
 - Shooter posture adds no independent hit/damage modifier; it only participates
-  in endpoint/LoS legality. Aim passes alignment 16 (zero penalty); Scan & Fire
-  uses the exact `<=4: -4`, `<=8: -2`, otherwise-zero alignment bands.
+  in endpoint cover. Aim passes scan-sight strength 16 (zero penalty); Scan &
+  Fire passes the endpoint-inclusive terrain sight value and uses the exact
+  `<=4: -4`, `<=8: -2`, otherwise-zero bands.
 - Exact bullet and blast rolls, cover/distance damage adjustments, and blast
   cover cuts.
 - Grenade creates projectile type 1→blast category 0; Missile type 2→category
@@ -183,9 +184,9 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
   visible, but visible-enemy and last-known sets remain private to each Team.
 - Scan & Fire remains active for `seconds×60`, reacquires an eligible enemy at
   the named weapon's repeat interval, honors player maximum distance, and adds
-  2 to candidate distance only on the exact inclusive cone boundary. The
-  semantic name of its final scan-grid tie-break value remains documented but
-  does not affect the four closed gates.
+  2 to candidate distance only on the exact inclusive cone boundary. Equal
+  adjusted distances prefer higher scan-grid sight strength, then canonical
+  candidate order.
 - Survival ends with the last Side standing. Each Team contributes existing
   score + 150 per survivor + 400 when that Team has any survivor; allied
   contributions are summed and the Side total is shown on every allied row.

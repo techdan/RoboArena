@@ -86,7 +86,8 @@ miss a visible target arbitrarily.
 Several original rules are tactically meaningful but hard to infer:
 
 - damage assigns 1–4 later firing actions with halved hit score;
-- Scan & Fire has center/alignment accuracy bands inside its broad hard cone;
+- Scan & Fire uses terrain-derived sight-strength accuracy bands inside its
+  broad hard cone;
 - rough, bush, low wall, posture, distance, and current tile feed different
   stages of hit/damage resolution;
 - Aim & Fire targets a tile, and leaving it before fire halves the score;

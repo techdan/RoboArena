@@ -23,8 +23,8 @@ create v1 implementation dependencies.
   presentation tuning and no longer blocks the deterministic gameplay engine.
 - Scan & Fire duration, reacquisition loop, maximum-distance filter, and named
   repeat intervals are path-confirmed. Seconds is duration only and no separate
-  numeric scan-length/target-speed term reaches live fire. Stable original
-  candidate order is the main-game equal-distance fallback.
+  numeric scan-length/target-speed term reaches live fire. Equal adjusted
+  distances prefer higher scan-sight strength, then canonical candidate order.
 - v1 includes durable asynchronous turns: private planning, ready/lock status,
   leave-and-return room recovery, independently watched resolved turns,
   deterministic replay, and a concise post-turn causality log. Accounts, push
@@ -79,7 +79,7 @@ RoboArena/
 │   │   ├── firing.ts
 │   │   ├── blast.ts
 │   │   ├── catalog.ts
-│   │   ├── resolver.ts             (Phases 2-3)
+│   │   ├── resolver.ts             (Phases 2-4)
 │   │   ├── visibility.ts           (Phase 4)
 │   │   ├── replay.ts               (Phase 5)
 │   │   ├── index.ts
@@ -357,14 +357,14 @@ The static trace locks the implementation shape: evaluate at the scheduled
 command tick, reacquire after each named repeat interval, filter by maximum
 distance, choose nearest adjusted-distance candidate, decrement ammo when the
 shot is emitted, and lock the aimed tile/result at fire time (no impact-time
-tracking). The final equal-distance priority value's UI label remains isolated;
-use a stable original-order tie-break until it is named. The Seconds field is
-duration only; no separate numeric scan-length or target-speed term reaches the
-live hit resolver beyond the confirmed off-aimed-tile halving.
+tracking). Equal adjusted distances prefer the exact scan-grid sight strength,
+then stable original candidate order. The Seconds field is duration only; no
+separate numeric scan-length or target-speed term reaches the live hit resolver
+beyond the confirmed off-aimed-tile halving.
 
 For a stationary scanner versus a runner, movement completion is processed
 before a firing opportunity at the same tick. Acquisition observes the
-runner's resulting tile and current distance/alignment/terrain/cover. There is
+runner's resulting tile and current distance/scan-sight strength/terrain/cover. There is
 no speed statistic. A runner can cross the cone between weapon opportunities
 without being acquired; after acquisition, leaving later does not reroll the
 locked shot.
@@ -398,15 +398,16 @@ export function computeVisibility(state: MatchState, teamId: string): Visibility
 **Tests required**:
 - upright target at d=10 inside the scan cone with clear LoS → visible
 - target behind a wall → NOT visible
-- target behind a low wall → still visible (low walls don't block sight, only weapons)
-- target behind a bush → NOT visible if observer's view passes through the bush AND target is on the bush (matches "blocks visibility when on tile")
+- target behind one Low Wall or Bush → still visible with scan-sight strength 13
+- six endpoint-inclusive Low Wall/Bush samples → strength exhausted, NOT visible
 - Scan & Fire watchdog: enemy enters scan cone at tick 80 → current target tile
   and result lock at tick 80
 - S&F runs out of `secondsRemaining` → mode terminates, no shot fired
 
 **Risks**:
 - Visibility is computed per-team-per-tick → potentially expensive. v1 ships the naive O(robots × tiles-in-cone) approach; optimization later if profiling shows hot spot.
-- "Behind cover" semantics for visibility (vs. weapons): weapons don't cover behind, but bushes DO block visibility from behind. This asymmetry is the trickiest part of this phase.
+- Visibility and Scan & Fire acquisition must use the same endpoint-inclusive
+  0..16 scan-sight-strength path; do not substitute boolean terrain opacity.
 
 **Effort**: L.
 
@@ -1485,7 +1486,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 ### Determinism contract (engine)
 
 - `Math.random()` and `Date.now()` are **forbidden** in `src/engine/`. Enforced by ESLint custom rule (lands in Phase 1.5).
-- Only integer arithmetic on game-state values where possible. Distances / damage are integers. Projectile mid-flight positions are tile-by-tile schedules, never `number` floats.
+- Only integer arithmetic on game-state values where possible. Distances and damage are integers. Projectile travel is renderer-only interpolation; the engine stores no authoritative mid-flight position.
 - `verifyReplay` against canned replays runs in CI from Phase 5 onward.
 
 ### Testing strategy
@@ -1557,9 +1558,10 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
   fire boundary.
 - **Movement cost**: fixed 30-tick one-tile and 40-tick two-tile selector costs;
   the original movement resolver has no stride-parity state.
-- **Scan alignment**: the scan cone is the inclusive forward semicircle
-  (`dot >= 0`). Scan & Fire also subtracts 4/2/0 from score at alignment
-  magnitudes `<=4` / `<=8` / `>8`; Aim & Fire passes 16.
+- **Scan sight strength**: the scan cone is the inclusive forward semicircle
+  (`dot >= 0`). Terrain sight starts at 16, loses 3 per Low Wall/Bush sample,
+  and becomes 0 at a Wall. Scan & Fire subtracts 4/2/0 from score at strengths
+  `<=4` / `<=8` / `>8`; Aim & Fire passes 16.
 - **Cover**: endpoint terrain samples plus posture produce cover class 1-4;
   that class contributes to live-fire hit score and damage adjustment.
 - **Replay**: `{ initialState, seed, turnOrders[] }` — re-runs deterministically.

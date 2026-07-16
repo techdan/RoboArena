@@ -43,6 +43,8 @@ Thumbs.db
 *.tmp
 .cache/
 coverage/
+.codex-*-review/
+.codex-*-review.zip
 
 # Claude Code per-developer settings (project-shared settings.json may be committed if added)
 .claude/settings.local.json

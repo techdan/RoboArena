@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { makeMatch, makeOpenArena, makeRobot, makeTeam } from "./__fixtures__/match.js";
-import { computeVisibility, hasVisibilityLineOfSight, visibilityTileKey } from "./visibility.js";
+import {
+  computeVisibility,
+  hasVisibilityLineOfSight,
+  scanSightStrength,
+  visibilityTileKey,
+} from "./visibility.js";
 import type { Arena, MatchState, Terrain } from "./types.js";
 
 const withTerrain = (arena: Arena, x: number, y: number, terrain: Terrain): Arena => ({
@@ -26,18 +31,24 @@ describe("ordinary Team visibility", () => {
     expect(visibility.visibleEnemies.has(enemy.id)).toBe(true);
   });
 
-  it("walls block visibility while low walls and crevices do not", () => {
+  it("applies exact full, partial, and transparent sight terrain", () => {
     const base = makeOpenArena(12, 8);
     const wall = withTerrain(base, 4, 2, "wall");
     const lowWall = withTerrain(base, 4, 2, "low-wall");
+    const bush = withTerrain(base, 4, 2, "bush");
     const crevice = withTerrain(base, 4, 2, "crevice");
 
+    expect(scanSightStrength(wall, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(0);
+    expect(scanSightStrength(lowWall, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(13);
+    expect(scanSightStrength(bush, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(13);
+    expect(scanSightStrength(crevice, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(16);
     expect(hasVisibilityLineOfSight(wall, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(false);
     expect(hasVisibilityLineOfSight(lowWall, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(true);
+    expect(hasVisibilityLineOfSight(bush, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(true);
     expect(hasVisibilityLineOfSight(crevice, { x: 1, y: 2 }, { x: 7, y: 2 })).toBe(true);
   });
 
-  it("a bush blocks its tile and tiles behind it", () => {
+  it("keeps a robot on or behind one bush visible with reduced scan strength", () => {
     const arena = withTerrain(makeOpenArena(12, 8), 4, 2, "bush");
     const observer = makeRobot("o1", "team-1", "rifle", { x: 1, y: 2 });
     const onBush = makeRobot("e1", "team-2", "rifle", { x: 4, y: 2 });
@@ -49,10 +60,18 @@ describe("ordinary Team visibility", () => {
     });
 
     const visibility = computeVisibility(state, "team-1");
-    expect(visibility.visibleEnemies).toEqual(new Set());
+    expect(visibility.visibleEnemies).toEqual(new Set([onBush.id, behindBush.id]));
     expect(
       visibility.visibleTiles.has(visibilityTileKey(onBush.position as { x: number; y: number })),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("blocks sight after six partial terrain samples exhaust strength", () => {
+    let arena = makeOpenArena(12, 8);
+    for (let x = 2; x <= 7; x += 1) arena = withTerrain(arena, x, 2, "low-wall");
+
+    expect(scanSightStrength(arena, { x: 1, y: 2 }, { x: 8, y: 2 })).toBe(0);
+    expect(hasVisibilityLineOfSight(arena, { x: 1, y: 2 }, { x: 8, y: 2 })).toBe(false);
   });
 
   it("always exposes same-Side robots without pooling their enemy contacts", () => {

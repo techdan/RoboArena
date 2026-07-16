@@ -502,7 +502,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     readonly targetTile: TileCoord;
     readonly target?: RobotState & { readonly position: TileCoord };
     readonly fireMode: "aim" | "scan";
-    readonly alignmentMagnitude?: number;
+    readonly scanStrength?: number;
     readonly pendingDamage: PendingDamage[];
   }): number | "unlimited" => {
     const shooter = robots.get(input.actor.robotId);
@@ -639,9 +639,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         rng,
         damageStaggered: shooter.damageStaggerActionsRemaining > 0,
         fireMode: input.fireMode,
-        ...(input.alignmentMagnitude === undefined
-          ? {}
-          : { alignmentMagnitude: input.alignmentMagnitude }),
+        ...(input.scanStrength === undefined ? {} : { scanStrength: input.scanStrength }),
       });
       if (result.outcome === "hit") {
         input.pendingDamage.push({
@@ -734,7 +732,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         targetTile: acquired.robot.position,
         target: acquired.robot,
         fireMode: "scan",
-        alignmentMagnitude: acquired.alignmentMagnitude,
+        scanStrength: acquired.scanStrength,
         pendingDamage,
       });
       if (remainingAmmo === 0) {

@@ -79,15 +79,16 @@ score += distance ladder:
   where base = accuracyTier + 4  (Rifle 2, Burst/Missile/Stealth 1, Auto 0)
 score += target terrain: rough +2, (cover tiles -1/-3 per RE — map bush -1, lowWall -3)
   otherwise add weaponAccTable[weaponKind] from DGROUP 0x1596
-score -= scan alignment: <=4 => 4, <=8 => 2, otherwise 0 (Aim passes 16)
+score -= scan sight strength: <=4 => 4, <=8 => 2, otherwise 0 (Aim passes 16)
 score = clamp(score, 0, 19)
 if damage-stagger count > 0: score >>= 1; consume one count per firing action
 if target not on aimed tile at resolution: score >>= 1   // RE §15, confirmed
 hit = rngInt(0,255) < HIT_TABLE[score]
 ```
 
-The formerly unnamed argument is Scan & Fire alignment, not posture. The first
-halving flag is the confirmed 1–4-action damage-stagger counter (`+0x1E`).
+The formerly unnamed argument is Scan & Fire's terrain-derived scan-grid sight
+strength, not posture or geometric alignment. The first halving flag is the
+confirmed 1–4-action damage-stagger counter (`+0x1E`).
 
 `resolveFire` must receive the aimed tile separately from the actual target
 robot/tile. The occupancy penalty compares those values at fire-resolution
@@ -122,7 +123,8 @@ postureCut by coverClass: {1: 0.5, 2: 0.75, 3: 0.875, 4: 1.0}
 - Index beyond table length → 0 damage. Missile radius = 2 effective.
 
 ### Step 6 — cover model (`geometry.ts` or new `cover.ts`)
-Height-LoS returning `coverClass 1..4` (RE §15). The decoded final mapping is:
+Endpoint cover classification returns `coverClass 1..4` (RE §15). The decoded
+final mapping is:
 
 | obstruction | Upright | Ducking | Crouching |
 |---|---:|---:|---:|
@@ -130,7 +132,7 @@ Height-LoS returning `coverClass 1..4` (RE §15). The decoded final mapping is:
 | bush / partial height 2 | 4 | 3 | 2 |
 | low wall / height 3 | 3 | 2 | 1 |
 
-Wall (4) is fully blocked by the LoS gate. Point-blank defaults to class 4.
+Wall (4) is fully blocked by the separate scan-sight gate. Point-blank defaults to class 4.
 Implement the table exactly. Target cover samples the target, the major-axis
 neighbor toward the shooter at distance ≥2 (y-major ties), and the corner
 neighbor only when distance >1 and `abs(dx-dy)<2`.
@@ -155,7 +157,7 @@ neighbor only when distance >1 and `abs(dx-dy)<2`.
 ## Explicitly OUT of scope
 - Fence mechanics, Grenade/TimeBomb/Zap gameplay, sport modes beyond Survival,
   formation rosters, stealth changes,
-  scan alignment/probability changes inside the confirmed closed ±90° hard gate, Phase 1.5
+  scan-sight/acquisition changes inside the confirmed closed ±90° hard gate, Phase 1.5
   toolchain.
 
 ## Acceptance

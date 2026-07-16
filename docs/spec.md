@@ -64,9 +64,6 @@ boundaries are explicit product/data choices:
 
 - **Projectile presentation timing**: hit/damage are locked at fire time; exact
   visual travel duration is a Phase 7 RoboArena animation choice.
-- **Scan & Fire equal-distance priority label**: the selection mechanism is
-  traced, but the UI meaning of the final candidate-priority value is unnamed;
-  main game uses stable original candidate order as its specified fallback.
 - **Target speed wording**: the live resolver contains no independent numeric
   speed term. Movement matters through the confirmed off-aimed-tile score
   halving; the Scan & Fire Seconds field controls command duration only.
@@ -330,8 +327,8 @@ Scan headings are absolute commands; any changed heading costs **5 ticks
 4. Score starts from cover class `1/2/3/4 -> 4/8/12/18`.
 5. Add the exact accuracy/distance ladder and target-terrain modifier
    (`rough +2`, `bush -1`, `low-wall -3`, otherwise weapon-property add).
-6. Aim & Fire passes alignment magnitude 16, so no alignment penalty applies.
-   Scan & Fire subtracts 4 at alignment `<=4`, 2 at `<=8`, otherwise 0.
+6. Aim & Fire passes scan-sight strength 16, so no scan penalty applies.
+   Scan & Fire subtracts 4 at sight strength `<=4`, 2 at `<=8`, otherwise 0.
 7. Clamp score to 0..19. If the shooter is damage-staggered, halve it. If the
    target left the aimed tile, halve it again.
 8. Hit when `(rng & 255) < LIVE_FIRE_HIT_THRESHOLDS[score]`.
@@ -352,15 +349,15 @@ independent score or damage modifier beyond endpoint/LoS legality. ✅
 - **Scan & Fire** (enemy-targeted, reacquires): remains active for
   `seconds × 60`, filters eligible enemies by the player-set maximum distance,
   chooses the nearest adjusted-distance candidate, fires, then reacquires at
-  the weapon's Scan repeat interval. The final equal-distance priority value's
-  UI meaning remains isolated; it does not change the timing/filter pipeline. ✅/🟨
+  the weapon's Scan repeat interval. Equal adjusted distances prefer the higher
+  scan-sight strength, then retain canonical Home-slot/roster order. ✅
 
 The acquisition adjustment is exact: a candidate on the inclusive cone boundary
 adds 2 to its floored-Euclidean distance; other candidates use raw distance.
-Equal adjusted distances retain Home-slot/roster candidate order in v1. The
-live-fire alignment bands are exact; RoboArena reconstructs their 0..16 input
-from normalized heading/target centering while the original scan-grid value's
-UI label remains unnamed. ✅ adjustment / 🔵 alignment-input reconstruction
+Equal adjusted distances prefer higher scan-sight strength, then retain
+Home-slot/roster candidate order. The same exact 0..16 sight strength feeds the
+live-fire penalty bands: it starts at 16, each endpoint-inclusive Low Wall or
+Bush sample subtracts 3, and a Wall reduces it to 0. Aim & Fire passes 16. ✅
 
 #### Stationary scanner versus a moving target
 
@@ -372,7 +369,8 @@ candidate. A target that crosses the cone entirely between opportunities is
 not acquired. A target acquired at an opportunity is aimed at on its current
 tile and the hit/damage rolls lock then; target speed has no separate numeric
 modifier. Movement only changes which opportunities expose the target and the
-distance, alignment, terrain, cover, and tile occupancy seen at that boundary.
+distance, scan-sight strength, terrain, cover, and tile occupancy seen at that
+boundary.
 
 DOS shortcut: **Ctrl+Shift+click** on a target tile for repeat-fire (Amiga uses Alt). ✅
 
@@ -399,10 +397,16 @@ Team slot (`seg96:0x0AAC`) without propagating them to other same-Side slots.
 Accordingly, ordinary visible-enemy sets and last-known-X markers remain per
 Team, even in a 2v2 or 3v1 alliance. ✅
 
-LoS blockers (engine treats these as opaque to *visibility*, separate from bullets):
-- Walls block visibility ✅
-- Crevices do **not** block visibility (manual: "robots can sight across them") ✅
-- Bushes block visibility when on the bush tile ✅
+Ordinary visibility and Scan & Fire share the exact scan-grid sight strength:
+- Clear sight starts at 16; a target is visible while the result is greater than 0. ✅
+- A Wall or Outer Wall sample immediately returns 0. ✅
+- Every Low Wall or Bush sample subtracts 3, including shooter and target
+  endpoints; one partial obstacle therefore reduces strength to 13 rather than
+  blocking sight. Six partial samples exhaust the value. ✅
+- Crevices, Rough Ground, and Open Ground do not reduce sight strength. ✅
+
+This path is terrain-based. Posture does not independently alter ordinary
+visibility; it remains part of endpoint cover and live-fire resolution. ✅
 
 ### Deferred Stealth rule
 
@@ -540,7 +544,7 @@ named/checksummed arena references after the Phase 6 arena library exists.
 Determinism is enforced by:
 - Seedable RNG (mulberry32) for every probabilistic decision
 - Integer arithmetic on game-state values
-- Tile-by-tile Bresenham for projectile paths (no floats)
+- No authoritative mid-flight projectile state; launch/impact cues and outcomes lock at fire time
 - No `Math.random`, no `Date.now`, no `setTimeout` in `src/engine/`
 
 For v1 online matches, the server owns the canonical replay inputs and event

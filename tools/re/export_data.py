@@ -193,7 +193,7 @@ def main():
             "score_range": [0, 19],
             "formula": ("score = (accTier+4)-based init by cover class {1:4,2:8,3:12,4:18} "
                         "+ distance weighting + target-terrain add + weapon add(0x1596) "
-                        "- alignment penalty; clamp(0,19); halve for damage stagger and "
+                        "- scan-sight penalty; clamp(0,19); halve for damage stagger and "
                         "again if target left aimed tile; hit = (rnd&0xFF) < table[score]"),
         },
         "bullet_damage": bullet_damage,

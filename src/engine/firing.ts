@@ -56,10 +56,10 @@ export interface FireContext {
   readonly rng: Rng;
   /** Damage stagger is active for this firing action (original field +0x1E). */
   readonly damageStaggered?: boolean;
-  /** Selects the named accuracy table column and alignment penalty. Defaults to Aim & Fire. */
+  /** Selects the named accuracy table column and scan-strength penalty. Defaults to Aim & Fire. */
   readonly fireMode?: "aim" | "scan";
-  /** Scan & Fire centering magnitude (0..16); Aim & Fire always behaves as 16. */
-  readonly alignmentMagnitude?: number;
+  /** Scan-grid sight value (0..16); Aim & Fire always passes 16. */
+  readonly scanStrength?: number;
 }
 
 const clampScore = (score: number): number => Math.max(0, Math.min(19, score));
@@ -95,17 +95,17 @@ export const calculateLiveFireScore = (input: {
   readonly targetOnAimedTile: boolean;
   readonly damageStaggered?: boolean;
   readonly fireMode?: "aim" | "scan";
-  readonly alignmentMagnitude?: number;
+  readonly scanStrength?: number;
 }): number => {
   const accuracyBase = input.accuracy + 4;
   const fireMode = input.fireMode ?? "aim";
-  const alignmentMagnitude = fireMode === "scan" ? (input.alignmentMagnitude ?? 16) : 16;
-  const alignmentPenalty = alignmentMagnitude <= 4 ? 4 : alignmentMagnitude <= 8 ? 2 : 0;
+  const scanStrength = fireMode === "scan" ? (input.scanStrength ?? 16) : 16;
+  const scanPenalty = scanStrength <= 4 ? 4 : scanStrength <= 8 ? 2 : 0;
   let score =
     COVER_CLASS_HIT_SCORE[input.coverClass] +
     distanceScoreAdjustment(input.distance, accuracyBase) +
     terrainScoreAdjustment(input.targetTerrain, input.weapon, fireMode) -
-    alignmentPenalty;
+    scanPenalty;
 
   score = clampScore(score);
   if (input.damageStaggered) score >>= 1;
@@ -156,7 +156,7 @@ export const resolveFire = (ctx: FireContext): FireResolution => {
     targetOnAimedTile: ctx.aimedTile.x === ctx.targetTile.x && ctx.aimedTile.y === ctx.targetTile.y,
     ...(ctx.damageStaggered === undefined ? {} : { damageStaggered: ctx.damageStaggered }),
     ...(ctx.fireMode === undefined ? {} : { fireMode: ctx.fireMode }),
-    ...(ctx.alignmentMagnitude === undefined ? {} : { alignmentMagnitude: ctx.alignmentMagnitude }),
+    ...(ctx.scanStrength === undefined ? {} : { scanStrength: ctx.scanStrength }),
   });
   const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
   const roll = ctx.rng.nextUint32() & 0xff;

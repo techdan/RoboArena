@@ -1,12 +1,12 @@
 /**
  * Deterministic Scan & Fire target acquisition (`docs/spec.md` §§6-7).
  *
- * Callers supply candidates in canonical Home-slot/roster order. Equal-distance
- * candidates retain that order until the original priority field is named.
+ * Callers supply candidates in canonical Home-slot/roster order. Equal adjusted
+ * distances prefer the larger scan-grid sight value, then retain canonical order.
  */
 
 import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
-import { hasVisibilityLineOfSight } from "./visibility.js";
+import { scanSightStrength } from "./visibility.js";
 import type { Arena, RobotState, TileCoord } from "./types.js";
 
 export interface ScanCandidate {
@@ -18,7 +18,7 @@ export interface ScanTarget {
   readonly robot: RobotState & { readonly position: TileCoord };
   readonly distance: number;
   readonly adjustedDistance: number;
-  readonly alignmentMagnitude: number;
+  readonly scanStrength: number;
 }
 
 const isOnArena = (position: RobotState["position"]): position is TileCoord => position !== "dock";
@@ -34,26 +34,17 @@ const HEADING_OFFSETS: Readonly<Record<RobotState["scanHeading"], TileCoord>> = 
   NW: { x: -1, y: -1 },
 };
 
-/**
- * RoboArena's 0..16 reconstruction of the original scan-grid alignment value.
- * The live-fire penalty bands and exact-boundary zero are confirmed; the
- * original grid value's UI label remains unnamed (`docs/spec.md` §6).
- */
-export const scanAlignmentMagnitude = (
+/** Exact inclusive cone boundary used by `seg18:0x0854`'s +2 rank adjustment. */
+export const isOnScanConeBoundary = (
   from: TileCoord,
   heading: RobotState["scanHeading"],
   target: TileCoord,
-): number => {
-  if (from.x === target.x && from.y === target.y) return 16;
+): boolean => {
+  if (from.x === target.x && from.y === target.y) return false;
   const direction = HEADING_OFFSETS[heading];
-  const headingX = direction.x;
-  const headingY = direction.y;
   const targetX = target.x - from.x;
   const targetY = target.y - from.y;
-  const dot = Math.max(0, headingX * targetX + headingY * targetY);
-  const denominator =
-    Math.sqrt(headingX ** 2 + headingY ** 2) * Math.sqrt(targetX ** 2 + targetY ** 2);
-  return Math.max(0, Math.min(16, Math.ceil((dot * 16) / denominator)));
+  return direction.x * targetX + direction.y * targetY === 0;
 };
 
 export const findScanAndFireTarget = (input: {
@@ -70,26 +61,34 @@ export const findScanAndFireTarget = (input: {
       continue;
     }
     const distance = floorEuclideanDistance(input.shooter.position, robot.position);
-    if (
-      distance > input.maxDistance ||
-      !isWithinScanCone(input.shooter.position, input.shooter.scanHeading, robot.position) ||
-      !hasVisibilityLineOfSight(input.arena, input.shooter.position, robot.position)
-    ) {
-      continue;
-    }
-    const alignmentMagnitude = scanAlignmentMagnitude(
+    const insideCone = isWithinScanCone(
       input.shooter.position,
       input.shooter.scanHeading,
       robot.position,
     );
+    if (distance > input.maxDistance || !insideCone) {
+      continue;
+    }
+    const scanStrength = scanSightStrength(input.arena, input.shooter.position, robot.position);
+    if (scanStrength === 0) {
+      continue;
+    }
     // seg18:0x0854 adds two only for the exact inclusive cone boundary.
-    const adjustedDistance = distance + (alignmentMagnitude === 0 ? 2 : 0);
-    if (selected === null || adjustedDistance < selected.adjustedDistance) {
+    const adjustedDistance =
+      distance +
+      (isOnScanConeBoundary(input.shooter.position, input.shooter.scanHeading, robot.position)
+        ? 2
+        : 0);
+    if (
+      selected === null ||
+      adjustedDistance < selected.adjustedDistance ||
+      (adjustedDistance === selected.adjustedDistance && scanStrength > selected.scanStrength)
+    ) {
       selected = {
         robot: { ...robot, position: robot.position },
         distance,
         adjustedDistance,
-        alignmentMagnitude,
+        scanStrength,
       };
     }
   }

@@ -101,7 +101,7 @@ describe("live-fire score", () => {
     ).toBe(9);
   });
 
-  it("uses the named Scan & Fire accuracy add and alignment bands", () => {
+  it("uses the named Scan & Fire accuracy add and sight-strength bands", () => {
     const common = {
       accuracy: 0 as const,
       distance: 13,
@@ -111,9 +111,9 @@ describe("live-fire score", () => {
       targetOnAimedTile: true,
       fireMode: "scan" as const,
     };
-    expect(calculateLiveFireScore({ ...common, alignmentMagnitude: 16 })).toBe(9);
-    expect(calculateLiveFireScore({ ...common, alignmentMagnitude: 8 })).toBe(7);
-    expect(calculateLiveFireScore({ ...common, alignmentMagnitude: 4 })).toBe(5);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 16 })).toBe(9);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 8 })).toBe(7);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 4 })).toBe(5);
   });
 });
 

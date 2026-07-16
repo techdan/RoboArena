@@ -86,7 +86,8 @@ Not wired yet: `dev`, `build`, `start`. These land with the Next.js scaffold.
 Current engine layering:
 
 ```text
-constants.ts -> types.ts -> rng/geometry/movement/firing/blast/catalog -> index.ts
+constants/catalog/types -> rng/geometry/movement/firing/blast/visibility/scanAndFire
+                        -> resolver -> replay -> index
 ```
 
 Future architecture:

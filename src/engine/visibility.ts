@@ -14,16 +14,29 @@ const isOnArena = (position: RobotState["position"]): position is TileCoord => p
 
 const tileAt = (arena: Arena, tile: TileCoord) => arena.tiles[tile.y]?.[tile.x];
 
-const blocksVisibility = (arena: Arena, tile: TileCoord): boolean => {
-  const terrain = tileAt(arena, tile)?.terrain;
-  return terrain === "wall" || terrain === "outer-wall" || terrain === "bush";
+/**
+ * Exact scan-grid sight value from `seg87:0x19E3`.
+ *
+ * Clear sight starts at 16. Every Low Wall or Bush sample removes 3; Walls and
+ * Outer Walls immediately return 0. Crevices and ordinary ground do not cut
+ * the value. The original path includes both endpoints.
+ */
+export const scanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord): number => {
+  if (from.x === to.x && from.y === to.y) return 16;
+
+  let strength = 16;
+  for (const tile of [from, ...tilesAlongLineExclusive(from, to), to]) {
+    const terrain = tileAt(arena, tile)?.terrain;
+    if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") return 0;
+    if (terrain === "low-wall" || terrain === "bush") {
+      strength = Math.max(0, strength - 3);
+    }
+  }
+  return strength;
 };
 
-/** Visibility blockers differ from weapon cover: bushes and walls are opaque; low walls are not. */
-export const hasVisibilityLineOfSight = (arena: Arena, from: TileCoord, to: TileCoord): boolean => {
-  if (from.x === to.x && from.y === to.y) return true;
-  return [...tilesAlongLineExclusive(from, to), to].every((tile) => !blocksVisibility(arena, tile));
-};
+export const hasVisibilityLineOfSight = (arena: Arena, from: TileCoord, to: TileCoord): boolean =>
+  scanSightStrength(arena, from, to) > 0;
 
 export const robotCanSeeTile = (arena: Arena, observer: RobotState, tile: TileCoord): boolean =>
   isOnArena(observer.position) &&

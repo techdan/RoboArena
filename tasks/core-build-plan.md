@@ -11,7 +11,7 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 5 are draft-complete with 178 passing tests. The engine now
+Phases 1R through 5 are draft-complete with 181 passing tests. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. Phase 6 Next.js/PixiJS scaffolding and verified
@@ -63,9 +63,9 @@ The reproducibility audit and confirmed-value inventory are recorded in
 working value and proceed through the confidence policy above.
 
 **Exit gate:** satisfied. All constants needed by Phase 1R/2 are confirmed.
-The unnamed Scan & Fire equal-distance priority is contained by Phase 4's
-stable original-order fallback and remains a non-blocking research label;
-arena MAP orientation/import is verified row-major.
+Scan & Fire equal adjusted-distance candidates prefer higher exact scan-grid
+sight strength, then canonical candidate order; arena MAP orientation/import is
+verified row-major.
 
 ## Milestone 1 — Phase 1R: realign engine primitives [DRAFT COMPLETE]
 

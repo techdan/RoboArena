@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeOpenArena, makeRobot } from "./__fixtures__/match.js";
-import { findScanAndFireTarget, scanAlignmentMagnitude } from "./scanAndFire.js";
+import { findScanAndFireTarget, isOnScanConeBoundary } from "./scanAndFire.js";
 
 describe("Scan & Fire acquisition", () => {
   it("selects the nearest eligible enemy", () => {
@@ -40,6 +40,31 @@ describe("Scan & Fire acquisition", () => {
     expect(result?.robot.id).toBe(first.id);
   });
 
+  it("prefers higher scan strength when adjusted distances tie", () => {
+    const arena = makeOpenArena(10, 10);
+    const partialArena = {
+      ...arena,
+      tiles: arena.tiles.map((row, y) =>
+        row.map((tile, x) => (x === 5 && y === 3 ? { terrain: "bush" as const } : tile)),
+      ),
+    };
+    const shooter = makeRobot("s1", "team-1", "rifle", { x: 1, y: 4 });
+    const partial = makeRobot("partial", "team-2", "rifle", { x: 5, y: 3 });
+    const clear = makeRobot("clear", "team-3", "rifle", { x: 5, y: 5 });
+    const result = findScanAndFireTarget({
+      arena: partialArena,
+      shooter: { ...shooter, position: { x: 1, y: 4 } },
+      shooterSide: 1,
+      candidates: [
+        { side: 2, robot: partial },
+        { side: 3, robot: clear },
+      ],
+      maxDistance: 10,
+    });
+
+    expect(result).toMatchObject({ robot: { id: clear.id }, scanStrength: 16 });
+  });
+
   it("adds two to adjusted distance only on the exact cone boundary", () => {
     const shooter = makeRobot("s1", "team-1", "rifle", { x: 4, y: 4 });
     const boundary = makeRobot("boundary", "team-2", "rifle", { x: 4, y: 1 });
@@ -62,12 +87,12 @@ describe("Scan & Fire acquisition", () => {
     });
   });
 
-  it("filters same-Side, out-of-cone, out-of-distance, and bush-hidden robots", () => {
+  it("filters same-Side, out-of-cone, out-of-distance, and wall-hidden robots", () => {
     const arena = makeOpenArena(12, 8);
-    const bushArena = {
+    const wallArena = {
       ...arena,
       tiles: arena.tiles.map((row, y) =>
-        row.map((tile, x) => (x === 4 && y === 3 ? { terrain: "bush" as const } : tile)),
+        row.map((tile, x) => (x === 4 && y === 3 ? { terrain: "wall" as const } : tile)),
       ),
     };
     const shooter = makeRobot("s1", "team-1", "rifle", { x: 2, y: 3 });
@@ -80,7 +105,7 @@ describe("Scan & Fire acquisition", () => {
 
     expect(
       findScanAndFireTarget({
-        arena: bushArena,
+        arena: wallArena,
         shooter: { ...shooter, position: { x: 2, y: 3 } },
         shooterSide: 1,
         candidates,
@@ -89,11 +114,11 @@ describe("Scan & Fire acquisition", () => {
     ).toBeNull();
   });
 
-  it("produces the live-fire alignment bands from geometric centering", () => {
+  it("detects only the exact inclusive cone boundary", () => {
     const from = { x: 5, y: 5 };
-    expect(scanAlignmentMagnitude(from, "E", { x: 9, y: 5 })).toBe(16);
-    expect(scanAlignmentMagnitude(from, "E", { x: 9, y: 9 })).toBeGreaterThan(8);
-    expect(scanAlignmentMagnitude(from, "E", { x: 6, y: 9 })).toBeLessThanOrEqual(4);
-    expect(scanAlignmentMagnitude(from, "E", { x: 5, y: 9 })).toBe(0);
+    expect(isOnScanConeBoundary(from, "E", { x: 9, y: 5 })).toBe(false);
+    expect(isOnScanConeBoundary(from, "E", { x: 6, y: 9 })).toBe(false);
+    expect(isOnScanConeBoundary(from, "E", { x: 5, y: 9 })).toBe(true);
+    expect(isOnScanConeBoundary(from, "E", from)).toBe(false);
   });
 });

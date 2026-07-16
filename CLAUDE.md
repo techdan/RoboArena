@@ -18,7 +18,7 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-5 of the deterministic
-engine are draft-complete with 178 passing tests. Phase 1.5 lint/format/CI is
+engine are draft-complete with 181 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -31,7 +31,7 @@ verified arena import are next; visual projectile travel speed remains renderer 
 ## Commands
 
 ```bash
-npm test               # Run all engine unit tests (currently 178 tests)
+npm test               # Run all engine unit tests (currently 181 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -46,9 +46,10 @@ Dev/build/start scripts remain deferred until the Next.js scaffold.
 
 The codebase is in two distinct phases of completion:
 
-**`src/engine/` (Phase 2 draft-complete)** — pure-TypeScript deterministic
+**`src/engine/` (Phases 2-5 draft-complete)** — pure-TypeScript deterministic
 simulation realigned to the audited binary structures above, plus immutable
-turn scheduling, command validation, and immediate Aim & Fire resolution.
+turn scheduling, command validation, combat/visibility resolution, and replay
+verification.
 Confirmed named weapon cadence/accuracy mappings are centralized in
 `catalog.ts`; confirmed movement/action costs remain in `constants.ts`.
 Every probabilistic decision goes through a seedable RNG (`createRng(seed)`).
@@ -58,7 +59,7 @@ explosive ammo, and deterministic fire-boundary launch/impact cues.
 
 **Phase 4 (draft-complete)** — per-Team ordinary visibility, visibility
 transitions/last-known markers, and Scan & Fire acquisition, cooldown, ammo,
-alignment, and fire-time result locking. Stealth remains deferred.
+scan-sight strength, and fire-time result locking. Stealth remains deferred.
 
 **Phase 5 (draft-complete)** — versioned replay recording, JSON transport,
 byte-level event/state verification, deterministic digests, and a checked-in
@@ -75,7 +76,7 @@ These are not stylistic preferences — they are the determinism contract. The e
 - **No `Math.random()`** — use the `Rng` from `rng.ts`. Phase 1.5 lands an ESLint rule that enforces this in CI.
 - **No `Date.now()`, `performance.now()`, `setTimeout`, `setInterval`** — engine has no concept of wall-clock time, only ticks.
 - **No imports from `src/app/`, `src/components/`, `src/renderer/`, `src/planner/`** — engine is one-way-dependency. UI imports engine, not the other way.
-- **Integer arithmetic on game-state values** where possible. Distances and damage are integers. Projectile mid-flight uses tile-by-tile schedules, never floats.
+- **Integer arithmetic on game-state values** where possible. Distances and damage are integers. Projectile travel is renderer-only interpolation; the engine stores no authoritative mid-flight projectile position.
 - **Pure functions everywhere**: engine modules return new state, never mutate inputs.
 
 Match 1-7 empirical observations are codified into `constants.ts`. Don't change those numbers without updating `docs/spec.md` — they are coupled.

@@ -306,18 +306,18 @@ Roll: `hit = (game_rand() & 0xFF) < table[index]`.
 are exact so a reviewer can re-trace):
 
 The two arguments are, by bp-offset: `bandArg = [bp+0Ah]` (a small discrete
-scan-band selector) and `alignArg = [bp+16h]` (a larger scan-alignment
-magnitude that also acts as the “inside the cone at all?” gate).
+scan-band selector) and `sightArg = [bp+16h]` (the exact 0..16 scan-grid sight
+strength from `seg87:0x19E3`).
 
 ```
 # guards (both scan inputs must be nonzero, i.e. target is within the cone)
 if bandArg == 0:   return MISS      # → "angle blocked"
-if alignArg == 0:  return MISS
+if sightArg == 0:  return MISS
 
 # base index from the scan band (jump table seg96:0x09D2, selector = bandArg)
 index = { 1:2, 2:4, 3:6 }.get(bandArg, 10)     # ≥4 (dead-center) → 10
 
-index -= (4 - alignArg/4)      # alignment magnitude: well-centered adds, cone-edge subtracts
+index -= (4 - sightArg/4)      # terrain sight strength: partial blockers subtract
 if targetTileFlagA != 0:  index += 4          # target on exposed/rough tile → easier hit
 elif targetTileFlagB == 1: index += 2
 index -= (dist/4 - 2)          # closer = higher index (dist is the §4 Euclidean distance)
@@ -333,23 +333,22 @@ return (game_rand() & 0xFF) < table[index]
 
 **What’s solid:** the table (exact), the clamp `[0,13]`, the roll
 `rand&0xFF < table[idx]`, the distance term `−(dist/4−2)`, and that **two**
-scan inputs feed it — a discrete band `bandArg` ∈ {0..≥4} and a continuous
-alignment magnitude `alignArg`.
+scan inputs feed it — a discrete band `bandArg` ∈ {0..≥4} and the integer
+terrain sight strength `sightArg` ∈ {0..16}.
 
-**What still needs one trace or a calibration playtest:** the exact numeric range
-and source of `bandArg`/`alignArg` (i.e. how a compass scan-heading vs. the
-target’s bearing maps onto those two values), and which robot field is
+**What still needs one trace or a calibration playtest:** the exact source and
+meaning of `bandArg`, and which robot field is
 `weaponClass==4`
 (candidate: Missile/Grenade indirect fire — consistent with the “can only hit
 the exact tile at range” behavior we already flagged for Aim & Fire). Callers of
 `seg96` will resolve this; noted in [§13](#13-for-the-reviewer-fable-checklist).
 
-**Reconciliation with playtests:** a Rifle (tier 2) at point-blank, dead-centre
-scan lands near index 12–13 → 81–100% (matches “BLACK = 1.0”); rotate the scan
-off-axis and `alignArg` collapses, dropping the index to the 5–6 band → ~15–19%
-(matches “GREY ≈ 0.2”). So our 2-zone model is a **coarse sampling** of this
-curve — safe to keep for v1, but the table is here if we want the real thing
-(it gives graceful intermediate accuracies and a distance falloff for free).
+**Reconciliation with playtests:** a Rifle (tier 2) at point-blank with clear
+sight can land near index 12–13 → 81–100% (matching “BLACK = 1.0”). Partial
+sight terrain lowers `sightArg` and therefore the preview index. This corrects
+the earlier geometric-alignment interpretation; compass bearing feeds the
+separate `bandArg`, while terrain feeds `sightArg`. The preview/UI table remains
+separate from the authoritative live-fire table in §7b.
 
 **Targeting validator** (`seg76`, the pre-fire check that returns the status
 strings) runs in this order, returning the STR id shown to the player:
@@ -471,7 +470,7 @@ elif dist >= 3:    score += base/2 + (6 - dist)
 else:              score += base + 2*(3 - dist) + 2      # point-blank bonus
 # target-terrain add by the tile the target stands on (field +0x2E = terrain type 1/2/3):
 score += { 1:+2, 2:-1, 3:-3 }[terrainType]    # else (open) adds weaponAccTable[weapon] from 0x1596
-score -= (alignmentPenalty)                   # <=4: -4, <=8: -2, else 0; Aim passes 16
+score -= (scanSightPenalty)                   # <=4: -4, <=8: -2, else 0; Aim passes 16
 score = clamp(score, 0, 19)
 if damageStaggerCount: score >>= 1             # damage assigned 1–4 future actions
 if targetLeftAimedTile: score >>= 1
@@ -919,7 +918,7 @@ to the Dock ("arrggghhh"). There is no armor-vs-damage-type interaction.
 3. LoS/cover:       walk path (seg87) → coverClass 1..4 (terrain sample + posture enum)
                     if a Wall fully blocks → no hit
 4. Hit roll:        score = coverInit[coverClass] + distanceBonus + targetTerrainAdd
-                            + weaponAccAdd - alignmentPenalty ; clamp 0..19
+                            + weaponAccAdd - scanSightPenalty ; clamp 0..19
                     if damage-staggered: score >>= 1
                     if target left aimed tile: score >>= 1
                     hit = (rand&0xFF) < hitTable_0x156E[score]
@@ -1010,23 +1009,24 @@ A shot is legal only if all three pass, checked in order:
    and range. The predicate is the **closed forward semicircle**: exact ±90°
    boundary rays and same-tile are accepted; a negative heading dot product is
    rejected as "angle blocked". This is exactly
-   `dot(headingVector, target-shooter) >= 0` for all eight headings. Alignment
-   bands inside the cone affect accuracy, not the hard gate.
+   `dot(headingVector, target-shooter) >= 0` for all eight headings. The exact
+   boundary also adds 2 to Scan & Fire candidate rank distance.
 3. **Line of sight** — a clear line must exist (else "sight blocked").
 
-### Line-of-sight = height-based Bresenham
+### Scan-grid sight strength = endpoint-inclusive Bresenham
 
-`seg87:0x19E3` traces the line shooter→target via the Bresenham stepper
-`seg56:0x0360`, reading the same **terrain-height map** (TIL `b0`) the cover trace
-uses. It returns *clear* / *blocked* (and a sentinel `16` for same-tile). Rules
-(consistent with the help text, §2):
-- **Wall (height 4)** blocks sight completely (opaque, TIL `b2`=2).
-- **Low Wall (3) / Bush (2 with `b2`=1)** partially block — they give cover but a
-  taller shooter/target can see over/around depending on heights.
-- **Crevice** does **not** block (LoS-transparent — help text + TIL `b2`=0), even
-  though it's impassable.
-- Because LoS uses heights, **posture again matters**: a crouching robot behind a
-  low wall is both harder to hit *and* harder to see.
+`seg87:0x19E3` traces shooter→target through `seg56:0x0360` and returns an
+integer sight strength. Same-tile and clear sight return 16. The sampled path
+includes both endpoints:
+- **Wall / Outer Wall** (`TIL b2=2`) returns 0 immediately.
+- Every **Low Wall / Bush** (`TIL b2=1`) subtracts 3, clamped at 0.
+- **Crevice / Rough / Open** (`TIL b2=0`) do not reduce the value.
+
+The scan-grid builder `seg96:0x0900..0x09AE` stores this pairwise value and
+`seg96:0x1FC5` returns it. A value of 0 rejects ordinary visibility and Scan &
+Fire acquisition; a positive value is also passed into live fire, where the
+`<=4` and `<=8` penalty bands apply. This path does **not** read posture. Posture
+still affects the separate endpoint-cover path (`seg87:0x1BF8`).
 
 ### Team visibility (fog of war)
 
@@ -1197,7 +1197,7 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 22 | **Scan cone hard boundary** | closed ±90° forward semicircle; boundary included | `seg76:0x0775` → `seg21:0x0CCF` | 🟩 | P1 |
-| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; exact cone-boundary distance adjustment `+2`; equal adjusted candidates use stable original candidate order until the scan-grid priority value's UI label is needed | `seg6:0x1F74`; `seg18:0x072C..0x0888`; `seg21:0x0CCF`; `seg96:0x1FC5`; `seg6:0x3D79` | 🟩 mechanism / 🟨 value label | P1 |
+| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; exact cone-boundary distance adjustment `+2`; equal adjusted candidates prefer higher scan-grid sight strength, then canonical candidate order; the same strength feeds live-fire penalties | `seg6:0x1F74`; `seg18:0x072C..0x0919`; `seg21:0x0CCF`; `seg87:0x19E3`; `seg96:0x0900..0x09AE/0x1FC5`; `seg6:0x3D79` | 🟩 | P1 |
 | 24 | **Aim & Fire moving-target** | **confirmed**: off-aimed-tile halves hit (§15, `seg21:0x0F0A`) | — | 🟩 | P1 |
 | 25 | **Arena coordinate reconciliation** | MAP=`body[y*width+x]`; no flip/transpose; display border +8 | `seg81:0x092F/0x09F2` | 🟩 | P1 |
 | 26 | **Home Area / Dock positions per arena** | homes use exact 6/8/12/16 dimension thresholds at NW/NE/SE/SW; Team Name box fixes home slot without compaction; Dock is off-field | `seg87:0x1F32`; manual; complete INF/MAP parse | 🟩 | P1 |

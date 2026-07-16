@@ -101,6 +101,45 @@ describe("Phase 4 resolver integration", () => {
     ]);
   });
 
+  it("passes terrain sight strength into the live-fire score", () => {
+    const baseArena = makeOpenArena(18, 8);
+    const arena = {
+      ...baseArena,
+      tiles: baseArena.tiles.map((row, y) =>
+        row.map((tile, x) => {
+          if (y !== 3) return tile;
+          if (x === 14) return { terrain: "low-wall" as const };
+          if (x === 4 || x === 7 || x === 10) return { terrain: "bush" as const };
+          return tile;
+        }),
+      ),
+    };
+    const scanner = makeRobot("s1", "team-1", "rifle", { x: 1, y: 3 });
+    const target = {
+      ...makeRobot("r2", "team-2", "rifle", { x: 14, y: 3 }),
+      posture: "crouching" as const,
+    };
+    const state = makeMatch({ arena, teamOneRobots: [scanner], teamTwoRobots: [target] });
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "scan-sight-score",
+        orders: ordersFor(state, [
+          {
+            robotId: scanner.id,
+            segments: [{ kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 1 }],
+          },
+        ]),
+      }),
+    );
+
+    expect(eventsOf(result.events, "scan-target-acquired")).toHaveLength(2);
+    expect(eventsOf(result.events, "shot-missed")[0]).toMatchObject({
+      reason: "hit-roll",
+      score: 0,
+    });
+  });
+
   it("decrements explosive ammo at Scan fire time and stops at zero", () => {
     const scanner = makeRobot("m1", "team-1", "missile", { x: 1, y: 3 });
     const targets = [
