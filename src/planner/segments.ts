@@ -290,7 +290,7 @@ export const validatedTimelinePrefix = (
     if (segment.kind === "aim-and-fire") {
       if (
         !isInBounds(arena, segment.target) ||
-        !availableWeapons(robot).includes(segment.weapon) ||
+        !availableWeapons(robot, valid).includes(segment.weapon) ||
         previewAim({
           arena,
           shooter: {
@@ -309,7 +309,7 @@ export const validatedTimelinePrefix = (
     }
     if (
       segment.kind === "scan-and-fire" &&
-      (!availableWeapons(robot).includes(segment.weapon) ||
+      (!availableWeapons(robot, valid).includes(segment.weapon) ||
         segment.maxDistance < 1 ||
         segment.maxDistance > PLANNER_WEAPON_RANGE[segment.weapon] ||
         segment.seconds < 1 ||

@@ -737,9 +737,13 @@ and deletions retain only the resolver-legal command prefix.
 range/cone/line-of-sight, endpoint-cover, and 20-entry live-fire score rules
 without importing authoritative state or consuming RNG. Aim previews use only
 explicitly authorized contacts; when none are supplied, the dialog presents
-labeled hypothetical posture estimates. Repeat fire is terminal for the
-remaining turn budget, and Scan & Fire defaults to the selected weapon's v1
-range plus the robot's remaining whole-second budget.
+labeled hypothetical posture estimates for direct-fire weapons; explosive
+weapons instead explain their deterministic impact and blast model without a
+fictitious direct-hit score. Repeat fire is terminal for the remaining turn
+budget, finite-ammo validation reserves the possible runtime consumption of
+repeat/scan commands, and Scan & Fire defaults to the selected weapon's v1
+range plus the robot's remaining whole-second budget. Planner dialogs contain
+focus, own Escape, restore their opener, and suspend global shortcuts.
 
 **Effort**: M.
 

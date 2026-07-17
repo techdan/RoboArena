@@ -16,10 +16,10 @@ export function FireBox({
   return (
     <div className="fire-box">
       <button type="button" data-active={aimActive} disabled={disabled} onClick={onAim}>
-        <Crosshair size={15} /> Aim &amp; Fire
+        <Crosshair size={15} aria-hidden="true" /> Aim &amp; Fire
       </button>
       <button type="button" disabled={disabled} onClick={onScan}>
-        <Radar size={15} /> Scan &amp; Fire
+        <Radar size={15} aria-hidden="true" /> Scan &amp; Fire
       </button>
       {disabled ? (
         <small>Deploy this robot to enable firing tools.</small>

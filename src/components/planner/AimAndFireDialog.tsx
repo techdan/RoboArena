@@ -4,6 +4,7 @@ import { Crosshair, ShieldAlert, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Arena, RobotState, TileCoord, WeaponId } from "../../engine/types";
 import { previewAim, WEAPON_LABELS, type AuthorizedContact } from "../../planner/firingHelpers";
+import { usePlannerDialogFocus } from "./usePlannerDialogFocus";
 
 export interface AimAndFireDialogProps {
   readonly arena: Arena;
@@ -37,6 +38,7 @@ export function AimAndFireDialog({
 }: AimAndFireDialogProps) {
   const [weapon, setWeapon] = useState(initialWeapon);
   const [repeat, setRepeat] = useState(initialRepeat);
+  const dialogRef = usePlannerDialogFocus<HTMLElement>(onCancel);
   const preview = useMemo(
     () => previewAim({ arena, shooter, target, weapon, authorizedContacts }),
     [arena, authorizedContacts, shooter, target, weapon],
@@ -50,10 +52,12 @@ export function AimAndFireDialog({
       }}
     >
       <section
+        ref={dialogRef}
         className="planner-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="aim-dialog-title"
+        tabIndex={-1}
       >
         <header>
           <div>
@@ -61,11 +65,11 @@ export function AimAndFireDialog({
             <h2 id="aim-dialog-title">Aim &amp; Fire</h2>
           </div>
           <button type="button" onClick={onCancel} aria-label="Close Aim and Fire dialog">
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </header>
         <div className="fire-target-summary">
-          <Target size={17} />
+          <Target size={17} aria-hidden="true" />
           <span>
             Target{" "}
             <strong>
@@ -80,6 +84,9 @@ export function AimAndFireDialog({
           Weapon
           <select
             className="setup-input"
+            name="aim-weapon"
+            autoComplete="off"
+            data-dialog-initial-focus
             value={weapon}
             onChange={(event) => setWeapon(event.currentTarget.value as WeaponId)}
           >
@@ -92,6 +99,7 @@ export function AimAndFireDialog({
         </label>
         <label className="repeat-choice">
           <input
+            name="repeat-fire"
             type="checkbox"
             checked={repeat}
             onChange={(event) => setRepeat(event.currentTarget.checked)}
@@ -101,10 +109,10 @@ export function AimAndFireDialog({
             <small>Keep firing at this tile through the remaining program horizon.</small>
           </span>
         </label>
-        {preview.status === "eligible" ? (
+        {preview.status === "eligible" && preview.resolution === "direct-hit-roll" ? (
           <div className="fire-preview">
             <div className="fire-preview-heading">
-              <Crosshair size={16} />
+              <Crosshair size={16} aria-hidden="true" />
               <span>
                 {preview.authorizedContact === null
                   ? "Hypothetical target posture estimates"
@@ -125,9 +133,21 @@ export function AimAndFireDialog({
             </div>
             <p>No RNG result is previewed. The server rolls only when this command resolves.</p>
           </div>
+        ) : preview.status === "eligible" ? (
+          <div className="fire-preview">
+            <div className="fire-preview-heading">
+              <Crosshair size={16} aria-hidden="true" />
+              <span>Deterministic blast trajectory</span>
+            </div>
+            <p>
+              This explosive impacts the programmed tile and resolves blast damage by radius and
+              cover. It does not use the direct-fire hit-score table; damage RNG remains
+              server-authoritative.
+            </p>
+          </div>
         ) : (
           <div className="fire-blocked" role="status">
-            <ShieldAlert size={17} />
+            <ShieldAlert size={17} aria-hidden="true" />
             <span>{STATUS_COPY[preview.status]}</span>
           </div>
         )}

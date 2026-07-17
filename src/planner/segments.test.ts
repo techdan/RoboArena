@@ -151,4 +151,30 @@ describe("planner segments", () => {
       ]),
     ).toEqual({ segments: [repeat], droppedCount: 1 });
   });
+
+  it("rejects deterministic finite-ammo overcommit and reserves finite scan ammo", () => {
+    const arena = makeOpenArena();
+    const robot = makeRobot("r1", "t1", "missile", { x: 1, y: 1 });
+    const missile = {
+      kind: "aim-and-fire",
+      target: { x: 3, y: 1 },
+      weapon: "missile-launcher",
+      repeat: false,
+    } as const;
+    expect(validatedTimelinePrefix(arena, robot, 0, [missile, missile, missile, missile])).toEqual({
+      segments: [missile, missile, missile],
+      droppedCount: 1,
+    });
+
+    const scan = {
+      kind: "scan-and-fire",
+      weapon: "missile-launcher",
+      maxDistance: 18,
+      seconds: 1,
+    } as const;
+    expect(validatedTimelinePrefix(arena, robot, 0, [scan, missile])).toEqual({
+      segments: [scan],
+      droppedCount: 1,
+    });
+  });
 });

@@ -8,6 +8,7 @@ import {
   PLANNER_WEAPON_RANGE,
   WEAPON_LABELS,
 } from "../../planner/firingHelpers";
+import { usePlannerDialogFocus } from "./usePlannerDialogFocus";
 
 export interface ScanAndFireDialogProps {
   readonly weapons: readonly WeaponId[];
@@ -34,6 +35,7 @@ export function ScanAndFireDialog({
   const [weapon, setWeapon] = useState(initialWeapon);
   const [maxDistance, setMaxDistance] = useState(initialMaxDistance ?? defaults.maxDistance);
   const [seconds, setSeconds] = useState(initialSeconds ?? defaults.seconds);
+  const dialogRef = usePlannerDialogFocus<HTMLElement>(onCancel);
   return (
     <div
       className="planner-dialog-backdrop"
@@ -43,10 +45,12 @@ export function ScanAndFireDialog({
       }}
     >
       <section
+        ref={dialogRef}
         className="planner-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scan-fire-title"
+        tabIndex={-1}
       >
         <header>
           <div>
@@ -54,11 +58,11 @@ export function ScanAndFireDialog({
             <h2 id="scan-fire-title">Scan &amp; Fire</h2>
           </div>
           <button type="button" onClick={onCancel} aria-label="Close Scan and Fire dialog">
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </header>
         <div className="scan-explanation">
-          <Radar size={18} />
+          <Radar size={18} aria-hidden="true" />
           <p>
             Watch the current inclusive forward semicircle. At each firing opportunity, the server
             acquires the nearest eligible visible enemy within this cap.
@@ -68,6 +72,9 @@ export function ScanAndFireDialog({
           Weapon
           <select
             className="setup-input"
+            name="scan-weapon"
+            autoComplete="off"
+            data-dialog-initial-focus
             value={weapon}
             onChange={(event) => {
               const next = event.currentTarget.value as WeaponId;
@@ -90,7 +97,10 @@ export function ScanAndFireDialog({
             <input
               className="setup-input"
               aria-label="Maximum Distance"
+              name="scan-maximum-distance"
+              autoComplete="off"
               type="number"
+              inputMode="numeric"
               min={1}
               max={PLANNER_WEAPON_RANGE[weapon]}
               value={maxDistance}
@@ -109,7 +119,10 @@ export function ScanAndFireDialog({
             <input
               className="setup-input"
               aria-label="Seconds"
+              name="scan-seconds"
+              autoComplete="off"
               type="number"
+              inputMode="numeric"
               min={1}
               max={40}
               value={seconds}

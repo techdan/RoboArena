@@ -153,12 +153,11 @@ export function PlannerExperience({
   if (selectedRobot === undefined) throw new Error("This team has no programmable robots.");
   const selectedTimeline = timelineForRobot(orders, selectedRobot.id);
   const editingIndex = editing?.robotId === selectedRobot.id ? editing.index : null;
-  const projected = projectRobotAtTick(
-    selectedRobot,
+  const commandPrefix =
     editingIndex === null
       ? selectedTimeline.segments
-      : selectedTimeline.segments.slice(0, editingIndex),
-  );
+      : selectedTimeline.segments.slice(0, editingIndex);
+  const projected = projectRobotAtTick(selectedRobot, commandPrefix);
   const projectedShooter = useMemo(
     () => ({
       ...selectedRobot,
@@ -170,7 +169,7 @@ export function PlannerExperience({
   );
   const selectedEndTick =
     timelineTiming(selectedRobot, selectedTimeline.segments, budgetTicks).at(-1)?.endTick ?? 0;
-  const weapons = availableWeapons(selectedRobot);
+  const weapons = availableWeapons(selectedRobot, commandPrefix);
   const homeTiles = useMemo(
     () =>
       new Set(
@@ -451,6 +450,15 @@ export function PlannerExperience({
         setScanDialog(null);
         setEditing(null);
         setNotice("Firing action canceled.");
+        return;
+      }
+      const target = event.target;
+      if (
+        aimDialog !== null ||
+        scanDialog !== null ||
+        (target instanceof HTMLElement &&
+          target.closest("input, select, textarea, [contenteditable='true']") !== null)
+      ) {
         return;
       }
       if (!(event.ctrlKey || event.metaKey)) {

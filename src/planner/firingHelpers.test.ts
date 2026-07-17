@@ -5,7 +5,12 @@ import { LIVE_FIRE_HIT_THRESHOLDS } from "../engine/constants";
 import { resolveCover } from "../engine/cover";
 import { calculateLiveFireScore } from "../engine/firing";
 import type { Arena } from "../engine/types";
-import { defaultScanSettings, PLANNER_WEAPON_RANGE, previewAim } from "./firingHelpers";
+import {
+  availableWeapons,
+  defaultScanSettings,
+  PLANNER_WEAPON_RANGE,
+  previewAim,
+} from "./firingHelpers";
 
 describe("authorized firing previews", () => {
   it("surfaces angle, range, and line-of-sight gates without rolling", () => {
@@ -90,8 +95,45 @@ describe("authorized firing previews", () => {
     expect(authorized.estimates.map((entry) => entry.posture)).toEqual(["ducking"]);
   });
 
+  it("explains blast weapons without inventing a direct-fire hit score", () => {
+    const arena = makeOpenArena(20, 5);
+    const shooter = makeRobot("r1", "t1", "missile", { x: 2, y: 2 }, { scanHeading: "E" });
+    const preview = previewAim({
+      arena,
+      shooter,
+      target: { x: 7, y: 2 },
+      weapon: "missile-launcher",
+      authorizedContacts: [],
+    });
+    expect(preview).toMatchObject({ status: "eligible", resolution: "blast", estimates: [] });
+  });
+
+  it("projects finite ammunition and reserves runtime-dependent fire", () => {
+    const robot = makeRobot("r1", "t1", "missile", { x: 1, y: 1 });
+    const shot = {
+      kind: "aim-and-fire",
+      target: { x: 2, y: 1 },
+      weapon: "missile-launcher",
+      repeat: false,
+    } as const;
+    expect(availableWeapons(robot)).toEqual(["missile-launcher", "rifle"]);
+    expect(availableWeapons(robot, [shot, shot])).toEqual(["missile-launcher", "rifle"]);
+    expect(availableWeapons(robot, [shot, shot, shot])).toEqual(["rifle"]);
+    expect(
+      availableWeapons(robot, [
+        {
+          kind: "scan-and-fire",
+          weapon: "missile-launcher",
+          maxDistance: 18,
+          seconds: 1,
+        },
+      ]),
+    ).toEqual(["rifle"]);
+  });
+
   it("defaults Scan & Fire to the weapon range and remaining whole-second horizon", () => {
-    expect(defaultScanSettings("rifle", 685)).toEqual({ maxDistance: 18, seconds: 12 });
+    expect(defaultScanSettings("rifle", 685)).toEqual({ maxDistance: 18, seconds: 11 });
+    expect(defaultScanSettings("rifle", 870)).toEqual({ maxDistance: 18, seconds: 14 });
     expect(defaultScanSettings("missile-launcher", 0)).toEqual({ maxDistance: 18, seconds: 1 });
     for (const [id, definition] of Object.entries(WEAPONS)) {
       expect(PLANNER_WEAPON_RANGE[id as keyof typeof PLANNER_WEAPON_RANGE]).toBe(

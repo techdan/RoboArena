@@ -13,6 +13,7 @@ import type {
   Heading,
   Posture,
   RobotState,
+  RobotCommandSegment,
   TileCoord,
   WeaponId,
 } from "../engine/types";
@@ -46,6 +47,13 @@ export const WEAPON_LABELS: Readonly<Record<WeaponId, string>> = {
   "missile-launcher": "Missile Launcher",
   "grenade-launcher": "Grenade Launcher",
 };
+const WEAPON_RESOLUTION: Readonly<Record<WeaponId, "direct-hit-roll" | "blast">> = {
+  rifle: "direct-hit-roll",
+  "burst-gun": "direct-hit-roll",
+  "auto-rifle": "direct-hit-roll",
+  "missile-launcher": "blast",
+  "grenade-launcher": "blast",
+};
 
 export interface AuthorizedContact {
   readonly id: string;
@@ -71,14 +79,39 @@ export interface AimPreview {
   readonly target: TileCoord;
   readonly weapon: WeaponId;
   readonly authorizedContact: AuthorizedContact | null;
+  readonly resolution: "direct-hit-roll" | "blast";
   readonly estimates: readonly HitEstimate[];
   readonly stoppedAt?: TileCoord;
 }
 
-export const availableWeapons = (robot: RobotState): readonly WeaponId[] =>
-  [robot.definition.primaryWeapon, ...(robot.definition.secondaryWeapons ?? [])].filter(
-    (weapon) => robot.ammo[weapon] === "unlimited" || (robot.ammo[weapon] ?? 0) > 0,
+const projectedAmmo = (
+  robot: RobotState,
+  segments: readonly RobotCommandSegment[],
+): Readonly<Record<WeaponId, number | "unlimited">> => {
+  const ammo = { ...robot.ammo };
+  for (const segment of segments) {
+    if (segment.kind !== "aim-and-fire" && segment.kind !== "scan-and-fire") continue;
+    const remaining = ammo[segment.weapon];
+    if (remaining === "unlimited") continue;
+    ammo[segment.weapon] =
+      segment.kind === "scan-and-fire" || segment.repeat ? 0 : Math.max(0, remaining - 1);
+  }
+  return ammo;
+};
+
+/**
+ * Scan & Fire and repeat fire conservatively reserve all remaining finite ammo.
+ * This keeps later commands legal regardless of hidden runtime acquisitions.
+ */
+export const availableWeapons = (
+  robot: RobotState,
+  segments: readonly RobotCommandSegment[] = [],
+): readonly WeaponId[] => {
+  const ammo = projectedAmmo(robot, segments);
+  return [robot.definition.primaryWeapon, ...(robot.definition.secondaryWeapons ?? [])].filter(
+    (weapon) => ammo[weapon] === "unlimited" || (ammo[weapon] ?? 0) > 0,
   );
+};
 
 const floorDistance = (from: TileCoord, to: TileCoord): number => {
   const dx = from.x - to.x;
@@ -197,6 +230,7 @@ export const previewAim = (input: {
   readonly weapon: WeaponId;
   readonly authorizedContacts: readonly AuthorizedContact[];
 }): AimPreview => {
+  const resolution = WEAPON_RESOLUTION[input.weapon];
   const position = input.shooter.position;
   if (position === "dock")
     return {
@@ -205,6 +239,7 @@ export const previewAim = (input: {
       target: input.target,
       weapon: input.weapon,
       authorizedContact: null,
+      resolution,
       estimates: [],
     };
   const distance = floorDistance(position, input.target);
@@ -215,6 +250,7 @@ export const previewAim = (input: {
       target: input.target,
       weapon: input.weapon,
       authorizedContact: null,
+      resolution,
       estimates: [],
     };
   if (!isTileInScanGate(position, input.shooter.scanHeading, input.target))
@@ -224,6 +260,7 @@ export const previewAim = (input: {
       target: input.target,
       weapon: input.weapon,
       authorizedContact: null,
+      resolution,
       estimates: [],
     };
   const stoppedAt = [...lineExclusive(position, input.target), input.target].find((tile) => {
@@ -237,6 +274,7 @@ export const previewAim = (input: {
       target: input.target,
       weapon: input.weapon,
       authorizedContact: null,
+      resolution,
       estimates: [],
       stoppedAt,
     };
@@ -252,21 +290,25 @@ export const previewAim = (input: {
     target: input.target,
     weapon: input.weapon,
     authorizedContact: contact,
-    estimates: postures.map((posture) =>
-      estimate(
-        input.arena,
-        position,
-        input.target,
-        posture,
-        input.shooter.definition.accuracy,
-        input.weapon,
-        input.shooter.damageStaggerActionsRemaining > 0,
-      ),
-    ),
+    resolution,
+    estimates:
+      resolution === "blast"
+        ? []
+        : postures.map((posture) =>
+            estimate(
+              input.arena,
+              position,
+              input.target,
+              posture,
+              input.shooter.definition.accuracy,
+              input.weapon,
+              input.shooter.damageStaggerActionsRemaining > 0,
+            ),
+          ),
   };
 };
 
 export const defaultScanSettings = (weapon: WeaponId, remainingTicks: number) => ({
   maxDistance: PLANNER_WEAPON_RANGE[weapon],
-  seconds: Math.max(1, Math.min(40, Math.ceil(Math.max(0, remainingTicks) / 60))),
+  seconds: Math.max(1, Math.min(40, Math.floor(Math.max(0, remainingTicks) / 60))),
 });

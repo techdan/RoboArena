@@ -86,9 +86,20 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     await planner.getByRole("button", { name: "Add Aim & Fire" }).click();
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toBeVisible();
 
-    await planner.getByRole("button", { name: "Scan & Fire", exact: true }).click();
+    const scanButton = planner.getByRole("button", { name: "Scan & Fire", exact: true });
+    await scanButton.click();
+    await expect(planner.getByLabel("Weapon")).toBeFocused();
+    const maximumDistance = planner.getByLabel("Maximum Distance");
+    await maximumDistance.click();
+    await maximumDistance.press("Control+A");
+    await maximumDistance.pressSequentially("12");
+    await expect(maximumDistance).toHaveValue("12");
+    await maximumDistance.press("Escape");
+    await expect(scanButton).toBeFocused();
+
+    await scanButton.click();
     await expect(planner.getByLabel("Maximum Distance")).toHaveValue("18");
-    await expect(planner.getByLabel("Seconds")).toHaveValue("11");
+    await expect(planner.getByLabel("Seconds")).toHaveValue("10");
     await planner.getByRole("button", { name: "Add Scan & Fire" }).click();
     await expect(timelines.getByText("Scan & Fire", { exact: true })).toBeVisible();
 

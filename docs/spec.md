@@ -157,6 +157,10 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 - Beginner default: **15.0 seconds = 900 ticks**. ✅
 - Other formations: configurable 1-40 seconds (Turn Length dialog in original). ✅
 - The planner permits commands extending past the budget; commands beyond 15.0 s are greyed out and not executed. ✅
+- Planner validation decrements finite ammo for fixed Aim & Fire shots. Repeat
+  Aim & Fire and Scan & Fire conservatively reserve all remaining finite ammo,
+  so hidden runtime acquisition cannot make a later finite-weapon command
+  resolver-invalid.
 
 ---
 
