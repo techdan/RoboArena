@@ -93,7 +93,9 @@ and terminal repeat-fire timing without consuming authoritative RNG.
 
 **Phase 11 (draft-complete)** — durable private drafts and locks, persisted
 seed/nonce recovery, exact-once deterministic resolution, participant-specific
-state/events, independent movie acknowledgement and playback resume, Final
+state/events with visibility-boundary contact materialization and unseen-source
+redaction, bounded WebSocket payload/rate handling, participant-specific recent
+room status, independent movie acknowledgement and playback resume, Final
 Ceremony scoring, and canonical Phase 5 replay storage/verification.
 
 **Everything after Phase 11 (not yet built)** — explainability/onboarding,

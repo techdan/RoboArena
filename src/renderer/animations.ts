@@ -9,6 +9,7 @@ import type {
   TileCoord,
 } from "../engine/types";
 import { TICKS_PER_SECOND } from "../engine/constants";
+import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 
 export interface MovieRobotSnapshot {
   readonly id: string;
@@ -31,7 +32,7 @@ export interface MovieSnapshot {
 export interface MovieTimeline {
   readonly ticks: readonly number[];
   readonly snapshots: readonly MovieSnapshot[];
-  readonly eventsByTick: ReadonlyMap<number, readonly ResolutionEvent[]>;
+  readonly eventsByTick: ReadonlyMap<number, readonly ParticipantResolutionEvent[]>;
 }
 
 export type AnimationCue =
@@ -102,7 +103,7 @@ const updateRobot = (
 
 export const applyMovieEvent = (
   robots: Readonly<Record<string, MovieRobotSnapshot>>,
-  event: ResolutionEvent,
+  event: ParticipantResolutionEvent,
 ): Readonly<Record<string, MovieRobotSnapshot>> => {
   switch (event.kind) {
     case "deployed":
@@ -126,6 +127,14 @@ export const applyMovieEvent = (
         hp: 0,
         destroyed: true,
       }));
+    case "enemy-spotted":
+      return event.contact === undefined ? robots : { ...robots, [event.enemyId]: event.contact };
+    case "enemy-lost": {
+      if (robots[event.enemyId] === undefined) return robots;
+      const next = { ...robots };
+      delete next[event.enemyId];
+      return next;
+    }
     default:
       return robots;
   }
@@ -133,10 +142,10 @@ export const applyMovieEvent = (
 
 export const buildMovieTimeline = (
   initialState: MatchState,
-  events: readonly ResolutionEvent[],
+  events: readonly ParticipantResolutionEvent[],
 ): MovieTimeline => {
   const sorted = [...events].sort((left, right) => left.tick - right.tick || left.seq - right.seq);
-  const eventsByTick = new Map<number, ResolutionEvent[]>();
+  const eventsByTick = new Map<number, ParticipantResolutionEvent[]>();
   for (const event of sorted) {
     const atTick = eventsByTick.get(event.tick) ?? [];
     atTick.push(event);

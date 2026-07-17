@@ -8,7 +8,8 @@
 import { gsap } from "gsap";
 import { Assets, Sprite } from "pixi.js";
 import type { Container, Graphics, Texture } from "pixi.js";
-import type { ResolutionEvent, TileCoord } from "../../engine/types";
+import type { TileCoord } from "../../engine/types";
+import type { ParticipantResolutionEvent } from "../../lib/net/protocol";
 import { EFFECT_ASSETS, MARKER_ASSETS } from "../assets";
 import { MOVIE_TILE_SIZE } from "../RobotSprite";
 
@@ -84,7 +85,7 @@ const explosion = (layer: Container, at: { x: number; y: number }, big: boolean)
 
 export const renderMovieEffects = (
   layer: Container,
-  events: readonly ResolutionEvent[],
+  events: readonly ParticipantResolutionEvent[],
   robotPositions: Readonly<Record<string, TileCoord | "dock">>,
   reducedMotion = false,
 ) => {

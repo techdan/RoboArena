@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { makeMatch, makeRobot } from "../engine/__fixtures__/match";
 import { resolveTurn } from "../engine/resolver";
 import type { ResolutionEvent } from "../engine/types";
+import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import {
   ANIMATION_CUES,
   buildMovieTimeline,
@@ -103,5 +104,51 @@ describe("movie timeline", () => {
     expect(ANIMATION_CUES["enemy-lost"]).toBe("last-known");
     expect(ANIMATION_CUES["last-known-marker"]).toBe("last-known");
     expect(ANIMATION_CUES["shot-missed"]).toBe("miss");
+  });
+
+  it("materializes, damages, and removes a participant contact", () => {
+    const events: readonly ParticipantResolutionEvent[] = [
+      {
+        tick: 10,
+        seq: 0,
+        kind: "enemy-spotted",
+        teamId: "team-1",
+        enemyId: "contact",
+        at: { x: 2, y: 1 },
+        contact: {
+          id: "contact",
+          teamId: "team-2",
+          teamColor: "blue",
+          robotClass: "rifle",
+          position: { x: 2, y: 1 },
+          hp: 140,
+          armor: 140,
+          posture: "upright",
+          scanHeading: "W",
+          destroyed: false,
+        },
+      },
+      {
+        tick: 20,
+        seq: 1,
+        kind: "damaged",
+        damageKind: "direct",
+        targetId: "contact",
+        damage: 15,
+      },
+      {
+        tick: 30,
+        seq: 2,
+        kind: "enemy-lost",
+        teamId: "team-1",
+        enemyId: "contact",
+        lastSeenAt: { x: 2, y: 1 },
+      },
+    ];
+    const timeline = buildMovieTimeline(state, events);
+
+    expect(snapshotAtTick(timeline, 10).robots.contact).toMatchObject({ hp: 140 });
+    expect(snapshotAtTick(timeline, 20).robots.contact).toMatchObject({ hp: 125 });
+    expect(snapshotAtTick(timeline, 30).robots.contact).toBeUndefined();
   });
 });

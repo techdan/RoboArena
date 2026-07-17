@@ -12,6 +12,7 @@ import type {
 } from "../src/engine/types.js";
 import type {
   MatchSnapshotMessage,
+  ParticipantRoomStatus,
   PublicPlayer,
   PublicRoom,
   ProtocolErrorCode,
@@ -27,6 +28,7 @@ import {
   acknowledgeTurn,
   createAuthoritativeMatch,
   lockParticipantOrders,
+  participantStatus,
   resolvePendingTurn,
   setPlaybackPosition,
   submitParticipantOrders,
@@ -147,6 +149,22 @@ export class RoomService {
     const room = this.#requireRoom(code);
     const player = this.#authenticate(room, token);
     return { room: this.publicRoom(room), selfPlayerId: player.id };
+  }
+
+  participantRoomStatus(code: string, playerId: string): ParticipantRoomStatus | undefined {
+    const room = this.#requireRoom(code);
+    if (!room.players.some((player) => player.id === playerId)) {
+      throw new RoomError("UNAUTHORIZED", "That participant does not own a seat.");
+    }
+    if (room.match === undefined) return undefined;
+    return {
+      status: participantStatus(room.match, playerId),
+      turnNumber: room.match.state.turnNumber,
+      waitingForPlayers: Math.max(
+        0,
+        room.match.playerIds.length - room.match.lockedPlayerIds.length,
+      ),
+    };
   }
 
   async updatePlayer(

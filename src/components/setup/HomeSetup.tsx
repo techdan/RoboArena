@@ -4,7 +4,7 @@ import { ArrowRight, Film, Gamepad2, RadioTower, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { PROTOCOL_VERSION, type PublicRoom } from "../../lib/net/protocol";
+import { PROTOCOL_VERSION, type RoomSnapshotMessage } from "../../lib/net/protocol";
 import {
   forgetRoom,
   recentRooms,
@@ -21,7 +21,16 @@ interface RememberedRoom {
   readonly status: string;
 }
 
-const roomStatus = (room: PublicRoom): string => {
+const roomStatus = (snapshot: RoomSnapshotMessage): string => {
+  const { room, matchStatus } = snapshot;
+  if (matchStatus?.status === "planning") return `Your turn · Turn ${matchStatus.turnNumber}`;
+  if (matchStatus?.status === "waiting") {
+    return matchStatus.waitingForPlayers === 1
+      ? "Waiting for 1 player"
+      : `Waiting for ${matchStatus.waitingForPlayers} players`;
+  }
+  if (matchStatus?.status === "turn-ready") return "Turn ready to watch";
+  if (matchStatus?.status === "finished") return "Finished";
   if (room.phase === "active") return "Match started";
   const ready = room.players.filter((player) => player.ready).length;
   if (room.players.length < 2) return "Waiting for players";
@@ -55,7 +64,7 @@ export function HomeSetup() {
             code: roomCode,
             token,
           });
-          return { code: roomCode, status: roomStatus(response.room) };
+          return { code: roomCode, status: roomStatus(response) };
         } catch (caught) {
           if (caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED") {
             forgetRoom(roomCode);
@@ -224,7 +233,7 @@ export function HomeSetup() {
             {remembered.length > 0 ? (
               <div className="mt-6 border-t border-white/8 pt-5">
                 <p className="eyebrow mb-3">Recent rooms</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" aria-live="polite">
                   {remembered.map((room) => (
                     <Link key={room.code} href={`/room/${room.code}`} className="recent-room">
                       <strong>{room.code}</strong>

@@ -21,7 +21,12 @@ import { MatchLifecycleError } from "./matches.js";
 interface ConnectionState {
   roomCode?: string;
   playerId?: string;
+  messageTimes: number[];
 }
+
+export const MAX_CLIENT_MESSAGE_BYTES = 256 * 1024;
+export const MESSAGE_RATE_WINDOW_MS = 10_000;
+export const MESSAGE_RATE_LIMIT = 60;
 
 const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
   if (error instanceof RoomError || error instanceof MatchLifecycleError) {
@@ -72,7 +77,7 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
     }
     response.writeHead(404).end();
   });
-  const sockets = new WebSocketServer({ server: http });
+  const sockets = new WebSocketServer({ server: http, maxPayload: MAX_CLIENT_MESSAGE_BYTES });
   const connections = new Map<WebSocket, ConnectionState>();
 
   const send = (socket: WebSocket, message: ServerMessage) => {
@@ -80,7 +85,7 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
   };
 
   const subscribe = (socket: WebSocket, access: RoomAccess) => {
-    const state = connections.get(socket) ?? {};
+    const state = connections.get(socket) ?? { messageTimes: [] };
     if (state.playerId !== undefined && state.playerId !== access.selfPlayerId) {
       service.markDisconnected(state.playerId);
     }
@@ -94,12 +99,14 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
     const room = service.publicRoom(code);
     for (const [socket, state] of connections) {
       if (state.roomCode !== code || state.playerId === undefined) continue;
+      const matchStatus = service.participantRoomStatus(code, state.playerId);
       send(socket, {
         version: PROTOCOL_VERSION,
         requestId: "broadcast",
         kind: "RoomSnapshot",
         room,
         selfPlayerId: state.playerId,
+        ...(matchStatus === undefined ? {} : { matchStatus }),
       });
     }
   };
@@ -144,7 +151,10 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
   };
 
   sockets.on("connection", (socket) => {
-    connections.set(socket, {});
+    connections.set(socket, { messageTimes: [] });
+    socket.on("error", () => {
+      // Protocol/size failures close the socket; the close handler performs cleanup.
+    });
     socket.on("message", (data) => {
       void (async () => {
         let requestId = "invalid";
@@ -157,6 +167,23 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
           } catch {
             // The strict parser below produces the public validation response.
           }
+          const connection = connections.get(socket) ?? { messageTimes: [] };
+          const now = Date.now();
+          connection.messageTimes = connection.messageTimes.filter(
+            (receivedAt) => now - receivedAt < MESSAGE_RATE_WINDOW_MS,
+          );
+          if (connection.messageTimes.length >= MESSAGE_RATE_LIMIT) {
+            send(socket, {
+              version: PROTOCOL_VERSION,
+              requestId,
+              kind: "ProtocolError",
+              code: "RATE_LIMITED",
+              message: "Too many room-service messages. Wait a moment and try again.",
+            });
+            return;
+          }
+          connection.messageTimes.push(now);
+          connections.set(socket, connection);
           const message = parseClientMessageJson(raw);
           requestId = message.requestId;
           const token = "token" in message ? message.token : undefined;
@@ -172,9 +199,14 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
           const cached = storage.getRequestResult(principal, requestId);
           if (cached !== undefined) {
             if (cached.kind === "RoomSnapshot") {
+              const matchStatus = service.participantRoomStatus(
+                cached.room.code,
+                cached.selfPlayerId,
+              );
               const freshResponse: RoomSnapshotMessage = {
                 ...cached,
                 room: service.publicRoom(cached.room.code),
+                ...(matchStatus === undefined ? {} : { matchStatus }),
                 ...(issuedParticipantToken === undefined
                   ? {}
                   : { participantToken: issuedParticipantToken }),
@@ -260,12 +292,14 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
           }
           const access = await dispatch(message, issuedParticipantToken);
           subscribe(socket, access);
+          const matchStatus = service.participantRoomStatus(access.room.code, access.selfPlayerId);
           const response: RoomSnapshotMessage = {
             version: PROTOCOL_VERSION,
             requestId,
             kind: "RoomSnapshot",
             room: service.publicRoom(access.room.code),
             selfPlayerId: access.selfPlayerId,
+            ...(matchStatus === undefined ? {} : { matchStatus }),
             ...(access.participantToken === undefined
               ? {}
               : { participantToken: access.participantToken }),

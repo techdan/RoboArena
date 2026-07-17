@@ -1,10 +1,12 @@
 /** Participant-specific state and event projection. Hidden enemy state never crosses this boundary. */
 
 import { computeVisibility } from "../src/engine/visibility.js";
-import type { MatchState, ResolutionEvent } from "../src/engine/types.js";
+import type { MatchState, ResolutionEvent, RobotState } from "../src/engine/types.js";
 import {
   serializeMatchState,
   type MatchSnapshotMessage,
+  type ParticipantResolutionEvent,
+  type ParticipantRobotContact,
   type ParticipantTurnResult,
 } from "../src/lib/net/protocol.js";
 import {
@@ -38,6 +40,7 @@ const eventIsAuthorized = (
   playerId: string,
   authorizedRobotIds: ReadonlySet<string>,
   authorizedProjectileIds: Set<string>,
+  hiddenMoveBoundaries: ReadonlySet<string>,
 ): boolean => {
   switch (event.kind) {
     case "turn-start":
@@ -50,6 +53,10 @@ const eventIsAuthorized = (
     case "command-start":
     case "deployed":
     case "move-step":
+      return (
+        authorizedRobotIds.has(event.robotId) &&
+        !hiddenMoveBoundaries.has(`${event.tick}:${event.robotId}`)
+      );
     case "posture-changed":
     case "scan-rotated":
     case "destroyed":
@@ -67,9 +74,56 @@ const eventIsAuthorized = (
     case "projectile-impacted":
       return authorizedProjectileIds.has(event.projectileId);
     case "damaged":
-      return authorizedRobotIds.has(event.sourceId) && authorizedRobotIds.has(event.targetId);
+      return false;
   }
 };
+
+const updateRobotState = (robots: Map<string, RobotState>, event: ResolutionEvent): void => {
+  const replace = (robotId: string, update: (robot: RobotState) => RobotState) => {
+    const robot = robots.get(robotId);
+    if (robot !== undefined) robots.set(robotId, update(robot));
+  };
+  switch (event.kind) {
+    case "deployed":
+    case "move-step":
+      replace(event.robotId, (robot) => ({ ...robot, position: event.to }));
+      return;
+    case "posture-changed":
+      replace(event.robotId, (robot) => ({ ...robot, posture: event.posture }));
+      return;
+    case "scan-rotated":
+      replace(event.robotId, (robot) => ({ ...robot, scanHeading: event.heading }));
+      return;
+    case "damaged":
+      replace(event.targetId, (robot) => ({ ...robot, hp: Math.max(0, robot.hp - event.damage) }));
+      return;
+    case "destroyed":
+      replace(event.robotId, (robot) => ({ ...robot, hp: 0 }));
+      return;
+    default:
+      return;
+  }
+};
+
+const participantContact = (
+  robot: RobotState | undefined,
+  teamColor: string | undefined,
+  at: ParticipantRobotContact["position"],
+): ParticipantRobotContact | undefined =>
+  robot === undefined || teamColor === undefined
+    ? undefined
+    : {
+        id: robot.id,
+        teamId: robot.teamId,
+        teamColor,
+        robotClass: robot.definition.class,
+        position: at,
+        hp: robot.hp,
+        armor: robot.definition.armor,
+        posture: robot.posture,
+        scanHeading: robot.scanHeading,
+        destroyed: robot.hp === 0,
+      };
 
 export const projectTurnResult = (
   turn: CanonicalTurnRecord,
@@ -81,13 +135,56 @@ export const projectTurnResult = (
     initialView.teams.flatMap((team) => team.robots.map((robot) => robot.id)),
   );
   const authorizedProjectileIds = new Set<string>();
-  const events: ResolutionEvent[] = [];
+  const hiddenMoveBoundaries = new Set(
+    turn.events.flatMap((event) =>
+      event.kind === "enemy-lost" && event.teamId === playerId
+        ? [`${event.tick}:${event.enemyId}`]
+        : [],
+    ),
+  );
+  const robots = new Map(
+    turn.initialState.teams.flatMap((team) =>
+      team.robots.map((robot) => [robot.id, robot] as const),
+    ),
+  );
+  const teamColors = new Map(turn.initialState.teams.map((team) => [team.id, team.color] as const));
+  const events: ParticipantResolutionEvent[] = [];
   for (const event of turn.events) {
+    updateRobotState(robots, event);
     if (event.kind === "enemy-spotted" && event.teamId === playerId) {
       authorizedRobotIds.add(event.enemyId);
     }
-    if (eventIsAuthorized(event, playerId, authorizedRobotIds, authorizedProjectileIds)) {
-      events.push(event);
+    if (event.kind === "damaged") {
+      if (authorizedRobotIds.has(event.targetId)) {
+        events.push(
+          authorizedRobotIds.has(event.sourceId)
+            ? event
+            : {
+                tick: event.tick,
+                seq: event.seq,
+                kind: event.kind,
+                damageKind: event.damageKind,
+                targetId: event.targetId,
+                damage: event.damage,
+              },
+        );
+      }
+    } else if (
+      eventIsAuthorized(
+        event,
+        playerId,
+        authorizedRobotIds,
+        authorizedProjectileIds,
+        hiddenMoveBoundaries,
+      )
+    ) {
+      if (event.kind === "enemy-spotted" && event.teamId === playerId) {
+        const robot = robots.get(event.enemyId);
+        const contact = participantContact(robot, teamColors.get(robot?.teamId ?? ""), event.at);
+        events.push(contact === undefined ? event : { ...event, contact });
+      } else {
+        events.push(event);
+      }
     }
     if (event.kind === "enemy-lost" && event.teamId === playerId) {
       authorizedRobotIds.delete(event.enemyId);

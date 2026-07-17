@@ -826,14 +826,20 @@ per-player acknowledgement, and per-player playback position. Resolution is a
 single-process compare-by-state transition: a crash after the resolving record
 is stored simply re-runs the pure engine with the same seed. Exact request
 retries are no-ops even if the response cache was not committed. `server/view.ts`
-removes unseen enemy robots and filters events as visibility changes; neither
+removes unseen enemy robots and filters events at visibility boundaries. A newly
+visible contact carries only the state needed to materialize its movie sprite;
+the outbound step that loses visibility is suppressed, and damage to an owned
+robot retains its observable amount while an unseen source is redacted. Neither
 orders, seeds, nonces, nor hidden projectile details cross the participant
-boundary. The planner saves or atomically locks its current draft, readiness
-shares status only, each player watches and acknowledges independently, and the
-Final Ceremony uses the locked Survival scoring helpers. The four-browser room
-test covers lock, one canonical resolution, independent acknowledgement, and
-Turn 2 planning; restart tests cover partial lock, result recovery, duplicate
-lock, playback resume, replay verification, and final scoring.
+boundary. The WebSocket edge caps raw payloads and rate-limits each connection.
+The planner saves or atomically locks its current draft, readiness shares status
+only, recent-room cards show participant-specific match status, each player
+watches and acknowledges independently, and the Final Ceremony uses the locked
+Survival scoring helpers. Resolution verifies the complete stored canonical
+replay before appending a turn. The four-browser room test covers lock, one
+canonical resolution, independent acknowledgement, and Turn 2 planning;
+restart tests cover partial lock, result recovery, duplicate lock, playback
+resume, replay verification, and final scoring.
 
 **Effort**: XL.
 

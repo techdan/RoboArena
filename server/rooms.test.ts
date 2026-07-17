@@ -11,7 +11,7 @@ import {
   type ServerMessage,
 } from "../src/lib/net/protocol";
 import { configForLength, type PlayerColor } from "../src/lib/setup/validate";
-import { createRoomServer } from "./index";
+import { createRoomServer, MAX_CLIENT_MESSAGE_BYTES, MESSAGE_RATE_LIMIT } from "./index";
 import { RoomError, RoomService } from "./rooms";
 import { RoomStorage } from "./storage";
 
@@ -137,6 +137,11 @@ describe("authoritative rooms", () => {
       { turnNumber: 1, timelines: [] },
       "host-lock",
     );
+    expect(firstService.participantRoomStatus(host.room.code, host.selfPlayerId)).toEqual({
+      status: "waiting",
+      turnNumber: 1,
+      waitingForPlayers: 1,
+    });
     firstStorage.close();
 
     const secondStorage = new RoomStorage(path);
@@ -174,6 +179,9 @@ describe("authoritative rooms", () => {
     expect(thirdService.getMatchSnapshot(host.room.code, hostToken, "resume").unseenTurns).toEqual([
       expect.objectContaining({ turnNumber: 1, playbackTick: 120 }),
     ]);
+    expect(thirdService.participantRoomStatus(host.room.code, host.selfPlayerId)?.status).toBe(
+      "turn-ready",
+    );
     const acknowledged = await thirdService.acknowledgeTurnResult(
       host.room.code,
       hostToken,
@@ -182,6 +190,10 @@ describe("authoritative rooms", () => {
       "ack",
     );
     expect(acknowledged.status).toBe("planning");
+    expect(thirdService.participantRoomStatus(host.room.code, host.selfPlayerId)).toMatchObject({
+      status: "planning",
+      turnNumber: 2,
+    });
     expect(thirdService.getMatchSnapshot(host.room.code, guestToken, "guest").status).toBe(
       "turn-ready",
     );
@@ -283,6 +295,7 @@ describe("WebSocket room integration", () => {
         code: host.room.code,
         token: requireToken(host.participantToken),
       });
+      expect(started.matchStatus).toMatchObject({ status: "planning", turnNumber: 1 });
       const snapshot = await sendMatchRequest(sockets[0]!, {
         version: PROTOCOL_VERSION,
         requestId: "planner-state",
@@ -353,6 +366,59 @@ describe("WebSocket room integration", () => {
     } finally {
       secondSocket.close();
       await secondServer.close();
+    }
+  });
+
+  it("rate-limits sustained messages on one connection", async () => {
+    const server = createRoomServer(":memory:");
+    const { port } = await server.listen(0, "127.0.0.1");
+    const socket = await openSocket(`ws://127.0.0.1:${port}`);
+    try {
+      const limited = new Promise<Extract<ServerMessage, { readonly kind: "ProtocolError" }>>(
+        (resolveLimited, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("Rate limit response timed out.")),
+            5_000,
+          );
+          socket.on("message", (data) => {
+            const response = JSON.parse(data.toString()) as ServerMessage;
+            if (response.kind !== "ProtocolError" || response.code !== "RATE_LIMITED") return;
+            clearTimeout(timeout);
+            resolveLimited(response);
+          });
+        },
+      );
+      for (let index = 0; index <= MESSAGE_RATE_LIMIT; index += 1) {
+        socket.send(
+          JSON.stringify({
+            version: PROTOCOL_VERSION,
+            requestId: `rate-${index}`,
+            kind: "GetMatchState",
+            code: "ABC234",
+            token: "x".repeat(32),
+          }),
+        );
+      }
+      await expect(limited).resolves.toMatchObject({ code: "RATE_LIMITED" });
+    } finally {
+      socket.close();
+      await server.close();
+    }
+  });
+
+  it("closes a connection that exceeds the raw payload ceiling", async () => {
+    const server = createRoomServer(":memory:");
+    const { port } = await server.listen(0, "127.0.0.1");
+    const socket = await openSocket(`ws://127.0.0.1:${port}`);
+    try {
+      const closed = new Promise<number>((resolveClosed) => {
+        socket.once("close", (code) => resolveClosed(code));
+      });
+      socket.send("x".repeat(MAX_CLIENT_MESSAGE_BYTES + 1));
+      await expect(closed).resolves.toBe(1009);
+    } finally {
+      if (socket.readyState !== WebSocket.CLOSED) socket.close();
+      await server.close();
     }
   });
 });

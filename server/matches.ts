@@ -1,6 +1,6 @@
 /** Durable authoritative match phase machine for the private online turn loop. */
 
-import { createReplayLog } from "../src/engine/replay.js";
+import { createReplayLog, verifyReplay } from "../src/engine/replay.js";
 import { resolveTurn } from "../src/engine/resolver.js";
 import {
   resolveSurvivalOutcome,
@@ -142,12 +142,7 @@ export const submitParticipantOrders = (
   playerId: string,
   orders: TurnOrders,
 ): void => {
-  if (
-    match.lockedPlayerIds.includes(playerId) &&
-    JSON.stringify(match.drafts[playerId]) === JSON.stringify(orders)
-  ) {
-    return;
-  }
+  if (JSON.stringify(match.drafts[playerId]) === JSON.stringify(orders)) return;
   validateParticipantOrders(match, playerId, orders);
   match.drafts[playerId] = structuredClone(orders);
   match.revision += 1;
@@ -216,6 +211,33 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
     ],
   });
   const replayTurn = replay.turns.at(-1)!;
+  const candidateReplay: ReplayLog = {
+    formatVersion: 1,
+    initialState: match.initialState,
+    turns: [
+      ...match.turns.map((turn): ReplayTurn => ({
+        seed: turn.seed,
+        orders: turn.orders,
+        events: turn.events,
+        eventDigest: turn.eventDigest,
+        nextStateDigest: turn.nextStateDigest,
+      })),
+      {
+        seed: pending.seed,
+        orders: pending.orders,
+        events: result.events,
+        eventDigest: replayTurn.eventDigest,
+        nextStateDigest: replayTurn.nextStateDigest,
+      },
+    ],
+  };
+  const verification = verifyReplay(candidateReplay);
+  if (!verification.ok) {
+    throw new MatchLifecycleError(
+      "INTERNAL_ERROR",
+      `Canonical replay verification failed at tick ${verification.firstDivergenceTick}.`,
+    );
+  }
   match.turns.push({
     turnNumber: pending.turnNumber,
     seed: pending.seed,
@@ -246,10 +268,10 @@ export const acknowledgeTurn = (
   if (!match.turns.some((turn) => turn.turnNumber === turnNumber)) {
     throw new MatchLifecycleError("STALE_TURN", "That turn result is not available.");
   }
-  match.acknowledgedThrough[playerId] = Math.max(
-    match.acknowledgedThrough[playerId] ?? 0,
-    turnNumber,
-  );
+  const current = match.acknowledgedThrough[playerId] ?? 0;
+  const acknowledgedThrough = Math.max(current, turnNumber);
+  if (acknowledgedThrough === current) return;
+  match.acknowledgedThrough[playerId] = acknowledgedThrough;
   match.revision += 1;
 };
 

@@ -1,6 +1,6 @@
-import type { ResolutionEvent } from "../../engine/types";
+import type { ParticipantResolutionEvent } from "../../lib/net/protocol";
 
-const explain = (event: ResolutionEvent): string | null => {
+const explain = (event: ParticipantResolutionEvent): string | null => {
   switch (event.kind) {
     case "enemy-spotted":
       return `Contact spotted at ${event.at.x},${event.at.y}.`;
@@ -21,7 +21,11 @@ const explain = (event: ResolutionEvent): string | null => {
   }
 };
 
-export function TurnExplanation({ events }: { readonly events: readonly ResolutionEvent[] }) {
+export function TurnExplanation({
+  events,
+}: {
+  readonly events: readonly ParticipantResolutionEvent[];
+}) {
   const lines = events.flatMap((event) => {
     const text = explain(event);
     return text === null ? [] : [{ key: `${event.tick}:${event.seq}`, tick: event.tick, text }];

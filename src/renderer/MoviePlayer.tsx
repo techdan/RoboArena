@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Application, Texture } from "pixi.js";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
-import type { MatchState, ResolutionEvent, Terrain, TileCoord } from "../engine/types";
+import type { MatchState, Terrain, TileCoord } from "../engine/types";
+import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import {
   EFFECT_ASSET_URLS,
   MOVIE_MARKER_ASSET_URLS,
@@ -22,7 +23,7 @@ import {
 
 export interface MoviePlayerProps {
   readonly initialState: MatchState;
-  readonly events: readonly ResolutionEvent[];
+  readonly events: readonly ParticipantResolutionEvent[];
   readonly fps?: number;
   readonly initialTick?: number;
   readonly onTickChange?: (tick: number) => void;
@@ -151,7 +152,11 @@ export function MoviePlayer({
       const visuals = new Map<string, RobotVisual>();
       const firstSnapshot = timeline.snapshots[0];
       if (firstSnapshot === undefined) throw new Error("Movie has no initial snapshot.");
-      const robotTextures = await loadRobotTextures(Object.values(firstSnapshot.robots));
+      const movieRobots = new Map<string, (typeof firstSnapshot.robots)[string]>();
+      for (const snapshot of timeline.snapshots) {
+        for (const robot of Object.values(snapshot.robots)) movieRobots.set(robot.id, robot);
+      }
+      const robotTextures = await loadRobotTextures([...movieRobots.values()]);
       if (disposed) return;
       for (const robot of Object.values(firstSnapshot.robots)) {
         const textureSet = robotTextures.get(robotTextureKey(robot.robotClass, robot.teamColor));
@@ -165,11 +170,21 @@ export function MoviePlayer({
         const snapshot = timeline.snapshots[index];
         if (snapshot === undefined) return;
         const robotPositions: Record<string, TileCoord | "dock"> = {};
+        for (const visual of visuals.values()) visual.container.visible = false;
         for (const robot of Object.values(snapshot.robots)) {
           robotPositions[robot.id] = robot.position;
-          const visual = visuals.get(robot.id);
-          if (visual !== undefined)
-            updateRobotSprite(visual, robot, animate && !reducedMotionRef.current);
+          let visual = visuals.get(robot.id);
+          if (visual === undefined) {
+            const textureSet = robotTextures.get(
+              robotTextureKey(robot.robotClass, robot.teamColor),
+            );
+            if (textureSet === undefined) continue;
+            visual = createRobotSprite(robot, textureSet);
+            visuals.set(robot.id, visual);
+            robotLayer.addChild(visual.container);
+          }
+          visual.container.visible = true;
+          updateRobotSprite(visual, robot, animate && !reducedMotionRef.current);
         }
         renderMovieEffects(
           effectsLayer,

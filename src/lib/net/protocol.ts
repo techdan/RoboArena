@@ -1,7 +1,16 @@
 /** Versioned runtime-validated room protocol shared by browsers and server. */
 
 import { z } from "zod";
-import type { LastKnownMarker, MatchState, ResolutionEvent, TurnOrders } from "../../engine/types";
+import type {
+  Heading,
+  LastKnownMarker,
+  MatchState,
+  Posture,
+  ResolutionEvent,
+  RobotClass,
+  TileCoord,
+  TurnOrders,
+} from "../../engine/types";
 import {
   playerColorSchema,
   playerNameSchema,
@@ -214,12 +223,19 @@ export interface PublicRoom {
   readonly matchId?: string;
 }
 
+export interface ParticipantRoomStatus {
+  readonly status: "planning" | "waiting" | "turn-ready" | "finished";
+  readonly turnNumber: number;
+  readonly waitingForPlayers: number;
+}
+
 export interface RoomSnapshotMessage {
   readonly version: typeof PROTOCOL_VERSION;
   readonly requestId: string;
   readonly kind: "RoomSnapshot";
   readonly room: PublicRoom;
   readonly selfPlayerId: string;
+  readonly matchStatus?: ParticipantRoomStatus;
   /** Issued only by CreateRoom/JoinRoom; never broadcast to other players. */
   readonly participantToken?: string;
 }
@@ -253,15 +269,55 @@ export interface MatchSnapshotMessage {
   }[];
 }
 
+/** Observable robot fields needed to introduce a contact during a private turn movie. */
+export interface ParticipantRobotContact {
+  readonly id: string;
+  readonly teamId: string;
+  readonly teamColor: string;
+  readonly robotClass: RobotClass;
+  readonly position: TileCoord;
+  readonly hp: number;
+  readonly armor: number;
+  readonly posture: Posture;
+  readonly scanHeading: Heading;
+  readonly destroyed: boolean;
+}
+
+type ParticipantEnemySpottedEvent = Extract<ResolutionEvent, { readonly kind: "enemy-spotted" }> & {
+  /** Present on participant projections; optional so canonical replay events remain renderer-compatible. */
+  readonly contact?: ParticipantRobotContact;
+};
+
+export interface ParticipantDamageEvent {
+  readonly tick: number;
+  readonly seq: number;
+  readonly kind: "damaged";
+  readonly damageKind: "direct" | "blast";
+  readonly targetId: string;
+  readonly damage: number;
+  /** Source details are present only when that source is authorized for this participant. */
+  readonly sourceId?: string;
+  readonly shotIndex?: number;
+  readonly score?: number;
+  readonly radius?: number;
+}
+
+/** Canonical events with participant-only contact data and redaction-safe observed damage. */
+export type ParticipantResolutionEvent =
+  | Exclude<ResolutionEvent, { readonly kind: "enemy-spotted" | "damaged" }>
+  | ParticipantEnemySpottedEvent
+  | ParticipantDamageEvent;
+
 export interface ParticipantTurnResult {
   readonly turnNumber: number;
   readonly initialState: SerializedMatchState;
-  readonly events: readonly ResolutionEvent[];
+  readonly events: readonly ParticipantResolutionEvent[];
   readonly playbackTick: number;
 }
 
 export type ProtocolErrorCode =
   | "INVALID_MESSAGE"
+  | "RATE_LIMITED"
   | "ROOM_NOT_FOUND"
   | "ROOM_FULL"
   | "ROOM_STARTED"
