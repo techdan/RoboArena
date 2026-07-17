@@ -5,10 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 RoboArena — a modern web-based clone of the 1991 Maxis tactical game
-*RoboSport*. Two to four internet-connected players privately program robot
+_RoboSport_. Two to four internet-connected players privately program robot
 teams, then watch simultaneous resolution as a deterministic movie.
 
-**Main-game scope (Phases 1-11.6 + release polish)**: 2-4 humans on separate
+**Main-game scope (Phases 1-12)**: 2-4 humans on separate
 internet-connected devices, one Team and unique Side per player, free-for-all
 Survival, no AI. Desktop mouse + keyboard and iPad touch in landscape are v1
 targets. The v1 server is authoritative
@@ -28,8 +28,8 @@ orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
 alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
 inspection, and browser-emulated iPad input are draft-complete; its physical
-iPad Safari smoke match remains a Phase 13 release gate. The independent Phase 8
-hosting gate remains open. See
+iPad Safari smoke match and the independent Phase 8 production-hosting closure
+are now consolidated in the Phase 12 v1 ship gate. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
@@ -105,8 +105,10 @@ Ceremony scoring, and canonical Phase 5 replay storage/verification.
 contextual help dialogs, first-use guidance, authorized event filters/export,
 and Pointer Events-based iPad planner/movie controls.
 
-**Everything after Phase 11.5 (not yet built)** — multiplayer hardening and
-release polish, including the physical-iPad Safari smoke gate.
+**Everything after Phase 11.5 (not yet built)** — Phase 11.6 multiplayer
+hardening followed by the Phase 12 production, resilience, real-network, and
+physical-iPad v1 ship gate. Phase 13 presentation polish is nonblocking post-v1
+work.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`
@@ -151,7 +153,7 @@ When working on an engine numerical value: **`src/engine/constants.ts` and `src/
 
 **Trunk-based commits** for now (PR-based later when multi-agent review starts). Frequent, focused commits to `main`. Never amend commits or force-push.
 
-Commit messages: short imperative subject; body explains *why* + lists tests added. Use a HEREDOC for multi-line; use `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` when AI-paired.
+Commit messages: short imperative subject; body explains _why_ + lists tests added. Use a HEREDOC for multi-line; use `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` when AI-paired.
 
 ## Scope discipline
 

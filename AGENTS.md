@@ -70,8 +70,9 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   are built.
 - Phase 11.5 is draft-complete: typed Field Guide/context help, first-use
   guidance, authorized event inspection/export, and Pointer Events-based iPad
-  planner/movie controls. Physical iPad Safari validation remains a Phase 13
-  release gate; Phase 11.6 multiplayer hardening is next.
+  planner/movie controls. Physical iPad Safari validation, production hosting,
+  and resilience closure form the Phase 12 v1 ship gate; Phase 11.6 multiplayer
+  hardening is next.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

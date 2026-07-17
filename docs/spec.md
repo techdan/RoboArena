@@ -3,6 +3,7 @@
 The canonical, current spec for v1 mechanics. Numbers here match `src/engine/constants.ts` and `src/engine/catalog.ts` — those files are the literal source of truth; this doc explains them.
 
 **Confidence labels** on each rule:
+
 - ✅ **CONFIRMED** — binary path/semantics or controlled DOS test verified
 - 🟨 **MAPPED / PROVISIONAL LABEL** — raw mechanism is verified, named mapping remains open
 - 🔵 **PROPOSED** — engine ships with these defaults; tunable in playtest
@@ -28,7 +29,7 @@ server resolves every locked program simultaneously as a deterministic movie,
 then the next turn begins. Last Team standing wins the v1 free-for-all Survival
 mode.
 
-**v1 scope (Phases 1-11.6)**: 2-4 humans on separate devices join an online
+**v1 scope (Phases 1-12)**: 2-4 humans on separate devices join an online
 room; one player controls one Team; every Team has a unique Side, so matches are
 1v1, 1v1v1, or 1v1v1v1. v1 supports desktop mouse + keyboard and browser-based
 iPad touch in landscape. The server is
@@ -40,6 +41,7 @@ non-Survival sport, and AI are later phases.
 RoboArena v1 is a playable Survival MVP, not full RoboSport parity.
 
 Deferred deliberately:
+
 - Hot-seat / shared-device play. Separate-device rooms are the v1 path; privacy
   curtains and sequential handoff are v2 work.
 - Alliances and multiple Teams sharing a Side. The audited original behavior is
@@ -131,12 +133,12 @@ boundaries are explicit product/data choices:
 
 ### Game lengths
 
-| Length | Robots/team | Arena dimensions | Default roster |
-|---|---:|---|---|
-| Skirmish | 2 | 16×16 source map available; not selectable in main game | post-main preset |
-| Melee | 4 | 24×24 (Rubble Two) ✅ | 1 Rifle / 1 Burst / 1 Auto / 1 Missile ✅ |
-| Battle | 6 | 32×32 (Rubble Three) ✅ | 2 Rifle / 2 Burst / 1 Auto / 1 Missile ✅ |
-| Campaign | 8 | 40×40 source map available; not selectable in main game | 3 Rifle / 2 Burst / 2 Auto / 1 Missile ✅ |
+| Length   | Robots/team | Arena dimensions                                        | Default roster                            |
+| -------- | ----------: | ------------------------------------------------------- | ----------------------------------------- |
+| Skirmish |           2 | 16×16 source map available; not selectable in main game | post-main preset                          |
+| Melee    |           4 | 24×24 (Rubble Two) ✅                                   | 1 Rifle / 1 Burst / 1 Auto / 1 Missile ✅ |
+| Battle   |           6 | 32×32 (Rubble Three) ✅                                 | 2 Rifle / 2 Burst / 1 Auto / 1 Missile ✅ |
+| Campaign |           8 | 40×40 source map available; not selectable in main game | 3 Rifle / 2 Burst / 2 Auto / 1 Missile ✅ |
 
 ### Formations
 
@@ -170,12 +172,12 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 Four combat classes participate in the main-game Survival roster. Point-buy by
 **rating** and Stealth are reserved for post-main-game Custom Game/parity work.
 
-| Class | Primary weapon | Accuracy tier¹ | Armor (HP) | Rating | Special |
-|---|---|---|---:|---:|---|
-| Rifle | Rifle | High | 140 | 40 | — |
-| Burst | Burst Gun | Medium | 120 | 50 | — |
-| Auto | Auto Rifle² | Low | 100 | 60 | — |
-| Missile | Missile Launcher (+ Rifle secondary³) | Medium | 100 | 80 | 3 missiles starting ammo |
+| Class   | Primary weapon                        | Accuracy tier¹ | Armor (HP) | Rating | Special                  |
+| ------- | ------------------------------------- | -------------- | ---------: | -----: | ------------------------ |
+| Rifle   | Rifle                                 | High           |        140 |     40 | —                        |
+| Burst   | Burst Gun                             | Medium         |        120 |     50 | —                        |
+| Auto    | Auto Rifle²                           | Low            |        100 |     60 | —                        |
+| Missile | Missile Launcher (+ Rifle secondary³) | Medium         |        100 |     80 | 3 missiles starting ammo |
 
 All ✅ from B&W Mac team-builder dialog.
 
@@ -195,11 +197,11 @@ phase. ✅ stats / deferred behavior
 **v1 ships all 3 postures.** The binary stores them as `1/2/3`; Ducking is the
 mobile middle point in the cover system.
 
-| Posture | Movement | Exposed / Bush / Low-wall cover class |
-|---|---|---|
-| Upright (default) | passable terrain | 4 / 4 / 3 ✅ |
-| Ducking | same traversal as Upright | 4 / 3 / 2 ✅ |
-| Crouching | Open Ground only | 3 / 2 / 1 ✅ |
+| Posture           | Movement                  | Exposed / Bush / Low-wall cover class |
+| ----------------- | ------------------------- | ------------------------------------- |
+| Upright (default) | passable terrain          | 4 / 4 / 3 ✅                          |
+| Ducking           | same traversal as Upright | 4 / 3 / 2 ✅                          |
+| Crouching         | Open Ground only          | 3 / 2 / 1 ✅                          |
 
 Posture commands set an absolute posture. Any actual change costs **10 ticks
 (1/6 s)**; selecting the current posture is a no-op. ✅
@@ -208,13 +210,13 @@ Posture commands set an absolute posture. Any actual change costs **10 ticks
 
 ## 4. Weapons
 
-| Weapon | Bullets/click | Engine firing interval | Max range | Ammo |
-|---|---:|---|---:|---|
-| Rifle | 1 | 30 ticks (0.50 s) ✅ | 18 ✅ | unlimited |
-| Burst Gun | **3** ✅ | 15 ticks (0.25 s) ✅ | 18 ✅ | unlimited |
-| Auto Rifle | 1 | 10 ticks (0.17 s) ✅ | 18 ✅ | unlimited |
-| Missile Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅ | 18 ✅ | 3 |
-| Grenade Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅ | 18 ✅ | custom grant 0–9; not granted in main game |
+| Weapon           | Bullets/click | Engine firing interval | Max range | Ammo                                       |
+| ---------------- | ------------: | ---------------------- | --------: | ------------------------------------------ |
+| Rifle            |             1 | 30 ticks (0.50 s) ✅   |     18 ✅ | unlimited                                  |
+| Burst Gun        |      **3** ✅ | 15 ticks (0.25 s) ✅   |     18 ✅ | unlimited                                  |
+| Auto Rifle       |             1 | 10 ticks (0.17 s) ✅   |     18 ✅ | unlimited                                  |
+| Missile Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | 3                                          |
+| Grenade Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | custom grant 0–9; not granted in main game |
 
 Scan & Fire repeat intervals are Rifle/Burst/Auto/Missile/Grenade =
 `30/20/10/20/20` ticks. Named selectors and both timing columns are confirmed;
@@ -225,11 +227,11 @@ range uses **floored Euclidean distance** and is uniform at 18. ✅
 Each direct-fire hit rolls `base + (random & mask)`, then applies cover and
 distance adjustments. The roll families and labels are exact.
 
-| Weapon | Base roll per bullet |
-|---|---|
-| Rifle | `10 + (random & 7)` → 10–17 ✅ |
-| Burst Gun | `8 + (random & 15)` → 8–23, three independent bullets ✅ |
-| Auto Rifle | `6 + (random & 15)` → 6–21 ✅ |
+| Weapon     | Base roll per bullet                                     |
+| ---------- | -------------------------------------------------------- |
+| Rifle      | `10 + (random & 7)` → 10–17 ✅                           |
+| Burst Gun  | `8 + (random & 15)` → 8–23, three independent bullets ✅ |
+| Auto Rifle | `6 + (random & 15)` → 6–21 ✅                            |
 
 Damage adjustment: cover class 1/2/3/4 adds `-4/0/0/+4`; distance `<5` adds
 4 and distance `>12` subtracts 4. Clamp final damage to at least 0. ✅
@@ -238,12 +240,12 @@ Damage adjustment: cover class 1/2/3/4 adds `-4/0/0/+4`; distance `<5` adds
 
 Blast at impact tile; falloff by floored Euclidean radius:
 
-| Radius | Damage |
-|---|---|
+| Radius         | Damage   |
+| -------------- | -------- |
 | 0 (direct hit) | 60-91 ✅ |
-| 1 | 40-55 ✅ |
-| 2 | 10-17 ✅ |
-| 3+ | 0 ✅ |
+| 1              | 40-55 ✅ |
+| 2              | 10-17 ✅ |
+| 3+             | 0 ✅     |
 
 **Blast radius = 2.** Friendly-fire rule: explosives damage all robots in radius regardless of team. ✅
 
@@ -261,10 +263,10 @@ integer shifts/truncation. ✅
 
 Movement uses fixed selector costs; there is no stride parity:
 
-| Move size | Cost |
-|---|---:|
+| Move size                  |                 Cost |
+| -------------------------- | -------------------: |
 | Single tile (8 directions) | 30 ticks / 0.50 s ✅ |
-| Double tile (16 offsets) | 40 ticks / 0.67 s ✅ |
+| Double tile (16 offsets)   | 40 ticks / 0.67 s ✅ |
 
 The pathfinder chunks long paths into the original one- and two-tile commands
 to minimize total time. There is no triple-tile move selector. ✅
@@ -291,15 +293,15 @@ The exact slow rule is command chunking, not a multiplier:
 
 Upright and Ducking share traversal and speed classification rules.
 
-| Terrain | Upright/Ducking | Crouching |
-|---|---|---|
-| Open Ground | yes | yes |
-| Rough Ground | yes | **no** |
-| Low Walls | yes | **no** to enter; may crouch in place |
-| Walls | **no** | **no** |
-| Bushes | yes | **no** |
-| Crevices | **no** | **no** |
-| Outer Walls | **no** except Dock transitions | **no** |
+| Terrain      | Upright/Ducking                | Crouching                            |
+| ------------ | ------------------------------ | ------------------------------------ |
+| Open Ground  | yes                            | yes                                  |
+| Rough Ground | yes                            | **no**                               |
+| Low Walls    | yes                            | **no** to enter; may crouch in place |
+| Walls        | **no**                         | **no**                               |
+| Bushes       | yes                            | **no**                               |
+| Crevices     | **no**                         | **no**                               |
+| Outer Walls  | **no** except Dock transitions | **no**                               |
 
 ### Deployment
 
@@ -395,6 +397,7 @@ Friendly bodies do **not** block bullets and do not take damage from friendly bu
 
 Per-team visibility is semantically current every tick and is recomputed at each
 boundary that can change position, posture, heading, or survival. A team sees:
+
 - All robots on its Side (allies are always visible)
 - Tiles within any of its own robots' scan cone × range with unobstructed LoS
 - Enemy robots in those visible tiles (with caveats below)
@@ -407,6 +410,7 @@ Accordingly, ordinary visible-enemy sets and last-known-X markers remain per
 Team, even in a 2v2 or 3v1 alliance. ✅
 
 Ordinary visibility and Scan & Fire share the exact scan-grid sight strength:
+
 - Clear sight starts at 16; a target is visible while the result is greater than 0. ✅
 - A Wall or Outer Wall sample immediately returns 0. ✅
 - Every Low Wall or Bush sample subtracts 3, including shooter and target
@@ -431,12 +435,12 @@ At end of each turn, for every team, record tiles where they last saw any enemy 
 
 ## 8. Timeline & tick model
 
-| Quantity | Value |
-|---|---|
-| Tick rate | **60 ticks/second** ✅ |
-| Movie playback | **12 fps default**; choices 20/15/12/10/6/5/4/3 ✅ |
-| Default turn duration | 15.0 s = 900 ticks ✅ |
-| Configurable turn range | 1-40 s = 60-2400 ticks ✅ |
+| Quantity                | Value                                              |
+| ----------------------- | -------------------------------------------------- |
+| Tick rate               | **60 ticks/second** ✅                             |
+| Movie playback          | **12 fps default**; choices 20/15/12/10/6/5/4/3 ✅ |
+| Default turn duration   | 15.0 s = 900 ticks ✅                              |
+| Configurable turn range | 1-40 s = 60-2400 ticks ✅                          |
 
 ### The three clocks in v1
 
@@ -514,7 +518,7 @@ coordinate. ✅ original and clone engine model
 - A side wins when it is the last side with any surviving robot. Teams sharing
   a side are allies. ✅
 - Each Team first contributes `existing Team score + 150 × surviving robots +
-  400 if that Team has at least one survivor`. The executable then sums every
+400 if that Team has at least one survivor`. The executable then sums every
   allied Team contribution by Side and copies that same Side total into every
   allied Team's ceremony row. Extra 100-point objective terms in the same
   function are non-Survival-only. ✅
@@ -554,6 +558,7 @@ available, but switching replay storage to references still requires an
 explicit later format migration.
 
 Determinism is enforced by:
+
 - Seedable RNG (mulberry32) for every probabilistic decision
 - Integer arithmetic on game-state values
 - No authoritative mid-flight projectile state; launch/impact cues and outcomes lock at fire time
@@ -592,16 +597,16 @@ rather than being treated as balance redesigns.
 
 ## 11. Source-of-truth pointers
 
-| Concern | Where |
-|---|---|
-| Locked numerical constants | `src/engine/constants.ts` |
-| Weapon damage tables | `src/engine/catalog.ts` (`WEAPONS`) |
-| Robot class stats | `src/engine/catalog.ts` (`ROBOT_DEFINITIONS`) |
-| Combat resolution implementation | `src/engine/firing.ts`, `src/engine/blast.ts` |
-| Movement implementation | `src/engine/movement.ts` |
-| Turn scheduling and resolution | `src/engine/commandInterpreter.ts`, `src/engine/resolver.ts` |
-| Empirical research log | `docs/priority-tests.md` |
-| Implementation roadmap | `docs/implementation-plan.md` |
-| Original-game research | `docs/priority-tests.md`; local ignored source captures |
+| Concern                          | Where                                                        |
+| -------------------------------- | ------------------------------------------------------------ |
+| Locked numerical constants       | `src/engine/constants.ts`                                    |
+| Weapon damage tables             | `src/engine/catalog.ts` (`WEAPONS`)                          |
+| Robot class stats                | `src/engine/catalog.ts` (`ROBOT_DEFINITIONS`)                |
+| Combat resolution implementation | `src/engine/firing.ts`, `src/engine/blast.ts`                |
+| Movement implementation          | `src/engine/movement.ts`                                     |
+| Turn scheduling and resolution   | `src/engine/commandInterpreter.ts`, `src/engine/resolver.ts` |
+| Empirical research log           | `docs/priority-tests.md`                                     |
+| Implementation roadmap           | `docs/implementation-plan.md`                                |
+| Original-game research           | `docs/priority-tests.md`; local ignored source captures      |
 
 If the spec and code diverge, **the code is correct** and this doc gets updated.

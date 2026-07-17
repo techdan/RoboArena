@@ -39,7 +39,7 @@ pool enemy scan contacts/last-known markers, and Final Ceremony contributions
 aggregate by Side. Team Name boxes provide non-compacting Home slots and
 canonical Team order. Phase 11.6 therefore retains online three-/four-player
 free-for-all integration and end-to-end testing gates. The traced alliance
-behavior is retained for post-v1 Phase 12, with no known original-code
+behavior is retained for post-v1 Phase 16, with no known original-code
 business-rule gate.
 
 ## Reproduction and independent checks
@@ -75,15 +75,15 @@ those IDs. `seg6:0x4CF2` proves which selectors reach Aim & Fire versus Scan &
 Fire handlers. `seg6:0x383B` uses `selector-5` for direct damage and
 `seg6:0x3790` uses the same index for the `0x1596` accuracy-add table.
 
-| Weapon | Group | Aim | Scan | Direct roll | Aim/Scan ticks | Aim/Scan accuracy index |
-|---|---:|---:|---:|---|---:|---:|
-| Rifle | 4 | 5 | 6 | `10+(rng&7)` | 30 / 30 | 0 / 1 |
-| Burst | 7 | 8 | 9 | `8+(rng&15)` | 15 / 20 | 3 / 4 |
-| Automatic | 10 | 11 | 12 | `6+(rng&15)` | 10 / 10 | 6 / 7 |
-| Missile | 13 | 15 | 16 | blast path | 30 / 20 | specialized path |
-| Grenade | 17 | 19 | 20 | blast path | 30 / 20 | specialized path |
-| Prod | 1 | 2 | 3 | specialized path | table-driven | specialized path |
-| Bomb | 21 | 22 | 23 | blast path | table-driven | specialized path |
+| Weapon    | Group | Aim | Scan | Direct roll      | Aim/Scan ticks | Aim/Scan accuracy index |
+| --------- | ----: | --: | ---: | ---------------- | -------------: | ----------------------: |
+| Rifle     |     4 |   5 |    6 | `10+(rng&7)`     |        30 / 30 |                   0 / 1 |
+| Burst     |     7 |   8 |    9 | `8+(rng&15)`     |        15 / 20 |                   3 / 4 |
+| Automatic |    10 |  11 |   12 | `6+(rng&15)`     |        10 / 10 |                   6 / 7 |
+| Missile   |    13 |  15 |   16 | blast path       |        30 / 20 |        specialized path |
+| Grenade   |    17 |  19 |   20 | blast path       |        30 / 20 |        specialized path |
+| Prod      |     1 |   2 |    3 | specialized path |   table-driven |        specialized path |
+| Bomb      |    21 |  22 |   23 | blast path       |   table-driven |        specialized path |
 
 **Confidence:** SEMANTICS CONFIRMED; ENGINE VERIFIED for v1 catalog fields.
 
@@ -93,13 +93,13 @@ Fire handlers. `seg6:0x383B` uses `selector-5` for direct damage and
 returns byte 1 unless the selector uses a player parameter multiplied by 60.
 The live dispatcher and posture enum helpers identify these command groups:
 
-| Command | Selectors | Exact ticks |
-|---|---:|---:|
-| Absolute scan heading | 24..31 | 5 |
-| One-tile move | 41..48 | 30 |
-| Two-tile move | 49..64 | 40 |
-| Upright / Ducking / Crouching | 70 / 71 / 72 | 10 |
-| Deploy | 74 | 120 |
+| Command                       |    Selectors | Exact ticks |
+| ----------------------------- | -----------: | ----------: |
+| Absolute scan heading         |       24..31 |           5 |
+| One-tile move                 |       41..48 |          30 |
+| Two-tile move                 |       49..64 |          40 |
+| Upright / Ducking / Crouching | 70 / 71 / 72 |          10 |
+| Deploy                        |           74 |         120 |
 
 There is no alternating stride cost or persisted stride-parity business state.
 Absolute posture and heading changes each consume one fixed command.
@@ -202,7 +202,7 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
 - Phase 15 owns Treasure Hunt, Capture the Flag, Hostage, Baseball, their setup
   objects/commands, and their scoring.
 - Phase 11.6 owns 3-/4-player online FFA integration, explicit non-compacting
-  Home slots, private orders/reconnect, and four-player tests. Phase 12 owns the
+  Home slots, private orders/reconnect, and four-player tests. Phase 16 owns the
   later hot-seat adapter and already-closed alliance semantics.
 - AI, complete formation rosters, point-buy source, and extra weapon grants are
   later parity work.

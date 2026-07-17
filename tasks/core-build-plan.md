@@ -29,7 +29,7 @@ RE audit -> Phase 1R engine realignment -> Phase 1.5 toolchain
          -> Phase 2 resolver -> Phase 3 projectile/blast events
          -> Phase 4 visibility + Scan & Fire -> Phase 5 replay
          -> renderer -> authoritative room/setup -> planner/online turn loop
-         -> 3-/4-player FFA hardening -> release polish
+         -> 3-/4-player FFA hardening -> production/device v1 ship gate
 ```
 
 Phase 3 must preserve fire-time result locking and add deterministic
@@ -208,7 +208,7 @@ playable end to end.
 - Arena import review is required before the first renderer arena. Terrain is
   row-major; homes use exact generated spans; Dock is off-field state.
 - Exact Scan & Fire behavior: required at Phase 4, not Phase 2.
-- Hot-seat and multiple Teams per Side/alliance modes are post-v1 Phase 12.
+- Hot-seat and multiple Teams per Side/alliance modes are post-v1 Phase 16.
 - Stealth is Phase 14 and all non-Survival sports are Phase 15. Both are hard
   gated on the complete online FFA Survival v1.
 - Other formations, AI, extra weapons, full help/tutorial, audio, phone/native
@@ -222,5 +222,7 @@ playable end to end.
    recovery, and rejoin ownership from two real networks/devices.
 2. Implement Phase 11.6 three-/four-player free-for-all hardening and its
    dedicated ship gates.
-3. During Phase 13, run the physical-iPad Safari room-to-results smoke gate;
-   browser emulation already covers the 1024×768 Field Guide/touch contract.
+3. Close the consolidated Phase 12 v1 ship gate: required resilience work,
+   deployed production storage/WSS and two-real-network validation, then the
+   physical-iPad Safari room-to-results smoke match. Browser emulation already
+   covers the 1024×768 Field Guide/touch contract.
