@@ -6,8 +6,11 @@ import {
   deleteSegment,
   planMovement,
   projectRobotAtTick,
+  rebaseTurnOrders,
+  replaceSegmentAt,
   timelineForRobot,
   timelineTiming,
+  validatedTimelinePrefix,
 } from "./segments";
 
 describe("planner segments", () => {
@@ -77,5 +80,48 @@ describe("planner segments", () => {
         (segment) => segment.kind,
       ),
     ).toEqual(["deploy", "set-scan-direction"]);
+  });
+
+  it("projects each movement selector at its own completion boundary", () => {
+    const robot = makeRobot("r1", "t1", "rifle", { x: 0, y: 0 });
+    const segment = {
+      kind: "move",
+      posture: "upright",
+      path: [
+        { via: { x: 1, y: 0 }, to: { x: 2, y: 0 } },
+        { via: { x: 3, y: 0 }, to: { x: 4, y: 0 } },
+      ],
+    } as const;
+    expect(projectRobotAtTick(robot, [segment], 39).position).toEqual({ x: 0, y: 0 });
+    expect(projectRobotAtTick(robot, [segment], 40).position).toEqual({ x: 2, y: 0 });
+    expect(projectRobotAtTick(robot, [segment], 79).position).toEqual({ x: 2, y: 0 });
+    expect(projectRobotAtTick(robot, [segment], 80).position).toEqual({ x: 4, y: 0 });
+  });
+
+  it("truncates commands made illegal by direct replacement or deletion", () => {
+    const arena = makeOpenArena(6, 6);
+    const robot = makeRobot("r1", "t1", "rifle", "dock");
+    const segments = [
+      { kind: "deploy", to: { x: 0, y: 0 } },
+      {
+        kind: "move",
+        posture: "upright",
+        path: [{ via: { x: 1, y: 0 }, to: { x: 2, y: 0 } }],
+      },
+      { kind: "set-scan-direction", heading: "S" },
+    ] as const;
+    expect(validatedTimelinePrefix(arena, robot, 0, segments).droppedCount).toBe(0);
+    expect(validatedTimelinePrefix(arena, robot, 0, segments.slice(1))).toEqual({
+      segments: [],
+      droppedCount: 2,
+    });
+
+    const orders: TurnOrders = { turnNumber: 1, timelines: [{ robotId: robot.id, segments }] };
+    const replaced = replaceSegmentAt(orders, robot.id, 1, {
+      kind: "set-posture",
+      posture: "ducking",
+    });
+    expect(timelineForRobot(replaced, robot.id).segments[1]?.kind).toBe("set-posture");
+    expect(rebaseTurnOrders(arena, [robot], 0, orders, 2).turnNumber).toBe(2);
   });
 });

@@ -15,7 +15,7 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
   const initialTick = Number.isFinite(requestedTick) ? Math.max(0, requestedTick) : 0;
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#0d100e] text-white">
+    <main className="desktop-viewport-gate min-h-screen overflow-hidden bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
       <div className="relative mx-auto max-w-[1180px] px-8 py-9">
         <header className="mb-7 flex items-end justify-between border-b border-white/8 pb-6">

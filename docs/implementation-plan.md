@@ -667,7 +667,8 @@ real WSS/two-network restart check is not yet claimed.
 - `src/planner/history.ts` — bounded undo/redo history for the local draft
 
 **Tests required**:
-- A* pathfinding: valid path between two open tiles, around a wall, respecting posture restrictions
+- A* pathfinding: valid path between two open tiles, around a wall, respecting
+  posture restrictions, and preferring the lowest 30/40-tick selector cost
 - click a wall tile → cursor shows "blocked" state (mirrors DOS UX)
 - click outside Home Area on first move → "out of home" error
 - timeline updates correctly when adding/deleting commands using fixed 30/40
@@ -675,7 +676,8 @@ real WSS/two-network restart check is not yet claimed.
 - route compression calls the shared `chunkMovementPath`: Open+Open may become
   one 40-tick double, while entering Rough/Bush/Low-wall retains a 30-tick
   single; include straight, mixed, and diagonal route tests
-- undo/redo restores byte-equivalent orders and projected positions
+- undo/redo restores byte-equivalent orders and projected positions; movement
+  previews apply each selector at its own completion boundary
 - server snapshots never overwrite a newer unsent local draft without an
   explicit conflict/recovery path
 
@@ -689,13 +691,16 @@ real WSS/two-network restart check is not yet claimed.
 
 **Implementation note**: the authenticated `GetMatchState` request supplies the
 canonical setup snapshot without exposing another player's draft. Browser-local
-drafts are restored after reload and a changed server revision opens an explicit
-keep-local/use-server recovery choice instead of overwriting unsent work.
+drafts use a versioned, failure-safe envelope. Reloading a prior-turn draft
+preserves it behind an explicit recover-compatible/use-server choice; same-turn
+server revision conflicts retain the keep-local/use-server choice. Direct edits
+and deletions retain only the resolver-legal command prefix.
 
 **Risks**:
 - Pixi click handling vs. React state — same risk as Phase 7
-- A* returns unit waypoints; shared exact chunking then minimizes fixed-cost
-  singles/doubles without jumping over slow terrain or inventing stride state.
+- A* searches legal one-/two-tile selectors using their fixed 30/40-tick costs,
+  returns the selected unit waypoints, and shared exact chunking retains each
+  chosen `via` without jumping over slow terrain or inventing stride state.
 
 **Effort**: L.
 

@@ -60,8 +60,9 @@ implemented with its external WSS/two-network hosting gate still open; Phase
 - The authoritative WebSocket room service, SQLite WAL local/test storage, and
   2-4 player setup UI are built. Production targets Supabase Postgres; its
   adapter and migrations remain part of the Phase 8 hosting gate.
-- The movement/posture/scan planner, exact timeline, multi-robot preview,
-  reload-safe local draft, and undo/redo are built; Phase 10 firing tools are next.
+- The movement/posture/scan planner, exact per-selector timeline preview,
+  tick-cost routing, versioned/reload-safe local draft recovery, direct
+  legal-prefix editing, and undo/redo are built; Phase 10 firing tools are next.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

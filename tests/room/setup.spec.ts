@@ -41,6 +41,8 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     );
     const planner = pages[0]!;
     const board = planner.getByRole("application", { name: /planning board/ });
+    await board.focus();
+    await expect(planner.getByText("valid", { exact: true })).toBeVisible();
     await board.click({ position: { x: 492, y: 12 } });
     await expect(planner.getByText(/Out of home/)).toBeVisible();
     await board.click({ position: { x: 12, y: 12 } });
@@ -58,6 +60,14 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     await expect(timelines.getByText("Scan heading", { exact: true })).not.toBeVisible();
     await planner.getByRole("button", { name: "Redo" }).click();
     await expect(timelines.getByText("Scan heading", { exact: true })).toBeVisible();
+    await timelines.getByRole("button", { name: "Edit Scan heading" }).click();
+    await expect(planner.getByText("Replacing command 4", { exact: true })).toBeVisible();
+    await planner.getByRole("button", { name: "N", exact: true }).click();
+    await expect(planner.getByText(/Scan heading N added/)).toBeVisible();
+    await timelines.getByRole("button", { name: "Delete Deploy" }).click();
+    await expect(timelines.getByText("No commands", { exact: true }).first()).toBeVisible();
+    await planner.getByRole("button", { name: "Undo" }).click();
+    await expect(timelines.getByText("Deploy", { exact: true })).toBeVisible();
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

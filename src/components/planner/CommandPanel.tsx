@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2 } from "lucide-react";
+import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2, X } from "lucide-react";
 import type { Heading, Posture } from "../../engine/types";
 
 const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
@@ -11,11 +11,13 @@ export interface CommandPanelProps {
   readonly heading: Heading;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
+  readonly editingCommandNumber: number | null;
   readonly remainingTicks: number;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeading: (heading: Heading) => void;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
+  readonly onCancelEdit: () => void;
   readonly onReset: () => void;
 }
 
@@ -24,11 +26,13 @@ export function CommandPanel({
   heading,
   canUndo,
   canRedo,
+  editingCommandNumber,
   remainingTicks,
   onPosture,
   onHeading,
   onUndo,
   onRedo,
+  onCancelEdit,
   onReset,
 }: CommandPanelProps) {
   return (
@@ -40,18 +44,26 @@ export function CommandPanel({
         </div>
         <div className="history-buttons">
           <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="Undo">
-            <Undo2 size={16} />
+            <Undo2 size={16} aria-hidden="true" />
           </button>
           <button type="button" onClick={onRedo} disabled={!canRedo} aria-label="Redo">
-            <Redo2 size={16} />
+            <Redo2 size={16} aria-hidden="true" />
           </button>
         </div>
       </div>
+      {editingCommandNumber === null ? null : (
+        <div className="planner-editing" role="status">
+          <span>Replacing command {editingCommandNumber}</span>
+          <button type="button" onClick={onCancelEdit} aria-label="Cancel command edit">
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       <section>
         <h3>Movement</h3>
         <p className="planner-help">
-          <LocateFixed size={15} /> Choose a home tile to deploy, then choose destinations. Routes
-          avoid terrain your current posture cannot cross.
+          <LocateFixed size={15} aria-hidden="true" /> Choose a home tile to deploy, then choose
+          destinations. Routes avoid terrain your current posture cannot cross.
         </p>
       </section>
       <section>
@@ -84,8 +96,8 @@ export function CommandPanel({
           ))}
         </div>
         <p className="planner-help">
-          <Crosshair size={15} /> The white turret line previews the inclusive forward scan
-          semicircle.
+          <Crosshair size={15} aria-hidden="true" /> The white heading line points through the
+          center of the inclusive forward scan semicircle.
         </p>
       </section>
       <section>
@@ -109,7 +121,7 @@ export function CommandPanel({
         ) : null}
       </div>
       <button type="button" className="secondary-action w-full" onClick={onReset}>
-        <RotateCcw size={15} /> Reset this draft
+        <RotateCcw size={15} aria-hidden="true" /> Reset this draft
       </button>
     </aside>
   );

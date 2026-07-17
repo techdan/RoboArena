@@ -10,10 +10,12 @@ import {
   WEAPON_TIMING,
 } from "../engine/constants";
 import { chunkMovementPath } from "../engine/movementChunking";
+import { canTraverse } from "../engine/traversal";
 import type {
   Arena,
   CommandTimeline,
   Heading,
+  HomeSlot,
   MovementStep,
   Posture,
   RobotCommandSegment,
@@ -21,7 +23,7 @@ import type {
   TileCoord,
   TurnOrders,
 } from "../engine/types";
-import { findPath, tileAt } from "./pathfind";
+import { findPath, isInBounds, tileAt } from "./pathfind";
 
 export interface ProjectedRobot {
   readonly position: TileCoord | "dock";
@@ -129,6 +131,15 @@ export const projectRobotAtTick = (
 ): ProjectedRobot => {
   let projected = initialProjection(robot);
   for (const segment of segments) {
+    if (segment.kind === "move") {
+      for (const step of segment.path) {
+        const duration = step.via === undefined ? MOVE_SINGLE_COST_TICKS : MOVE_DOUBLE_COST_TICKS;
+        const endTick = projected.tick + duration;
+        if (endTick > previewTick) return projected;
+        projected = { ...projected, position: step.to, tick: endTick };
+      }
+      continue;
+    }
     const duration = segmentDuration(segment, projected);
     const endTick = projected.tick + duration;
     if (endTick > previewTick) return projected;
@@ -173,6 +184,130 @@ export const deleteSegment = (orders: TurnOrders, robotId: string, index: number
     robotId,
     timeline.segments.filter((_, segmentIndex) => segmentIndex !== index),
   );
+};
+
+export const replaceSegmentAt = (
+  orders: TurnOrders,
+  robotId: string,
+  index: number,
+  segment: RobotCommandSegment,
+): TurnOrders => {
+  const timeline = timelineForRobot(orders, robotId);
+  if (timeline.segments[index] === undefined) return orders;
+  return replaceTimeline(
+    orders,
+    robotId,
+    timeline.segments.map((current, segmentIndex) => (segmentIndex === index ? segment : current)),
+  );
+};
+
+const chebyshev = (from: TileCoord, to: TileCoord): number =>
+  Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y));
+
+const movementStepIsLegal = (
+  arena: Arena,
+  from: TileCoord,
+  step: MovementStep,
+  posture: Posture,
+): boolean => {
+  if (!isInBounds(arena, step.to)) return false;
+  const size = chebyshev(from, step.to);
+  if (size === 1 && step.via !== undefined) return false;
+  if (size !== 1 && size !== 2) return false;
+  const entered = step.via === undefined ? [step.to] : [step.via, step.to];
+  if (
+    size === 2 &&
+    (step.via === undefined ||
+      !isInBounds(arena, step.via) ||
+      chebyshev(from, step.via) !== 1 ||
+      chebyshev(step.via, step.to) !== 1)
+  ) {
+    return false;
+  }
+  return entered.every((coord) => {
+    const tile = tileAt(arena, coord);
+    return (
+      tile !== undefined &&
+      canTraverse(posture, tile.terrain) &&
+      (size === 1 || tile.terrain === "open")
+    );
+  });
+};
+
+export interface ValidatedTimeline {
+  readonly segments: readonly RobotCommandSegment[];
+  readonly droppedCount: number;
+}
+
+/** Retains the executable prefix after a direct edit or command deletion. */
+export const validatedTimelinePrefix = (
+  arena: Arena,
+  robot: RobotState,
+  homeSlot: HomeSlot,
+  segments: readonly RobotCommandSegment[],
+): ValidatedTimeline => {
+  let projected = initialProjection(robot);
+  const valid: RobotCommandSegment[] = [];
+  for (const segment of segments) {
+    if (projected.position === "dock" && segment.kind !== "deploy") break;
+    if (projected.position !== "dock" && segment.kind === "deploy") break;
+    if (segment.kind === "deploy") {
+      const home = arena.homeAreas[homeSlot];
+      const tile = tileAt(arena, segment.to);
+      if (
+        tile === undefined ||
+        !home?.tiles.some(
+          (candidate) => candidate.x === segment.to.x && candidate.y === segment.to.y,
+        ) ||
+        !canTraverse(projected.posture, tile.terrain)
+      ) {
+        break;
+      }
+    }
+    if (segment.kind === "move") {
+      if (
+        projected.position === "dock" ||
+        segment.path.length === 0 ||
+        segment.posture !== projected.posture
+      ) {
+        break;
+      }
+      let position = projected.position;
+      let legal = true;
+      for (const step of segment.path) {
+        if (!movementStepIsLegal(arena, position, step, projected.posture)) {
+          legal = false;
+          break;
+        }
+        position = step.to;
+      }
+      if (!legal) break;
+    }
+    const endTick = projected.tick + segmentDuration(segment, projected);
+    projected = applySegment(projected, segment, endTick);
+    valid.push(segment);
+  }
+  return { segments: valid, droppedCount: segments.length - valid.length };
+};
+
+export const rebaseTurnOrders = (
+  arena: Arena,
+  robots: readonly RobotState[],
+  homeSlot: HomeSlot,
+  orders: TurnOrders,
+  turnNumber: number,
+): TurnOrders => {
+  const robotById = new Map(robots.map((robot) => [robot.id, robot]));
+  const timelines: CommandTimeline[] = [];
+  for (const timeline of orders.timelines) {
+    const robot = robotById.get(timeline.robotId);
+    if (robot === undefined) continue;
+    const validated = validatedTimelinePrefix(arena, robot, homeSlot, timeline.segments);
+    if (validated.segments.length > 0) {
+      timelines.push({ robotId: robot.id, segments: validated.segments });
+    }
+  }
+  return { turnNumber, timelines };
 };
 
 export type MovementPlanResult =

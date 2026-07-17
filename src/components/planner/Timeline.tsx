@@ -1,6 +1,6 @@
 "use client";
 
-import { ScanLine, Trash2 } from "lucide-react";
+import { Pencil, ScanLine, Trash2 } from "lucide-react";
 import type { RobotState, TurnOrders } from "../../engine/types";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
 
@@ -20,8 +20,10 @@ export interface TimelineProps {
   readonly selectedRobotId: string;
   readonly budgetTicks: number;
   readonly previewTick: number;
+  readonly editing: { readonly robotId: string; readonly index: number } | null;
   readonly onPreviewTick: (tick: number) => void;
   readonly onSelectRobot: (robotId: string) => void;
+  readonly onEdit: (robotId: string, segmentIndex: number) => void;
   readonly onDelete: (robotId: string, segmentIndex: number) => void;
 }
 
@@ -31,8 +33,10 @@ export function Timeline({
   selectedRobotId,
   budgetTicks,
   previewTick,
+  editing,
   onPreviewTick,
   onSelectRobot,
+  onEdit,
   onDelete,
 }: TimelineProps) {
   const longestTick = robots.reduce((maximum, robot) => {
@@ -89,6 +93,7 @@ export function Timeline({
                     <div
                       className="timeline-segment"
                       data-over-budget={entry.overBudget}
+                      data-editing={editing?.robotId === robot.id && editing.index === entry.index}
                       key={`${robot.id}-${entry.index}`}
                       title={`${entry.startTick}–${entry.endTick} ticks`}
                     >
@@ -103,10 +108,17 @@ export function Timeline({
                       ) : null}
                       <button
                         type="button"
+                        aria-label={`Edit ${commandLabel(entry.segment.kind)}`}
+                        onClick={() => onEdit(robot.id, entry.index)}
+                      >
+                        <Pencil size={13} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
                         aria-label={`Delete ${commandLabel(entry.segment.kind)}`}
                         onClick={() => onDelete(robot.id, entry.index)}
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={13} aria-hidden="true" />
                       </button>
                     </div>
                   ))

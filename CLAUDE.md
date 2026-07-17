@@ -18,7 +18,7 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9 are
-draft-complete; Phase 8 is locally implemented with 217 passing tests and its
+draft-complete; Phase 8 is locally implemented with 224 passing tests and its
 external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
@@ -32,7 +32,7 @@ the independent Phase 8 hosting gate remains open. See
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 217 tests)
+npm test               # Run all unit tests (currently 224 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -83,8 +83,9 @@ storage, and a separate long-lived host for the room service; the Postgres
 adapter/migrations and external deployment check remain open.
 
 **Phase 9 (draft-complete)** — authenticated canonical setup snapshot, private
-reload-safe drafts, deterministic A*, exact single/double route chunking,
-multi-robot tick preview, posture/scan tools, and bounded undo/redo.
+versioned/reload-safe drafts with explicit prior-turn recovery, deterministic
+tick-cost A*, exact single/double route chunking and per-selector multi-robot
+preview, direct legal-prefix editing, posture/scan tools, and bounded undo/redo.
 
 **Everything after Phase 9 (not yet built)** — firing tools and the
 authoritative online turn loop.

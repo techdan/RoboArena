@@ -207,8 +207,15 @@ export function ArenaCanvas({
       role="application"
       aria-label={`${arena.sizeName} planning board. Use arrow keys and Enter to choose a tile.`}
       tabIndex={0}
-      onPointerMove={(event) => onCursor(tileFromPointer(event))}
-      onPointerLeave={() => onCursor(null)}
+      onFocus={() => onCursor(keyboardTile)}
+      onPointerMove={(event) => {
+        const tile = tileFromPointer(event);
+        setKeyboardTile(tile);
+        onCursor(tile);
+      }}
+      onPointerLeave={(event) => {
+        if (document.activeElement !== event.currentTarget) onCursor(null);
+      }}
       onClick={(event) => onChooseTile(tileFromPointer(event))}
       onKeyDown={(event) => {
         const delta =
@@ -223,10 +230,12 @@ export function ArenaCanvas({
                   : null;
         if (delta !== null) {
           event.preventDefault();
-          setKeyboardTile((tile) => ({
-            x: Math.min(arena.width - 1, Math.max(0, tile.x + delta.x)),
-            y: Math.min(arena.height - 1, Math.max(0, tile.y + delta.y)),
-          }));
+          const next = {
+            x: Math.min(arena.width - 1, Math.max(0, keyboardTile.x + delta.x)),
+            y: Math.min(arena.height - 1, Math.max(0, keyboardTile.y + delta.y)),
+          };
+          setKeyboardTile(next);
+          onCursor(next);
         } else if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onChooseTile(keyboardTile);

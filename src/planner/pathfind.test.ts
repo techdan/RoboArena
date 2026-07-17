@@ -52,4 +52,20 @@ describe("planner A*", () => {
       reason: "unreachable",
     });
   });
+
+  it("prefers the lowest tick-cost route over an equally short slow route", () => {
+    const arena = arenaWith(
+      Array.from({ length: 7 }, (_, y) =>
+        Array.from({ length: 5 }, (_, x) => (x === 2 && y > 0 && y < 6 ? "rough" : "open")),
+      ),
+    );
+    const route = findPath(arena, { x: 2, y: 6 }, { x: 2, y: 0 }, "upright");
+    expect(route.kind).toBe("path");
+    if (route.kind === "path") {
+      expect(route.steps).toHaveLength(6);
+      expect(
+        route.steps.slice(0, -1).every((step) => arena.tiles[step.y]?.[step.x]?.terrain === "open"),
+      ).toBe(true);
+    }
+  });
 });

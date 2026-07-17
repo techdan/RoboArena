@@ -13,81 +13,24 @@ import type {
   TileCoord,
   TurnOrders,
 } from "../../engine/types";
+import { loadPlannerDraft, savePlannerDraft } from "../../planner/draft";
 import { plannerReducer, createPlannerState } from "../../planner/state";
 import {
   appendSegment,
   deleteSegment,
   planMovement,
   projectRobotAtTick,
+  rebaseTurnOrders,
+  replaceSegmentAt,
   replaceTimeline,
   timelineForRobot,
   timelineTiming,
+  validatedTimelinePrefix,
 } from "../../planner/segments";
 import { tileAt } from "../../planner/pathfind";
 import { ArenaCanvas, type PlannerRobotView } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
 import { Timeline } from "./Timeline";
-
-const draftKey = (matchId: string, teamId: string) =>
-  `roboarena.planner-draft.${matchId}.${teamId}`;
-
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null;
-
-const isTile = (value: unknown): boolean =>
-  isObject(value) && Number.isInteger(value.x) && Number.isInteger(value.y);
-
-const isSegment = (value: unknown): boolean => {
-  if (!isObject(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "deploy") return isTile(value.to);
-  if (value.kind === "move") {
-    return (
-      (value.posture === "upright" ||
-        value.posture === "ducking" ||
-        value.posture === "crouching") &&
-      Array.isArray(value.path) &&
-      value.path.every(
-        (step) => isObject(step) && isTile(step.to) && (step.via === undefined || isTile(step.via)),
-      )
-    );
-  }
-  if (value.kind === "set-posture")
-    return (
-      value.posture === "upright" || value.posture === "ducking" || value.posture === "crouching"
-    );
-  if (value.kind === "set-scan-direction")
-    return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"].includes(String(value.heading));
-  return false;
-};
-
-const isTurnOrders = (value: unknown, turnNumber: number): value is TurnOrders =>
-  isObject(value) &&
-  value.turnNumber === turnNumber &&
-  Array.isArray(value.timelines) &&
-  value.timelines.every(
-    (timeline) =>
-      isObject(timeline) &&
-      typeof timeline.robotId === "string" &&
-      Array.isArray(timeline.segments) &&
-      timeline.segments.every(isSegment),
-  );
-
-const readDraft = (
-  matchId: string,
-  teamId: string,
-  turnNumber: number,
-): { readonly orders: TurnOrders; readonly corrupt: boolean; readonly restored: boolean } => {
-  const empty: TurnOrders = { turnNumber, timelines: [] };
-  try {
-    const raw = window.localStorage.getItem(draftKey(matchId, teamId));
-    if (raw === null) return { orders: empty, corrupt: false, restored: false };
-    const value: unknown = JSON.parse(raw);
-    if (!isTurnOrders(value, turnNumber)) throw new Error("Stale or malformed planner draft.");
-    return { orders: value, corrupt: false, restored: true };
-  } catch {
-    return { orders: empty, corrupt: true, restored: false };
-  }
-};
 
 const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoord[] => {
   const route: TileCoord[] = [];
@@ -98,6 +41,19 @@ const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoor
         route.push(...(step.via === undefined ? [] : [step.via]), step.to);
   }
   return route;
+};
+
+interface EditingCommand {
+  readonly robotId: string;
+  readonly index: number;
+}
+
+const browserLocalStorage = (): Storage | null => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 };
 
 export interface PlannerExperienceProps {
@@ -116,30 +72,65 @@ export function PlannerExperience({
   const team = match.teams.find((candidate) => candidate.id === selfPlayerId);
   if (team === undefined)
     throw new Error("The participant team is missing from this match snapshot.");
-  const initialDraft = useRef<ReturnType<typeof readDraft> | null>(null);
-  initialDraft.current ??= readDraft(matchId, team.id, match.turnNumber);
   const revision = `${match.turnNumber}:${match.config.arenaSizeName}:${match.teams.map((entry) => entry.id).join(",")}`;
+  const authoritativeOrders = useMemo<TurnOrders>(
+    () => ({ turnNumber: match.turnNumber, timelines: [] }),
+    [match.turnNumber],
+  );
+  const initialDraft = useRef<ReturnType<typeof loadPlannerDraft> | null>(null);
+  if (initialDraft.current === null) {
+    const storage = typeof window === "undefined" ? null : browserLocalStorage();
+    initialDraft.current =
+      storage === null
+        ? { kind: typeof window === "undefined" ? "none" : "unavailable" }
+        : loadPlannerDraft(storage, matchId, team.id, revision);
+  }
   const [state, dispatch] = useReducer(plannerReducer, undefined, () => {
-    const restored = initialDraft.current!;
-    const created = createPlannerState(restored.orders, revision);
-    return restored.restored ? { ...created, dirty: true } : created;
+    const loaded = initialDraft.current!;
+    if (loaded.kind !== "restored") return createPlannerState(authoritativeOrders, revision);
+    const current = loaded.envelope.orders.turnNumber === match.turnNumber;
+    const conflictOrders = current
+      ? (loaded.envelope.conflictOrders ?? null)
+      : (loaded.envelope.conflictOrders ?? loaded.envelope.orders);
+    const created = createPlannerState(
+      current ? loaded.envelope.orders : authoritativeOrders,
+      revision,
+      conflictOrders,
+    );
+    return current && loaded.envelope.orders.timelines.length > 0
+      ? { ...created, dirty: true }
+      : created;
   });
   const [selectedRobotId, setSelectedRobotId] = useState(team.robots[0]?.id ?? "");
+  const [editing, setEditing] = useState<EditingCommand | null>(null);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [previewTick, setPreviewTick] = useState(budgetTicks);
+  const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
+    initialDraft.current.kind === "unavailable" ? "error" : "saved",
+  );
   const [notice, setNotice] = useState(
-    initialDraft.current.corrupt
+    initialDraft.current.kind === "corrupt"
       ? "Saved draft was corrupt and has been reset safely."
-      : initialDraft.current.restored
-        ? "Recovered your unsent local draft."
-        : "Choose a Home Area tile to deploy your first robot.",
+      : initialDraft.current.kind === "unavailable"
+        ? "Local draft storage is unavailable. This draft remains in memory only."
+        : initialDraft.current.kind === "restored"
+          ? initialDraft.current.envelope.orders.turnNumber === match.turnNumber
+            ? "Recovered your unsent local draft."
+            : `Preserved your Turn ${initialDraft.current.envelope.orders.turnNumber} draft for explicit recovery.`
+          : "Choose a Home Area tile to deploy your first robot.",
   );
   const orders = state.history.present;
   const selectedRobot = team.robots.find((robot) => robot.id === selectedRobotId) ?? team.robots[0];
   if (selectedRobot === undefined) throw new Error("This team has no programmable robots.");
   const selectedTimeline = timelineForRobot(orders, selectedRobot.id);
-  const projected = projectRobotAtTick(selectedRobot, selectedTimeline.segments);
+  const editingIndex = editing?.robotId === selectedRobot.id ? editing.index : null;
+  const projected = projectRobotAtTick(
+    selectedRobot,
+    editingIndex === null
+      ? selectedTimeline.segments
+      : selectedTimeline.segments.slice(0, editingIndex),
+  );
   const homeTiles = useMemo(
     () =>
       new Set(
@@ -167,8 +158,16 @@ export function PlannerExperience({
           : "valid";
 
   useEffect(() => {
-    window.localStorage.setItem(draftKey(matchId, team.id), JSON.stringify(orders));
-  }, [matchId, orders, team.id]);
+    const storage = browserLocalStorage();
+    const saved =
+      storage !== null &&
+      savePlannerDraft(storage, matchId, team.id, {
+        authoritativeRevision: state.authoritativeRevision,
+        orders,
+        ...(state.conflictOrders === null ? {} : { conflictOrders: state.conflictOrders }),
+      });
+    setDraftStorageStatus(saved ? "saved" : "error");
+  }, [matchId, orders, state.authoritativeRevision, state.conflictOrders, team.id]);
 
   const lastRevision = useRef(revision);
   useEffect(() => {
@@ -177,14 +176,65 @@ export function PlannerExperience({
     dispatch({
       type: "authoritative-refresh",
       revision,
-      orders: { turnNumber: match.turnNumber, timelines: [] },
+      orders: authoritativeOrders,
     });
-  }, [match.turnNumber, revision]);
+  }, [authoritativeOrders, revision]);
 
   const edit = (next: TurnOrders, message: string) => {
     dispatch({ type: "edit", orders: next });
+    setEditing(null);
     setNotice(message);
     setPreviewTick(budgetTicks);
+  };
+  const commitSegment = (segment: RobotCommandSegment, message: string) => {
+    const candidate =
+      editingIndex === null
+        ? appendSegment(orders, selectedRobot.id, segment)
+        : replaceSegmentAt(orders, selectedRobot.id, editingIndex, segment);
+    const validated = validatedTimelinePrefix(
+      match.arena,
+      selectedRobot,
+      team.homeSlot,
+      timelineForRobot(candidate, selectedRobot.id).segments,
+    );
+    const next = replaceTimeline(orders, selectedRobot.id, validated.segments);
+    edit(
+      next,
+      validated.droppedCount === 0
+        ? message
+        : `${message} ${validated.droppedCount} dependent command${validated.droppedCount === 1 ? " was" : "s were"} removed because the edit made them invalid.`,
+    );
+  };
+  const removeCommand = (robotId: string, index: number) => {
+    const robot = team.robots.find((candidate) => candidate.id === robotId);
+    if (robot === undefined) return;
+    const candidate = deleteSegment(orders, robotId, index);
+    const validated = validatedTimelinePrefix(
+      match.arena,
+      robot,
+      team.homeSlot,
+      timelineForRobot(candidate, robotId).segments,
+    );
+    edit(
+      replaceTimeline(orders, robotId, validated.segments),
+      validated.droppedCount === 0
+        ? "Command removed. Undo remains available."
+        : `Command and ${validated.droppedCount} invalid dependent command${validated.droppedCount === 1 ? "" : "s"} removed. Undo remains available.`,
+    );
+  };
+  const selectRobot = (robotId: string) => {
+    setSelectedRobotId(robotId);
+    setEditing(null);
+  };
+  const beginEdit = (robotId: string, index: number) => {
+    setSelectedRobotId(robotId);
+    setEditing({ robotId, index });
+    setPreviewTick(budgetTicks);
+    setNotice(`Editing command ${index + 1}. Choose a tile, posture, or heading to replace it.`);
+  };
+  const changeHistory = (type: "undo" | "redo") => {
+    dispatch({ type });
+    setEditing(null);
   };
   const chooseTile = (tile: TileCoord) => {
     if (projected.position === "dock") {
@@ -196,10 +246,7 @@ export function PlannerExperience({
         setNotice("Blocked — choose a traversable deployment tile inside your Home Area.");
         return;
       }
-      edit(
-        appendSegment(orders, selectedRobot.id, { kind: "deploy", to: tile }),
-        `Deploy programmed at ${tile.x},${tile.y}.`,
-      );
+      commitSegment({ kind: "deploy", to: tile }, `Deploy programmed at ${tile.x},${tile.y}.`);
       return;
     }
     const plan = planMovement(match.arena, projected.position, tile, projected.posture);
@@ -217,28 +264,22 @@ export function PlannerExperience({
       setNotice("The robot is already on that tile.");
       return;
     }
-    edit(
-      appendSegment(orders, selectedRobot.id, plan.segment),
-      `Route added: ${plan.segment.path.length} movement selectors.`,
-    );
+    commitSegment(plan.segment, `Route added: ${plan.segment.path.length} movement selectors.`);
   };
   const addPosture = (posture: Posture) => {
     if (posture === projected.posture) {
       setNotice(`Already ${posture}; no time is added.`);
       return;
     }
-    edit(
-      appendSegment(orders, selectedRobot.id, { kind: "set-posture", posture }),
-      `${posture} posture added · 10 ticks.`,
-    );
+    commitSegment({ kind: "set-posture", posture }, `${posture} posture added · 10 ticks.`);
   };
   const addHeading = (heading: Heading) => {
     if (heading === projected.scanHeading) {
       setNotice(`Scan is already facing ${heading}; no time is added.`);
       return;
     }
-    edit(
-      appendSegment(orders, selectedRobot.id, { kind: "set-scan-direction", heading }),
+    commitSegment(
+      { kind: "set-scan-direction", heading },
       `Scan heading ${heading} added · 5 ticks.`,
     );
   };
@@ -262,26 +303,58 @@ export function PlannerExperience({
     };
   });
 
+  const keepOrRecoverConflict = () => {
+    const conflictOrders = state.conflictOrders;
+    if (conflictOrders === null) return;
+    if (conflictOrders.turnNumber === match.turnNumber) {
+      dispatch({ type: "keep-local" });
+      setNotice("Kept the unsent local draft for this server turn.");
+      return;
+    }
+    const recovered = rebaseTurnOrders(
+      match.arena,
+      team.robots,
+      team.homeSlot,
+      conflictOrders,
+      match.turnNumber,
+    );
+    dispatch({ type: "recover-conflict", revision, orders: recovered });
+    setNotice(
+      recovered.timelines.length > 0
+        ? `Recovered the compatible command prefixes from Turn ${conflictOrders.turnNumber}. Review them before locking.`
+        : `The Turn ${conflictOrders.turnNumber} draft was preserved, but none of its commands are legal from the current state.`,
+    );
+  };
+
+  const acceptAuthoritative = () => {
+    dispatch({
+      type: "accept-authoritative",
+      revision: state.conflictRevision ?? revision,
+      orders: authoritativeOrders,
+    });
+    setNotice("Using the current authoritative server turn.");
+  };
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) {
         const index = Number(event.key) - 1;
         if (Number.isInteger(index) && team.robots[index] !== undefined)
-          setSelectedRobotId(team.robots[index].id);
+          selectRobot(team.robots[index].id);
         return;
       }
       if (event.key.toLowerCase() === "z") {
         event.preventDefault();
-        dispatch({ type: event.shiftKey ? "redo" : "undo" });
+        changeHistory(event.shiftKey ? "redo" : "undo");
       }
       if (event.key.toLowerCase() === "y") {
         event.preventDefault();
-        dispatch({ type: "redo" });
+        changeHistory("redo");
       }
       if (event.key.toLowerCase() === "a") {
         event.preventDefault();
         const index = team.robots.findIndex((robot) => robot.id === selectedRobot.id);
-        setSelectedRobotId(team.robots[(index + 1) % team.robots.length]?.id ?? selectedRobot.id);
+        selectRobot(team.robots[(index + 1) % team.robots.length]?.id ?? selectedRobot.id);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -289,8 +362,8 @@ export function PlannerExperience({
   }, [selectedRobot.id, team.robots]);
 
   return (
-    <main className="planner-page">
-      <div className="ambient-grid" />
+    <main className="planner-page desktop-viewport-gate">
+      <div className="ambient-grid" aria-hidden="true" />
       <header className="planner-header">
         <div>
           <p className="eyebrow">Turn {match.turnNumber} · Private draft</p>
@@ -298,33 +371,33 @@ export function PlannerExperience({
         </div>
         <div className="planner-header-status">
           <span>
-            <ShieldCheck size={14} /> Seat verified
+            <ShieldCheck size={14} aria-hidden="true" /> Seat verified
           </span>
-          <span>
-            <Save size={14} /> Saved locally
+          <span role="status" aria-live="polite">
+            {draftStorageStatus === "saved" ? (
+              <Save size={14} aria-hidden="true" />
+            ) : (
+              <CloudOff size={14} aria-hidden="true" />
+            )}
+            {draftStorageStatus === "saved" ? "Saved locally" : "Memory only — storage unavailable"}
           </span>
           <Link href={`/room/${roomCode}`}>Room {roomCode}</Link>
         </div>
       </header>
-      {state.conflictRevision !== null ? (
+      {state.conflictRevision !== null && state.conflictOrders !== null ? (
         <div className="planner-conflict" role="alert">
-          <AlertTriangle size={18} />
+          <AlertTriangle size={18} aria-hidden="true" />
           <span>
-            The server advanced while this browser has an unsent draft. Your work was preserved.
+            {state.conflictOrders.turnNumber === match.turnNumber
+              ? "The server state changed while this browser has an unsent draft. Your work was preserved."
+              : `The server advanced to Turn ${match.turnNumber}. Your Turn ${state.conflictOrders.turnNumber} draft remains preserved for recovery.`}
           </span>
-          <button type="button" onClick={() => dispatch({ type: "keep-local" })}>
-            Keep local draft
+          <button type="button" onClick={keepOrRecoverConflict}>
+            {state.conflictOrders.turnNumber === match.turnNumber
+              ? "Keep local draft"
+              : "Recover compatible commands"}
           </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: "accept-authoritative",
-                revision: state.conflictRevision!,
-                orders: { turnNumber: match.turnNumber, timelines: [] },
-              })
-            }
-          >
+          <button type="button" onClick={acceptAuthoritative}>
             Use server turn
           </button>
         </div>
@@ -336,10 +409,10 @@ export function PlannerExperience({
         budgetTicks={budgetTicks}
         previewTick={previewTick}
         onPreviewTick={setPreviewTick}
-        onSelectRobot={setSelectedRobotId}
-        onDelete={(robotId, index) =>
-          edit(deleteSegment(orders, robotId, index), "Command removed. Undo remains available.")
-        }
+        editing={editing}
+        onSelectRobot={selectRobot}
+        onEdit={beginEdit}
+        onDelete={removeCommand}
       />
       <div className="planner-workspace">
         <section className="planner-board-card">
@@ -366,8 +439,8 @@ export function PlannerExperience({
             }}
             onChooseTile={chooseTile}
           />
-          <div className="planner-notice" role="status">
-            <CloudOff size={15} />
+          <div className="planner-notice" role="status" aria-live="polite">
+            <CloudOff size={15} aria-hidden="true" />
             <span>{notice}</span>
             <small>Draft is private and has not been locked.</small>
           </div>
@@ -377,11 +450,13 @@ export function PlannerExperience({
           heading={projected.scanHeading}
           canUndo={state.history.past.length > 0}
           canRedo={state.history.future.length > 0}
+          editingCommandNumber={editingIndex === null ? null : editingIndex + 1}
           remainingTicks={budgetTicks - selectedEndTick}
           onPosture={addPosture}
           onHeading={addHeading}
-          onUndo={() => dispatch({ type: "undo" })}
-          onRedo={() => dispatch({ type: "redo" })}
+          onUndo={() => changeHistory("undo")}
+          onRedo={() => changeHistory("redo")}
+          onCancelEdit={() => setEditing(null)}
           onReset={() =>
             edit(
               replaceTimeline(orders, selectedRobot.id, []),

@@ -43,12 +43,36 @@ describe("planner draft state", () => {
     const refreshed = plannerReducer(local, {
       type: "authoritative-refresh",
       revision: "rev-2",
-      orders: orders(2, "server"),
+      orders: orders(1, "server"),
     });
     expect(refreshed.history.present).toEqual(orders(1, "local"));
     expect(refreshed.conflictRevision).toBe("rev-2");
+    expect(refreshed.conflictOrders).toEqual(orders(1, "local"));
     expect(plannerReducer(refreshed, { type: "keep-local" }).history.present).toEqual(
       orders(1, "local"),
     );
+  });
+
+  it("moves a prior-turn draft into recoverable conflict state", () => {
+    const local = plannerReducer(createPlannerState(orders(1), "rev-1"), {
+      type: "edit",
+      orders: orders(1, "local"),
+    });
+    const refreshed = plannerReducer(local, {
+      type: "authoritative-refresh",
+      revision: "rev-2",
+      orders: orders(2, "server"),
+    });
+    expect(refreshed.history.present).toEqual(orders(2, "server"));
+    expect(refreshed.conflictOrders).toEqual(orders(1, "local"));
+    expect(plannerReducer(refreshed, { type: "keep-local" })).toBe(refreshed);
+    const recovered = plannerReducer(refreshed, {
+      type: "recover-conflict",
+      revision: "rev-2",
+      orders: orders(2, "recovered"),
+    });
+    expect(recovered.history.present).toEqual(orders(2, "recovered"));
+    expect(recovered.conflictOrders).toBeNull();
+    expect(recovered.dirty).toBe(true);
   });
 });

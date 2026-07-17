@@ -22,3 +22,10 @@ test("renders both verified arenas without browser errors", async ({ page }) => 
     fullPage: true,
   });
 });
+
+test("keeps room setup interactive below the planner desktop breakpoint", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Join room", exact: true }).click();
+  await expect(page.getByLabel("Room code")).toBeVisible();
+});

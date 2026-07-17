@@ -8,6 +8,7 @@ export interface PlannerState {
   readonly authoritativeRevision: string;
   readonly dirty: boolean;
   readonly conflictRevision: string | null;
+  readonly conflictOrders: TurnOrders | null;
 }
 
 export type PlannerAction =
@@ -24,16 +25,19 @@ export type PlannerAction =
       readonly orders: TurnOrders;
       readonly revision: string;
     }
-  | { readonly type: "keep-local" };
+  | { readonly type: "keep-local" }
+  | { readonly type: "recover-conflict"; readonly orders: TurnOrders; readonly revision: string };
 
 export const createPlannerState = (
   orders: TurnOrders,
   authoritativeRevision: string,
+  conflictOrders: TurnOrders | null = null,
 ): PlannerState => ({
   history: createHistory(orders),
   authoritativeRevision,
   dirty: false,
-  conflictRevision: null,
+  conflictRevision: conflictOrders === null ? null : authoritativeRevision,
+  conflictOrders,
 });
 
 export const plannerReducer = (state: PlannerState, action: PlannerAction): PlannerState => {
@@ -46,15 +50,39 @@ export const plannerReducer = (state: PlannerState, action: PlannerAction): Plan
       return { ...state, history: redoHistory(state.history), dirty: true };
     case "authoritative-refresh":
       if (action.revision === state.authoritativeRevision) return state;
-      if (state.dirty) return { ...state, conflictRevision: action.revision };
+      if (state.dirty) {
+        if (state.history.present.turnNumber !== action.orders.turnNumber) {
+          return {
+            ...createPlannerState(action.orders, action.revision, state.history.present),
+            conflictRevision: action.revision,
+          };
+        }
+        return {
+          ...state,
+          conflictRevision: action.revision,
+          conflictOrders: state.history.present,
+        };
+      }
       return createPlannerState(action.orders, action.revision);
     case "accept-authoritative":
       return createPlannerState(action.orders, action.revision);
     case "keep-local":
+      if (
+        state.conflictOrders !== null &&
+        state.conflictOrders.turnNumber !== state.history.present.turnNumber
+      ) {
+        return state;
+      }
       return {
         ...state,
         authoritativeRevision: state.conflictRevision ?? state.authoritativeRevision,
         conflictRevision: null,
+        conflictOrders: null,
+      };
+    case "recover-conflict":
+      return {
+        ...createPlannerState(action.orders, action.revision),
+        dirty: true,
       };
   }
 };
