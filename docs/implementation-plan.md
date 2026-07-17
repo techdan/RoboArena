@@ -846,12 +846,15 @@ v1 finish line until Phase 11.6 proves three- and four-player free-for-all play.
 
 **Goal**: make the simultaneous-programming game understandable without
 changing its combat balance. Ship the high-value slice in v1; defer the large
-encyclopedic help corpus.
+encyclopedic help corpus. Phase 11.5 includes a compact in-game Field Guide
+with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
 
 **Dependencies**: Phases 8, 9, 10, 11 (so the things being explained exist).
 
 **Files** (full list in §10):
-- `src/components/help/Tooltip.tsx`, `FirstTimeHint.tsx`, `HelpProvider.tsx`
+- `src/components/help/Tooltip.tsx`, `InfoPopover.tsx`, `FirstTimeHint.tsx`, `HelpProvider.tsx`
+- `src/components/help/FieldGuideDialog.tsx` — Robots / Terrain / Actions tabs
+- `src/lib/help/content.ts` — typed presentation copy derived from canonical engine tables
 - `src/state/useHelpStore.ts` (with localStorage persistence)
 - `src/components/match/TurnExplanation.tsx`
 - `src/components/replay/ReplayScrubber.tsx`, `EventInspector.tsx`
@@ -859,6 +862,20 @@ encyclopedic help corpus.
 
 **Acceptance criteria**:
 - [ ] Every planner/setup control has a concise tooltip and keyboard focus state
+- [ ] The Field Guide has Robots, Terrain, and Actions tabs; it exposes v1
+      class stats/roles, traversal/cover/sight rules, and action timing/targeting
+      without duplicating authoritative numerical constants
+- [ ] An explicit adjacent `?` control opens details for every action; visible
+      robots and terrain tiles also open the same anchored info popover by
+      right-click, keyboard context-menu activation, or touch long-press
+- [ ] Contextual help is an accessible mini-modal: focus enters it, Escape and
+      outside click close it, focus returns to its trigger, and it remains
+      usable near viewport edges without obscuring the selected board object
+- [ ] Long-press is a help-only iPad enhancement with movement/scroll
+      cancellation; it does not make planner or movie gameplay touch-supported
+- [ ] Robot popovers reveal only generic class facts plus state already
+      authorized for that player; unseen contacts and hidden orders never enter
+      help props, analytics, DOM, or accessibility text
 - [ ] First planning visit teaches move, scan, timeline, lock, and hidden-order
       concepts; hints are dismissible and do not recur
 - [ ] The timeline exposes exact tick costs, slow-terrain route boundaries,
@@ -867,9 +884,9 @@ encyclopedic help corpus.
       from authorized event causes without seeing hidden information
 - [ ] Replay viewer supports scrub, step, speed, idle compression, event filter,
       and export of the deterministic replay file
-- [ ] Full topic pages, help cursor, and illustrated manual remain explicitly v2+
+- [ ] Full topic pages, global help cursor, and illustrated manual remain explicitly v2+
 
-**Effort**: M.
+**Effort**: L.
 
 ---
 
@@ -1410,34 +1427,80 @@ exists.
 
 ## 10. Onboarding, explanation, and help
 
-**v1 locked**: concise tooltips, first-use planning guidance, exact timeline
-feedback, post-turn cause explanations, and replay inspection are part of the
-main-game finish line. The help cursor, illustrated topic library, and
+**v1 locked**: concise tooltips, a compact Robots/Terrain/Actions Field Guide,
+contextual info popovers, first-use planning guidance, exact timeline feedback,
+post-turn cause explanations, and replay inspection are part of the main-game
+finish line. The global help cursor, full illustrated article library, and
 interactive tutorial are post-v1.
 
 ### Component split
 
-1. **v1 tooltips** — every non-obvious control has hover/focus help.
-2. **v1 first-time hints** — small dismissible guidance for planning, locking,
+1. **v1 tooltips** — brief, non-interactive hover/focus labels for every
+   non-obvious control.
+2. **v1 contextual info** — an anchored accessible mini-modal for detailed bot,
+   terrain, or action facts. Explicit `?` buttons are the universal trigger;
+   right-click, keyboard context-menu activation, and touch long-press are
+   additional triggers where an object exists on the board.
+3. **v1 Field Guide** — one dialog with Robots, Terrain, and Actions tabs. It is
+   the complete compact v1 reference, not an illustrated encyclopedia.
+4. **v1 first-time hints** — small dismissible guidance for planning, locking,
    ready status, hidden orders, and movie controls.
-3. **v1 explanations** — authorized event causes translate hit, miss, damage,
+5. **v1 explanations** — authorized event causes translate hit, miss, damage,
    cover, timing, and elimination events into concise text.
-4. **post-v1 help cursor/articles** — indexed illustrated reference material.
+6. **post-v1 help cursor/articles** — indexed illustrated reference material.
 
 ### Files
 
-- `src/components/help/Tooltip.tsx` — primitive (Floating UI under the hood)
-- `src/components/help/HelpDialog.tsx` — post-v1 contextual help modal
+- `src/components/help/Tooltip.tsx` — brief hover/focus primitive
+- `src/components/help/InfoPopover.tsx` — anchored accessible mini-modal with
+  click/context-menu/long-press trigger adapters
+- `src/components/help/FieldGuideDialog.tsx` — v1 Robots / Terrain / Actions reference
+- `src/components/help/HelpDialog.tsx` — post-v1 full-article dialog
 - `src/components/help/HelpCursorToggle.tsx` — post-v1 button + `?` key handler
 - `src/components/help/FirstTimeHint.tsx` — toast component with auto-dismiss
 - `src/components/help/HelpProvider.tsx` — context that exposes `useHelp()`
 - `src/state/useHelpStore.ts` — tracks `hintsShown: Set<string>`, persists to localStorage
+- `src/lib/help/content.ts` — typed v1 reference content derived from
+  `ROBOT_DEFINITIONS`, `WEAPONS`, timing constants, and terrain/traversal helpers
 - `src/components/match/TurnExplanation.tsx` — v1 authorized cause log
 - `src/lib/explain/events.ts` — v1 structured explanation projection
 - `src/lib/help/topics/`, `src/app/help/[topic]/page.tsx`, and
   `public/assets/help/` — post-v1 illustrated reference
 
-### Content — terrain help dialog example
+### Contextual-help interaction contract
+
+- `?` is always rendered as a real keyboard-reachable button next to an action
+  label; contextual gestures are never the only way to discover help.
+- Right-click suppresses the browser menu only on a recognized bot or terrain
+  target. Keyboard users receive the same behavior from the Context Menu key or
+  Shift+F10 on that target.
+- Touch long-press opens help after 550 ms and cancels if the pointer moves more
+  than 8 px, scrolling begins, a second pointer appears, or the pointer ends.
+  This is a progressive iPad reference affordance only; v1 gameplay remains
+  desktop mouse + keyboard.
+- The popover uses dialog semantics, names the selected object, moves focus to
+  its close control, closes on Escape/outside press, and restores focus.
+- Board help receives only the participant-projected robot/tile data already in
+  the renderer. Generic Field Guide class entries may describe every shipped
+  non-Stealth v1 class, but never reveal an unseen live robot or private order.
+- Rich content is loaded only when the Field Guide or a contextual popover is
+  opened; stable typed ids (`robot:rifle`, `terrain:bush`, `action:scan-fire`)
+  select content without passing the whole match state through React context.
+
+### Field Guide content
+
+- **Robots**: class art, armor, accuracy, rating, weapons/ammo, posture behavior,
+  and a short tactical role. Stealth is omitted until Phase 14.
+- **Terrain**: sprite, posture traversal, one-/two-tile movement behavior,
+  endpoint cover, scan-sight effects, and blocking behavior.
+- **Actions**: exact tick cost or cadence, prerequisites, targeting/acquisition,
+  deterministic versus probabilistic factors, timeline behavior, and shortcut.
+
+Numerical facts come from `src/engine/constants.ts`, `src/engine/catalog.ts`, or
+pure terrain/action helpers. `content.ts` adds labels and prose but must not
+redeclare armor, range, timing, ammo, cover, or damage tables.
+
+### Content — terrain info example
 
 ```md
 # Bushes
@@ -1509,14 +1572,17 @@ plainly rather than guessed or reconstructed from a client.
 - **Desktop only**. Minimum viewport **1280×720**. Smaller viewports show "Please use a larger screen for the best experience." (Engine + replay still work; only the planner/movie UI is gated.)
 - **Browsers**: Chrome 110+, Edge 110+, Firefox 115+, Safari 16.5+. Test in Chrome and Firefox at minimum; others best-effort.
 - **OS**: Windows / macOS / Linux. Browser handles abstraction; no OS-specific code.
-- **Input**: mouse + keyboard only. Touch not supported in v1; mobile/tablet = v2.
+- **Input**: mouse + keyboard gameplay only. Touch gameplay is not supported in
+  v1; the Phase 11.5 long-press help popover is a reference-only progressive
+  enhancement and does not change the desktop gameplay target.
 
 ### Mouse interactions
 
 | Interaction | Action |
 |---|---|
 | Left click on tile | primary action (place / move / target) |
-| Right click | reserved for context menu (TBD per phase) |
+| Right click on a bot/terrain tile | open its Phase 11.5 contextual info popover |
+| Touch long-press on a bot/terrain tile | open help only; gameplay remains unsupported on touch |
 | Shift + left click | set scan direction (mirrors original) |
 | Ctrl + Shift + left click | repeat-fire (mirrors DOS shortcut) |
 | Mouse drag on empty area | pan camera |
@@ -1529,7 +1595,7 @@ Ported from the original's keyboard reference where modern equivalents exist:
 
 | Key | Action |
 |---|---|
-| `?` or `H` | Toggle help cursor mode (post-v1; v1 reserves the shortcut) |
+| `?` or `H` | Open the v1 Field Guide; global help-cursor mode remains post-v1 |
 | `Cmd/Ctrl + S` | Save match (manual save anchor) |
 | `Cmd/Ctrl + E` | End turn |
 | `Cmd/Ctrl + D` | Toggle Team Data panel |
@@ -1735,7 +1801,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
 | 10 | ✅ DRAFT COMPLETE | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate |
 | 11 | ✅ DRAFT COMPLETE | XL | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay |
-| 11.5 | ⬜ | M | v1 explainability, onboarding, and replay inspection (§10) |
+| 11.5 | ⬜ | L | v1 Field Guide, contextual help, onboarding, explanations, and replay inspection (§10) |
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
 | 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
 | 13 | ⬜ | L | v1 release polish — online UX, art, performance, accessibility basics |

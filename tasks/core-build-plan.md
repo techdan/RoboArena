@@ -218,5 +218,7 @@ playable end to end.
 1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
    Vercel frontend and external long-lived room service and verify WSS, restart
    recovery, and rejoin ownership from two real networks/devices.
-2. Implement Phase 11.5 explainability, onboarding, and participant-safe replay
+2. Implement Phase 11.5 explainability: the Robots/Terrain/Actions Field Guide,
+   accessible contextual info popovers (`?`, right-click, keyboard context
+   menu, help-only long-press), onboarding, and participant-safe replay
    inspection without exposing private opposing orders.
