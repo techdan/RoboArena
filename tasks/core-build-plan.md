@@ -210,15 +210,17 @@ playable end to end.
 - Hot-seat and multiple Teams per Side/alliance modes are post-v1 Phase 12.
 - Stealth is Phase 14 and all non-Survival sports are Phase 15. Both are hard
   gated on the complete online FFA Survival v1.
-- Other formations, AI, extra weapons, full help/tutorial, audio, mobile, and
-  production-scale infrastructure are post-v1 or explicitly later phases.
+- Other formations, AI, extra weapons, full help/tutorial, audio, phone/native
+  mobile apps, and production-scale infrastructure are post-v1 or explicitly
+  later phases. Browser-based iPad touch in landscape is part of v1.
 
 ## Next actions
 
 1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
    Vercel frontend and external long-lived room service and verify WSS, restart
    recovery, and rejoin ownership from two real networks/devices.
-2. Implement Phase 11.5 explainability: the Robots/Terrain/Actions Field Guide,
-   accessible contextual info popovers (`?`, right-click, keyboard context
-   menu, help-only long-press), onboarding, and participant-safe replay
-   inspection without exposing private opposing orders.
+2. Implement Phase 11.5 explainability and iPad input: the
+   Robots/Terrain/Actions Field Guide, accessible contextual info popovers (`?`,
+   right-click, keyboard context menu, long-press), a Pointer Events-based full
+   touch planner/movie loop with visible modifier alternatives, onboarding, and
+   participant-safe replay inspection without exposing private opposing orders.

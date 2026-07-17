@@ -30,7 +30,8 @@ mode.
 
 **v1 scope (Phases 1-11.6)**: 2-4 humans on separate devices join an online
 room; one player controls one Team; every Team has a unique Side, so matches are
-1v1, 1v1v1, or 1v1v1v1. Desktop mouse + keyboard only. The server is
+1v1, 1v1v1, or 1v1v1v1. v1 supports desktop mouse + keyboard and browser-based
+iPad touch in landscape. The server is
 authoritative. Hot-seat, alliances/multiple Teams per Side, Stealth, every
 non-Survival sport, and AI are later phases.
 

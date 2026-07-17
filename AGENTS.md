@@ -27,8 +27,9 @@ Important scope constraints:
   watch unseen turns, and then plan; ordinary service restart must recover.
 - Hot-seat and multiple Teams per Side/alliance modes are v2 features.
 - Survival sport mode only for v1.
-- Desktop-only, mouse + keyboard.
-- Audio, AI, mobile/touch, accounts, analytics, i18n, production observability, and production-grade abuse prevention are out of v1 scope.
+- Desktop mouse + keyboard and iPad touch in landscape are v1 targets. Phones
+  and native mobile-app packaging remain post-v1.
+- Audio, AI, accounts, analytics, i18n, production observability, and production-grade abuse prevention are out of v1 scope.
 - Do not ship copyrighted RoboSport assets, sprites, audio, or the RoboSport name in product UI. RoboArena is the product.
 
 ### RoboSport parity guard
@@ -228,7 +229,12 @@ When the Next.js UI lands:
 - All clickable elements, including buttons, links, and expandable text, must have `cursor-pointer`.
 - Use lucide-react icons where a standard icon exists.
 - The first screen should be the usable game/setup experience, not a marketing landing page.
-- v1 targets desktop only. Small viewports should show a larger-screen message for planner/movie UI.
+- v1 targets desktop plus iPadOS Safari in landscape at 1024×768 CSS pixels or
+  larger. Portrait iPads should show a rotate-device prompt; phone-sized
+  viewports should show the larger-screen message.
+- Planner/movie interactions must have complete Pointer Events-based mouse,
+  keyboard, and touch paths. Do not make hover or keyboard modifiers the only
+  way to invoke a gameplay action; touch targets should be at least 44×44 CSS px.
 - Setup/planner controls must be keyboard reachable with visible focus and
   connection/readiness/team identity must not rely on color alone.
 

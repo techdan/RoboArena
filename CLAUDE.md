@@ -10,7 +10,8 @@ teams, then watch simultaneous resolution as a deterministic movie.
 
 **Main-game scope (Phases 1-11.6 + release polish)**: 2-4 humans on separate
 internet-connected devices, one Team and unique Side per player, free-for-all
-Survival, no AI. Desktop-only (mouse + keyboard). The v1 server is authoritative
+Survival, no AI. Desktop mouse + keyboard and iPad touch in landscape are v1
+targets. The v1 server is authoritative
 and supports private asynchronous orders, durable leave/return, and restart-safe
 resolution. Hot-seat, multiple Teams
 per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
@@ -151,14 +152,16 @@ Commit messages: short imperative subject; body explains *why* + lists tests add
 This is a "fun game with friends" project, not a production-grade SaaS. Many things that look like obvious gaps are explicit non-goals — they're deferred in `docs/implementation-plan.md` §14:
 
 - Accessibility basics in v1: keyboard-reachable controls, focus states,
-  readable/non-color-only status; full board screen-reader and touch support later
+  readable/non-color-only status, and complete iPad touch gameplay; full board
+  screen-reader support remains later
 - v1 security is bounded but real: schema/order validation, ownership checks,
   hidden-state filtering, payload limits, and basic rate limits
 - No production observability (Sentry, metrics, alerts)
 - No internationalization, no analytics, no cookie banner, no license/legal text
 - No AI players
 - Online rooms are v1; hot-seat and alliance/team modes are v2
-- No mobile / touch / tablet support
+- No phone UI or native mobile/tablet app; browser-based iPadOS Safari in
+  landscape is supported in v1
 - No account system; an opaque server-issued token restores one room seat
 - No Stealth or non-Survival sport implementation before the complete online
   free-for-all Survival v1 gate

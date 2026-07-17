@@ -861,6 +861,8 @@ with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
 - `src/components/help/Tooltip.tsx`, `InfoPopover.tsx`, `FirstTimeHint.tsx`, `HelpProvider.tsx`
 - `src/components/help/FieldGuideDialog.tsx` — Robots / Terrain / Actions tabs
 - `src/lib/help/content.ts` — typed presentation copy derived from canonical engine tables
+- `src/lib/input/pointerGestures.ts` — shared tap/drag/pinch/long-press gesture adapter
+- `src/components/match/TouchActionBar.tsx` — visible touch alternatives to modifier-key actions
 - `src/state/useHelpStore.ts` (with localStorage persistence)
 - `src/components/match/TurnExplanation.tsx`
 - `src/components/replay/ReplayScrubber.tsx`, `EventInspector.tsx`
@@ -877,8 +879,13 @@ with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
 - [ ] Contextual help is an accessible mini-modal: focus enters it, Escape and
       outside click close it, focus returns to its trigger, and it remains
       usable near viewport edges without obscuring the selected board object
-- [ ] Long-press is a help-only iPad enhancement with movement/scroll
-      cancellation; it does not make planner or movie gameplay touch-supported
+- [ ] The complete setup, planner, movie, results, and reconnect loop is usable
+      with touch in iPadOS Safari in landscape without a mouse or keyboard
+- [ ] Pointer gestures are unambiguous: tap selects/targets, empty-arena drag
+      pans, pinch zooms, and long-press opens contextual help; movement, scroll,
+      pinch, second-pointer, and pointer-cancel transitions cannot fire a stale tap
+- [ ] Actions previously exposed through Shift/Ctrl modifiers have visible
+      44×44 CSS px touch controls with the same planner semantics
 - [ ] Robot popovers reveal only generic class facts plus state already
       authorized for that player; unseen contacts and hidden orders never enter
       help props, analytics, DOM, or accessibility text
@@ -892,7 +899,18 @@ with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
       and export of the deterministic replay file
 - [ ] Full topic pages, global help cursor, and illustrated manual remain explicitly v2+
 
-**Effort**: L.
+**Touch tests required**:
+- unit tests cover tap-versus-drag thresholds, long-press cancellation,
+  second-pointer/pinch transitions, pointer cancellation, and prevention of
+  synthetic click double-activation;
+- Playwright’s touch-enabled iPad viewport covers room join, one complete
+  planned turn (move, scan, aim/repeat fire, edit, lock), movie controls,
+  contextual help, results, and reconnect;
+- before v1 release, repeat the complete loop on a physical iPad in current
+  iPadOS Safari, including rotation recovery and safe-area layout. Emulation is
+  useful regression coverage but does not satisfy the real-device ship gate.
+
+**Effort**: XL.
 
 ---
 
@@ -979,11 +997,16 @@ replay for every configuration.
 ### Phase 13 — v1 release polish, accessibility basics, and art [⬜]
 
 **Goal**: ship-quality online FFA. Real art (replace vector placeholders),
-keyboard navigation and non-color-only status, graceful desktop-only viewport
-message, connection-state polish, and performance budget enforcement. Audio,
-touch/mobile, and full screen-reader game-board support remain later work.
+keyboard navigation and non-color-only status, desktop/iPad responsive polish,
+iPadOS Safari touch validation, connection-state polish, and performance budget
+enforcement. Audio, phone layouts, native app packaging, and full screen-reader
+game-board support remain later work.
 
 **Dependencies**: v1 Phases 1-11.6. Deferred Phase 12 is not a dependency.
+
+**Acceptance gate**: no clipped controls or accidental page gestures at the
+supported iPad viewport; complete one real-device room-to-results smoke match
+using touch alone and verify desktop mouse/keyboard regression coverage.
 
 **Effort**: L.
 
@@ -1482,8 +1505,8 @@ interactive tutorial are post-v1.
   Shift+F10 on that target.
 - Touch long-press opens help after 550 ms and cancels if the pointer moves more
   than 8 px, scrolling begins, a second pointer appears, or the pointer ends.
-  This is a progressive iPad reference affordance only; v1 gameplay remains
-  desktop mouse + keyboard.
+  It shares the v1 Pointer Events gesture adapter with supported iPad gameplay,
+  so long-press never also selects, targets, pans, or zooms.
 - The popover uses dialog semantics, names the selected object, moves focus to
   its close control, closes on Escape/outside press, and restores focus.
 - Board help receives only the participant-projected robot/tile data already in
@@ -1575,12 +1598,19 @@ plainly rather than guessed or reconstructed from a client.
 
 ### v1 target (locked)
 
-- **Desktop only**. Minimum viewport **1280×720**. Smaller viewports show "Please use a larger screen for the best experience." (Engine + replay still work; only the planner/movie UI is gated.)
-- **Browsers**: Chrome 110+, Edge 110+, Firefox 115+, Safari 16.5+. Test in Chrome and Firefox at minimum; others best-effort.
-- **OS**: Windows / macOS / Linux. Browser handles abstraction; no OS-specific code.
-- **Input**: mouse + keyboard gameplay only. Touch gameplay is not supported in
-  v1; the Phase 11.5 long-press help popover is a reference-only progressive
-  enhancement and does not change the desktop gameplay target.
+- **Desktop**: minimum viewport **1280×720**, mouse + keyboard. Smaller desktop
+  viewports show "Please use a larger screen for the best experience."
+- **iPad**: browser-based iPadOS Safari in landscape at **1024×768 CSS px** or
+  larger, using touch alone. Portrait shows a rotate-device prompt. Phones and
+  native-app packaging remain post-v1.
+- **Browsers**: desktop Chrome 110+, Edge 110+, Firefox 115+, Safari 16.5+;
+  current and previous major iPadOS Safari. Test desktop Chrome/Firefox and real
+  iPad Safari at minimum; other iPad browsers are best-effort.
+- **OS**: Windows / macOS / Linux desktops plus iPadOS. Browser handles
+  abstraction; no native platform code.
+- **Input architecture**: Pointer Events provide shared tap/click, drag, and
+  long-press arbitration. Touch gameplay must not depend on hover, right-click,
+  keyboard modifiers, or Apple Pencil.
 
 ### Mouse interactions
 
@@ -1588,12 +1618,29 @@ plainly rather than guessed or reconstructed from a client.
 |---|---|
 | Left click on tile | primary action (place / move / target) |
 | Right click on a bot/terrain tile | open its Phase 11.5 contextual info popover |
-| Touch long-press on a bot/terrain tile | open help only; gameplay remains unsupported on touch |
+| Touch long-press on a bot/terrain tile | open its Phase 11.5 contextual info popover without also selecting it |
 | Shift + left click | set scan direction (mirrors original) |
 | Ctrl + Shift + left click | repeat-fire (mirrors DOS shortcut) |
 | Mouse drag on empty area | pan camera |
 | Mouse wheel | zoom camera (Phase 9+) |
 | Hover | tooltip / cursor state (target sight / blocked / out of range) |
+
+### iPad touch interactions
+
+| Interaction | Action |
+|---|---|
+| Tap bot/tile/control | select or perform the current primary action |
+| Drag from a movement endpoint | extend/edit the planned route |
+| Drag on empty arena | pan camera |
+| Two-finger pinch | zoom camera around the gesture midpoint |
+| Long-press bot/terrain | open contextual info; cancel the pending tap |
+| Touch action-bar button | set scan direction, repeat-fire, and other modifier-key modes |
+| Timeline tap/drag | select or scrub a command/tick without page scrolling |
+
+All touch controls use at least 44×44 CSS px hit targets, respect safe-area
+insets, and expose selected/disabled state without relying on hover. Canvas
+gesture ownership uses deliberate `touch-action` regions: browser page scrolling
+remains available outside the arena and timeline.
 
 ### Keyboard shortcuts
 
@@ -1614,7 +1661,8 @@ Ported from the original's keyboard reference where modern equivalents exist:
 | `,` `.` | Movie playback: slower / faster |
 | `Tab` | Cycle UI focus (a11y) |
 
-Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships desktop only."
+Defer phone layouts, Android tablet certification, and native app packaging to
+post-v1. iPad touch support is part of the v1 ship gate.
 
 ---
 
@@ -1652,7 +1700,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Projectile screen speed | Phase 7 presentation | Tune animation without changing engine outcomes or replay state |
 | Stealth × Scan-and-Fire interaction | Post-main-game Phase 14 | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate |
 | Arena import accuracy | Phase 6 | Verify generated row-major MAP output and exact generated home rectangles |
-| Mobile / tablet playability | Out of v1 (locked §12) | Desktop-only with mouse + keyboard for v1; tablet/touch in v2 |
+| iPad touch playability | v1 ship gate (§12) | Validate the complete loop on real iPadOS Safari in landscape; phones, Android tablets, and native apps remain post-v1 |
 | WebSocket hosting/reliability | Phase 8 onward | Validate the Vercel frontend + external long-lived WSS service + Supabase Postgres restart path on two real networks; keep one authoritative room process in v1 |
 | Absent player stalls orders | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1 |
 | Replay format breaking changes | Phase 5+ | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9) |
@@ -1661,7 +1709,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | AI tiers | Out of main game | Deferred until after the explicitly scheduled parity phases |
 | Audio / SFX / music | Out of v1 | Deferred to post-v1 entirely |
 | Localization | Out of v1 | English only; not building i18n hooks |
-| Accessibility | Partial v1 | Keyboard-reachable setup/planner controls, focus states, readable status and non-color-only team cues; full screen-reader/touch support later |
+| Accessibility | Partial v1 | Keyboard-reachable controls, focus states, readable/non-color-only status, 44×44 touch targets, and iPad touch parity; full game-board screen-reader support later |
 | Security / abuse prevention | Bounded v1 | Server validation, ownership checks, payload limits, basic rate limits, hidden-state filtering; DDoS/abuse operations remain post-v1 |
 | Privacy / analytics / cookie policy | Out of v1 | No third-party analytics; participant tokens identify only a room seat |
 | License / legal disclaimers | Out of v1 | Defer until shared publicly |
@@ -1807,10 +1855,10 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
 | 10 | ✅ DRAFT COMPLETE | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate |
 | 11 | ✅ DRAFT COMPLETE | XL | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay |
-| 11.5 | ⬜ | L | v1 Field Guide, contextual help, onboarding, explanations, and replay inspection (§10) |
+| 11.5 | ⬜ | XL | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
 | 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
-| 13 | ⬜ | L | v1 release polish — online UX, art, performance, accessibility basics |
+| 13 | ⬜ | L | v1 release polish — online UX, iPad validation, art, performance, accessibility basics |
 | 14 | ⏸ POST-MAIN-GAME | L | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests |
 | 15 | ⏸ POST-MAIN-GAME | XL | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring |
 

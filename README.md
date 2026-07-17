@@ -75,9 +75,10 @@ Two to four humans on separate internet-connected devices join a room. Each
 controls one Team on a unique Side, so supported configurations are 1v1,
 1v1v1, and 1v1v1v1. The server stores submitted turns durably and resolves them
 authoritatively; players may leave after submitting and return later to watch
-and plan. Survival only, desktop mouse + keyboard, no AI. Hot-seat,
-alliance/team modes, Stealth, other
-sports, mobile/touch, accounts, and production-scale operations are post-v1.
+and plan. Survival only, with desktop mouse + keyboard and browser-based iPad
+touch in landscape; no AI. Hot-seat, alliance/team modes, Stealth, other
+sports, phone/native mobile apps, accounts, and production-scale operations are
+post-v1.
 
 ## Contributing
 
