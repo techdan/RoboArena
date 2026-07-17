@@ -45,4 +45,45 @@ describe("room protocol schemas", () => {
     expect(clientMessageSchema.safeParse({ ...valid, token: undefined }).success).toBe(false);
     expect(clientMessageSchema.safeParse({ ...valid, hiddenOrders: [] }).success).toBe(false);
   });
+
+  it("strictly validates bounded private turn orders", () => {
+    const valid = {
+      version: 1,
+      requestId: "lock-1",
+      kind: "LockOrders",
+      code: "ABC234",
+      token: "x".repeat(43),
+      matchId: "match-1",
+      orders: {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: "r1",
+            segments: [{ kind: "deploy", to: { x: 1, y: 1 } }],
+          },
+        ],
+      },
+    };
+    expect(clientMessageSchema.safeParse(valid).success).toBe(true);
+    expect(
+      clientMessageSchema.safeParse({
+        ...valid,
+        orders: { ...valid.orders, hiddenOpponentOrders: [] },
+      }).success,
+    ).toBe(false);
+    expect(
+      clientMessageSchema.safeParse({
+        ...valid,
+        orders: {
+          ...valid.orders,
+          timelines: [
+            {
+              robotId: "r1",
+              segments: [{ kind: "scan-and-fire", weapon: "rifle", maxDistance: 19, seconds: 1 }],
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+  });
 });

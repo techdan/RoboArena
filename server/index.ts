@@ -16,6 +16,7 @@ import {
 } from "../src/lib/net/protocol.js";
 import { RoomError, RoomService, hashParticipantToken, type RoomAccess } from "./rooms.js";
 import { RoomStorage } from "./storage.js";
+import { MatchLifecycleError } from "./matches.js";
 
 interface ConnectionState {
   roomCode?: string;
@@ -23,7 +24,7 @@ interface ConnectionState {
 }
 
 const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
-  if (error instanceof RoomError) {
+  if (error instanceof RoomError || error instanceof MatchLifecycleError) {
     return {
       version: PROTOCOL_VERSION,
       requestId,
@@ -103,6 +104,17 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
     }
   };
 
+  const broadcastMatch = (code: string) => {
+    for (const [socket, state] of connections) {
+      if (state.roomCode !== code || state.playerId === undefined) continue;
+      try {
+        send(socket, service.getMatchSnapshotForPlayer(code, state.playerId, "broadcast"));
+      } catch {
+        // A setup-only subscriber does not have a match snapshot yet.
+      }
+    }
+  };
+
   const dispatch = async (
     message: ClientMessage,
     issuedParticipantToken?: string,
@@ -123,6 +135,10 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
       case "StartMatch":
         return service.startMatch(message.code, message.token);
       case "GetMatchState":
+      case "SubmitOrders":
+      case "LockOrders":
+      case "TurnResultAcknowledged":
+      case "SetPlaybackPosition":
         throw new Error("Match snapshots use the authenticated snapshot path.");
     }
   };
@@ -171,34 +187,75 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
               broadcast(freshResponse.room.code);
               return;
             }
-            if (cached.kind === "MatchSnapshot" && message.kind === "GetMatchState") {
+            if (cached.kind === "MatchSnapshot" && "token" in message) {
               const access = service.resumeRoom(cached.roomCode, message.token);
               subscribe(socket, access);
+              send(
+                socket,
+                service.getMatchSnapshot(cached.roomCode, message.token, message.requestId),
+              );
+              return;
             }
             send(socket, cached);
             return;
           }
           if (message.kind === "GetMatchState") {
             const access = service.resumeRoom(message.code, message.token);
-            const match = service.getMatchState(message.code, message.token);
             subscribe(socket, access);
-            const response: MatchSnapshotMessage = {
-              version: PROTOCOL_VERSION,
-              requestId,
-              kind: "MatchSnapshot",
-              roomCode: message.code,
-              matchId: access.room.matchId!,
-              selfPlayerId: access.selfPlayerId,
-              match: {
-                ...match,
-                lastKnownMarkers: [...match.lastKnownMarkers].map(([teamId, markers]) => ({
-                  teamId,
-                  markers,
-                })),
-              },
-            };
+            const response = service.getMatchSnapshot(message.code, message.token, requestId);
             storage.saveRequestResult(principal, requestId, response);
             send(socket, response);
+            return;
+          }
+          if (
+            message.kind === "SubmitOrders" ||
+            message.kind === "LockOrders" ||
+            message.kind === "TurnResultAcknowledged" ||
+            message.kind === "SetPlaybackPosition"
+          ) {
+            const access = service.resumeRoom(message.code, message.token);
+            subscribe(socket, access);
+            const response: MatchSnapshotMessage =
+              message.kind === "SubmitOrders"
+                ? await service.submitOrders(
+                    message.code,
+                    message.token,
+                    message.matchId,
+                    message.orders,
+                    requestId,
+                  )
+                : message.kind === "LockOrders"
+                  ? await service.lockOrders(
+                      message.code,
+                      message.token,
+                      message.matchId,
+                      message.orders,
+                      requestId,
+                    )
+                  : message.kind === "TurnResultAcknowledged"
+                    ? await service.acknowledgeTurnResult(
+                        message.code,
+                        message.token,
+                        message.matchId,
+                        message.turnNumber,
+                        requestId,
+                      )
+                    : await service.updatePlaybackPosition(
+                        message.code,
+                        message.token,
+                        message.matchId,
+                        message.turnNumber,
+                        message.tick,
+                        requestId,
+                      );
+            if (message.kind !== "SetPlaybackPosition") {
+              storage.saveRequestResult(principal, requestId, response);
+            }
+            send(socket, response);
+            if (message.kind !== "SetPlaybackPosition") {
+              broadcast(message.code);
+              broadcastMatch(message.code);
+            }
             return;
           }
           const access = await dispatch(message, issuedParticipantToken);

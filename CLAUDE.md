@@ -17,22 +17,22 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-7 and 9-10 are
-draft-complete; Phase 8 is locally implemented with 228 passing tests and its
+**Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11 are
+draft-complete; Phase 8 is locally implemented with 236 passing tests and its
 external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 11's authoritative turn loop is next while
+alliance behavior is retained for v2. Phase 11.5 explainability and replay UX is next while
 the independent Phase 8 hosting gate remains open. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 228 tests)
+npm test               # Run all unit tests (currently 236 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -91,8 +91,13 @@ preview, direct legal-prefix editing, posture/scan tools, and bounded undo/redo.
 inclusive scan-gate overlay, exact score-table estimates from authorized facts,
 and terminal repeat-fire timing without consuming authoritative RNG.
 
-**Everything after Phase 10 (not yet built)** — the authoritative online turn
-loop, explainability/onboarding, multiplayer hardening, and release polish.
+**Phase 11 (draft-complete)** — durable private drafts and locks, persisted
+seed/nonce recovery, exact-once deterministic resolution, participant-specific
+state/events, independent movie acknowledgement and playback resume, Final
+Ceremony scoring, and canonical Phase 5 replay storage/verification.
+
+**Everything after Phase 11 (not yet built)** — explainability/onboarding,
+participant-safe replay inspection, multiplayer hardening, and release polish.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

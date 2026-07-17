@@ -118,6 +118,77 @@ describe("authoritative rooms", () => {
     secondStorage.close();
   });
 
+  it("recovers a partial lock, resolves once, and preserves independent acknowledgement", async () => {
+    const path = resolve(`test-results/phase11-turn-restart-${crypto.randomUUID()}.sqlite`);
+    const firstStorage = new RoomStorage(path);
+    const firstService = new RoomService(firstStorage);
+    const host = firstService.createRoom("Turn Host", "red");
+    const guest = await firstService.joinRoom(host.room.code, "Turn Guest", "blue");
+    const hostToken = requireToken(host.participantToken);
+    const guestToken = requireToken(guest.participantToken);
+    await firstService.setReady(host.room.code, hostToken, true);
+    await firstService.setReady(host.room.code, guestToken, true);
+    const started = await firstService.startMatch(host.room.code, hostToken);
+    const matchId = started.room.matchId!;
+    await firstService.lockOrders(
+      host.room.code,
+      hostToken,
+      matchId,
+      { turnNumber: 1, timelines: [] },
+      "host-lock",
+    );
+    firstStorage.close();
+
+    const secondStorage = new RoomStorage(path);
+    const secondService = new RoomService(secondStorage);
+    const resolved = await secondService.lockOrders(
+      host.room.code,
+      guestToken,
+      matchId,
+      { turnNumber: 1, timelines: [] },
+      "guest-lock",
+    );
+    expect(resolved).toMatchObject({ status: "turn-ready", unseenTurns: [{ turnNumber: 1 }] });
+    await expect(
+      secondService.lockOrders(
+        host.room.code,
+        guestToken,
+        matchId,
+        { turnNumber: 1, timelines: [] },
+        "guest-lock-retry-after-commit",
+      ),
+    ).resolves.toMatchObject({ status: "turn-ready" });
+    await secondService.updatePlaybackPosition(
+      host.room.code,
+      hostToken,
+      matchId,
+      1,
+      120,
+      "movie-position",
+    );
+    expect(secondStorage.loadRoom(host.room.code)?.match?.turns).toHaveLength(1);
+    secondStorage.close();
+
+    const thirdStorage = new RoomStorage(path);
+    const thirdService = new RoomService(thirdStorage);
+    expect(thirdService.getMatchSnapshot(host.room.code, hostToken, "resume").unseenTurns).toEqual([
+      expect.objectContaining({ turnNumber: 1, playbackTick: 120 }),
+    ]);
+    const acknowledged = await thirdService.acknowledgeTurnResult(
+      host.room.code,
+      hostToken,
+      matchId,
+      1,
+      "ack",
+    );
+    expect(acknowledged.status).toBe("planning");
+    expect(thirdService.getMatchSnapshot(host.room.code, guestToken, "guest").status).toBe(
+      "turn-ready",
+    );
+    expect(thirdStorage.loadRoom(host.room.code)?.match?.turns).toHaveLength(1);
+    thirdStorage.close();
+  });
+
   it("never stores a participant token in the idempotency response cache", () => {
     const storage = new RoomStorage(":memory:");
     const response: RoomSnapshotMessage = {

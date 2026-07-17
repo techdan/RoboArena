@@ -6,7 +6,7 @@ simultaneous resolution as a movie. Inspired by but not affiliated with the
 original.
 
 **Status**: deterministic engine/replay work, the Next.js/PixiJS renderer,
-event-driven movie playback, local authoritative room/setup flow, and the
+event-driven movie playback, local authoritative room/setup/turn flow, and the
 movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
 remains open alongside continued local phases. v1 targets online
 free-for-all Survival. See

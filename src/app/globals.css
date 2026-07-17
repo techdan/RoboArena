@@ -13,6 +13,269 @@
   background: #0d100e;
 }
 
+.planner-sync-action,
+.planner-lock-action,
+.match-flow-actions button,
+.match-flow-actions a,
+.match-acknowledge,
+.connection-overlay button {
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  padding: 0.55rem 0.8rem;
+  font:
+    700 0.68rem/1 var(--font-mono),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.planner-sync-action {
+  background: rgb(255 255 255 / 5%);
+  color: rgb(255 255 255 / 68%);
+}
+
+.planner-lock-action,
+.match-acknowledge {
+  border-color: rgb(190 242 100 / 25%);
+  background: rgb(190 242 100 / 12%);
+  color: #d9f99d;
+}
+
+.planner-sync-action:disabled,
+.planner-lock-action:disabled,
+.match-flow-actions button:disabled,
+.match-acknowledge:disabled,
+.connection-overlay button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.match-flow-page {
+  min-height: 100vh;
+  background: #0d100e;
+  padding: 2rem;
+  color: white;
+}
+
+.match-room-status {
+  display: flex;
+  max-width: 1180px;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 auto 1.25rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 4%);
+  padding: 1rem 1.2rem;
+}
+
+.match-room-status[data-status="planning"] svg,
+.match-room-status[data-status="turn-ready"] svg {
+  color: #bef264;
+}
+
+.match-room-status[data-status="waiting"] svg {
+  color: #fbbf24;
+}
+
+.match-room-status[data-status="finished"] svg {
+  color: #67e8f9;
+}
+
+.match-room-status strong,
+.match-panel h2 {
+  font-weight: 800;
+}
+
+.match-room-status p,
+.match-panel > p,
+.match-privacy-note {
+  margin-top: 0.25rem;
+  color: rgb(255 255 255 / 48%);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.match-flow-grid {
+  display: grid;
+  max-width: 1180px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 auto 1rem;
+}
+
+.match-panel,
+.final-ceremony {
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1.25rem;
+  background: rgb(255 255 255 / 3.5%);
+  padding: 1.25rem;
+}
+
+.ready-list,
+.final-ceremony ol {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.ready-list li,
+.final-ceremony li,
+.team-data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgb(0 0 0 / 18%);
+  padding: 0.75rem;
+}
+
+.ready-list li > span:last-child,
+.team-data-row > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(255 255 255 / 48%);
+  font:
+    600 0.68rem/1 var(--font-mono),
+    monospace;
+  text-transform: uppercase;
+}
+
+.ready-list li > span[data-ready="true"] {
+  color: #bef264;
+}
+
+.team-color-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+.team-data-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+}
+
+.team-data-row > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.match-flow-actions {
+  display: flex;
+  max-width: 1180px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin: 1rem auto;
+}
+
+.match-flow-actions button,
+.match-flow-actions a {
+  background: rgb(255 255 255 / 5%);
+  color: rgb(255 255 255 / 68%);
+}
+
+.match-movie-page > .movie-shell,
+.match-movie-page > div:not(.connection-overlay) {
+  max-width: 1180px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.match-acknowledge {
+  margin: 1rem auto;
+}
+
+.turn-explanation ol {
+  max-height: 18rem;
+  overflow: auto;
+  margin-top: 1rem;
+}
+
+.turn-explanation li {
+  border-top: 1px solid rgb(255 255 255 / 7%);
+  padding: 0.55rem 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.78rem;
+}
+
+.turn-explanation time {
+  margin-right: 0.5rem;
+  color: #bef264;
+  font-family: var(--font-mono), monospace;
+}
+
+.connection-overlay {
+  position: fixed;
+  z-index: 90;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  width: min(30rem, calc(100vw - 2rem));
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid rgb(248 113 113 / 30%);
+  border-radius: 1rem;
+  background: #261414;
+  padding: 0.9rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 40%);
+}
+
+.connection-overlay > svg {
+  color: #fca5a5;
+}
+
+.connection-overlay p {
+  margin-top: 0.2rem;
+  color: rgb(255 255 255 / 50%);
+  font-size: 0.75rem;
+}
+
+.connection-overlay button {
+  background: rgb(248 113 113 / 10%);
+  color: #fecaca;
+}
+
+.results-page {
+  display: grid;
+  align-content: start;
+}
+
+.final-ceremony {
+  width: min(42rem, 100%);
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.final-ceremony > svg {
+  margin: 0 auto 1rem;
+  color: #67e8f9;
+}
+
+.final-ceremony h1 {
+  margin-top: 0.4rem;
+  font-size: 2.2rem;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .match-flow-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

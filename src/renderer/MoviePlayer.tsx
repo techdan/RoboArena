@@ -25,9 +25,16 @@ export interface MoviePlayerProps {
   readonly events: readonly ResolutionEvent[];
   readonly fps?: number;
   readonly initialTick?: number;
+  readonly onTickChange?: (tick: number) => void;
 }
 
-export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }: MoviePlayerProps) {
+export function MoviePlayer({
+  initialState,
+  events,
+  fps = 12,
+  initialTick = 0,
+  onTickChange,
+}: MoviePlayerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const renderSnapshotRef = useRef<(index: number, animate: boolean) => void>(() => undefined);
   const timeline = useMemo(() => buildMovieTimeline(initialState, events), [initialState, events]);
@@ -189,6 +196,7 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
   }, [initialIndex, initialState, timeline]);
 
   const tick = timeline.ticks[currentIndex] ?? 0;
+  useEffect(() => onTickChange?.(tick), [onTickChange, tick]);
   const animationCues = (timeline.eventsByTick.get(tick) ?? [])
     .map((event) => ANIMATION_CUES[event.kind])
     .filter((cue) => cue !== "none")

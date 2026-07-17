@@ -124,11 +124,21 @@ export class RoomSocket {
   }
 }
 
-type GetMatchStateMessage = Extract<ClientMessage, { readonly kind: "GetMatchState" }>;
+type MatchClientMessage = Extract<
+  ClientMessage,
+  {
+    readonly kind:
+      | "GetMatchState"
+      | "SubmitOrders"
+      | "LockOrders"
+      | "TurnResultAcknowledged"
+      | "SetPlaybackPosition";
+  }
+>;
 
-export function requestOnce(message: GetMatchStateMessage): Promise<MatchSnapshotMessage>;
+export function requestOnce(message: MatchClientMessage): Promise<MatchSnapshotMessage>;
 export function requestOnce(
-  message: Exclude<ClientMessage, GetMatchStateMessage>,
+  message: Exclude<ClientMessage, MatchClientMessage>,
 ): Promise<RoomSnapshotMessage>;
 export async function requestOnce(
   message: ClientMessage,
@@ -148,9 +158,27 @@ export async function requestOnce(
         if (response.requestId !== message.requestId) return;
         if (response.kind === "ProtocolError")
           finish(() => reject(new RoomRequestError(response.code, response.message)));
-        else if (message.kind === "GetMatchState" && response.kind === "MatchSnapshot") {
+        else if (
+          [
+            "GetMatchState",
+            "SubmitOrders",
+            "LockOrders",
+            "TurnResultAcknowledged",
+            "SetPlaybackPosition",
+          ].includes(message.kind) &&
+          response.kind === "MatchSnapshot"
+        ) {
           finish(() => resolve(response));
-        } else if (message.kind !== "GetMatchState" && response.kind === "RoomSnapshot") {
+        } else if (
+          ![
+            "GetMatchState",
+            "SubmitOrders",
+            "LockOrders",
+            "TurnResultAcknowledged",
+            "SetPlaybackPosition",
+          ].includes(message.kind) &&
+          response.kind === "RoomSnapshot"
+        ) {
           finish(() => resolve(response));
         }
       });

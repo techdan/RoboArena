@@ -107,6 +107,24 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     await expect(planner.getByRole("checkbox")).toBeChecked();
     await planner.getByRole("button", { name: "Add Aim & Fire" }).click();
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toHaveCount(2);
+
+    await Promise.all(
+      pages.map((page) => page.getByRole("button", { name: "Lock orders" }).click()),
+    );
+    await Promise.all(
+      pages.map((page) =>
+        expect(page.getByText("Turn ready", { exact: true })).toBeVisible({ timeout: 15_000 }),
+      ),
+    );
+    await expect(
+      pages[0]!.getByRole("button", { name: "Acknowledge Turn 1 and plan next" }),
+    ).toBeVisible();
+    await pages[0]!.getByRole("button", { name: "Acknowledge Turn 1 and plan next" }).click();
+    await expect(pages[0]!.getByRole("heading", { name: /command board/ })).toBeVisible();
+    await expect(pages[0]!.getByText("Turn 2 · Private draft")).toBeVisible();
+    await expect(
+      pages[1]!.getByRole("button", { name: "Acknowledge Turn 1 and plan next" }),
+    ).toBeVisible();
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

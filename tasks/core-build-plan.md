@@ -11,14 +11,15 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 7 and Phases 9-10 are draft-complete; Phase 8 is locally
+Phases 1R through 7 and Phases 9-11 are draft-complete; Phase 8 is locally
 implemented with its deployed WSS/two-network restart gate still open. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
 arena imports, deterministic local movie playback, and authoritative room/setup
-boundary and the movement/posture/scan/firing planner are built. Phase 11's
-authoritative turn loop is next while the external Phase 8 gate remains tracked independently.
+boundary, planner, and durable private plan/lock/resolve/watch loop are built.
+Phase 11.5 explainability/replay UX is next while the external Phase 8 gate
+remains tracked independently.
 
 The immediate critical path is:
 
@@ -217,5 +218,5 @@ playable end to end.
 1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
    Vercel frontend and external long-lived room service and verify WSS, restart
    recovery, and rejoin ownership from two real networks/devices.
-2. Implement Phase 11's durable authoritative plan/lock/resolve/watch loop,
-   preserving private orders and per-player visibility filtering.
+2. Implement Phase 11.5 explainability, onboarding, and participant-safe replay
+   inspection without exposing private opposing orders.

@@ -8,8 +8,14 @@ import type {
   RobotState,
   TeamState,
   WeaponId,
+  TurnOrders,
 } from "../src/engine/types.js";
-import type { PublicPlayer, PublicRoom, ProtocolErrorCode } from "../src/lib/net/protocol.js";
+import type {
+  MatchSnapshotMessage,
+  PublicPlayer,
+  PublicRoom,
+  ProtocolErrorCode,
+} from "../src/lib/net/protocol.js";
 import {
   DEFAULT_ROOM_CONFIG,
   type PlayerColor,
@@ -17,6 +23,16 @@ import {
 } from "../src/lib/setup/validate.js";
 import { loadArena } from "../src/lib/arenas/index.js";
 import type { RoomStorage } from "./storage.js";
+import {
+  acknowledgeTurn,
+  createAuthoritativeMatch,
+  lockParticipantOrders,
+  resolvePendingTurn,
+  setPlaybackPosition,
+  submitParticipantOrders,
+  type AuthoritativeMatchRecord,
+} from "./matches.js";
+import { participantMatchSnapshot } from "./view.js";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ID_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -40,6 +56,7 @@ export interface RoomRecord {
   readonly players: PlayerRecord[];
   matchId?: string;
   matchState?: MatchState;
+  match?: AuthoritativeMatchRecord;
 }
 
 export class RoomError extends Error {
@@ -186,6 +203,10 @@ export class RoomService {
       });
       room.matchId = randomId(10, ID_ALPHABET);
       room.matchState = await this.#createMatchState(room);
+      room.match = createAuthoritativeMatch(
+        room.matchState,
+        room.players.map((participant) => participant.id),
+      );
       room.phase = "active";
       this.storage.saveRoom(room);
       return { room: this.publicRoom(room), selfPlayerId: player.id };
@@ -198,6 +219,151 @@ export class RoomService {
     if (room.matchState === undefined)
       throw new RoomError("ROOM_STARTED", "The match has not started.");
     return room.matchState;
+  }
+
+  getMatchSnapshot(code: string, token: string, requestId: string): MatchSnapshotMessage {
+    const room = this.#requireRoom(code);
+    const player = this.#authenticate(room, token);
+    const match = this.#requireMatch(room);
+    if (resolvePendingTurn(match)) {
+      room.matchState = match.state;
+      this.storage.saveRoom(room);
+    }
+    return participantMatchSnapshot({
+      requestId,
+      roomCode: code,
+      matchId: room.matchId!,
+      playerId: player.id,
+      match,
+    });
+  }
+
+  getMatchSnapshotForPlayer(
+    code: string,
+    playerId: string,
+    requestId: string,
+  ): MatchSnapshotMessage {
+    const room = this.#requireRoom(code);
+    if (!room.players.some((player) => player.id === playerId)) {
+      throw new RoomError("UNAUTHORIZED", "That participant does not own a seat.");
+    }
+    const match = this.#requireMatch(room);
+    if (resolvePendingTurn(match)) {
+      room.matchState = match.state;
+      this.storage.saveRoom(room);
+    }
+    return participantMatchSnapshot({
+      requestId,
+      roomCode: code,
+      matchId: room.matchId!,
+      playerId,
+      match,
+    });
+  }
+
+  async submitOrders(
+    code: string,
+    token: string,
+    matchId: string,
+    orders: TurnOrders,
+    requestId: string,
+  ): Promise<MatchSnapshotMessage> {
+    return this.#withLock(code, () => {
+      const room = this.#requireRoom(code);
+      const player = this.#authenticate(room, token);
+      const match = this.#requireMatch(room, matchId);
+      submitParticipantOrders(match, player.id, orders);
+      this.storage.saveRoom(room);
+      return participantMatchSnapshot({
+        requestId,
+        roomCode: code,
+        matchId,
+        playerId: player.id,
+        match,
+      });
+    });
+  }
+
+  async lockOrders(
+    code: string,
+    token: string,
+    matchId: string,
+    orders: TurnOrders,
+    requestId: string,
+  ): Promise<MatchSnapshotMessage> {
+    return this.#withLock(code, () => {
+      const room = this.#requireRoom(code);
+      const player = this.#authenticate(room, token);
+      const match = this.#requireMatch(room, matchId);
+      lockParticipantOrders(
+        match,
+        player.id,
+        orders,
+        randomBytes(32).toString("hex"),
+        randomBytes(16).toString("hex"),
+      );
+      // Persist the seed, nonce, and immutable combined orders before the pure
+      // resolver runs. A restart can deterministically finish this phase.
+      this.storage.saveRoom(room);
+      if (resolvePendingTurn(match)) {
+        room.matchState = match.state;
+        this.storage.saveRoom(room);
+      }
+      return participantMatchSnapshot({
+        requestId,
+        roomCode: code,
+        matchId,
+        playerId: player.id,
+        match,
+      });
+    });
+  }
+
+  async acknowledgeTurnResult(
+    code: string,
+    token: string,
+    matchId: string,
+    turnNumber: number,
+    requestId: string,
+  ): Promise<MatchSnapshotMessage> {
+    return this.#withLock(code, () => {
+      const room = this.#requireRoom(code);
+      const player = this.#authenticate(room, token);
+      const match = this.#requireMatch(room, matchId);
+      acknowledgeTurn(match, player.id, turnNumber);
+      this.storage.saveRoom(room);
+      return participantMatchSnapshot({
+        requestId,
+        roomCode: code,
+        matchId,
+        playerId: player.id,
+        match,
+      });
+    });
+  }
+
+  async updatePlaybackPosition(
+    code: string,
+    token: string,
+    matchId: string,
+    turnNumber: number,
+    tick: number,
+    requestId: string,
+  ): Promise<MatchSnapshotMessage> {
+    return this.#withLock(code, () => {
+      const room = this.#requireRoom(code);
+      const player = this.#authenticate(room, token);
+      const match = this.#requireMatch(room, matchId);
+      setPlaybackPosition(match, player.id, turnNumber, tick);
+      this.storage.saveRoom(room);
+      return participantMatchSnapshot({
+        requestId,
+        roomCode: code,
+        matchId,
+        playerId: player.id,
+        match,
+      });
+    });
   }
 
   markConnected(playerId: string): void {
@@ -221,7 +387,10 @@ export class RoomService {
         id: player.id,
         name: player.name,
         color: player.color,
-        ready: player.ready,
+        ready:
+          room.phase === "active"
+            ? (room.match?.lockedPlayerIds.includes(player.id) ?? false)
+            : player.ready,
         connected: this.#connected.has(player.id),
         isHost: player.id === room.hostPlayerId,
         ...(player.side === undefined ? {} : { side: player.side }),
@@ -241,6 +410,24 @@ export class RoomService {
     const room = this.#requireRoom(code);
     if (room.phase !== "setup") throw new RoomError("ROOM_STARTED", "Room setup is frozen.");
     return room;
+  }
+
+  #requireMatch(room: RoomRecord, matchId?: string): AuthoritativeMatchRecord {
+    if (room.match === undefined && room.matchState !== undefined && room.matchId !== undefined) {
+      room.match = createAuthoritativeMatch(
+        room.matchState,
+        room.players.map((player) => player.id),
+      );
+      this.storage.saveRoom(room);
+    }
+    if (
+      room.match === undefined ||
+      room.matchId === undefined ||
+      (matchId !== undefined && room.matchId !== matchId)
+    ) {
+      throw new RoomError("MATCH_NOT_FOUND", "Match not found for this room.");
+    }
+    return room.match;
   }
 
   #authenticate(room: RoomRecord, token: string): PlayerRecord {

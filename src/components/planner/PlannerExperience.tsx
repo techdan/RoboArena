@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CloudOff, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CloudOff, LockKeyhole, Save, ShieldCheck, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { TICKS_PER_SECOND } from "../../engine/constants";
@@ -70,8 +70,6 @@ interface ScanDialogState {
   readonly seconds?: number;
 }
 
-const AUTHORIZED_CONTACTS: readonly AuthorizedContact[] = [];
-
 const browserLocalStorage = (): Storage | null => {
   try {
     return window.localStorage;
@@ -85,6 +83,11 @@ export interface PlannerExperienceProps {
   readonly roomCode: string;
   readonly selfPlayerId: string;
   readonly match: MatchState;
+  readonly serverOrders?: TurnOrders;
+  readonly serverRevision?: string;
+  readonly syncing?: boolean;
+  readonly onSaveOrders?: (orders: TurnOrders) => void;
+  readonly onLockOrders?: (orders: TurnOrders) => void;
 }
 
 export function PlannerExperience({
@@ -92,14 +95,41 @@ export function PlannerExperience({
   roomCode,
   selfPlayerId,
   match,
+  serverOrders,
+  serverRevision,
+  syncing = false,
+  onSaveOrders,
+  onLockOrders,
 }: PlannerExperienceProps) {
   const team = match.teams.find((candidate) => candidate.id === selfPlayerId);
   if (team === undefined)
     throw new Error("The participant team is missing from this match snapshot.");
-  const revision = `${match.turnNumber}:${match.config.arenaSizeName}:${match.teams.map((entry) => entry.id).join(",")}`;
+  const authorizedContacts = useMemo<readonly AuthorizedContact[]>(
+    () =>
+      match.teams.flatMap((candidate) =>
+        candidate.side === team.side
+          ? []
+          : candidate.robots.flatMap((robot, index) =>
+              robot.position === "dock"
+                ? []
+                : [
+                    {
+                      id: robot.id,
+                      label: `${candidate.name} R${index + 1}`,
+                      tile: robot.position,
+                      posture: robot.posture,
+                    },
+                  ],
+            ),
+      ),
+    [match.teams, team.side],
+  );
+  const revision =
+    serverRevision ??
+    `${match.turnNumber}:${match.config.arenaSizeName}:${match.teams.map((entry) => entry.id).join(",")}`;
   const authoritativeOrders = useMemo<TurnOrders>(
-    () => ({ turnNumber: match.turnNumber, timelines: [] }),
-    [match.turnNumber],
+    () => serverOrders ?? { turnNumber: match.turnNumber, timelines: [] },
+    [match.turnNumber, serverOrders],
   );
   const initialDraft = useRef<ReturnType<typeof loadPlannerDraft> | null>(null);
   if (initialDraft.current === null) {
@@ -190,9 +220,9 @@ export function PlannerExperience({
             shooter: projectedShooter,
             target: cursor,
             weapon: weapons[0]!,
-            authorizedContacts: AUTHORIZED_CONTACTS,
+            authorizedContacts,
           }),
-    [aimTool, cursor, match.arena, projectedShooter, weapons],
+    [aimTool, authorizedContacts, cursor, match.arena, projectedShooter, weapons],
   );
   const cursorState =
     cursor === null
@@ -506,6 +536,27 @@ export function PlannerExperience({
             {draftStorageStatus === "saved" ? "Saved locally" : "Memory only — storage unavailable"}
           </span>
           <Link href={`/room/${roomCode}`}>Room {roomCode}</Link>
+          {onSaveOrders === undefined ? null : (
+            <button
+              type="button"
+              className="planner-sync-action"
+              disabled={syncing}
+              onClick={() => onSaveOrders(orders)}
+            >
+              <UploadCloud size={14} aria-hidden="true" /> Save to server
+            </button>
+          )}
+          {onLockOrders === undefined ? null : (
+            <button
+              type="button"
+              className="planner-lock-action"
+              disabled={syncing}
+              onClick={() => onLockOrders(orders)}
+            >
+              <LockKeyhole size={14} aria-hidden="true" />
+              {syncing ? "Locking…" : "Lock orders"}
+            </button>
+          )}
         </div>
       </header>
       {state.conflictRevision !== null && state.conflictOrders !== null ? (
@@ -618,7 +669,7 @@ export function PlannerExperience({
           weapons={weapons}
           initialWeapon={aimDialog.weapon}
           initialRepeat={aimDialog.repeat}
-          authorizedContacts={AUTHORIZED_CONTACTS}
+          authorizedContacts={authorizedContacts}
           onCancel={() => {
             setAimDialog(null);
             setAimTool(false);

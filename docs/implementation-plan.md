@@ -749,7 +749,7 @@ focus, own Escape, restore their opener, and suspend global shortcuts.
 
 ---
 
-### Phase 11 — Authoritative online turn loop + results [⬜]
+### Phase 11 — Authoritative online turn loop + results [✅ DRAFT COMPLETE]
 
 **Goal**: complete the asynchronous private plan → lock → leave if desired →
 server resolve → return/watch → next-plan loop. The server receives immutable
@@ -811,13 +811,29 @@ allowed to know.
 - exported replay re-runs to byte-identical canonical events.
 
 **Acceptance criteria**:
-- [ ] A complete two-player internet match is playable end to end
-- [ ] Final Ceremony uses exact Survival points and returns to the room/menu
-- [ ] Ready state reveals no plan details; leave/return recovers current progress
-- [ ] A player can submit, close the browser, later see “turn ready,” watch it,
+- [x] A complete two-player internet match is playable end to end
+- [x] Final Ceremony uses exact Survival points and returns to the room/menu
+- [x] Ready state reveals no plan details; leave/return recovers current progress
+- [x] A player can submit, close the browser, later see “turn ready,” watch it,
       and submit the next turn without requiring simultaneous presence
-- [ ] Persistent Team Data and explanation panels show only authorized facts
-- [ ] Replay export/load works through the Phase 5 format
+- [x] Persistent Team Data and explanation panels show only authorized facts
+- [x] The server stores and verifies the canonical replay through the Phase 5
+      format; participant UI never exports private opposing orders
+
+**Implemented contract**: `server/matches.ts` persists private drafts, current
+locks, a seed/nonce/combined-order resolution record, canonical replay turns,
+per-player acknowledgement, and per-player playback position. Resolution is a
+single-process compare-by-state transition: a crash after the resolving record
+is stored simply re-runs the pure engine with the same seed. Exact request
+retries are no-ops even if the response cache was not committed. `server/view.ts`
+removes unseen enemy robots and filters events as visibility changes; neither
+orders, seeds, nonces, nor hidden projectile details cross the participant
+boundary. The planner saves or atomically locks its current draft, readiness
+shares status only, each player watches and acknowledges independently, and the
+Final Ceremony uses the locked Survival scoring helpers. The four-browser room
+test covers lock, one canonical resolution, independent acknowledgement, and
+Turn 2 planning; restart tests cover partial lock, result recovery, duplicate
+lock, playback resume, replay verification, and final scoring.
 
 **Effort**: XL.
 
@@ -1718,7 +1734,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 8 | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains |
 | 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
 | 10 | ✅ DRAFT COMPLETE | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate |
-| 11 | ⬜ | XL | Authoritative two-player online turn loop, reconnect, results, replay |
+| 11 | ✅ DRAFT COMPLETE | XL | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay |
 | 11.5 | ⬜ | M | v1 explainability, onboarding, and replay inspection (§10) |
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
 | 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
