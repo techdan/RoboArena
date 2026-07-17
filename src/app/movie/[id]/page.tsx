@@ -41,7 +41,7 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
           </div>
         </header>
 
-        <div className="grid grid-cols-[520px_1fr] gap-6">
+        <div className="grid grid-cols-[auto_1fr] gap-6">
           <MovieExperience
             initialState={movie.initialState}
             events={movie.events}
