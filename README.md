@@ -7,7 +7,7 @@ original.
 
 **Status**: deterministic engine/replay work, the Next.js/PixiJS renderer,
 event-driven movie playback, local authoritative room/setup flow, and the
-movement/posture/scan planner are built. The external WSS/restart hosting gate
+movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
 remains open alongside continued local phases. v1 targets online
 free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.

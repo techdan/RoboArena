@@ -124,4 +124,31 @@ describe("planner segments", () => {
     expect(timelineForRobot(replaced, robot.id).segments[1]?.kind).toBe("set-posture");
     expect(rebaseTurnOrders(arena, [robot], 0, orders, 2).turnNumber).toBe(2);
   });
+
+  it("shows firing durations and treats repeat fire as terminal through the horizon", () => {
+    const arena = makeOpenArena();
+    const robot = makeRobot("r1", "t1", "rifle", { x: 1, y: 1 });
+    const aim = {
+      kind: "aim-and-fire",
+      target: { x: 3, y: 1 },
+      weapon: "rifle",
+      repeat: false,
+    } as const;
+    const scan = { kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 3 } as const;
+    expect(timelineTiming(robot, [aim, scan], 900).map((entry) => entry.durationTicks)).toEqual([
+      30, 180,
+    ]);
+    const repeat = { ...aim, repeat: true } as const;
+    expect(timelineTiming(robot, [repeat], 900)[0]).toMatchObject({
+      startTick: 0,
+      endTick: 900,
+      durationTicks: 900,
+    });
+    expect(
+      validatedTimelinePrefix(arena, robot, 0, [
+        repeat,
+        { kind: "set-posture", posture: "ducking" },
+      ]),
+    ).toEqual({ segments: [repeat], droppedCount: 1 });
+  });
 });

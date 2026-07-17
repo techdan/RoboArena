@@ -706,7 +706,7 @@ and deletions retain only the resolver-legal command prefix.
 
 ---
 
-### Phase 10 — Planner UI: firing dialogs [⬜]
+### Phase 10 — Planner UI: firing dialogs [✅ DRAFT COMPLETE]
 
 **Goal**: Aim & Fire (with repeat-fire variant via Ctrl+Shift) and Scan & Fire (with Maximum Distance + Seconds dialog).
 
@@ -720,17 +720,26 @@ and deletions retain only the resolver-legal command prefix.
 
 **Tests required**:
 - Aim & Fire dialog: target outside cone shows "angle blocked"; target out of weapon range shows "out of range"
-- Scan & Fire dialog: Max Distance defaults to weapon's `scanFireMaxDistance`; Seconds defaults to remaining-budget
+- Scan & Fire dialog: Max Distance defaults to the weapon's confirmed maximum
+  range (18 tiles in v1); Seconds defaults to the remaining budget
 - Ctrl+Shift+click on target tile creates a `repeat: true` Aim & Fire segment
 - hit preview uses only information currently authorized for that player; it
   never reveals an unseen robot, hidden enemy order, or unrevealed RNG result
 
 **Acceptance criteria**:
-- [ ] Both fire modes can be programmed; commands appear on timeline with correct durations
-- [ ] Visual scan-gate overlay distinguishes eligible and angle-blocked tiles;
+- [x] Both fire modes can be programmed; commands appear on timeline with correct durations
+- [x] Visual scan-gate overlay distinguishes eligible and angle-blocked tiles;
   authorized previews use the score table rather than BLACK/GREY combat zones
-- [ ] Targeting explains deterministic geometry/cover factors and labels
+- [x] Targeting explains deterministic geometry/cover factors and labels
       probabilistic outcomes as estimates, without previewing the actual roll
+
+**Implemented contract**: planner-side firing helpers mirror the locked
+range/cone/line-of-sight, endpoint-cover, and 20-entry live-fire score rules
+without importing authoritative state or consuming RNG. Aim previews use only
+explicitly authorized contacts; when none are supplied, the dialog presents
+labeled hypothetical posture estimates. Repeat fire is terminal for the
+remaining turn budget, and Scan & Fire defaults to the selected weapon's v1
+range plus the robot's remaining whole-second budget.
 
 **Effort**: M.
 
@@ -1704,7 +1713,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 7 | ✅ DRAFT COMPLETE | L | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls |
 | 8 | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains |
 | 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
-| 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
+| 10 | ✅ DRAFT COMPLETE | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate |
 | 11 | ⬜ | XL | Authoritative two-player online turn loop, reconnect, results, replay |
 | 11.5 | ⬜ | M | v1 explainability, onboarding, and replay inspection (§10) |
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |

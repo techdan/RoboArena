@@ -68,6 +68,34 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     await expect(timelines.getByText("No commands", { exact: true }).first()).toBeVisible();
     await planner.getByRole("button", { name: "Undo" }).click();
     await expect(timelines.getByText("Deploy", { exact: true })).toBeVisible();
+
+    await planner.getByRole("button", { name: "E", exact: true }).click();
+    await planner.getByRole("button", { name: "Aim & Fire", exact: true }).click();
+    await board.click({ position: { x: 108, y: 132 } });
+    await expect(planner.getByText(/Angle blocked/)).toBeVisible();
+    await planner.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await planner.getByRole("button", { name: "Aim & Fire", exact: true }).click();
+    await board.click({ position: { x: 564, y: 12 } });
+    await expect(planner.getByText(/Out of range/)).toBeVisible();
+    await planner.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await planner.getByRole("button", { name: "Aim & Fire", exact: true }).click();
+    await board.click({ position: { x: 204, y: 12 } });
+    await expect(planner.getByText(/Hypothetical target posture estimates/)).toBeVisible();
+    await planner.getByRole("button", { name: "Add Aim & Fire" }).click();
+    await expect(timelines.getByText("Aim & Fire", { exact: true })).toBeVisible();
+
+    await planner.getByRole("button", { name: "Scan & Fire", exact: true }).click();
+    await expect(planner.getByLabel("Maximum Distance")).toHaveValue("18");
+    await expect(planner.getByLabel("Seconds")).toHaveValue("11");
+    await planner.getByRole("button", { name: "Add Scan & Fire" }).click();
+    await expect(timelines.getByText("Scan & Fire", { exact: true })).toBeVisible();
+
+    await board.click({ position: { x: 204, y: 12 }, modifiers: ["Control", "Shift"] });
+    await expect(planner.getByRole("checkbox")).toBeChecked();
+    await planner.getByRole("button", { name: "Add Aim & Fire" }).click();
+    await expect(timelines.getByText("Aim & Fire", { exact: true })).toHaveCount(2);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

@@ -36,6 +36,13 @@ const isInteger = (value: unknown): value is number => Number.isInteger(value);
 const isTile = (value: unknown): boolean =>
   isObject(value) && isInteger(value.x) && isInteger(value.y);
 
+const isWeapon = (value: unknown): boolean =>
+  value === "rifle" ||
+  value === "burst-gun" ||
+  value === "auto-rifle" ||
+  value === "missile-launcher" ||
+  value === "grenade-launcher";
+
 const isSegment = (value: unknown): value is RobotCommandSegment => {
   if (!isObject(value) || typeof value.kind !== "string") return false;
   switch (value.kind) {
@@ -60,18 +67,16 @@ const isSegment = (value: unknown): value is RobotCommandSegment => {
     case "set-scan-direction":
       return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"].includes(String(value.heading));
     case "aim-and-fire":
-      return (
-        isTile(value.target) &&
-        typeof value.weapon === "string" &&
-        typeof value.repeat === "boolean"
-      );
+      return isTile(value.target) && isWeapon(value.weapon) && typeof value.repeat === "boolean";
     case "scan-and-fire":
       return (
-        typeof value.weapon === "string" &&
+        isWeapon(value.weapon) &&
         isInteger(value.maxDistance) &&
-        value.maxDistance >= 0 &&
+        value.maxDistance >= 1 &&
+        value.maxDistance <= 18 &&
         isInteger(value.seconds) &&
-        value.seconds > 0
+        value.seconds > 0 &&
+        value.seconds <= 40
       );
     default:
       return false;

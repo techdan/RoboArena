@@ -47,7 +47,7 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phases 2-7 and 9 are draft complete; Phase 8 is locally
+Phase 1R realignment and Phases 2-7 and 9-10 are draft complete; Phase 8 is locally
 implemented with its external WSS/two-network hosting gate still open; Phase
 1.5 tooling is complete:
 
@@ -62,7 +62,9 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   adapter and migrations remain part of the Phase 8 hosting gate.
 - The movement/posture/scan planner, exact per-selector timeline preview,
   tick-cost routing, versioned/reload-safe local draft recovery, direct
-  legal-prefix editing, and undo/redo are built; Phase 10 firing tools are next.
+  legal-prefix editing, undo/redo, firing dialogs, repeat fire, authorized
+  score estimates, and the inclusive scan-gate overlay are built. Phase 11's
+  authoritative turn loop is next.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

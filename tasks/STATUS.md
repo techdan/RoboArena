@@ -56,8 +56,9 @@ are exact for the version-locked binary.
 | Phase 7 — movie playback                        | ✅ **DRAFT COMPLETE** — deterministic snapshots, PixiJS/GSAP robots and effects, full transport/scrub/speed/idle controls, production visual baseline; 198 tests total |
 | Phase 8 — authoritative rooms                   | 🟨 **LOCALLY COMPLETE / HOSTING GATE OPEN** — strict v1 protocol, hashed rejoin ownership, reconnect/idempotency recovery, SQLite local/test storage, four-browser setup/start flow; Supabase Postgres adapter and external deployment remain open |
 | Phase 9 — movement/posture/scan planner         | ✅ **DRAFT COMPLETE** — authenticated match snapshot, tick-cost A*, exact per-selector preview, versioned conflict recovery, direct legal-prefix editing, undo/redo; 224 tests total |
+| Phase 10 — firing planner                       | ✅ **DRAFT COMPLETE** — Aim/Scan & Fire dialogs, repeat-fire shortcut, exact authorized score estimates, inclusive scan-gate overlay, terminal repeat timing; 228 tests total |
 | Assets (terrain + robots + effects)             | ✅ **SHIPPED & INTEGRATED** (2026-07-16) — Foundry Plate production set: 5 classes × 3 postures + turrets (generated), 11 effects, 3 markers; movie renderer consumes them with per-team paint recolor. Contract: `docs/asset-manifest.md`; regenerate robots via `scripts/generate-robot-assets.mjs` |
-| Phases 10–13 (firing/turn loop/polish)          | ⬜ Phase 10 is next; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1                                                               |
+| Phases 11–13 (turn loop/polish)                 | ⬜ Phase 11 is next; Phase 11.6 is the 3-/4-player online FFA gate; Phase 12 hot-seat/alliances is post-v1                                                               |
 | Phase 14 Stealth / Phase 15 non-Survival sports | ⏸ post-v1; hard-gated on shipped online FFA Survival                                                                                                                   |
 
 ## What the RE pass established (all in `docs/reverse-engineering.md`)

@@ -24,6 +24,7 @@ import type {
   TurnOrders,
 } from "../engine/types";
 import { findPath, isInBounds, tileAt } from "./pathfind";
+import { availableWeapons, PLANNER_WEAPON_RANGE, previewAim } from "./firingHelpers";
 
 export interface ProjectedRobot {
   readonly position: TileCoord | "dock";
@@ -103,7 +104,10 @@ export const timelineTiming = (
 ): readonly SegmentTiming[] => {
   let projected = initialProjection(robot);
   return segments.map((segment, index) => {
-    const durationTicks = segmentDuration(segment, projected);
+    const durationTicks =
+      segment.kind === "aim-and-fire" && segment.repeat
+        ? Math.max(WEAPON_TIMING[segment.weapon].firingIntervalTicks, budgetTicks - projected.tick)
+        : segmentDuration(segment, projected);
     const startTick = projected.tick;
     const endTick = startTick + durationTicks;
     projected = applySegment(projected, segment, endTick);
@@ -283,9 +287,40 @@ export const validatedTimelinePrefix = (
       }
       if (!legal) break;
     }
+    if (segment.kind === "aim-and-fire") {
+      if (
+        !isInBounds(arena, segment.target) ||
+        !availableWeapons(robot).includes(segment.weapon) ||
+        previewAim({
+          arena,
+          shooter: {
+            ...robot,
+            position: projected.position,
+            posture: projected.posture,
+            scanHeading: projected.scanHeading,
+          },
+          target: segment.target,
+          weapon: segment.weapon,
+          authorizedContacts: [],
+        }).status !== "eligible"
+      ) {
+        break;
+      }
+    }
+    if (
+      segment.kind === "scan-and-fire" &&
+      (!availableWeapons(robot).includes(segment.weapon) ||
+        segment.maxDistance < 1 ||
+        segment.maxDistance > PLANNER_WEAPON_RANGE[segment.weapon] ||
+        segment.seconds < 1 ||
+        segment.seconds > 40)
+    ) {
+      break;
+    }
     const endTick = projected.tick + segmentDuration(segment, projected);
     projected = applySegment(projected, segment, endTick);
     valid.push(segment);
+    if (segment.kind === "aim-and-fire" && segment.repeat) break;
   }
   return { segments: valid, droppedCount: segments.length - valid.length };
 };

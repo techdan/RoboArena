@@ -12,6 +12,7 @@ import type {
   RobotCommandSegment,
   TileCoord,
   TurnOrders,
+  WeaponId,
 } from "../../engine/types";
 import { loadPlannerDraft, savePlannerDraft } from "../../planner/draft";
 import { plannerReducer, createPlannerState } from "../../planner/state";
@@ -28,8 +29,17 @@ import {
   validatedTimelinePrefix,
 } from "../../planner/segments";
 import { tileAt } from "../../planner/pathfind";
+import {
+  availableWeapons,
+  defaultScanSettings,
+  PLANNER_WEAPON_RANGE,
+  previewAim,
+  type AuthorizedContact,
+} from "../../planner/firingHelpers";
+import { AimAndFireDialog } from "./AimAndFireDialog";
 import { ArenaCanvas, type PlannerRobotView } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
+import { ScanAndFireDialog } from "./ScanAndFireDialog";
 import { Timeline } from "./Timeline";
 
 const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoord[] => {
@@ -47,6 +57,20 @@ interface EditingCommand {
   readonly robotId: string;
   readonly index: number;
 }
+
+interface AimDialogState {
+  readonly target: TileCoord;
+  readonly weapon: WeaponId;
+  readonly repeat: boolean;
+}
+
+interface ScanDialogState {
+  readonly weapon: WeaponId;
+  readonly maxDistance?: number;
+  readonly seconds?: number;
+}
+
+const AUTHORIZED_CONTACTS: readonly AuthorizedContact[] = [];
 
 const browserLocalStorage = (): Storage | null => {
   try {
@@ -103,6 +127,10 @@ export function PlannerExperience({
   });
   const [selectedRobotId, setSelectedRobotId] = useState(team.robots[0]?.id ?? "");
   const [editing, setEditing] = useState<EditingCommand | null>(null);
+  const [aimTool, setAimTool] = useState(false);
+  const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
+  const [scanDialog, setScanDialog] = useState<ScanDialogState | null>(null);
+  const [scanOverlayDistance, setScanOverlayDistance] = useState(18);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [previewTick, setPreviewTick] = useState(budgetTicks);
@@ -131,6 +159,18 @@ export function PlannerExperience({
       ? selectedTimeline.segments
       : selectedTimeline.segments.slice(0, editingIndex),
   );
+  const projectedShooter = useMemo(
+    () => ({
+      ...selectedRobot,
+      position: projected.position,
+      posture: projected.posture,
+      scanHeading: projected.scanHeading,
+    }),
+    [projected.position, projected.posture, projected.scanHeading, selectedRobot],
+  );
+  const selectedEndTick =
+    timelineTiming(selectedRobot, selectedTimeline.segments, budgetTicks).at(-1)?.endTick ?? 0;
+  const weapons = availableWeapons(selectedRobot);
   const homeTiles = useMemo(
     () =>
       new Set(
@@ -142,20 +182,37 @@ export function PlannerExperience({
     if (cursor === null || projected.position === "dock") return null;
     return planMovement(match.arena, projected.position, cursor, projected.posture);
   }, [cursor, match.arena, projected.position, projected.posture]);
+  const aimCursorPreview = useMemo(
+    () =>
+      !aimTool || cursor === null
+        ? null
+        : previewAim({
+            arena: match.arena,
+            shooter: projectedShooter,
+            target: cursor,
+            weapon: weapons[0]!,
+            authorizedContacts: AUTHORIZED_CONTACTS,
+          }),
+    [aimTool, cursor, match.arena, projectedShooter, weapons],
+  );
   const cursorState =
     cursor === null
       ? "out-of-bounds"
-      : projected.position === "dock"
-        ? !homeTiles.has(`${cursor.x},${cursor.y}`)
-          ? "out-of-home"
-          : canTraverse(projected.posture, tileAt(match.arena, cursor)?.terrain ?? "wall")
-            ? "valid"
-            : "blocked"
-        : hoverPlan?.kind === "error"
-          ? hoverPlan.reason === "unreachable"
-            ? "blocked"
-            : hoverPlan.reason
-          : "valid";
+      : aimCursorPreview !== null
+        ? aimCursorPreview.status === "eligible"
+          ? "valid"
+          : "blocked"
+        : projected.position === "dock"
+          ? !homeTiles.has(`${cursor.x},${cursor.y}`)
+            ? "out-of-home"
+            : canTraverse(projected.posture, tileAt(match.arena, cursor)?.terrain ?? "wall")
+              ? "valid"
+              : "blocked"
+          : hoverPlan?.kind === "error"
+            ? hoverPlan.reason === "unreachable"
+              ? "blocked"
+              : hoverPlan.reason
+            : "valid";
 
   useEffect(() => {
     const storage = browserLocalStorage();
@@ -183,6 +240,9 @@ export function PlannerExperience({
   const edit = (next: TurnOrders, message: string) => {
     dispatch({ type: "edit", orders: next });
     setEditing(null);
+    setAimTool(false);
+    setAimDialog(null);
+    setScanDialog(null);
     setNotice(message);
     setPreviewTick(budgetTicks);
   };
@@ -225,18 +285,43 @@ export function PlannerExperience({
   const selectRobot = (robotId: string) => {
     setSelectedRobotId(robotId);
     setEditing(null);
+    setAimTool(false);
+    setAimDialog(null);
+    setScanDialog(null);
   };
   const beginEdit = (robotId: string, index: number) => {
     setSelectedRobotId(robotId);
     setEditing({ robotId, index });
     setPreviewTick(budgetTicks);
+    const segment = timelineForRobot(orders, robotId).segments[index];
+    if (segment?.kind === "aim-and-fire") {
+      setAimDialog({ target: segment.target, weapon: segment.weapon, repeat: segment.repeat });
+      setNotice(`Editing Aim & Fire command ${index + 1}.`);
+      return;
+    }
+    if (segment?.kind === "scan-and-fire") {
+      setScanDialog({
+        weapon: segment.weapon,
+        maxDistance: segment.maxDistance,
+        seconds: segment.seconds,
+      });
+      setScanOverlayDistance(segment.maxDistance);
+      setNotice(`Editing Scan & Fire command ${index + 1}.`);
+      return;
+    }
     setNotice(`Editing command ${index + 1}. Choose a tile, posture, or heading to replace it.`);
   };
   const changeHistory = (type: "undo" | "redo") => {
     dispatch({ type });
     setEditing(null);
+    setAimDialog(null);
+    setScanDialog(null);
+    setAimTool(false);
   };
-  const chooseTile = (tile: TileCoord) => {
+  const chooseTile = (
+    tile: TileCoord,
+    modifiers: { readonly ctrl: boolean; readonly shift: boolean },
+  ) => {
     if (projected.position === "dock") {
       if (!homeTiles.has(`${tile.x},${tile.y}`)) {
         setNotice("Out of home — deployment must begin inside your assigned Home Area.");
@@ -247,6 +332,19 @@ export function PlannerExperience({
         return;
       }
       commitSegment({ kind: "deploy", to: tile }, `Deploy programmed at ${tile.x},${tile.y}.`);
+      return;
+    }
+    if ((modifiers.ctrl && modifiers.shift) || aimTool) {
+      setAimDialog({
+        target: tile,
+        weapon: weapons[0]!,
+        repeat: modifiers.ctrl && modifiers.shift,
+      });
+      setNotice(
+        modifiers.ctrl && modifiers.shift
+          ? `Repeat Aim & Fire target selected at ${tile.x},${tile.y}.`
+          : `Aim & Fire target selected at ${tile.x},${tile.y}.`,
+      );
       return;
     }
     const plan = planMovement(match.arena, projected.position, tile, projected.posture);
@@ -283,8 +381,6 @@ export function PlannerExperience({
       `Scan heading ${heading} added · 5 ticks.`,
     );
   };
-  const selectedEndTick =
-    timelineTiming(selectedRobot, selectedTimeline.segments, budgetTicks).at(-1)?.endTick ?? 0;
   const robotViews: readonly PlannerRobotView[] = team.robots.map((robot, index) => {
     const view = projectRobotAtTick(
       robot,
@@ -302,6 +398,17 @@ export function PlannerExperience({
       selected: robot.id === selectedRobot.id,
     };
   });
+  const scanOverlay =
+    projected.position === "dock" || (!aimTool && aimDialog === null && scanDialog === null)
+      ? null
+      : {
+          origin: projected.position,
+          heading: projected.scanHeading,
+          maxDistance:
+            scanDialog === null
+              ? PLANNER_WEAPON_RANGE[aimDialog?.weapon ?? weapons[0]!]
+              : scanOverlayDistance,
+        };
 
   const keepOrRecoverConflict = () => {
     const conflictOrders = state.conflictOrders;
@@ -337,6 +444,15 @@ export function PlannerExperience({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && (aimTool || aimDialog !== null || scanDialog !== null)) {
+        event.preventDefault();
+        setAimTool(false);
+        setAimDialog(null);
+        setScanDialog(null);
+        setEditing(null);
+        setNotice("Firing action canceled.");
+        return;
+      }
       if (!(event.ctrlKey || event.metaKey)) {
         const index = Number(event.key) - 1;
         if (Number.isInteger(index) && team.robots[index] !== undefined)
@@ -359,7 +475,7 @@ export function PlannerExperience({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedRobot.id, team.robots]);
+  }, [aimDialog, aimTool, scanDialog, selectedRobot.id, team.robots]);
 
   return (
     <main className="planner-page desktop-viewport-gate">
@@ -433,6 +549,7 @@ export function PlannerExperience({
             route={routeTiles(selectedTimeline.segments)}
             cursor={cursor}
             cursorState={cursorState}
+            scanOverlay={scanOverlay}
             onCursor={(tile) => {
               setCursor(tile);
               if (tile === null) setNotice("Out of bounds — move back inside the tactical grid.");
@@ -456,7 +573,27 @@ export function PlannerExperience({
           onHeading={addHeading}
           onUndo={() => changeHistory("undo")}
           onRedo={() => changeHistory("redo")}
-          onCancelEdit={() => setEditing(null)}
+          onCancelEdit={() => {
+            setEditing(null);
+            setAimDialog(null);
+            setScanDialog(null);
+          }}
+          fireDisabled={projected.position === "dock"}
+          aimActive={aimTool}
+          onAim={() => {
+            setAimTool(true);
+            setScanDialog(null);
+            setNotice("Aim & Fire active — choose a target tile. Ctrl+Shift adds repeat fire.");
+          }}
+          onScanFire={() => {
+            const weapon = weapons[0]!;
+            const defaults = defaultScanSettings(weapon, budgetTicks - selectedEndTick);
+            setAimTool(false);
+            setAimDialog(null);
+            setScanDialog({ weapon });
+            setScanOverlayDistance(defaults.maxDistance);
+            setNotice("Configure how long and how far this robot should scan for a target.");
+          }}
           onReset={() =>
             edit(
               replaceTimeline(orders, selectedRobot.id, []),
@@ -465,6 +602,50 @@ export function PlannerExperience({
           }
         />
       </div>
+      {aimDialog === null ? null : (
+        <AimAndFireDialog
+          arena={match.arena}
+          shooter={projectedShooter}
+          target={aimDialog.target}
+          weapons={weapons}
+          initialWeapon={aimDialog.weapon}
+          initialRepeat={aimDialog.repeat}
+          authorizedContacts={AUTHORIZED_CONTACTS}
+          onCancel={() => {
+            setAimDialog(null);
+            setAimTool(false);
+            setEditing(null);
+          }}
+          onConfirm={(weapon, repeat) =>
+            commitSegment(
+              { kind: "aim-and-fire", target: aimDialog.target, weapon, repeat },
+              `${repeat ? "Repeat " : ""}Aim & Fire added at ${aimDialog.target.x},${aimDialog.target.y}.`,
+            )
+          }
+        />
+      )}
+      {scanDialog === null ? null : (
+        <ScanAndFireDialog
+          weapons={weapons}
+          initialWeapon={scanDialog.weapon}
+          {...(scanDialog.maxDistance === undefined
+            ? {}
+            : { initialMaxDistance: scanDialog.maxDistance })}
+          {...(scanDialog.seconds === undefined ? {} : { initialSeconds: scanDialog.seconds })}
+          remainingTicks={budgetTicks - selectedEndTick}
+          onDistanceChange={setScanOverlayDistance}
+          onCancel={() => {
+            setScanDialog(null);
+            setEditing(null);
+          }}
+          onConfirm={(weapon, maxDistance, seconds) =>
+            commitSegment(
+              { kind: "scan-and-fire", weapon, maxDistance, seconds },
+              `Scan & Fire added · ${maxDistance} tiles for ${seconds} seconds.`,
+            )
+          }
+        />
+      )}
     </main>
   );
 }

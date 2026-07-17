@@ -2,6 +2,7 @@
 
 import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2, X } from "lucide-react";
 import type { Heading, Posture } from "../../engine/types";
+import { FireBox } from "./FireBox";
 
 const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
 const HEADINGS: readonly Heading[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -19,6 +20,10 @@ export interface CommandPanelProps {
   readonly onRedo: () => void;
   readonly onCancelEdit: () => void;
   readonly onReset: () => void;
+  readonly fireDisabled: boolean;
+  readonly aimActive: boolean;
+  readonly onAim: () => void;
+  readonly onScanFire: () => void;
 }
 
 export function CommandPanel({
@@ -34,6 +39,10 @@ export function CommandPanel({
   onRedo,
   onCancelEdit,
   onReset,
+  fireDisabled,
+  aimActive,
+  onAim,
+  onScanFire,
 }: CommandPanelProps) {
   return (
     <aside className="planner-panel">
@@ -102,14 +111,7 @@ export function CommandPanel({
       </section>
       <section>
         <h3>Fire</h3>
-        <div className="locked-tools">
-          <button type="button" disabled>
-            Aim & Fire · Phase 10
-          </button>
-          <button type="button" disabled>
-            Scan & Fire · Phase 10
-          </button>
-        </div>
+        <FireBox disabled={fireDisabled} aimActive={aimActive} onAim={onAim} onScan={onScanFire} />
       </section>
       <div className="planner-budget">
         <span>Remaining horizon</span>

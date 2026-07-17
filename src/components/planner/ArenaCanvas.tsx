@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 import type { Application, Container } from "pixi.js";
 import type { Arena, Heading, Posture, RobotClass, TileCoord } from "../../engine/types";
 import { ARENA_ASSET_URLS, TERRAIN_ASSETS } from "../../renderer/assets";
+import { isTileInScanGate } from "../../planner/firingHelpers";
 
 const TILE_SIZE = 24;
 const TEAM_COLORS: Readonly<Record<string, number>> = {
@@ -40,8 +41,16 @@ export interface ArenaCanvasProps {
   readonly route: readonly TileCoord[];
   readonly cursor: TileCoord | null;
   readonly cursorState: "valid" | "blocked" | "out-of-home" | "out-of-bounds";
+  readonly scanOverlay: {
+    readonly origin: TileCoord;
+    readonly heading: Heading;
+    readonly maxDistance: number;
+  } | null;
   readonly onCursor: (tile: TileCoord | null) => void;
-  readonly onChooseTile: (tile: TileCoord) => void;
+  readonly onChooseTile: (
+    tile: TileCoord,
+    modifiers: { readonly ctrl: boolean; readonly shift: boolean },
+  ) => void;
 }
 
 export function ArenaCanvas({
@@ -50,6 +59,7 @@ export function ArenaCanvas({
   route,
   cursor,
   cursorState,
+  scanOverlay,
   onCursor,
   onChooseTile,
 }: ArenaCanvasProps) {
@@ -127,6 +137,21 @@ export function ArenaCanvas({
     void (async () => {
       const { Graphics, Text } = await import("pixi.js");
       overlay.removeChildren().forEach((child) => child.destroy());
+      if (scanOverlay !== null) {
+        const gate = new Graphics();
+        for (let y = 0; y < arena.height; y += 1) {
+          for (let x = 0; x < arena.width; x += 1) {
+            const dx = x - scanOverlay.origin.x;
+            const dy = y - scanOverlay.origin.y;
+            if (Math.floor(Math.sqrt(dx * dx + dy * dy)) > scanOverlay.maxDistance) continue;
+            const eligible = isTileInScanGate(scanOverlay.origin, scanOverlay.heading, { x, y });
+            gate
+              .rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+              .fill({ color: eligible ? 0x86efac : 0xfb7185, alpha: eligible ? 0.09 : 0.075 });
+          }
+        }
+        overlay.addChild(gate);
+      }
       if (route.length > 0) {
         const line = new Graphics();
         const first = route[0];
@@ -182,7 +207,17 @@ export function ArenaCanvas({
       );
       app.render();
     })();
-  }, [cursor, cursorState, keyboardTile, robots, route, status]);
+  }, [
+    arena.height,
+    arena.width,
+    cursor,
+    cursorState,
+    keyboardTile,
+    robots,
+    route,
+    scanOverlay,
+    status,
+  ]);
 
   const tileFromPointer = (
     event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>,
@@ -216,7 +251,9 @@ export function ArenaCanvas({
       onPointerLeave={(event) => {
         if (document.activeElement !== event.currentTarget) onCursor(null);
       }}
-      onClick={(event) => onChooseTile(tileFromPointer(event))}
+      onClick={(event) =>
+        onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey })
+      }
       onKeyDown={(event) => {
         const delta =
           event.key === "ArrowUp"
@@ -238,12 +275,22 @@ export function ArenaCanvas({
           onCursor(next);
         } else if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onChooseTile(keyboardTile);
+          onChooseTile(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
         }
       }}
       data-cursor-state={cursorState}
     >
       <div ref={hostRef} className="absolute inset-0" />
+      {scanOverlay === null ? null : (
+        <div className="scan-gate-legend" aria-label="Scan gate overlay legend">
+          <span>
+            <i data-kind="eligible" /> Eligible angle
+          </span>
+          <span>
+            <i data-kind="blocked" /> Angle blocked
+          </span>
+        </div>
+      )}
       {status !== "ready" ? (
         <div className="planner-canvas-loading" role="status">
           {status === "error" ? "Renderer unavailable" : "Loading tactical grid…"}
