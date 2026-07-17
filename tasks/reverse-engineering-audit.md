@@ -39,7 +39,7 @@ pool enemy scan contacts/last-known markers, and Final Ceremony contributions
 aggregate by Side. Team Name boxes provide non-compacting Home slots and
 canonical Team order. Phase 11.6 therefore retains online three-/four-player
 free-for-all integration and end-to-end testing gates. The traced alliance
-behavior is retained for post-v1 Phase 16, with no known original-code
+behavior is retained for post-v1 Phase 13.5, with no known original-code
 business-rule gate.
 
 ## Reproduction and independent checks
@@ -202,8 +202,9 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
 - Phase 15 owns Treasure Hunt, Capture the Flag, Hostage, Baseball, their setup
   objects/commands, and their scoring.
 - Phase 11.6 owns 3-/4-player online FFA integration, explicit non-compacting
-  Home slots, private orders/reconnect, and four-player tests. Phase 16 owns the
-  later hot-seat adapter and already-closed alliance semantics.
+  Home slots, private orders/reconnect, and four-player tests. Phase 13.5 owns
+  the already-closed alliance semantics for online rooms; Phase 16 later adds
+  only the hot-seat/local-device adapter and privacy handoff.
 - AI, complete formation rosters, point-buy source, and extra weapon grants are
   later parity work.
 - Exact projectile screen travel speed is a renderer tuning value. Combat

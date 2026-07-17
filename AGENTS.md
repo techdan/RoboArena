@@ -25,7 +25,8 @@ Important scope constraints:
 - The v1 server is authoritative and durable. Private orders and hidden state
   must never be exposed to opponents. Players may submit, leave, return later,
   watch unseen turns, and then plan; ordinary service restart must recover.
-- Hot-seat and multiple Teams per Side/alliance modes are v2 features.
+- Online alliance/multiple-Team Side modes are post-v1 Phase 13.5; hot-seat and
+  shared-device orchestration remain last in Phase 16.
 - Survival sport mode only for v1.
 - Desktop mouse + keyboard and iPad touch in landscape are v1 targets. Phones
   and native mobile-app packaging remain post-v1.

@@ -1093,12 +1093,14 @@ and do not expose private information. Passing this phase means **v1 complete**.
 
 ---
 
-### Phase 13 — post-v1 presentation polish, art, and expanded performance [⏸ POST-v1]
+### Phase 13 — post-v1 core-battle polish and enhancements [⏸ POST-v1]
 
-**Goal**: improve presentation after the functional v1 ships: replace or refine
-vector placeholders where playtesting justifies it, broaden visual regression
-coverage, tune animation and rendering performance beyond the Phase 12 floor,
-and add nonessential responsive/connection-state polish.
+**Goal**: polish and deepen the shipped core Survival battle game before adding
+new game modes. Replace or refine vector placeholders where playtesting
+justifies it, broaden visual regression coverage, tune animation and rendering
+performance beyond the Phase 12 floor, and add nonessential responsive,
+connection-state, usability, and balance-preserving quality-of-life
+enhancements.
 
 **Dependencies**: shipped Phase 12 and playtest feedback.
 
@@ -1114,10 +1116,43 @@ SVG/vector art is sufficient for the v1 gate.
 
 ---
 
+### Phase 13.5 — online alliance and shared-Side modes [⏸ POST-v1 CORE BATTLE]
+
+**Goal**: extend the core online Survival game from unique-Side free-for-all to
+multiple Teams sharing a Side. Alliance play remains separate-device and
+server-authoritative; shared-device privacy handoff belongs only to Phase 16.
+
+**Dependencies**: shipped Phase 12 and the Phase 13 core-battle polish pass.
+
+**Implementation work**:
+
+- allow the host to configure 2v2, 3v1, and other legal online Side assignments
+  while preserving one independently owned Team per connected player;
+- enforce same-Side direct-fire and Scan & Fire exclusion while retaining
+  explosive friendly damage;
+- keep allies always visible, but keep enemy contacts and last-known markers
+  private to each Team rather than pooling them across the Side;
+- aggregate Final Ceremony Team contributions by Side and repeat the shared Side
+  total on each allied Team row;
+- preserve explicit non-compacting Home slots and canonical Team order for every
+  Side layout;
+- version setup, room, match, and replay schemas so Team ownership and Side
+  membership remain distinct without breaking v1 free-for-all replays.
+
+**Acceptance tests**: v1 online FFA regression, separate-device 2v2 and 3v1,
+allied direct-fire immunity, allied blast damage, private allied contacts,
+Side-shared ceremony totals, nonadjacent Home slots, disconnect/rejoin, and
+byte-identical deterministic replay for every supported configuration.
+
+**Effort**: L.
+
+---
+
 ### Phase 14 — Stealth parity [⏸ POST-v1]
 
-**Hard gate**: the Phase 12 online FFA v1 release must pass before any Phase 14
-implementation begins. Phase 13 presentation polish is not a dependency.
+**Hard gate**: the Phase 12 online FFA v1 release and Phase 13.5 alliance gate
+must pass before any Phase 14 implementation begins. Stealth acceptance must
+cover both enemy and allied visibility without pooling private contacts.
 
 **Goal**: add the original Stealth class end to end: Custom Game availability,
 visibility behavior, ordinary/Aim/Scan interactions, last-known markers,
@@ -1135,8 +1170,9 @@ do not retrofit speculative Stealth gameplay branches during Phases 1–11.
 
 ### Phase 15 — Non-Survival sports [⏸ POST-v1]
 
-**Hard gate**: the online FFA Survival v1 must ship before any Phase 15
-implementation begins. This phase is independent of Stealth and hot-seat.
+**Hard gate**: the online FFA Survival v1 and Phase 13.5 alliance modes must ship
+before any Phase 15 implementation begins. This phase is independent of Stealth
+and hot-seat.
 
 **Goal**: audit and implement Treasure Hunt, Capture the Flag, Hostage, and
 Baseball, including their setup objects, planner verbs, resolver rules,
@@ -1151,32 +1187,33 @@ time; Survival behavior must not be generalized speculatively beforehand.
 
 ---
 
-### Phase 16 — v2 local/hot-seat and alliance modes [⏸ POST-v1]
+### Phase 16 — v2 local/hot-seat modes [⏸ POST-v1 LAST]
 
-**Goal**: add the modes intentionally excluded from the internet FFA v1:
-multiple local players sharing a device and multiple Teams sharing one Side.
-This phase consumes the original-code alliance audit without burdening the v1
-protocol or UI with unused branches.
+**Goal**: add multiple local players sharing a device after the online core
+battle and additional game modes are established. Reuse Phase 13.5 Side and
+alliance semantics; this phase owns only local-device orchestration, privacy
+handoff, and input/session UX.
 
-**Dependencies**: shipped Phase 12 and stable production telemetry from v1.
+**Dependencies**: Phase 13.5 alliance modes, Phase 14 Stealth, Phase 15
+non-Survival sports, and stable production telemetry. This phase is
+intentionally last.
 
 **Implementation work**:
 
 - local/hot-seat room adapter that uses the same authoritative phase machine,
   with a privacy handoff screen and per-player lock-in;
-- configuration UI for 2v2, 3v1, and other legal Side assignments;
-- same-Side direct-fire and Scan & Fire exclusion; explosive friendly damage;
-- allies always visible, but enemy contacts/last-known markers remain private to
-  each Team and are never pooled by Side;
-- Final Ceremony aggregates Team contributions by Side and repeats the shared
-  total on allied rows;
-- replay/protocol versioning that represents Team ownership separately from
-  Side without breaking v1 FFA files.
+- local participant/session ownership that cannot reveal the next player's
+  planner, contacts, or unseen movie before the privacy handoff completes;
+- local setup for every shipped online game mode, reusing the Phase 13.5 Side
+  configuration and the same deterministic resolver/replay contracts as online
+  rooms;
+- keyboard, mouse, and supported touch handoff flows without weakening online
+  authentication or private-projection boundaries.
 
-**Acceptance tests**: v1 online FFA regression, 2v2 and 3v1, allied direct-fire
-immunity, allied blast damage, private allied contacts, Side-shared ceremony
-totals, hot-seat information handoff, nonadjacent Home slots, and deterministic
-replay for every configuration.
+**Acceptance tests**: online mode regression, two- through four-player local FFA,
+local 2v2 and 3v1 using the Phase 13.5 rules, every shipped sport, Stealth,
+privacy handoff, unseen-turn playback ownership, nonadjacent Home slots, and
+deterministic replay for every configuration.
 
 **Effort**: L.
 
@@ -2005,14 +2042,16 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
 | 11.6    | ⬜ FUNCTIONAL GATE                 | L      | Three-/four-player online free-for-all hardening                                                              |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                         |
-| 13      | ⏸ POST-v1                          | L      | Nonblocking presentation polish, art refinement, and expanded performance work                                |
+| 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                     |
+| 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                     |
 | 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                |
 | 15      | ⏸ POST-MAIN-GAME                   | XL     | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring                                 |
-| 16      | ⏸ POST-v1                          | L      | Hot-seat/local adapter and allied/multi-Team Side modes                                                       |
+| 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                             |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
 5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 12. The concise gate-by-gate
 sequence is in `tasks/core-build-plan.md`. Phase 13 presentation polish and
-Phase 16 hot-seat/alliance work are post-v1 and are not on this path. Phases 14
-and 15 are hard-gated on the shipped online Survival v1: neither Stealth nor any
-non-Survival sport may enter the main-game critical path first.
+Phases 13.5–16 are post-v1 and are not on this path. The post-v1 core-battle
+sequence is Phase 13 polish → Phase 13.5 online alliances → Phase 14 Stealth;
+Phase 15 additional sports also requires Phase 13.5, and Phase 16 hot-seat is
+last. Neither Stealth nor a non-Survival sport may enter the v1 critical path.

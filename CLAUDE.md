@@ -107,8 +107,9 @@ and Pointer Events-based iPad planner/movie controls.
 
 **Everything after Phase 11.5 (not yet built)** — Phase 11.6 multiplayer
 hardening followed by the Phase 12 production, resilience, real-network, and
-physical-iPad v1 ship gate. Phase 13 presentation polish is nonblocking post-v1
-work.
+physical-iPad v1 ship gate. Phase 13 polishes and enhances the core battle game;
+Phase 13.5 then adds online alliances before Stealth or additional sports, while
+Phase 16 keeps hot-seat/local-device work last.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`
@@ -167,7 +168,8 @@ This is a "fun game with friends" project, not a production-grade SaaS. Many thi
 - No production observability (Sentry, metrics, alerts)
 - No internationalization, no analytics, no cookie banner, no license/legal text
 - No AI players
-- Online rooms are v1; hot-seat and alliance/team modes are v2
+- Online free-for-all rooms are v1; online alliance/team modes arrive in Phase
+  13.5 and hot-seat/local-device modes remain last in Phase 16
 - No phone UI or native mobile/tablet app; browser-based iPadOS Safari in
   landscape is supported in v1
 - No account system; an opaque server-issued token restores one room seat

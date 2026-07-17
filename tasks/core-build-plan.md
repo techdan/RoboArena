@@ -208,9 +208,11 @@ playable end to end.
 - Arena import review is required before the first renderer arena. Terrain is
   row-major; homes use exact generated spans; Dock is off-field state.
 - Exact Scan & Fire behavior: required at Phase 4, not Phase 2.
-- Hot-seat and multiple Teams per Side/alliance modes are post-v1 Phase 16.
-- Stealth is Phase 14 and all non-Survival sports are Phase 15. Both are hard
-  gated on the complete online FFA Survival v1.
+- Online alliance/multiple-Team Side modes are post-v1 Phase 13.5. They land
+  before Stealth or additional sports and do not depend on hot-seat.
+- Stealth is Phase 14 and all non-Survival sports are Phase 15. Both are gated
+  on Phase 13.5 alliance support as well as the complete online FFA Survival v1.
+- Shared-device hot-seat orchestration is Phase 16 and remains last.
 - Other formations, AI, extra weapons, full help/tutorial, audio, phone/native
   mobile apps, and production-scale infrastructure are post-v1 or explicitly
   later phases. Browser-based iPad touch in landscape is part of v1.

@@ -148,7 +148,9 @@ second resolver or divergent rules implementation.
    flexible presentation speed, and post-turn explanations without changing
    combat rules.
 4. Harden 2-, 3-, and 4-player free-for-all play through Phase 11.6.
-5. Add hot-seat and alliance/multiple-Team Sides in v2 using the audited rules.
-6. Evaluate pending impacts, continuous/reaction scanning, and other
+5. Add online alliance/multiple-Team Sides in Phase 13.5 using the audited rules.
+6. Add hot-seat/local-device orchestration last in Phase 16, reusing the online
+   alliance and deterministic room contracts.
+7. Evaluate pending impacts, continuous/reaction scanning, and other
    balance-changing redesigns as an explicit RoboArena ruleset, while retaining
    an Original-compatible rules preset if practical.
