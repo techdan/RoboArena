@@ -32,4 +32,17 @@ describe("room protocol schemas", () => {
         .success,
     ).toBe(false);
   });
+
+  it("requires a participant token for canonical planner snapshots", () => {
+    const valid = {
+      version: 1,
+      requestId: "match-1",
+      kind: "GetMatchState",
+      code: "ABC234",
+      token: "x".repeat(43),
+    };
+    expect(clientMessageSchema.safeParse(valid).success).toBe(true);
+    expect(clientMessageSchema.safeParse({ ...valid, token: undefined }).success).toBe(false);
+    expect(clientMessageSchema.safeParse({ ...valid, hiddenOrders: [] }).success).toBe(false);
+  });
 });

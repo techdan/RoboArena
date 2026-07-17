@@ -47,6 +47,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
         setError(message.message);
         return;
       }
+      if (message.kind !== "RoomSnapshot") return;
       setRoom(message.room);
       setSelfPlayerId(message.selfPlayerId);
       setError(undefined);

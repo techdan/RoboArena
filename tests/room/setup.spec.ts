@@ -36,9 +36,28 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     expect(new Set(pages.map((page) => page.url())).size).toBe(1);
     await Promise.all(
       pages.map((page) =>
-        expect(page.getByRole("heading", { name: "Your seat is secured" })).toBeVisible(),
+        expect(page.getByRole("heading", { name: /command board/ })).toBeVisible(),
       ),
     );
+    const planner = pages[0]!;
+    const board = planner.getByRole("application", { name: /planning board/ });
+    await board.click({ position: { x: 492, y: 12 } });
+    await expect(planner.getByText(/Out of home/)).toBeVisible();
+    await board.click({ position: { x: 12, y: 12 } });
+    await expect(planner.getByText("Deploy", { exact: true })).toBeVisible();
+    await board.click({ position: { x: 36, y: 36 } });
+    await expect(planner.getByText(/Blocked/)).toBeVisible();
+    await board.click({ position: { x: 108, y: 12 } });
+    await expect(planner.getByText("Move route", { exact: true })).toBeVisible();
+    await planner.getByRole("button", { name: "ducking" }).click();
+    await planner.getByRole("button", { name: "S", exact: true }).click();
+    const timelines = planner.getByRole("region", { name: "Command timelines" });
+    await expect(timelines.getByText("Posture", { exact: true })).toBeVisible();
+    await expect(timelines.getByText("Scan heading", { exact: true })).toBeVisible();
+    await planner.getByRole("button", { name: "Undo" }).click();
+    await expect(timelines.getByText("Scan heading", { exact: true })).not.toBeVisible();
+    await planner.getByRole("button", { name: "Redo" }).click();
+    await expect(timelines.getByText("Scan heading", { exact: true })).toBeVisible();
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

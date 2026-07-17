@@ -6,6 +6,8 @@
  * marked PROVISIONAL with their RE §20 item.
  */
 
+import type { WeaponId } from "./types.js";
+
 // ──────────────────────────────────────────────────────────────────────────
 // Time
 
@@ -17,6 +19,20 @@ export const MOVIE_FPS_OPTIONS = [20, 15, 12, 10, 6, 5, 4, 3] as const;
 
 /** Original default (choice index 2); independent from engine simulation ticks. */
 export const MOVIE_FPS = 12;
+
+/** Confirmed Aim/Scan firing cadence (RE §19; docs/spec.md §4). */
+export const WEAPON_TIMING: Readonly<
+  Record<
+    WeaponId,
+    { readonly firingIntervalTicks: number; readonly scanFiringIntervalTicks: number }
+  >
+> = {
+  rifle: { firingIntervalTicks: 30, scanFiringIntervalTicks: 30 },
+  "burst-gun": { firingIntervalTicks: 15, scanFiringIntervalTicks: 20 },
+  "auto-rifle": { firingIntervalTicks: 10, scanFiringIntervalTicks: 10 },
+  "missile-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 20 },
+  "grenade-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 20 },
+};
 
 export const TURN_DURATION_SECONDS_DEFAULT = 15;
 export const TURN_DURATION_TICKS_DEFAULT = TURN_DURATION_SECONDS_DEFAULT * TICKS_PER_SECOND;

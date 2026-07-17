@@ -47,7 +47,7 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phases 2-7 are draft complete; Phase 8 is locally
+Phase 1R realignment and Phases 2-7 and 9 are draft complete; Phase 8 is locally
 implemented with its external WSS/two-network hosting gate still open; Phase
 1.5 tooling is complete:
 
@@ -60,10 +60,11 @@ implemented with its external WSS/two-network hosting gate still open; Phase
 - The authoritative WebSocket room service, SQLite WAL local/test storage, and
   2-4 player setup UI are built. Production targets Supabase Postgres; its
   adapter and migrations remain part of the Phase 8 hosting gate.
-- Planner work is next after the Phase 8 external hosting gate is verified.
+- The movement/posture/scan planner, exact timeline, multi-robot preview,
+  reload-safe local draft, and undo/redo are built; Phase 10 firing tools are next.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
-Zustand remains planned for interactive planner state.
+Phase 9 uses an immutable local reducer; Zustand is not required yet.
 
 ## Commands
 

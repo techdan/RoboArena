@@ -1,6 +1,7 @@
 /** Versioned runtime-validated room protocol shared by browsers and server. */
 
 import { z } from "zod";
+import type { LastKnownMarker, MatchState } from "../../engine/types";
 import {
   playerColorSchema,
   playerNameSchema,
@@ -72,6 +73,14 @@ export const clientMessageSchema = z.discriminatedUnion("kind", [
       token: tokenSchema,
     })
     .strict(),
+  z
+    .object({
+      ...envelope,
+      kind: z.literal("GetMatchState"),
+      code: roomCodeSchema,
+      token: tokenSchema,
+    })
+    .strict(),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -106,6 +115,23 @@ export interface RoomSnapshotMessage {
   readonly participantToken?: string;
 }
 
+export type SerializedMatchState = Omit<MatchState, "lastKnownMarkers"> & {
+  readonly lastKnownMarkers: readonly {
+    readonly teamId: string;
+    readonly markers: readonly LastKnownMarker[];
+  }[];
+};
+
+export interface MatchSnapshotMessage {
+  readonly version: typeof PROTOCOL_VERSION;
+  readonly requestId: string;
+  readonly kind: "MatchSnapshot";
+  readonly roomCode: string;
+  readonly matchId: string;
+  readonly selfPlayerId: string;
+  readonly match: SerializedMatchState;
+}
+
 export type ProtocolErrorCode =
   | "INVALID_MESSAGE"
   | "ROOM_NOT_FOUND"
@@ -127,7 +153,12 @@ export interface ProtocolErrorMessage {
   readonly message: string;
 }
 
-export type ServerMessage = RoomSnapshotMessage | ProtocolErrorMessage;
+export type ServerMessage = RoomSnapshotMessage | MatchSnapshotMessage | ProtocolErrorMessage;
+
+export const deserializeMatchState = (value: SerializedMatchState): MatchState => ({
+  ...value,
+  lastKnownMarkers: new Map(value.lastKnownMarkers.map((entry) => [entry.teamId, entry.markers])),
+});
 
 export const parseClientMessage = (value: unknown): ClientMessage =>
   clientMessageSchema.parse(value);

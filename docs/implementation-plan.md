@@ -650,7 +650,7 @@ real WSS/two-network restart check is not yet claimed.
 
 ---
 
-### Phase 9 — Planner UI: movement + posture + scan [⬜]
+### Phase 9 — Planner UI: movement + posture + scan [✅ DRAFT COMPLETE]
 
 **Goal**: turn programming for the simplest commands. Player drags / clicks to plan a movement path; toggles posture; sets scan direction. The planner shows the timeline at the top and validates each command (path validity, scan-cone bounds) live.
 
@@ -661,7 +661,7 @@ real WSS/two-network restart check is not yet claimed.
 - `src/components/planner/Timeline.tsx` — top bar with cumulative time
 - `src/components/planner/CommandPanel.tsx` — Tools panel: Posture, Scan, Weapon, Fire buttons
 - `src/components/planner/ArenaCanvas.tsx` — interactive Pixi arena that handles clicks
-- `src/planner/state.ts` — Zustand store (or Context) for current `TurnOrders` being built
+- `src/planner/state.ts` — immutable reducer for current `TurnOrders` and conflict recovery
 - `src/planner/pathfind.ts` — A* on the arena tile grid for movement paths
 - `src/planner/segments.ts` — helpers to append/edit/delete `RobotCommandSegment`s
 - `src/planner/history.ts` — bounded undo/redo history for the local draft
@@ -680,12 +680,17 @@ real WSS/two-network restart check is not yet claimed.
   explicit conflict/recovery path
 
 **Acceptance criteria**:
-- [ ] Player can deploy a robot, walk it across the arena, change posture, set scan direction, all visible on the timeline
-- [ ] Multi-robot timeline preview works: planning robot B at tick X shows robot A's projected position at tick X (DOS-confirmed UX)
-- [ ] "Out of home", "blocked", "out of bounds" cursor states all surface
-- [ ] Every segment shows exact start/end ticks, route cost, remaining horizon,
+- [x] Player can deploy a robot, walk it across the arena, change posture, set scan direction, all visible on the timeline
+- [x] Multi-robot timeline preview works: planning robot B at tick X shows robot A's projected position at tick X (DOS-confirmed UX)
+- [x] "Out of home", "blocked", "out of bounds" cursor states all surface
+- [x] Every segment shows exact start/end ticks, route cost, remaining horizon,
       and whether it creates a scan opportunity
-- [ ] Commands remain editable; undo/redo works until orders are locked
+- [x] Commands remain editable; undo/redo works until orders are locked
+
+**Implementation note**: the authenticated `GetMatchState` request supplies the
+canonical setup snapshot without exposing another player's draft. Browser-local
+drafts are restored after reload and a changed server revision opens an explicit
+keep-local/use-server recovery choice instead of overwriting unsent work.
 
 **Risks**:
 - Pixi click handling vs. React state — same risk as Phase 7
@@ -1693,7 +1698,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 6 | ✅ DRAFT COMPLETE | M | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import |
 | 7 | ✅ DRAFT COMPLETE | L | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls |
 | 8 | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains |
-| 9 | ⬜ | L | Planner UI: movement / posture / scan |
+| 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
 | 10 | ⬜ | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire) |
 | 11 | ⬜ | XL | Authoritative two-player online turn loop, reconnect, results, replay |
 | 11.5 | ⬜ | M | v1 explainability, onboarding, and replay inspection (§10) |

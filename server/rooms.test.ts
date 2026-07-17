@@ -6,6 +6,7 @@ import { WebSocket } from "ws";
 import {
   PROTOCOL_VERSION,
   type ClientMessage,
+  type MatchSnapshotMessage,
   type RoomSnapshotMessage,
   type ServerMessage,
 } from "../src/lib/net/protocol";
@@ -192,6 +193,35 @@ describe("WebSocket room integration", () => {
         resumed.every((access) => JSON.stringify(access.room) === JSON.stringify(resumed[0]!.room)),
       ).toBe(true);
       expect(resumed[0]!.room.players).toHaveLength(4);
+      await Promise.all(
+        accesses.map((access, index) =>
+          sendRequest(sockets[index]!, {
+            version: PROTOCOL_VERSION,
+            requestId: `ready-${index}`,
+            kind: "SetReady",
+            code: host.room.code,
+            token: requireToken(access.participantToken),
+            ready: true,
+          }),
+        ),
+      );
+      const started = await sendRequest(sockets[0]!, {
+        version: PROTOCOL_VERSION,
+        requestId: "start",
+        kind: "StartMatch",
+        code: host.room.code,
+        token: requireToken(host.participantToken),
+      });
+      const snapshot = await sendMatchRequest(sockets[0]!, {
+        version: PROTOCOL_VERSION,
+        requestId: "planner-state",
+        kind: "GetMatchState",
+        code: host.room.code,
+        token: requireToken(host.participantToken),
+      });
+      expect(snapshot.matchId).toBe(started.room.matchId);
+      expect(snapshot.match.teams).toHaveLength(4);
+      expect(snapshot.match.lastKnownMarkers).toEqual([]);
     } finally {
       for (const socket of sockets) socket.close();
       await server.close();
@@ -274,7 +304,26 @@ const sendRequest = <Message extends ClientMessage>(
       socket.off("message", onMessage);
       if (response.kind === "ProtocolError")
         reject(new Error(`${response.code}: ${response.message}`));
-      else resolveResponse(response);
+      else if (response.kind === "RoomSnapshot") resolveResponse(response);
+      else reject(new Error(`Unexpected ${response.kind} response.`));
+    };
+    socket.on("message", onMessage);
+    socket.send(JSON.stringify(message));
+  });
+
+const sendMatchRequest = (
+  socket: WebSocket,
+  message: Extract<ClientMessage, { readonly kind: "GetMatchState" }>,
+): Promise<MatchSnapshotMessage> =>
+  new Promise((resolveResponse, reject) => {
+    const onMessage = (data: WebSocket.RawData) => {
+      const response = JSON.parse(data.toString()) as ServerMessage;
+      if (response.requestId !== message.requestId) return;
+      socket.off("message", onMessage);
+      if (response.kind === "ProtocolError")
+        reject(new Error(`${response.code}: ${response.message}`));
+      else if (response.kind === "MatchSnapshot") resolveResponse(response);
+      else reject(new Error(`Unexpected ${response.kind} response.`));
     };
     socket.on("message", onMessage);
     socket.send(JSON.stringify(message));

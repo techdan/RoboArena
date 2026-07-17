@@ -2,6 +2,7 @@
 
 import type {
   ClientMessage,
+  MatchSnapshotMessage,
   ProtocolErrorCode,
   RoomSnapshotMessage,
   ServerMessage,
@@ -123,10 +124,18 @@ export class RoomSocket {
   }
 }
 
-export const requestOnce = async (message: ClientMessage): Promise<RoomSnapshotMessage> => {
+type GetMatchStateMessage = Extract<ClientMessage, { readonly kind: "GetMatchState" }>;
+
+export function requestOnce(message: GetMatchStateMessage): Promise<MatchSnapshotMessage>;
+export function requestOnce(
+  message: Exclude<ClientMessage, GetMatchStateMessage>,
+): Promise<RoomSnapshotMessage>;
+export async function requestOnce(
+  message: ClientMessage,
+): Promise<RoomSnapshotMessage | MatchSnapshotMessage> {
   const socket = new RoomSocket();
   try {
-    return await new Promise<RoomSnapshotMessage>((resolve, reject) => {
+    return await new Promise<RoomSnapshotMessage | MatchSnapshotMessage>((resolve, reject) => {
       let settled = false;
       const finish = (callback: () => void) => {
         if (settled) return;
@@ -139,7 +148,11 @@ export const requestOnce = async (message: ClientMessage): Promise<RoomSnapshotM
         if (response.requestId !== message.requestId) return;
         if (response.kind === "ProtocolError")
           finish(() => reject(new RoomRequestError(response.code, response.message)));
-        else finish(() => resolve(response));
+        else if (message.kind === "GetMatchState" && response.kind === "MatchSnapshot") {
+          finish(() => resolve(response));
+        } else if (message.kind !== "GetMatchState" && response.kind === "RoomSnapshot") {
+          finish(() => resolve(response));
+        }
       });
       const timeout = setTimeout(
         () => finish(() => reject(new Error("The room service did not respond in time."))),
@@ -150,4 +163,4 @@ export const requestOnce = async (message: ClientMessage): Promise<RoomSnapshotM
   } finally {
     socket.close();
   }
-};
+}

@@ -9,6 +9,7 @@ import {
   PROTOCOL_VERSION,
   parseClientMessageJson,
   type ClientMessage,
+  type MatchSnapshotMessage,
   type ProtocolErrorMessage,
   type RoomSnapshotMessage,
   type ServerMessage,
@@ -121,6 +122,8 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
         return service.setReady(message.code, message.token, message.ready);
       case "StartMatch":
         return service.startMatch(message.code, message.token);
+      case "GetMatchState":
+        throw new Error("Match snapshots use the authenticated snapshot path.");
     }
   };
 
@@ -168,7 +171,34 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
               broadcast(freshResponse.room.code);
               return;
             }
+            if (cached.kind === "MatchSnapshot" && message.kind === "GetMatchState") {
+              const access = service.resumeRoom(cached.roomCode, message.token);
+              subscribe(socket, access);
+            }
             send(socket, cached);
+            return;
+          }
+          if (message.kind === "GetMatchState") {
+            const access = service.resumeRoom(message.code, message.token);
+            const match = service.getMatchState(message.code, message.token);
+            subscribe(socket, access);
+            const response: MatchSnapshotMessage = {
+              version: PROTOCOL_VERSION,
+              requestId,
+              kind: "MatchSnapshot",
+              roomCode: message.code,
+              matchId: access.room.matchId!,
+              selfPlayerId: access.selfPlayerId,
+              match: {
+                ...match,
+                lastKnownMarkers: [...match.lastKnownMarkers].map(([teamId, markers]) => ({
+                  teamId,
+                  markers,
+                })),
+              },
+            };
+            storage.saveRequestResult(principal, requestId, response);
+            send(socket, response);
             return;
           }
           const access = await dispatch(message, issuedParticipantToken);

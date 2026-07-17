@@ -5,7 +5,7 @@
  * are binary-confirmed (RE §5/§7/§19).
  */
 
-import { WEAPON_MAX_RANGE } from "./constants.js";
+import { WEAPON_MAX_RANGE, WEAPON_TIMING } from "./constants.js";
 import type { RobotClass, RobotDefinition, WeaponDefinition, WeaponId } from "./types.js";
 
 export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
@@ -14,8 +14,7 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Rifle",
     kind: "bullet",
     bulletsPerClick: 1,
-    firingIntervalTicks: 30,
-    scanFiringIntervalTicks: 30,
+    ...WEAPON_TIMING.rifle,
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
     damageRoll: { base: 10, mask: 7 },
@@ -27,8 +26,7 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Burst Gun",
     kind: "burst",
     bulletsPerClick: 3,
-    firingIntervalTicks: 15,
-    scanFiringIntervalTicks: 20,
+    ...WEAPON_TIMING["burst-gun"],
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
     damageRoll: { base: 8, mask: 15 },
@@ -40,8 +38,7 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Machine Gun",
     kind: "bullet",
     bulletsPerClick: 1,
-    firingIntervalTicks: 10,
-    scanFiringIntervalTicks: 10,
+    ...WEAPON_TIMING["auto-rifle"],
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: "unlimited",
     damageRoll: { base: 6, mask: 15 },
@@ -53,8 +50,7 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Missile Launcher",
     kind: "explosive",
     bulletsPerClick: 1,
-    firingIntervalTicks: 30,
-    scanFiringIntervalTicks: 20,
+    ...WEAPON_TIMING["missile-launcher"],
     maxRange: WEAPON_MAX_RANGE,
     startingAmmo: 3,
     blast: {
@@ -71,8 +67,7 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDefinition>> = {
     displayName: "Grenade Launcher",
     kind: "explosive",
     bulletsPerClick: 1,
-    firingIntervalTicks: 30,
-    scanFiringIntervalTicks: 20,
+    ...WEAPON_TIMING["grenade-launcher"],
     maxRange: WEAPON_MAX_RANGE,
     // Not granted by the main-game Beginner roster. Custom setup supplies 0–9.
     startingAmmo: 0,

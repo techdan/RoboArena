@@ -3,7 +3,9 @@
 import { LoaderCircle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { MatchState } from "../../engine/types";
 import { PROTOCOL_VERSION } from "../../lib/net/protocol";
+import { deserializeMatchState } from "../../lib/net/protocol";
 import {
   forgetRoom,
   requestId,
@@ -12,10 +14,16 @@ import {
   roomToken,
   RoomRequestError,
 } from "../../lib/net/client";
+import { PlannerExperience } from "../planner/PlannerExperience";
 
 type GateState =
   | { readonly kind: "checking" }
-  | { readonly kind: "authorized"; readonly roomCode: string }
+  | {
+      readonly kind: "authorized";
+      readonly roomCode: string;
+      readonly selfPlayerId: string;
+      readonly match: MatchState;
+    }
   | { readonly kind: "denied"; readonly roomCode: string | null; readonly reason: string };
 
 export function MatchGate({ matchId }: { readonly matchId: string }) {
@@ -36,14 +44,19 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
     void requestOnce({
       version: PROTOCOL_VERSION,
       requestId: requestId(),
-      kind: "ResumeRoom",
+      kind: "GetMatchState",
       code: roomCode,
       token,
     })
       .then((response) => {
         if (disposed) return;
-        if (response.room.phase === "active" && response.room.matchId === matchId) {
-          setState({ kind: "authorized", roomCode });
+        if (response.matchId === matchId) {
+          setState({
+            kind: "authorized",
+            roomCode,
+            selfPlayerId: response.selfPlayerId,
+            match: deserializeMatchState(response.match),
+          });
           return;
         }
         setState({
@@ -83,21 +96,24 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       </main>
     );
   }
-  const authorized = state.kind === "authorized";
+  if (state.kind === "authorized") {
+    return (
+      <PlannerExperience
+        matchId={matchId}
+        roomCode={state.roomCode}
+        selfPlayerId={state.selfPlayerId}
+        match={state.match}
+      />
+    );
+  }
   const roomCode = state.roomCode;
   return (
     <main className="grid min-h-screen place-items-center bg-[#0d100e] px-8 text-white">
       <section className="max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">
         <ShieldCheck className="mx-auto size-8 text-emerald-300" aria-hidden="true" />
         <p className="eyebrow mt-5">Canonical match {matchId}</p>
-        <h1 className="mt-3 text-3xl font-black tracking-[-0.04em]">
-          {authorized ? "Your seat is secured" : "Participant token required"}
-        </h1>
-        <p className="mt-4 leading-7 text-white/50">
-          {state.kind === "authorized"
-            ? "The authoritative match exists and setup is frozen. Phase 9 adds the private programming board here."
-            : state.reason}
-        </p>
+        <h1 className="mt-3 text-3xl font-black tracking-[-0.04em]">Participant token required</h1>
+        <p className="mt-4 leading-7 text-white/50">{state.reason}</p>
         {roomCode === null ? (
           <Link href="/" className="primary-action mt-6">
             Return home

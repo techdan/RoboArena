@@ -6,8 +6,9 @@ simultaneous resolution as a movie. Inspired by but not affiliated with the
 original.
 
 **Status**: deterministic engine/replay work, the Next.js/PixiJS renderer,
-event-driven movie playback, and the local authoritative room/setup flow are built.
-The external WSS/restart hosting gate precedes planner work. v1 targets online
+event-driven movie playback, local authoritative room/setup flow, and the
+movement/posture/scan planner are built. The external WSS/restart hosting gate
+remains open alongside continued local phases. v1 targets online
 free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 
@@ -31,7 +32,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run test:e2e
-npm run test:room        # four-browser room flow
+npm run test:room        # four-browser room + planner flow
 ```
 
 ## Repository layout
@@ -45,7 +46,8 @@ docs/
   initial-plan.md         HISTORICAL — superseded by spec.md
   archive/                pre-empirical-research docs (superseded)
 src/engine/               pure-TS deterministic simulation and replay codec
-src/app/                  Next.js routes (`/`, `/room/:code`, `/preview`, `/movie/demo`)
+src/app/                  Next.js routes (`/`, `/room/:code`, `/match/:id/edit`, `/preview`, `/movie/demo`)
+src/planner/              deterministic pathfinding, command timing, history, draft state
 src/lib/arenas/           verified generated Rubble Two/Three data
 src/renderer/             client-only PixiJS arena and movie boundary
 public/assets/terrain/    original RoboArena SVG terrain art

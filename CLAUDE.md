@@ -17,22 +17,22 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-7 are
-draft-complete; Phase 8 is locally implemented with 208 passing tests and its
+**Project state**: Phase 1R engine realignment and Phases 2-7 and 9 are
+draft-complete; Phase 8 is locally implemented with 217 passing tests and its
 external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 9 planner work follows the Phase 8
-hosting gate; visual projectile travel speed remains renderer tuning. See
+alliance behavior is retained for v2. Phase 10 firing-dialog work is next while
+the independent Phase 8 hosting gate remains open. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 208 tests)
+npm test               # Run all unit tests (currently 217 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -82,8 +82,12 @@ coverage. Production targets Vercel for Next.js, Supabase Postgres for durable
 storage, and a separate long-lived host for the room service; the Postgres
 adapter/migrations and external deployment check remain open.
 
-**Everything after Phase 8 (not yet built)** — planner and the authoritative
-online turn loop.
+**Phase 9 (draft-complete)** — authenticated canonical setup snapshot, private
+reload-safe drafts, deterministic A*, exact single/double route chunking,
+multi-robot tick preview, posture/scan tools, and bounded undo/redo.
+
+**Everything after Phase 9 (not yet built)** — firing tools and the
+authoritative online turn loop.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`
