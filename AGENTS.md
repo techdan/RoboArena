@@ -67,7 +67,11 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   score estimates, and the inclusive scan-gate overlay are built.
 - The durable plan/lock/resolve/watch loop, participant projections, independent
   acknowledgement/playback resume, Final Ceremony, and canonical server replay
-  are built. Phase 11.5 explainability and replay inspection are next.
+  are built.
+- Phase 11.5 is draft-complete: typed Field Guide/context help, first-use
+  guidance, authorized event inspection/export, and Pointer Events-based iPad
+  planner/movie controls. Physical iPad Safari validation remains a Phase 13
+  release gate; Phase 11.6 multiplayer hardening is next.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

@@ -24,6 +24,8 @@ import { ReadyPanel } from "../match/ReadyPanel";
 import { RoomStatus } from "../match/RoomStatus";
 import { TeamDataPanel } from "../match/TeamDataPanel";
 import { TurnExplanation } from "../match/TurnExplanation";
+import { ObservedTurnExport } from "../replay/ObservedTurnExport";
+import { FieldGuideButton } from "../help/HelpProvider";
 
 type GateState =
   | { readonly kind: "checking" }
@@ -235,6 +237,9 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         <main className="match-flow-page">
           {reconnect}
           <RoomStatus status={snapshot.status} />
+          <div className="match-guide-action">
+            <FieldGuideButton />
+          </div>
           <div className="match-flow-grid">
             <ReadyPanel match={match} lockedPlayerIds={snapshot.lockedPlayerIds} />
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
@@ -257,6 +262,9 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         <main className="match-flow-page match-movie-page">
           {reconnect}
           <RoomStatus status={snapshot.status} />
+          <div className="match-guide-action">
+            <FieldGuideButton />
+          </div>
           <MovieExperience
             key={turn.turnNumber}
             initialState={deserializeMatchState(turn.initialState)}
@@ -268,6 +276,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             <TurnExplanation events={turn.events} />
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
           </div>
+          <ObservedTurnExport turn={turn} />
           <button
             type="button"
             className="primary-action match-acknowledge"

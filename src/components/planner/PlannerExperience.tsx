@@ -41,6 +41,8 @@ import { ArenaCanvas, type PlannerRobotView } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
 import { ScanAndFireDialog } from "./ScanAndFireDialog";
 import { Timeline } from "./Timeline";
+import { FieldGuideButton, HelpButton } from "../help/HelpProvider";
+import { FirstTimeHint } from "../help/FirstTimeHint";
 
 const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoord[] => {
   const route: TileCoord[] = [];
@@ -524,6 +526,7 @@ export function PlannerExperience({
           <h1>{team.name} command board</h1>
         </div>
         <div className="planner-header-status">
+          <FieldGuideButton />
           <span>
             <ShieldCheck size={14} aria-hidden="true" /> Seat verified
           </span>
@@ -547,18 +550,22 @@ export function PlannerExperience({
             </button>
           )}
           {onLockOrders === undefined ? null : (
-            <button
-              type="button"
-              className="planner-lock-action"
-              disabled={syncing}
-              onClick={() => onLockOrders(orders)}
-            >
-              <LockKeyhole size={14} aria-hidden="true" />
-              {syncing ? "Locking…" : "Lock orders"}
-            </button>
+            <span className="header-action-with-help">
+              <button
+                type="button"
+                className="planner-lock-action"
+                disabled={syncing}
+                onClick={() => onLockOrders(orders)}
+              >
+                <LockKeyhole size={14} aria-hidden="true" />
+                {syncing ? "Locking…" : "Lock orders"}
+              </button>
+              <HelpButton topic="action:lock-orders" label="Lock orders" />
+            </span>
           )}
         </div>
       </header>
+      <FirstTimeHint />
       {state.conflictRevision !== null && state.conflictOrders !== null ? (
         <div className="planner-conflict" role="alert">
           <AlertTriangle size={18} aria-hidden="true" />

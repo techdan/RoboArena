@@ -18,7 +18,8 @@ named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
 arena imports, deterministic local movie playback, and authoritative room/setup
 boundary, planner, and durable private plan/lock/resolve/watch loop are built.
-Phase 11.5 explainability/replay UX is next while the external Phase 8 gate
+Phase 11.5 explainability/replay UX and browser-emulated iPad input are
+draft-complete while the external Phase 8 gate
 remains tracked independently.
 
 The immediate critical path is:
@@ -219,8 +220,7 @@ playable end to end.
 1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
    Vercel frontend and external long-lived room service and verify WSS, restart
    recovery, and rejoin ownership from two real networks/devices.
-2. Implement Phase 11.5 explainability and iPad input: the
-   Robots/Terrain/Actions Field Guide, accessible contextual info popovers (`?`,
-   right-click, keyboard context menu, long-press), a Pointer Events-based full
-   touch planner/movie loop with visible modifier alternatives, onboarding, and
-   participant-safe replay inspection without exposing private opposing orders.
+2. Implement Phase 11.6 three-/four-player free-for-all hardening and its
+   dedicated ship gates.
+3. During Phase 13, run the physical-iPad Safari room-to-results smoke gate;
+   browser emulation already covers the 1024×768 Field Guide/touch contract.

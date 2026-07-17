@@ -8,7 +8,9 @@ original.
 **Status**: deterministic engine/replay work, the Next.js/PixiJS renderer,
 event-driven movie playback, local authoritative room/setup/turn flow, and the
 movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
-remains open alongside continued local phases. v1 targets online
+remains open alongside continued local phases. Phase 11.5 Field Guide,
+contextual explanations, observed-turn inspection, and browser-emulated iPad
+touch controls are draft-complete. v1 targets online
 free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 

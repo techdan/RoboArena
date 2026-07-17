@@ -2,6 +2,7 @@
 
 import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2, X } from "lucide-react";
 import type { Heading, Posture } from "../../engine/types";
+import { HelpButton } from "../help/HelpProvider";
 import { FireBox } from "./FireBox";
 
 const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
@@ -69,14 +70,18 @@ export function CommandPanel({
         </div>
       )}
       <section>
-        <h3>Movement</h3>
+        <h3>
+          Movement <HelpButton topic="action:movement" label="Movement" />
+        </h3>
         <p className="planner-help">
           <LocateFixed size={15} aria-hidden="true" /> Choose a home tile to deploy, then choose
           destinations. Routes avoid terrain your current posture cannot cross.
         </p>
       </section>
       <section>
-        <h3>Posture</h3>
+        <h3>
+          Posture <HelpButton topic="action:posture" label="Posture" />
+        </h3>
         <div className="posture-grid">
           {POSTURES.map((choice) => (
             <button
@@ -91,7 +96,9 @@ export function CommandPanel({
         </div>
       </section>
       <section>
-        <h3>Scan direction</h3>
+        <h3>
+          Scan direction <HelpButton topic="action:scan-direction" label="Scan direction" />
+        </h3>
         <div className="heading-grid">
           {HEADINGS.map((choice) => (
             <button

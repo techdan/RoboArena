@@ -3,6 +3,7 @@
 import { Pencil, ScanLine, Trash2 } from "lucide-react";
 import type { RobotState, TurnOrders } from "../../engine/types";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
+import { HelpButton } from "../help/HelpProvider";
 
 const commandLabel = (kind: string): string =>
   ({
@@ -47,7 +48,9 @@ export function Timeline({
     <section className="planner-timeline" aria-label="Command timelines">
       <div className="timeline-heading">
         <div>
-          <p className="eyebrow">Program horizon</p>
+          <p className="eyebrow">
+            Program horizon <HelpButton topic="action:timeline" label="Program timeline" />
+          </p>
           <strong>
             {(previewTick / 60).toFixed(2)}s / {(budgetTicks / 60).toFixed(2)}s
           </strong>

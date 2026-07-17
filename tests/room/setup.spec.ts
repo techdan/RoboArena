@@ -40,9 +40,21 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
       ),
     );
     const planner = pages[0]!;
+    await planner.getByRole("button", { name: "Field Guide" }).click();
+    const guide = planner.getByRole("dialog", { name: "Field Guide" });
+    await expect(guide).toBeVisible();
+    await guide.getByRole("tab", { name: "Actions" }).click();
+    await expect(guide.getByRole("heading", { name: "Movement", exact: true })).toBeVisible();
+    await guide.getByRole("button", { name: "Close Field Guide" }).click();
     const board = planner.getByRole("application", { name: /planning board/ });
     await board.focus();
     await expect(planner.getByText("valid", { exact: true })).toBeVisible();
+    await board.click({ button: "right", position: { x: 12, y: 12 } });
+    await expect(planner.locator(".info-popover")).toBeVisible();
+    await planner
+      .locator(".info-popover")
+      .getByRole("button", { name: /Close .* details/ })
+      .click();
     await board.click({ position: { x: 492, y: 12 } });
     await expect(planner.getByText(/Out of home/)).toBeVisible();
     await board.click({ position: { x: 12, y: 12 } });
@@ -109,7 +121,7 @@ test("four browsers join, ready, and enter one authoritative match", async ({ br
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toHaveCount(2);
 
     await Promise.all(
-      pages.map((page) => page.getByRole("button", { name: "Lock orders" }).click()),
+      pages.map((page) => page.getByRole("button", { name: "Lock orders", exact: true }).click()),
     );
     await Promise.all(
       pages.map((page) =>

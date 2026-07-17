@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { HelpProvider } from "../components/help/HelpProvider";
 
 export const metadata: Metadata = {
   title: "RoboArena — Arena Preview",
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <HelpProvider>{children}</HelpProvider>
+      </body>
     </html>
   );
 }

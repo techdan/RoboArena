@@ -1,6 +1,7 @@
 "use client";
 
 import { Crosshair, Radar } from "lucide-react";
+import { HelpButton } from "../help/HelpProvider";
 
 export function FireBox({
   disabled,
@@ -15,16 +16,22 @@ export function FireBox({
 }) {
   return (
     <div className="fire-box">
-      <button type="button" data-active={aimActive} disabled={disabled} onClick={onAim}>
-        <Crosshair size={15} aria-hidden="true" /> Aim &amp; Fire
-      </button>
-      <button type="button" disabled={disabled} onClick={onScan}>
-        <Radar size={15} aria-hidden="true" /> Scan &amp; Fire
-      </button>
+      <div className="action-with-help">
+        <button type="button" data-active={aimActive} disabled={disabled} onClick={onAim}>
+          <Crosshair size={15} aria-hidden="true" /> Aim &amp; Fire
+        </button>
+        <HelpButton topic="action:aim-fire" label="Aim and Fire" />
+      </div>
+      <div className="action-with-help">
+        <button type="button" disabled={disabled} onClick={onScan}>
+          <Radar size={15} aria-hidden="true" /> Scan &amp; Fire
+        </button>
+        <HelpButton topic="action:scan-fire" label="Scan and Fire" />
+      </div>
       {disabled ? (
         <small>Deploy this robot to enable firing tools.</small>
       ) : (
-        <small>Ctrl+Shift+click a tile for repeat Aim &amp; Fire.</small>
+        <small>Use Repeat in the firing dialog; Ctrl+Shift+click remains a desktop shortcut.</small>
       )}
     </div>
   );

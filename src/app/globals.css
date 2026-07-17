@@ -350,6 +350,12 @@ canvas {
   background: #151816;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 30%);
 }
+.movie-canvas-content {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
 
 .movie-controls {
   display: flex;
@@ -925,6 +931,12 @@ canvas {
   background: #111512;
   outline: none;
 }
+.planner-canvas-content {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
 .planner-canvas:focus-visible {
   outline: 3px solid rgb(190 242 100 / 55%);
   outline-offset: 3px;
@@ -975,6 +987,12 @@ canvas {
   font-size: 0.6rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+.planner-panel h3,
+.timeline-heading .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 .history-buttons {
   display: flex;
@@ -1031,6 +1049,329 @@ canvas {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.35rem;
+}
+.action-with-help {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  gap: 0.25rem;
+}
+.action-with-help > button:first-child {
+  width: 100%;
+}
+.fire-box > small {
+  grid-column: 1 / -1;
+}
+
+.help-button,
+.field-guide-button {
+  cursor: pointer;
+}
+.help-button {
+  display: inline-grid;
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  place-items: center;
+  border: 1px solid rgb(190 242 100 / 22%);
+  border-radius: 999px;
+  padding: 0;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 7%);
+}
+.help-button:hover,
+.help-button:focus-visible,
+.field-guide-button:hover,
+.field-guide-button:focus-visible {
+  border-color: rgb(190 242 100 / 60%);
+  outline: 2px solid rgb(190 242 100 / 35%);
+  outline-offset: 2px;
+}
+.help-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+@media (hover: hover) {
+  .help-tooltip:hover::after,
+  .help-tooltip:focus-within::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    z-index: 140;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    width: max-content;
+    max-width: 14rem;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    color: rgb(255 255 255 / 78%);
+    background: #171c18;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 40%);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+.field-guide-button {
+  display: inline-flex;
+  min-height: 2.4rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(190 242 100 / 25%);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 8%);
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+.header-action-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+.help-backdrop {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+}
+.help-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(3 7 5 / 78%);
+  backdrop-filter: blur(10px);
+}
+.field-guide {
+  width: min(54rem, calc(100vw - 2rem));
+  max-height: min(46rem, calc(100vh - 2rem));
+  overflow: hidden;
+  border: 1px solid rgb(190 242 100 / 20%);
+  border-radius: 1.2rem;
+  color: white;
+  background: #111713;
+  box-shadow: 0 30px 100px rgb(0 0 0 / 65%);
+}
+.field-guide > header,
+.info-popover > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.field-guide > header {
+  padding: 1rem 1.1rem 0.8rem;
+}
+.field-guide h2,
+.info-popover h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+.field-guide header > button,
+.info-popover-close {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  color: white;
+  background: rgb(255 255 255 / 5%);
+  font-size: 1.25rem;
+}
+.field-guide-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  padding: 0 1.1rem 0.8rem;
+}
+.field-guide-tabs button,
+.event-filters button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 0.6rem;
+  color: rgb(255 255 255 / 48%);
+  background: rgb(0 0 0 / 18%);
+  font-weight: 800;
+}
+.field-guide-tabs button[data-active="true"],
+.event-filters button[data-active="true"] {
+  border-color: rgb(190 242 100 / 45%);
+  color: #d9f99d;
+  background: rgb(190 242 100 / 9%);
+}
+.field-guide-list {
+  display: grid;
+  max-height: 34rem;
+  gap: 0.5rem;
+  overflow-y: auto;
+  padding: 0.2rem 1.1rem 1.1rem;
+  content-visibility: auto;
+}
+.field-guide-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.75rem;
+  padding: 0.8rem;
+  background: rgb(255 255 255 / 3%);
+}
+.field-guide-list h3,
+.field-guide-list p {
+  margin: 0;
+}
+.field-guide-list p {
+  margin-top: 0.25rem;
+  color: rgb(255 255 255 / 48%);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.field-guide-list article > button {
+  min-width: 4.75rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  border: 1px solid rgb(190 242 100 / 24%);
+  border-radius: 0.55rem;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 7%);
+  font-weight: 800;
+}
+.info-popover {
+  position: fixed;
+  z-index: 140;
+  margin: 0;
+  width: min(25rem, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
+  border: 1px solid rgb(190 242 100 / 30%);
+  border-radius: 1rem;
+  padding: 1rem;
+  color: white;
+  background: #151c17;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 65%);
+}
+.info-popover > header {
+  padding-right: 3rem;
+}
+.info-popover-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+}
+.info-popover::backdrop {
+  background: rgb(0 0 0 / 20%);
+}
+.info-popover > p,
+.info-popover li {
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+.info-popover dl {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.8rem 0;
+}
+.info-popover dl div {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.45rem;
+  background: rgb(255 255 255 / 4%);
+}
+.info-popover dt {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.info-popover dd {
+  margin: 0;
+  color: rgb(255 255 255 / 76%);
+  font-size: 0.72rem;
+}
+.first-time-hint {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid rgb(251 191 36 / 25%);
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  color: #fde68a;
+  background: rgb(120 53 15 / 18%);
+}
+.first-time-hint strong,
+.first-time-hint p {
+  margin: 0;
+}
+.first-time-hint p {
+  margin-top: 0.15rem;
+  color: rgb(255 255 255 / 55%);
+  font-size: 0.72rem;
+}
+.first-time-hint button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  cursor: pointer;
+  place-items: center;
+  border: 0;
+  color: inherit;
+  background: transparent;
+}
+.event-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.65rem 0;
+}
+.event-filters button {
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+.turn-explanation li {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 0.5rem;
+}
+.turn-explanation li span,
+.turn-explanation li strong {
+  display: block;
+}
+.turn-explanation li strong {
+  margin-bottom: 0.15rem;
+  color: rgb(255 255 255 / 76%);
+}
+.match-guide-action {
+  display: flex;
+  max-width: 1180px;
+  justify-content: flex-end;
+  margin: 0 auto 0.6rem;
 }
 .fire-box button {
   display: inline-flex;
@@ -1351,7 +1692,7 @@ canvas {
   }
 }
 
-@media (max-width: 1279px) {
+@media (max-width: 1279px) and (pointer: fine) {
   .desktop-viewport-gate::before {
     content: "RoboArena’s planner and movie tools require a 1280 × 720 desktop display.";
     position: fixed;
@@ -1364,5 +1705,91 @@ canvas {
     color: rgb(255 255 255 / 75%);
     text-align: center;
     font-weight: 700;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .desktop-viewport-gate::before {
+    content: "Rotate your iPad to landscape to use the RoboArena command board.";
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 2rem;
+    background: #0d100e;
+    color: rgb(255 255 255 / 75%);
+    text-align: center;
+    font-weight: 700;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 1023px) {
+  .desktop-viewport-gate::before {
+    content: "RoboArena’s touch command board requires an iPad-sized landscape display.";
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 2rem;
+    background: #0d100e;
+    color: rgb(255 255 255 / 75%);
+    text-align: center;
+    font-weight: 700;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  .planner-page,
+  .match-flow-page {
+    padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+      max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  }
+  .planner-header {
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+  .planner-header-status {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .planner-workspace {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+    gap: 0.65rem;
+  }
+  .planner-board-card,
+  .planner-panel,
+  .planner-timeline {
+    padding: 0.65rem;
+  }
+  .planner-canvas {
+    max-width: 100%;
+  }
+  button,
+  a,
+  input[type="range"] {
+    min-height: 44px;
+  }
+  .help-button,
+  .history-buttons button,
+  .timeline-segment > button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .posture-grid button,
+  .heading-grid button,
+  .fire-box button,
+  .transport-button,
+  .speed-button {
+    min-height: 44px;
+  }
+  .movie-shell {
+    max-width: 100%;
+  }
+  .movie-viewport {
+    max-width: 100%;
+    overflow: hidden;
   }
 }

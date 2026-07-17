@@ -20,6 +20,7 @@ export * from "./cover.js";
 export * from "./visibility.js";
 export * from "./scanAndFire.js";
 export * from "./catalog.js";
+export * from "./catalogData.js";
 export * from "./movement.js";
 export * from "./firing.js";
 export * from "./blast.js";

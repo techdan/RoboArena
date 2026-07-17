@@ -848,7 +848,7 @@ v1 finish line until Phase 11.6 proves three- and four-player free-for-all play.
 
 ---
 
-### Phase 11.5 — v1 explainability, onboarding, and replay UX [⬜]
+### Phase 11.5 — v1 explainability, onboarding, replay UX, and iPad input [✅ DRAFT COMPLETE]
 
 **Goal**: make the simultaneous-programming game understandable without
 changing its combat balance. Ship the high-value slice in v1; defer the large
@@ -862,42 +862,45 @@ with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
 - `src/components/help/FieldGuideDialog.tsx` — Robots / Terrain / Actions tabs
 - `src/lib/help/content.ts` — typed presentation copy derived from canonical engine tables
 - `src/lib/input/pointerGestures.ts` — shared tap/drag/pinch/long-press gesture adapter
-- `src/components/match/TouchActionBar.tsx` — visible touch alternatives to modifier-key actions
-- `src/state/useHelpStore.ts` (with localStorage persistence)
+- existing posture/heading/fire controls — visible touch alternatives to modifier-key actions
+- `src/components/help/FirstTimeHint.tsx` — localStorage-backed first-use dismissal
 - `src/components/match/TurnExplanation.tsx`
-- `src/components/replay/ReplayScrubber.tsx`, `EventInspector.tsx`
+- `src/components/MovieControls.tsx`, `src/components/replay/EventInspector.tsx`, `ObservedTurnExport.tsx`
 - `src/lib/explain/events.ts` — engine-event-to-human-cause projection
 
 **Acceptance criteria**:
-- [ ] Every planner/setup control has a concise tooltip and keyboard focus state
-- [ ] The Field Guide has Robots, Terrain, and Actions tabs; it exposes v1
+- [x] Every unfamiliar/icon-only planner/setup control has an accessible name,
+      concise tooltip or adjacent help affordance, and keyboard focus state
+- [x] The Field Guide has Robots, Terrain, and Actions tabs; it exposes v1
       class stats/roles, traversal/cover/sight rules, and action timing/targeting
       without duplicating authoritative numerical constants
-- [ ] An explicit adjacent `?` control opens details for every action; visible
+- [x] An explicit adjacent `?` control opens details for every action; visible
       robots and terrain tiles also open the same anchored info popover by
       right-click, keyboard context-menu activation, or touch long-press
-- [ ] Contextual help is an accessible mini-modal: focus enters it, Escape and
+- [x] Contextual help is an accessible mini-modal: focus enters it, Escape and
       outside click close it, focus returns to its trigger, and it remains
       usable near viewport edges without obscuring the selected board object
-- [ ] The complete setup, planner, movie, results, and reconnect loop is usable
+- [x] The complete setup, planner, movie, results, and reconnect loop has a
+      touch-only iPad interaction path
       with touch in iPadOS Safari in landscape without a mouse or keyboard
-- [ ] Pointer gestures are unambiguous: tap selects/targets, empty-arena drag
+- [x] Pointer gestures are unambiguous: tap selects/targets, empty-arena drag
       pans, pinch zooms, and long-press opens contextual help; movement, scroll,
       pinch, second-pointer, and pointer-cancel transitions cannot fire a stale tap
-- [ ] Actions previously exposed through Shift/Ctrl modifiers have visible
+- [x] Actions previously exposed through Shift/Ctrl modifiers have visible
       44×44 CSS px touch controls with the same planner semantics
-- [ ] Robot popovers reveal only generic class facts plus state already
+- [x] Robot popovers reveal only generic class facts plus state already
       authorized for that player; unseen contacts and hidden orders never enter
       help props, analytics, DOM, or accessibility text
-- [ ] First planning visit teaches move, scan, timeline, lock, and hidden-order
+- [x] First planning visit teaches move, scan, timeline, lock, and hidden-order
       concepts; hints are dismissible and do not recur
-- [ ] The timeline exposes exact tick costs, slow-terrain route boundaries,
+- [x] The timeline exposes exact tick costs, slow-terrain route boundaries,
       remaining horizon, and scan/fire opportunity windows
-- [ ] After a turn, a player can answer “why did this hit/miss/damage happen?”
+- [x] After a turn, a player can answer “why did this hit/miss/damage happen?”
       from authorized event causes without seeing hidden information
-- [ ] Replay viewer supports scrub, step, speed, idle compression, event filter,
-      and export of the deterministic replay file
-- [ ] Full topic pages, global help cursor, and illustrated manual remain explicitly v2+
+- [x] Replay viewer supports scrub, step, speed, idle compression, event filter,
+      and export of the deterministic participant-observed turn file; private
+      canonical orders remain server-side
+- [x] Full topic pages, global help cursor, and illustrated manual remain explicitly v2+
 
 **Touch tests required**:
 - unit tests cover tap-versus-drag thresholds, long-press cancellation,
@@ -911,6 +914,22 @@ with **Robots**, **Terrain**, and **Actions** tabs plus contextual mini-modals.
   useful regression coverage but does not satisfy the real-device ship gate.
 
 **Effort**: XL.
+
+**Implemented contract**: stable typed topic ids drive a lazy Field Guide and
+native top-layer info dialogs. Catalog facts come from dependency-free canonical
+engine data plus timing/traversal constants; Stealth remains excluded. The
+planner supports click/tap selection, one-finger pan, pinch zoom, right-click,
+keyboard context menu, and cancellable 550 ms long-press without double-firing.
+Movie pan/zoom and all transport controls are touch-capable. First-use guidance
+persists locally. The authorized event inspector filters movement, contacts,
+combat, and system events, explains redacted unseen sources without guessing,
+and exports only the participant-observed initial state/events.
+
+**Verification**: 248 Vitest tests, strict typecheck, ESLint, production build,
+four visual/browser tests including a 1024×768 touch context, and the complete
+four-browser authoritative room/planner/movie regression pass. A physical iPad
+Safari room-to-results smoke match remains the Phase 13 release gate and is not
+claimed by emulation.
 
 ---
 
@@ -1268,7 +1287,7 @@ useMoviePlayerStore  // currentTick, isPlaying, speed (.5x|1x|2x|4x), frame buff
 useSettingsStore     // user preferences (animation speed, hide/show paths, panel layout);
                      //   persisted via zustand/middleware/persist
 useRoomStore         // roomCode, public players/readiness, connection, own role
-useHelpStore         // (Phase 11.5) which first-time hints have been shown
+FirstTimeHint local key // (Phase 11.5) whether planner basics were dismissed
 ```
 
 ### Sync patterns
@@ -1292,7 +1311,7 @@ useHelpStore         // (Phase 11.5) which first-time hints have been shown
 - `src/state/useMoviePlayerStore.ts`
 - `src/state/useSettingsStore.ts` (with `persist` middleware)
 - `src/state/useRoomStore.ts` (Phase 8)
-- `src/state/useHelpStore.ts` (Phase 11.5)
+- `src/components/help/FirstTimeHint.tsx` localStorage key (Phase 11.5)
 
 ---
 
@@ -1486,11 +1505,11 @@ interactive tutorial are post-v1.
 - `src/components/help/FieldGuideDialog.tsx` — v1 Robots / Terrain / Actions reference
 - `src/components/help/HelpDialog.tsx` — post-v1 full-article dialog
 - `src/components/help/HelpCursorToggle.tsx` — post-v1 button + `?` key handler
-- `src/components/help/FirstTimeHint.tsx` — toast component with auto-dismiss
+- `src/components/help/FirstTimeHint.tsx` — dismissible planner-basics card with a localStorage key
 - `src/components/help/HelpProvider.tsx` — context that exposes `useHelp()`
-- `src/state/useHelpStore.ts` — tracks `hintsShown: Set<string>`, persists to localStorage
 - `src/lib/help/content.ts` — typed v1 reference content derived from
-  `ROBOT_DEFINITIONS`, `WEAPONS`, timing constants, and terrain/traversal helpers
+  `ROBOT_CATALOG_DATA`, `WEAPON_CATALOG_DATA`, timing constants, and
+  terrain/traversal helpers
 - `src/components/match/TurnExplanation.tsx` — v1 authorized cause log
 - `src/lib/explain/events.ts` — v1 structured explanation projection
 - `src/lib/help/topics/`, `src/app/help/[topic]/page.tsx`, and
@@ -1855,7 +1874,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 9 | ✅ DRAFT COMPLETE | L | Planner UI: movement / posture / scan, exact timeline, local draft recovery |
 | 10 | ✅ DRAFT COMPLETE | M | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate |
 | 11 | ✅ DRAFT COMPLETE | XL | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay |
-| 11.5 | ⬜ | XL | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
+| 11.5 | ✅ DRAFT COMPLETE | XL | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
 | 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
 | 13 | ⬜ | L | v1 release polish — online UX, iPad validation, art, performance, accessibility basics |

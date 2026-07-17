@@ -26,8 +26,10 @@ pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
-alliance behavior is retained for v2. Phase 11.5 explainability and replay UX is next while
-the independent Phase 8 hosting gate remains open. See
+alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
+inspection, and browser-emulated iPad input are draft-complete; its physical
+iPad Safari smoke match remains a Phase 13 release gate. The independent Phase 8
+hosting gate remains open. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
@@ -99,8 +101,12 @@ redaction, bounded WebSocket payload/rate handling, participant-specific recent
 room status, independent movie acknowledgement and playback resume, Final
 Ceremony scoring, and canonical Phase 5 replay storage/verification.
 
-**Everything after Phase 11 (not yet built)** — explainability/onboarding,
-participant-safe replay inspection, multiplayer hardening, and release polish.
+**Phase 11.5 (draft-complete)** — typed Robots/Terrain/Actions Field Guide,
+contextual help dialogs, first-use guidance, authorized event filters/export,
+and Pointer Events-based iPad planner/movie controls.
+
+**Everything after Phase 11.5 (not yet built)** — multiplayer hardening and
+release polish, including the physical-iPad Safari smoke gate.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

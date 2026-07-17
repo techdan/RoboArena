@@ -13,6 +13,12 @@ import {
 } from "./assets";
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
 import { renderMovieEffects } from "./effects/effects";
+import {
+  movedBeyondGestureThreshold,
+  pointDistance,
+  scaleForPinch,
+  type Point,
+} from "../lib/input/pointerGestures";
 import { loadRobotTextures, robotTextureKey } from "./robotTextures";
 import {
   createRobotSprite,
@@ -54,6 +60,21 @@ export function MoviePlayer({
   const [compressIdle, setCompressIdle] = useState(true);
   const [rendererStatus, setRendererStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [viewTransform, setViewTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const viewTransformRef = useRef(viewTransform);
+  viewTransformRef.current = viewTransform;
+  const viewPointersRef = useRef(new Map<number, Point>());
+  const panRef = useRef<{
+    readonly pointerId: number;
+    readonly start: Point;
+    readonly transform: typeof viewTransform;
+    moved: boolean;
+  } | null>(null);
+  const pinchRef = useRef<{
+    readonly distance: number;
+    readonly midpoint: Point;
+    readonly transform: typeof viewTransform;
+  } | null>(null);
   const currentIndexRef = useRef(currentIndex);
   const reducedMotionRef = useRef(reducedMotion);
   currentIndexRef.current = currentIndex;
@@ -227,9 +248,87 @@ export function MoviePlayer({
         style={{
           width: initialState.arena.width * MOVIE_TILE_SIZE,
           height: initialState.arena.height * MOVIE_TILE_SIZE,
+          touchAction: "none",
+        }}
+        onPointerDown={(event) => {
+          if (event.pointerType !== "touch") return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const point = { x: event.clientX, y: event.clientY };
+          viewPointersRef.current.set(event.pointerId, point);
+          const points = [...viewPointersRef.current.values()];
+          if (points.length === 1) {
+            panRef.current = {
+              pointerId: event.pointerId,
+              start: point,
+              transform: viewTransformRef.current,
+              moved: false,
+            };
+          } else if (points.length === 2) {
+            const [first, second] = points;
+            if (first === undefined || second === undefined) return;
+            pinchRef.current = {
+              distance: pointDistance(first, second),
+              midpoint: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+              transform: viewTransformRef.current,
+            };
+            if (panRef.current !== null) panRef.current.moved = true;
+          }
+        }}
+        onPointerMove={(event) => {
+          if (event.pointerType !== "touch" || !viewPointersRef.current.has(event.pointerId))
+            return;
+          const point = { x: event.clientX, y: event.clientY };
+          viewPointersRef.current.set(event.pointerId, point);
+          const points = [...viewPointersRef.current.values()];
+          if (points.length >= 2) {
+            const [first, second] = points;
+            const pinch = pinchRef.current;
+            if (first === undefined || second === undefined || pinch === null) return;
+            const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+            setViewTransform({
+              x: pinch.transform.x + midpoint.x - pinch.midpoint.x,
+              y: pinch.transform.y + midpoint.y - pinch.midpoint.y,
+              scale: scaleForPinch(
+                pinch.transform.scale,
+                pinch.distance,
+                pointDistance(first, second),
+              ),
+            });
+            return;
+          }
+          const pan = panRef.current;
+          if (
+            pan === null ||
+            pan.pointerId !== event.pointerId ||
+            !movedBeyondGestureThreshold(pan.start, point)
+          )
+            return;
+          pan.moved = true;
+          setViewTransform({
+            ...pan.transform,
+            x: pan.transform.x + point.x - pan.start.x,
+            y: pan.transform.y + point.y - pan.start.y,
+          });
+        }}
+        onPointerUp={(event) => {
+          viewPointersRef.current.delete(event.pointerId);
+          if (viewPointersRef.current.size < 2) pinchRef.current = null;
+          if (panRef.current?.pointerId === event.pointerId) panRef.current = null;
+        }}
+        onPointerCancel={(event) => {
+          viewPointersRef.current.delete(event.pointerId);
+          panRef.current = null;
+          pinchRef.current = null;
         }}
       >
-        <div ref={hostRef} className="absolute inset-0" />
+        <div
+          className="movie-canvas-content"
+          style={{
+            transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
+          }}
+        >
+          <div ref={hostRef} className="absolute inset-0" />
+        </div>
         {rendererStatus !== "ready" ? (
           <div className="absolute inset-0 grid place-items-center bg-[#151816]/95">
             <p className="eyebrow">

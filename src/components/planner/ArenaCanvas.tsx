@@ -5,6 +5,14 @@ import type { Application, Container } from "pixi.js";
 import type { Arena, Heading, Posture, RobotClass, TileCoord } from "../../engine/types";
 import { ARENA_ASSET_URLS, TERRAIN_ASSETS } from "../../renderer/assets";
 import { isTileInScanGate } from "../../planner/firingHelpers";
+import { useHelp } from "../help/HelpProvider";
+import {
+  LONG_PRESS_MS,
+  movedBeyondGestureThreshold,
+  pointDistance,
+  scaleForPinch,
+  type Point,
+} from "../../lib/input/pointerGestures";
 
 const TILE_SIZE = 24;
 const TEAM_COLORS: Readonly<Record<string, number>> = {
@@ -63,11 +71,33 @@ export function ArenaCanvas({
   onCursor,
   onChooseTile,
 }: ArenaCanvasProps) {
+  const { openTopic } = useHelp();
   const hostRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const overlayRef = useRef<Container | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [keyboardTile, setKeyboardTile] = useState<TileCoord>({ x: 0, y: 0 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
+  const pointersRef = useRef(new Map<number, Point>());
+  const touchRef = useRef<{
+    readonly pointerId: number;
+    readonly start: Point;
+    readonly tile: TileCoord;
+    readonly startTransform: typeof transform;
+    readonly canPan: boolean;
+    moved: boolean;
+    longPressed: boolean;
+    timer: number | null;
+  } | null>(null);
+  const pinchRef = useRef<{
+    readonly distance: number;
+    readonly scale: number;
+    readonly midpoint: Point;
+    readonly startTransform: typeof transform;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -219,41 +249,168 @@ export function ArenaCanvas({
     status,
   ]);
 
-  const tileFromPointer = (
-    event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>,
-  ): TileCoord => {
-    const bounds = event.currentTarget.getBoundingClientRect();
+  const tileFromClient = (clientX: number, clientY: number, element: HTMLDivElement): TileCoord => {
+    const bounds = element.getBoundingClientRect();
+    const current = transformRef.current;
     return {
       x: Math.min(
         arena.width - 1,
-        Math.max(0, Math.floor((event.clientX - bounds.left) / TILE_SIZE)),
+        Math.max(0, Math.floor((clientX - bounds.left - current.x) / current.scale / TILE_SIZE)),
       ),
       y: Math.min(
         arena.height - 1,
-        Math.max(0, Math.floor((event.clientY - bounds.top) / TILE_SIZE)),
+        Math.max(0, Math.floor((clientY - bounds.top - current.y) / current.scale / TILE_SIZE)),
       ),
     };
+  };
+  const tileFromPointer = (
+    event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>,
+  ): TileCoord => tileFromClient(event.clientX, event.clientY, event.currentTarget);
+  const robotAt = (tile: TileCoord) =>
+    robots.find(
+      (robot) =>
+        robot.position !== "dock" && robot.position.x === tile.x && robot.position.y === tile.y,
+    );
+  const inspect = (tile: TileCoord, anchor: Point) => {
+    const robot = robotAt(tile);
+    if (robot !== undefined && robot.robotClass !== "stealth") {
+      openTopic(`robot:${robot.robotClass}`, anchor);
+      return;
+    }
+    const terrain = arena.tiles[tile.y]?.[tile.x]?.terrain;
+    if (terrain !== undefined) openTopic(`terrain:${terrain}`, anchor);
+  };
+  const cancelLongPress = () => {
+    const active = touchRef.current;
+    if (active?.timer !== null && active?.timer !== undefined) window.clearTimeout(active.timer);
+    if (active !== null) active.timer = null;
   };
 
   return (
     <div
       className="planner-canvas"
-      style={{ width: arena.width * TILE_SIZE, height: arena.height * TILE_SIZE }}
       role="application"
       aria-label={`${arena.sizeName} planning board. Use arrow keys and Enter to choose a tile.`}
       tabIndex={0}
+      style={{
+        width: arena.width * TILE_SIZE,
+        height: arena.height * TILE_SIZE,
+        touchAction: "none",
+      }}
       onFocus={() => onCursor(keyboardTile)}
       onPointerMove={(event) => {
         const tile = tileFromPointer(event);
         setKeyboardTile(tile);
         onCursor(tile);
+        if (event.pointerType !== "touch") return;
+        pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const points = [...pointersRef.current.values()];
+        if (points.length >= 2) {
+          cancelLongPress();
+          const [first, second] = points;
+          if (first === undefined || second === undefined) return;
+          const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+          const pinch = pinchRef.current;
+          if (pinch === null) return;
+          const scale = scaleForPinch(pinch.scale, pinch.distance, pointDistance(first, second));
+          setTransform({
+            x: pinch.startTransform.x + midpoint.x - pinch.midpoint.x,
+            y: pinch.startTransform.y + midpoint.y - pinch.midpoint.y,
+            scale,
+          });
+          if (touchRef.current !== null) touchRef.current.moved = true;
+          return;
+        }
+        const active = touchRef.current;
+        if (active === null || active.pointerId !== event.pointerId) return;
+        const current = { x: event.clientX, y: event.clientY };
+        if (!movedBeyondGestureThreshold(active.start, current)) return;
+        active.moved = true;
+        cancelLongPress();
+        if (active.canPan) {
+          setTransform({
+            ...active.startTransform,
+            x: active.startTransform.x + current.x - active.start.x,
+            y: active.startTransform.y + current.y - active.start.y,
+          });
+        }
       }}
       onPointerLeave={(event) => {
         if (document.activeElement !== event.currentTarget) onCursor(null);
       }}
-      onClick={(event) =>
-        onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey })
-      }
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch") return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const point = { x: event.clientX, y: event.clientY };
+        pointersRef.current.set(event.pointerId, point);
+        const points = [...pointersRef.current.values()];
+        if (points.length === 1) {
+          const tile = tileFromPointer(event);
+          const active = {
+            pointerId: event.pointerId,
+            start: point,
+            tile,
+            startTransform: transformRef.current,
+            canPan: robotAt(tile) === undefined,
+            moved: false,
+            longPressed: false,
+            timer: null as number | null,
+          };
+          active.timer = window.setTimeout(() => {
+            if (active.moved || pointersRef.current.size !== 1) return;
+            active.longPressed = true;
+            suppressClickRef.current = true;
+            inspect(active.tile, { x: point.x + 10, y: point.y + 10 });
+          }, LONG_PRESS_MS);
+          touchRef.current = active;
+        } else if (points.length === 2) {
+          cancelLongPress();
+          const [first, second] = points;
+          if (first === undefined || second === undefined) return;
+          pinchRef.current = {
+            distance: pointDistance(first, second),
+            scale: transformRef.current.scale,
+            midpoint: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+            startTransform: transformRef.current,
+          };
+          if (touchRef.current !== null) touchRef.current.moved = true;
+        }
+      }}
+      onPointerUp={(event) => {
+        if (event.pointerType !== "touch") return;
+        cancelLongPress();
+        const active = touchRef.current;
+        if (
+          active !== null &&
+          active.pointerId === event.pointerId &&
+          !active.moved &&
+          !active.longPressed
+        ) {
+          suppressClickRef.current = true;
+          onChooseTile(active.tile, { ctrl: false, shift: false });
+        }
+        pointersRef.current.delete(event.pointerId);
+        if (pointersRef.current.size < 2) pinchRef.current = null;
+        if (active?.pointerId === event.pointerId) touchRef.current = null;
+      }}
+      onPointerCancel={(event) => {
+        cancelLongPress();
+        pointersRef.current.delete(event.pointerId);
+        touchRef.current = null;
+        pinchRef.current = null;
+        suppressClickRef.current = true;
+      }}
+      onClick={(event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
+        onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        inspect(tileFromPointer(event), { x: event.clientX + 8, y: event.clientY + 8 });
+      }}
       onKeyDown={(event) => {
         const delta =
           event.key === "ArrowUp"
@@ -273,6 +430,13 @@ export function ArenaCanvas({
           };
           setKeyboardTile(next);
           onCursor(next);
+        } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+          event.preventDefault();
+          const bounds = event.currentTarget.getBoundingClientRect();
+          inspect(keyboardTile, {
+            x: bounds.left + transform.x + (keyboardTile.x + 1) * TILE_SIZE * transform.scale,
+            y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * transform.scale,
+          });
         } else if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onChooseTile(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
@@ -280,7 +444,14 @@ export function ArenaCanvas({
       }}
       data-cursor-state={cursorState}
     >
-      <div ref={hostRef} className="absolute inset-0" />
+      <div
+        className="planner-canvas-content"
+        style={{
+          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+        }}
+      >
+        <div ref={hostRef} className="absolute inset-0" />
+      </div>
       {scanOverlay === null ? null : (
         <div className="scan-gate-legend" aria-label="Scan gate overlay legend">
           <span>
