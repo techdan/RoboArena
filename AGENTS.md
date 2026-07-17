@@ -39,6 +39,10 @@ RoboArena v1 intentionally ships online free-for-all Survival with three
 postures, four non-Stealth combat classes, the core planner/movie loop,
 authoritative resolution, reconnect, and deterministic replay.
 
+Forward-compatible Stealth artwork may exist in the shared asset registry and
+generic renderer. That does not authorize Stealth setup, visibility, combat,
+planner, or other gameplay behavior before Phase 14.
+
 Do not expand scope just because the original had a feature. Add original-game parity features only when `docs/implementation-plan.md` schedules them or the user explicitly changes v1 scope.
 
 ## Current State
@@ -53,7 +57,9 @@ implemented with its external WSS/two-network hosting gate still open; Phase
 - The versioned replay recorder, JSON codec, verifier, and v1 golden fixture are built.
 - The Next.js shell, PixiJS arena/movie renderer, and verified Rubble Two/Three imports are built.
 - Event-driven movie playback supports deterministic scrub/step/play, speed, and idle compression.
-- The authoritative WebSocket room service, SQLite WAL storage, and 2-4 player setup UI are built.
+- The authoritative WebSocket room service, SQLite WAL local/test storage, and
+  2-4 player setup UI are built. Production targets Supabase Postgres; its
+  adapter and migrations remain part of the Phase 8 hosting gate.
 - Planner work is next after the Phase 8 external hosting gate is verified.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
@@ -104,6 +110,10 @@ Future architecture:
 - `src/app/` and `src/components/` host the Next.js/React UI.
 - `src/lib/net/` owns the v1 typed room protocol, WebSocket client, and reconnect
   state; `server/` owns authoritative room/match orchestration.
+
+Deployment is split: Vercel hosts Next.js, Supabase hosts production Postgres,
+and a long-lived container/VM host runs the single-process WebSocket room
+service. Never expose the database URL or service credentials to browser code.
 
 Dependency direction is one way: UI/planner/renderer may import engine code; engine must not import them.
 

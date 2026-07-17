@@ -77,10 +77,10 @@ export class RoomService {
 
   constructor(readonly storage: RoomStorage) {}
 
-  createRoom(name: string, color: PlayerColor): RoomAccess {
+  createRoom(name: string, color: PlayerColor, participantToken?: string): RoomAccess {
     let code = randomId(6, CODE_ALPHABET);
     while (this.storage.loadRoom(code) !== undefined) code = randomId(6, CODE_ALPHABET);
-    const token = randomBytes(32).toString("base64url");
+    const token = participantToken ?? randomBytes(32).toString("base64url");
     const player: PlayerRecord = {
       id: randomId(10, ID_ALPHABET),
       tokenHash: hashParticipantToken(token),
@@ -99,7 +99,12 @@ export class RoomService {
     return { room: this.publicRoom(room), selfPlayerId: player.id, participantToken: token };
   }
 
-  async joinRoom(code: string, name: string, color: PlayerColor): Promise<RoomAccess> {
+  async joinRoom(
+    code: string,
+    name: string,
+    color: PlayerColor,
+    participantToken?: string,
+  ): Promise<RoomAccess> {
     return this.#withLock(code, () => {
       const room = this.#requireRoom(code);
       if (room.phase !== "setup")
@@ -107,7 +112,7 @@ export class RoomService {
       if (room.players.length >= 4)
         throw new RoomError("ROOM_FULL", "This room already has four players.");
       this.#assertUniqueIdentity(room, name, color);
-      const token = randomBytes(32).toString("base64url");
+      const token = participantToken ?? randomBytes(32).toString("base64url");
       const player: PlayerRecord = {
         id: randomId(10, ID_ALPHABET),
         tokenHash: hashParticipantToken(token),

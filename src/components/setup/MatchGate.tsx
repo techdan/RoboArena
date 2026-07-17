@@ -1,15 +1,90 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import { LoaderCircle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { roomForMatch, roomToken } from "../../lib/net/client";
+import { PROTOCOL_VERSION } from "../../lib/net/protocol";
+import {
+  forgetRoom,
+  requestId,
+  requestOnce,
+  roomForMatch,
+  roomToken,
+  RoomRequestError,
+} from "../../lib/net/client";
+
+type GateState =
+  | { readonly kind: "checking" }
+  | { readonly kind: "authorized"; readonly roomCode: string }
+  | { readonly kind: "denied"; readonly roomCode: string | null; readonly reason: string };
 
 export function MatchGate({ matchId }: { readonly matchId: string }) {
-  const [roomCode, setRoomCode] = useState<string | null | undefined>();
-  useEffect(() => setRoomCode(roomForMatch(matchId)), [matchId]);
-  if (roomCode === undefined) return null;
-  const authorized = roomCode !== null && roomToken(roomCode) !== null;
+  const [state, setState] = useState<GateState>({ kind: "checking" });
+  useEffect(() => {
+    let disposed = false;
+    const roomCode = roomForMatch(matchId);
+    const token = roomCode === null ? null : roomToken(roomCode);
+    if (roomCode === null || token === null) {
+      setState({
+        kind: "denied",
+        roomCode,
+        reason: "Open this match through the room that issued your participant seat.",
+      });
+      return;
+    }
+    setState({ kind: "checking" });
+    void requestOnce({
+      version: PROTOCOL_VERSION,
+      requestId: requestId(),
+      kind: "ResumeRoom",
+      code: roomCode,
+      token,
+    })
+      .then((response) => {
+        if (disposed) return;
+        if (response.room.phase === "active" && response.room.matchId === matchId) {
+          setState({ kind: "authorized", roomCode });
+          return;
+        }
+        setState({
+          kind: "denied",
+          roomCode,
+          reason: "That room does not own this match.",
+        });
+      })
+      .catch((caught: unknown) => {
+        if (disposed) return;
+        if (caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED") {
+          forgetRoom(roomCode);
+        }
+        setState({
+          kind: "denied",
+          roomCode,
+          reason:
+            caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED"
+              ? "Your saved participant seat is no longer valid. Rejoin the room to continue."
+              : "The authoritative room service could not verify your seat. Try the room again.",
+        });
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [matchId]);
+  if (state.kind === "checking") {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#0d100e] text-white">
+        <div className="text-center" role="status">
+          <LoaderCircle
+            className="mx-auto size-7 animate-spin text-lime-300 motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          <p className="eyebrow mt-4">Verifying participant seat…</p>
+        </div>
+      </main>
+    );
+  }
+  const authorized = state.kind === "authorized";
+  const roomCode = state.roomCode;
   return (
     <main className="grid min-h-screen place-items-center bg-[#0d100e] px-8 text-white">
       <section className="max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">
@@ -19,9 +94,9 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
           {authorized ? "Your seat is secured" : "Participant token required"}
         </h1>
         <p className="mt-4 leading-7 text-white/50">
-          {authorized
+          {state.kind === "authorized"
             ? "The authoritative match exists and setup is frozen. Phase 9 adds the private programming board here."
-            : "Open this match through the room that issued your participant seat."}
+            : state.reason}
         </p>
         {roomCode === null ? (
           <Link href="/" className="primary-action mt-6">

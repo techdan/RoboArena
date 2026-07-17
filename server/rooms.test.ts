@@ -3,7 +3,12 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { PROTOCOL_VERSION, type ClientMessage, type ServerMessage } from "../src/lib/net/protocol";
+import {
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type RoomSnapshotMessage,
+  type ServerMessage,
+} from "../src/lib/net/protocol";
 import { configForLength, type PlayerColor } from "../src/lib/setup/validate";
 import { createRoomServer } from "./index";
 import { RoomError, RoomService } from "./rooms";
@@ -111,6 +116,29 @@ describe("authoritative rooms", () => {
     ).toBe(false);
     secondStorage.close();
   });
+
+  it("never stores a participant token in the idempotency response cache", () => {
+    const storage = new RoomStorage(":memory:");
+    const response: RoomSnapshotMessage = {
+      version: PROTOCOL_VERSION,
+      requestId: "request-1",
+      kind: "RoomSnapshot",
+      room: {
+        code: "ABC234",
+        phase: "setup",
+        hostPlayerId: "host",
+        config: configForLength("melee"),
+        players: [],
+      },
+      selfPlayerId: "host",
+      participantToken: "sensitive-participant-token".padEnd(32, "x"),
+    };
+    storage.saveRequestResult("principal", response.requestId, response);
+    expect(storage.getRequestResult("principal", response.requestId)).not.toHaveProperty(
+      "participantToken",
+    );
+    storage.close();
+  });
 });
 
 describe("WebSocket room integration", () => {
@@ -145,6 +173,9 @@ describe("WebSocket room integration", () => {
           }),
         ),
       );
+      const freshRetry = await sendRequest(sockets[0]!, createMessage);
+      expect(freshRetry.room.players).toHaveLength(4);
+      expect(freshRetry.participantToken).toBe(host.participantToken);
       const accesses = [host, ...joined];
       const resumed = await Promise.all(
         accesses.map((access, index) =>
@@ -164,6 +195,63 @@ describe("WebSocket room integration", () => {
     } finally {
       for (const socket of sockets) socket.close();
       await server.close();
+    }
+  });
+
+  it("does not share an anonymous idempotency result across different requests", async () => {
+    const server = createRoomServer(":memory:");
+    const { port } = await server.listen(0, "127.0.0.1");
+    const socket = await openSocket(`ws://127.0.0.1:${port}`);
+    try {
+      const first = await sendRequest(socket, {
+        version: PROTOCOL_VERSION,
+        requestId: "same-caller-id",
+        kind: "CreateRoom",
+        name: "First Team",
+        color: "red",
+      });
+      const second = await sendRequest(socket, {
+        version: PROTOCOL_VERSION,
+        requestId: "same-caller-id",
+        kind: "CreateRoom",
+        name: "Second Team",
+        color: "blue",
+      });
+      expect(second.room.code).not.toBe(first.room.code);
+      expect(second.participantToken).not.toBe(first.participantToken);
+    } finally {
+      socket.close();
+      await server.close();
+    }
+  });
+
+  it("replays a create request with the same seat token after a clean restart", async () => {
+    const path = resolve(`test-results/phase8-request-restart-${crypto.randomUUID()}.sqlite`);
+    const message = {
+      version: PROTOCOL_VERSION,
+      requestId: "durable-create-request",
+      kind: "CreateRoom",
+      name: "Restart Team",
+      color: "green",
+    } as const;
+    const firstServer = createRoomServer(path);
+    const firstAddress = await firstServer.listen(0, "127.0.0.1");
+    const firstSocket = await openSocket(`ws://127.0.0.1:${firstAddress.port}`);
+    const created = await sendRequest(firstSocket, message);
+    firstSocket.close();
+    await firstServer.close();
+
+    const secondServer = createRoomServer(path);
+    const secondAddress = await secondServer.listen(0, "127.0.0.1");
+    const secondSocket = await openSocket(`ws://127.0.0.1:${secondAddress.port}`);
+    try {
+      const retried = await sendRequest(secondSocket, message);
+      expect(retried.room.code).toBe(created.room.code);
+      expect(retried.selfPlayerId).toBe(created.selfPlayerId);
+      expect(retried.participantToken).toBe(created.participantToken);
+    } finally {
+      secondSocket.close();
+      await secondServer.close();
     }
   });
 });

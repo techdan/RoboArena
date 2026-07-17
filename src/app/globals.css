@@ -106,7 +106,11 @@ canvas {
   border: 1px solid rgb(255 255 255 / 9%);
   color: rgb(255 255 255 / 65%);
   background: rgb(255 255 255 / 4%);
-  transition: 150ms ease;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
 }
 
 .transport-button {
@@ -151,6 +155,11 @@ canvas {
   accent-color: #bef264;
 }
 
+.movie-scrubber:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .transport-button:disabled,
 .speed-button:disabled {
   cursor: not-allowed;
@@ -170,7 +179,11 @@ canvas {
   font-weight: 800;
   letter-spacing: 0.04em;
   text-decoration: none;
-  transition: 150ms ease;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
 }
 
 .secondary-link {
@@ -309,6 +322,9 @@ canvas {
 }
 
 .recent-room {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
   cursor: pointer;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 0.6rem;
@@ -318,6 +334,12 @@ canvas {
   font-family: ui-monospace, monospace;
   font-size: 0.7rem;
   text-decoration: none;
+}
+
+.recent-room span {
+  color: rgb(255 255 255 / 35%);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.65rem;
 }
 
 .team-row {
@@ -377,6 +399,16 @@ canvas {
   margin-top: 0.25rem;
   color: rgb(255 255 255 / 70%);
   font-size: 0.7rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transport-button,
+  .speed-button,
+  .secondary-link,
+  .primary-action,
+  .secondary-action {
+    transition: none;
+  }
 }
 
 @media (max-width: 1279px) {

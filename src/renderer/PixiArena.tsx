@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Texture } from "pixi.js";
 import type { Arena, Terrain } from "../engine/types";
-import { TERRAIN_ASSETS, TERRAIN_ASSET_URLS } from "./assets";
+import { ARENA_ASSET_URLS, TERRAIN_ASSETS } from "./assets";
 
 const TILE_SIZE = 20;
 
@@ -30,7 +30,7 @@ export function PixiArena({ arena }: PixiArenaProps) {
         height: arena.height * TILE_SIZE,
         antialias: true,
         autoDensity: true,
-        autoStart: true,
+        autoStart: false,
         background: "#151816",
         preference: "webgl",
         preserveDrawingBuffer: true,
@@ -50,10 +50,10 @@ export function PixiArena({ arena }: PixiArenaProps) {
 
       let loaded = 0;
       const textureEntries = await Promise.all(
-        TERRAIN_ASSET_URLS.map(async (url) => {
+        ARENA_ASSET_URLS.map(async (url) => {
           const texture = await Assets.load<Texture>(url);
           loaded += 1;
-          if (!disposed) setProgress(Math.round((loaded / TERRAIN_ASSET_URLS.length) * 100));
+          if (!disposed) setProgress(Math.round((loaded / ARENA_ASSET_URLS.length) * 100));
           return [url, texture] as const;
         }),
       );
@@ -101,7 +101,11 @@ export function PixiArena({ arena }: PixiArenaProps) {
     >
       <div ref={hostRef} className="absolute inset-0" />
       {status !== "ready" ? (
-        <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_center,#26322b_0%,#151816_68%)] p-8">
+        <div
+          className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_center,#26322b_0%,#151816_68%)] p-8"
+          role="status"
+          aria-live="polite"
+        >
           <div className="w-64 text-center">
             <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 text-xl font-black tracking-[-0.08em] text-emerald-200">
               RA
@@ -109,9 +113,16 @@ export function PixiArena({ arena }: PixiArenaProps) {
             <p className="text-xs font-bold uppercase tracking-[0.28em] text-white/70">
               {status === "error" ? "Renderer unavailable" : "Loading terrain"}
             </p>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"
+              role={status === "loading" ? "progressbar" : undefined}
+              aria-label={status === "loading" ? "Terrain loading progress" : undefined}
+              aria-valuemin={status === "loading" ? 0 : undefined}
+              aria-valuemax={status === "loading" ? 100 : undefined}
+              aria-valuenow={status === "loading" ? progress : undefined}
+            >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300 transition-[width] duration-200"
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300 transition-[width] duration-200 motion-reduce:transition-none"
                 style={{ width: `${status === "error" ? 100 : progress}%` }}
               />
             </div>

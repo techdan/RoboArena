@@ -196,8 +196,9 @@ and 3/2/1 low wall for Upright/Ducking/Crouching.
 
 ## Explicit scope boundary
 
-- Phase 14 owns Stealth setup, visibility, Scan & Fire interactions, assets, and
-  tests. None belongs in Phase 1–11.
+- Phase 14 owns Stealth setup, visibility, Scan & Fire interactions,
+  gameplay-facing asset use, and tests. Generic Stealth artwork may exist
+  earlier, but no Stealth gameplay behavior belongs in Phase 1–11.
 - Phase 15 owns Treasure Hunt, Capture the Flag, Hostage, Baseball, their setup
   objects/commands, and their scoring.
 - Phase 11.6 owns 3-/4-player online FFA integration, explicit non-compacting

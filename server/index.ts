@@ -102,12 +102,15 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
     }
   };
 
-  const dispatch = async (message: ClientMessage): Promise<RoomAccess> => {
+  const dispatch = async (
+    message: ClientMessage,
+    issuedParticipantToken?: string,
+  ): Promise<RoomAccess> => {
     switch (message.kind) {
       case "CreateRoom":
-        return service.createRoom(message.name, message.color);
+        return service.createRoom(message.name, message.color, issuedParticipantToken);
       case "JoinRoom":
-        return service.joinRoom(message.code, message.name, message.color);
+        return service.joinRoom(message.code, message.name, message.color, issuedParticipantToken);
       case "ResumeRoom":
         return service.resumeRoom(message.code, message.token);
       case "UpdatePlayer":
@@ -138,23 +141,37 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
           const message = parseClientMessageJson(raw);
           requestId = message.requestId;
           const token = "token" in message ? message.token : undefined;
+          const fingerprint = hashParticipantToken(JSON.stringify(message));
           const principal =
-            token === undefined ? `anonymous:${message.kind}` : hashParticipantToken(token);
+            token === undefined
+              ? `anonymous:${message.kind}:${fingerprint}`
+              : `${hashParticipantToken(token)}:${fingerprint}`;
+          const issuedParticipantToken =
+            token === undefined && (message.kind === "CreateRoom" || message.kind === "JoinRoom")
+              ? storage.participantTokenForRequest(fingerprint)
+              : undefined;
           const cached = storage.getRequestResult(principal, requestId);
           if (cached !== undefined) {
             if (cached.kind === "RoomSnapshot") {
-              subscribe(socket, {
-                room: cached.room,
-                selfPlayerId: cached.selfPlayerId,
-                ...(cached.participantToken === undefined
+              const freshResponse: RoomSnapshotMessage = {
+                ...cached,
+                room: service.publicRoom(cached.room.code),
+                ...(issuedParticipantToken === undefined
                   ? {}
-                  : { participantToken: cached.participantToken }),
+                  : { participantToken: issuedParticipantToken }),
+              };
+              subscribe(socket, {
+                room: freshResponse.room,
+                selfPlayerId: freshResponse.selfPlayerId,
               });
+              send(socket, freshResponse);
+              broadcast(freshResponse.room.code);
+              return;
             }
             send(socket, cached);
             return;
           }
-          const access = await dispatch(message);
+          const access = await dispatch(message, issuedParticipantToken);
           subscribe(socket, access);
           const response: RoomSnapshotMessage = {
             version: PROTOCOL_VERSION,

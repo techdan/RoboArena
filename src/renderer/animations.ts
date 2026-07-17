@@ -8,6 +8,7 @@ import type {
   RobotClass,
   TileCoord,
 } from "../engine/types";
+import { TICKS_PER_SECOND } from "../engine/constants";
 
 export interface MovieRobotSnapshot {
   readonly id: string;
@@ -34,7 +35,18 @@ export interface MovieTimeline {
 }
 
 export type AnimationCue =
-  "none" | "move" | "posture" | "scan" | "projectile" | "impact" | "hit" | "destroyed";
+  | "none"
+  | "move"
+  | "posture"
+  | "scan"
+  | "muzzle"
+  | "target-lock"
+  | "last-known"
+  | "projectile"
+  | "impact"
+  | "miss"
+  | "hit"
+  | "destroyed";
 
 /** Exhaustive presentation mapping; non-visual events intentionally map to `none`. */
 export const ANIMATION_CUES: Readonly<Record<ResolutionEvent["kind"], AnimationCue>> = {
@@ -45,15 +57,15 @@ export const ANIMATION_CUES: Readonly<Record<ResolutionEvent["kind"], AnimationC
   "posture-changed": "posture",
   "scan-rotated": "scan",
   "enemy-spotted": "none",
-  "enemy-lost": "none",
-  "scan-target-acquired": "none",
-  fired: "none",
+  "enemy-lost": "last-known",
+  "scan-target-acquired": "target-lock",
+  fired: "muzzle",
   "projectile-launched": "projectile",
   "projectile-impacted": "impact",
-  "shot-missed": "none",
+  "shot-missed": "miss",
   damaged: "hit",
   destroyed: "destroyed",
-  "last-known-marker": "none",
+  "last-known-marker": "last-known",
   "command-aborted": "none",
   "turn-end": "none",
 };
@@ -158,6 +170,7 @@ export const presentationDelayMs = (input: {
   readonly compressIdle: boolean;
 }): number => {
   const elapsedTicks = Math.max(1, input.toTick - input.fromTick);
-  const presentedFrames = input.compressIdle ? Math.min(elapsedTicks, 6) : elapsedTicks;
+  const elapsedFrames = Math.max(1, Math.ceil((elapsedTicks * input.fps) / TICKS_PER_SECOND));
+  const presentedFrames = input.compressIdle ? Math.min(elapsedFrames, 6) : elapsedFrames;
   return Math.max(16, Math.round((presentedFrames * 1000) / input.fps / input.speed));
 };

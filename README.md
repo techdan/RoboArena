@@ -17,7 +17,8 @@ free-for-all Survival. See
 - Next.js 16 + React 19 + Tailwind v4
 - PixiJS 8 terrain/movie renderer + GSAP presentation effects
 - Vitest 4 unit tests + Playwright visual smoke test
-- Long-lived WebSocket room service + SQLite WAL persistence
+- Long-lived WebSocket room service; SQLite local/test storage with Supabase
+  Postgres as the production target
 
 ## Quick start
 
@@ -48,7 +49,7 @@ src/app/                  Next.js routes (`/`, `/room/:code`, `/preview`, `/movi
 src/lib/arenas/           verified generated Rubble Two/Three data
 src/renderer/             client-only PixiJS arena and movie boundary
 public/assets/terrain/    original RoboArena SVG terrain art
-server/                   v1 authoritative room service and SQLite persistence
+server/                   v1 authoritative room service and storage adapters
 references/               source matrix, screenshot index
 screenshots/              gitignored local original-game research captures
 RoboSport (1991)/         gitignored — original DOS distribution, local research only

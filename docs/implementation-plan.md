@@ -117,12 +117,12 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Concern | Choice | Rationale |
 |---|---|---|
 | Language | TypeScript 5.6 strict | Already configured. `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM throughout. |
-| Test runner | Vitest 2.1 | Already configured. Fast, ESM-native, plays well with pure-TS engine. |
+| Test runner | Vitest 4.1 | Already configured. Fast, ESM-native, plays well with pure-TS engine. |
 | Linter | ESLint (flat config) | Standard for Next.js; large plugin ecosystem; widely understood by AI coding agents. |
 | Formatter | Prettier | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later. |
 | E2E test | Playwright | Added with the room flow, then expanded through the full 2-4 player online turn loop. |
 | CI | GitHub Actions | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands. |
-| Deploy | Web client + long-lived WebSocket service | Select and validate hosting in Phase 8; the v1 server must support persistent connections and one authoritative room process. |
+| Deploy | Vercel web client + long-lived WebSocket service + Supabase Postgres | Vercel does not provide the sticky process ownership or persistent SQLite filesystem assumed by the room service. Validate the split deployment in Phase 8. |
 | Branching | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed. |
 | Commit style | Conventional-ish; first line ≤ 72 chars; bodies describe *why* + tests. Co-authored where AI-paired. |
 
@@ -592,7 +592,7 @@ exactly one Team and every Team has a unique Side.
 - `src/components/setup/TeamRow.tsx` — own team name/color and assigned slot
 - `src/lib/setup/validate.ts` — shared `GameConfig` validation
 - `deploy/room-service.Dockerfile`, `docs/room-service-deployment.md` — portable
-  persistent-volume service and external WSS verification runbook
+  room service and Vercel/Supabase/external-WSS verification runbook
 
 **Room contract**:
 - short room code plus shareable deep link; no account required;
@@ -634,16 +634,17 @@ authenticated by its opaque rejoin token.
       to its private planning view
 - [x] All clickable controls are keyboard reachable and use `cursor-pointer`
 
-**Hosting gate**: before the phase closes, deploy a test instance on a platform
-that supports long-lived WSS connections plus durable storage and verify two
-real networks/devices. Keep each room owned by one server process in v1;
-cross-process distribution is post-v1, but ordinary process/deploy restart
-recovery is required for asynchronous play.
+**Hosting gate**: before the phase closes, deploy the Next.js application to
+Vercel, the room service to a long-lived container/VM host, and the durable
+database to Supabase Postgres; then verify two real networks/devices. Keep each
+room owned by one server process in v1. Cross-process distribution is post-v1,
+but ordinary process/deploy restart recovery is required for asynchronous play.
 
 **Current gate state**: the portable service image, health endpoint, SQLite WAL
-volume contract, graceful shutdown, local restart tests, and four-browser flow
-are verified. Deployment credentials and two external devices are not available
-in this workspace, so the real WSS/two-network restart check remains explicitly open.
+local/test adapter, graceful shutdown, local restart/idempotency tests, and
+four-browser flow are verified. The Supabase Postgres adapter/migrations,
+deployment credentials, and two external devices remain open; therefore the
+real WSS/two-network restart check is not yet claimed.
 
 **Effort**: L.
 
@@ -936,8 +937,9 @@ dependency.
 
 **Goal**: add the original Stealth class end to end: Custom Game availability,
 visibility behavior, ordinary/Aim/Scan interactions, last-known markers,
-planner disclosure rules, assets, replay coverage, and focused binary/dynamic
-verification. Do not retrofit speculative Stealth branches during Phases 1–11.
+planner disclosure rules, gameplay-facing asset use, replay coverage, and
+focused binary/dynamic verification. Generic Stealth art may already exist;
+do not retrofit speculative Stealth gameplay branches during Phases 1–11.
 
 **Acceptance criteria**:
 - [ ] Stealth has an updated claim-ledger-backed behavior spec
@@ -990,8 +992,9 @@ where this avoids duplicate files; rotation done programmatically by Pixi):
 - `auto-standing.svg` · `auto-crouching.svg`
 - `missile-standing.svg` · `missile-crouching.svg`
 
-Stealth assets belong to post-main-game Phase 14 and are not part of the
-Phase 7 preload or Phase 11 acceptance gate.
+Stealth gameplay belongs to post-main-game Phase 14. Forward-compatible Stealth
+art may be generated and wired through the generic renderer, but it is not part
+of the four-class main-game roster or any Phase 7/11 acceptance gate.
 
 Each robot SVG includes a directional indicator (small arrow or "muzzle") so rotation is meaningful. Color is applied via Pixi `tint` per team — SVG drawn in neutral grey, tinted at runtime to team color.
 
@@ -1015,8 +1018,8 @@ Each robot SVG includes a directional indicator (small arrow or "muzzle") so rot
 ### Production approach
 
 For v1: AI-assisted authoring. Generate concept SVGs or hand-draw in a vector
-tool, then iterate to a coherent palette. Stealth is not included in this
-main-game asset count.
+tool, then iterate to a coherent palette. Stealth art may be present in the
+shared asset set, but is not included in the main-game class count.
 
 Asset directory: `public/assets/`. Loaded via a single `assets.ts` registry that maps semantic names to URLs. Pixi's `Assets.load` handles the rest.
 
@@ -1031,15 +1034,20 @@ the cue-producing rows below; all other event kinds intentionally have no visual
 | `deployed` / `move-step` | place or tween the robot to its event-boundary tile | GSAP tween on `container.position` |
 | `posture-changed` | scale the layered robot silhouette for its posture | GSAP scale tween |
 | `scan-rotated` | smooth heading-needle rotation | GSAP tween on the scan needle |
+| `fired` | short muzzle flash oriented toward the target | sprite life cycle |
+| `scan-target-acquired` | transient scan-lock reticle | sprite life cycle |
 | `projectile-launched` (bullet/burst) | short-lived straight tracer | temporary Pixi `Graphics` |
 | `projectile-launched` (missile) | warm straight-line tracer from source to target | temporary Pixi `Graphics` |
 | `projectile-impacted` (bullet) | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle |
 | `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite | sprite life cycle |
+| `shot-missed` | compact dust miss at the target tile | sprite life cycle |
 | `damaged` | compact hit burst on the target | sprite life cycle |
 | `destroyed` | rotating explosion + fade out + remove sprite | composed tween chain |
+| `enemy-lost` / `last-known-marker` | transient last-known glyph at the event tile | sprite life cycle |
 
-`shot-missed`, `last-known-marker`, and other planning/metadata events have no
-movie cue. Last-known X glyphs remain an Edit-phase responsibility.
+The transient last-known movie cue communicates the emitted event only. The
+persistent last-known X glyph carried into the following turn remains an
+Edit-phase responsibility. Other planning/metadata events have no movie cue.
 
 **Determinism note**: animations are *visual representations of events*; they do not affect engine state or timing. Movie player advances ticks based on `events[i].tick`, not on animation completion. If an animation runs longer than its tick budget (e.g., explosion fade), the next tick can start before it finishes; sprites just keep rendering.
 
@@ -1158,7 +1166,7 @@ snapshots.**
 | State kind | Where it lives | Mutability | Notes |
 |---|---|---|---|
 | **Engine state** (`MatchState`, accepted `TurnOrders`, `ReplayLog`) | Server room process | Immutable; engine returns new instances | Canonical source of truth |
-| **Server-authoritative room/match state** | Server memory cache backed by transactional SQLite | Mutated only by validated protocol transitions | v1 authority, async recovery, and hidden-information boundary |
+| **Server-authoritative room/match state** | Server memory cache backed by transactional storage (SQLite local/test; Supabase Postgres production target) | Mutated only by validated protocol transitions | v1 authority, async recovery, and hidden-information boundary |
 | **Client UI state** (planner draft, selected robot, dialog open) | Zustand stores | Mutable; React subscribes via hooks | Per-tab, per-session |
 | **Client persistent state** (settings, rejoin token) | Zustand + localStorage (`zustand/middleware/persist`) | Mutable; auto-synced to localStorage | Token restores only the owned room seat |
 | **Renderer state** (Pixi sprite positions, tweens, current frame) | Pixi-internal | Mutable; React reads only via refs | Animation; not in Zustand |
@@ -1240,23 +1248,26 @@ useHelpStore         // (Phase 11.5) which first-time hints have been shown
 ## 9. Persistence model
 
 **v1 locked**: no accounts, but asynchronous rooms require durable storage.
-Use SQLite in WAL mode on the authoritative server's persistent volume. Store
-room configuration/state, token hashes, accepted orders, per-player
+Use Supabase Postgres for production and local Supabase Postgres for the normal
+development profile. SQLite WAL remains a local/test adapter while the Postgres
+adapter lands; it must not be deployed inside a Vercel Function. Store room
+configuration/state, token hashes, accepted orders, per-player
 `seenThroughTurn`, canonical turn results, and replay digests transactionally.
 The browser stores only settings, room references, and opaque rejoin tokens;
 completed replays can be exported as JSON.
 
-**Post-v1 proposal**: migrate the storage interface to a distributed database
-only when multi-instance rooms, public replay libraries, accounts, or saved
-teams require it. Room semantics must not depend on SQLite-specific behavior.
+The authoritative long-lived room service is the only database client. The
+Vercel browser application receives only its public WSS URL; database URLs and
+service credentials are server-only. Room semantics must remain independent of
+the selected storage adapter.
 
 ### What lives where
 
 | Kind | Where | Lifetime |
 |---|---|---|
-| Active rooms/matches | Server SQLite + memory cache | Until finished/abandoned and retention cleanup runs |
+| Active rooms/matches | Supabase Postgres + room-service memory cache (SQLite in local/test profile) | Until finished/abandoned and retention cleanup runs |
 | Own room rejoin token | Client localStorage | Until room expires or storage is cleared |
-| Canonical turn/replay data | Server SQLite; completed export JSON | Room lifetime; export is player-owned |
+| Canonical turn/replay data | Supabase Postgres; completed export JSON | Room lifetime; export is player-owned |
 | Saved teams | v1 built-in presets; post-v1 local/shared library | Presets only in v1 |
 | User settings | Client localStorage (`useSettingsStore` with `persist` middleware) | Until cleared |
 | Participant token (anonymous room identity) | Client localStorage | Per room; opaque and server-issued |
@@ -1298,16 +1309,18 @@ crashes while `resolving`, restart re-runs the pure engine from the already
 stored state/orders/seed; deterministic output and the unique turn key prevent
 double RNG consumption, score, or replay entries.
 
-### Post-v1 local dev setup
+### v1 local database setup
 
-Connection string from `.env.local`:
+The Supabase CLI reports the local connection string after `npx supabase start`.
+The default is:
+
 ```
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/roboarena
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
 
-Schema migrations: simple `.sql` files in `db/migrations/` applied via `psql` or a tiny Node script. No migration framework needed for the first shared-persistence pass.
-
-When shared persistence exists, local dev can use a local Postgres instance. Production hosting (Supabase) is a swap of `DATABASE_URL` once we get there.
+Keep SQL migrations in `supabase/migrations/`. The room service reads
+`DATABASE_URL` only on the server. Local and hosted Supabase projects use the
+same migrations; only the connection string changes.
 
 ### Post-v1 shared-library API endpoints
 
@@ -1529,7 +1542,7 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Stealth × Scan-and-Fire interaction | Post-main-game Phase 14 | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate |
 | Arena import accuracy | Phase 6 | Verify generated row-major MAP output and exact generated home rectangles |
 | Mobile / tablet playability | Out of v1 (locked §12) | Desktop-only with mouse + keyboard for v1; tablet/touch in v2 |
-| WebSocket hosting/reliability | Phase 8 onward | Validate WSS plus persistent-volume restart recovery on two real networks before planner integration; keep one authoritative room process in v1 |
+| WebSocket hosting/reliability | Phase 8 onward | Validate the Vercel frontend + external long-lived WSS service + Supabase Postgres restart path on two real networks; keep one authoritative room process in v1 |
 | Absent player stalls orders | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1 |
 | Replay format breaking changes | Phase 5+ | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9) |
 | Named weapon mapping for binary damage/fire tables | Closed in Phase 1R | Selector dispatch and live callers are source-locked in the claim ledger |
@@ -1546,9 +1559,9 @@ Defer mobile / tablet / touch to v2 with explicit documentation: "v1 ships deskt
 | Account system | Out of v1 | No accounts; opaque server-issued rejoin token owns one room seat |
 | Achievements / progression | Out of v1 | Original had none; matches are standalone |
 | Visual regression testing | Out of v1 | Add when art breakage actually causes pain |
-| Server scaling | Out of v1 | Single authoritative process, SQLite WAL, and memory cache; friend-scale only |
+| Server scaling | Out of v1 | Single authoritative room-service process, Supabase Postgres, and memory cache; friend-scale only |
 | Spectator / live spectating | Out of v1 | Public replay URLs cover the main case |
-| Hosting platform choice | Phase 8 | Benchmark current long-lived WSS options; avoid coupling room semantics to the vendor |
+| Hosting platform choice | Phase 8 | Vercel hosts Next.js; Supabase hosts Postgres; select a long-lived container/VM host for the single-process WSS service without coupling room semantics to that vendor |
 | Original-game source files | Cleanup | Keep manual dumps, screenshots, and original packages local and gitignored; publish summarized research notes only |
 
 ---
@@ -1687,7 +1700,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.6 | ⬜ MVP GATE | L | Three-/four-player online free-for-all hardening |
 | 12 | ⏸ POST-v1 | L | Hot-seat/local adapter and allied/multi-Team Side modes |
 | 13 | ⬜ | L | v1 release polish — online UX, art, performance, accessibility basics |
-| 14 | ⏸ POST-MAIN-GAME | L | Stealth class, visibility, Scan & Fire interactions, setup, assets, tests |
+| 14 | ⏸ POST-MAIN-GAME | L | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests |
 | 15 | ⏸ POST-MAIN-GAME | XL | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →

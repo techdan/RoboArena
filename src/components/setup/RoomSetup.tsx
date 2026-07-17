@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PROTOCOL_VERSION, type PublicRoom, type ServerMessage } from "../../lib/net/protocol";
 import {
+  forgetRoom,
   rememberMatch,
   rememberRoom,
   requestId,
@@ -17,6 +18,7 @@ import { TeamRow } from "./TeamRow";
 export function RoomSetup({ code }: { readonly code: string }) {
   const router = useRouter();
   const socketRef = useRef<RoomSocket | undefined>(undefined);
+  const tokenRef = useRef<string | undefined>(undefined);
   const [room, setRoom] = useState<PublicRoom>();
   const [selfPlayerId, setSelfPlayerId] = useState<string>();
   const [token, setToken] = useState<string>();
@@ -27,43 +29,93 @@ export function RoomSetup({ code }: { readonly code: string }) {
   const [editColor, setEditColor] = useState<PlayerColor>("red");
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [connected, setConnected] = useState(false);
 
-  const handleMessage = useCallback((message: ServerMessage) => {
-    if (message.kind === "ProtocolError") {
-      setError(message.message);
-      return;
-    }
-    setRoom(message.room);
-    setSelfPlayerId(message.selfPlayerId);
-    if (message.participantToken !== undefined) {
-      rememberRoom(message.room.code, message.participantToken);
-      setToken(message.participantToken);
-      setNeedsJoin(false);
-    }
-  }, []);
+  const handleMessage = useCallback(
+    (message: ServerMessage) => {
+      if (message.kind === "ProtocolError") {
+        if (message.code === "UNAUTHORIZED") {
+          forgetRoom(code);
+          tokenRef.current = undefined;
+          setToken(undefined);
+          setRoom(undefined);
+          setSelfPlayerId(undefined);
+          setNeedsJoin(true);
+          setError("That saved seat is no longer valid. Join the room again to claim a seat.");
+          return;
+        }
+        setError(message.message);
+        return;
+      }
+      setRoom(message.room);
+      setSelfPlayerId(message.selfPlayerId);
+      setError(undefined);
+      if (message.participantToken !== undefined) {
+        rememberRoom(message.room.code, message.participantToken);
+        tokenRef.current = message.participantToken;
+        setToken(message.participantToken);
+        setNeedsJoin(false);
+      }
+    },
+    [code],
+  );
 
   useEffect(() => {
     const socket = new RoomSocket();
     socketRef.current = socket;
     const unsubscribe = socket.subscribe(handleMessage);
+    let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectDelay = 500;
     const storedToken = roomToken(code);
+    tokenRef.current = storedToken ?? undefined;
     if (storedToken === null) setNeedsJoin(true);
-    else {
-      setToken(storedToken);
+    else setToken(storedToken);
+
+    const connect = () => {
+      void socket.connect().catch((caught: unknown) => {
+        if (disposed) return;
+        setConnected(false);
+        setError(caught instanceof Error ? caught.message : "Connection failed.");
+        scheduleReconnect();
+      });
+    };
+    const scheduleReconnect = () => {
+      if (disposed || reconnectTimer !== undefined) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = undefined;
+        connect();
+      }, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5_000);
+    };
+    const unsubscribeConnection = socket.subscribeConnection((isConnected) => {
+      setConnected(isConnected);
+      if (!isConnected) {
+        if (!disposed) setError("Connection lost. Reconnecting…");
+        scheduleReconnect();
+        return;
+      }
+      reconnectDelay = 500;
+      const activeToken = tokenRef.current;
+      if (activeToken === undefined) return;
       void socket
         .send({
           version: PROTOCOL_VERSION,
           requestId: requestId(),
           kind: "ResumeRoom",
           code,
-          token: storedToken,
+          token: activeToken,
         })
         .catch((caught) =>
           setError(caught instanceof Error ? caught.message : "Connection failed."),
         );
-    }
+    });
+    connect();
     return () => {
+      disposed = true;
+      if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       unsubscribe();
+      unsubscribeConnection();
       socket.close();
     };
   }, [code, handleMessage]);
@@ -115,6 +167,9 @@ export function RoomSetup({ code }: { readonly code: string }) {
               Team name
               <input
                 className="setup-input"
+                name="team-name"
+                autoComplete="off"
+                spellCheck={false}
                 value={name}
                 maxLength={24}
                 onChange={(event) => setName(event.currentTarget.value)}
@@ -187,8 +242,11 @@ export function RoomSetup({ code }: { readonly code: string }) {
             <p className="eyebrow mb-3">Private room</p>
             <div className="flex items-center gap-4">
               <h1 className="font-mono text-4xl font-black tracking-[0.16em]">{code}</h1>
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-3 py-1 text-xs font-bold text-emerald-200">
-                Setup live
+              <span
+                className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-3 py-1 text-xs font-bold text-emerald-200"
+                role="status"
+              >
+                {connected ? "Setup live" : "Reconnecting…"}
               </span>
             </div>
           </div>
@@ -232,6 +290,9 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 Team name
                 <input
                   className="setup-input"
+                  name="team-name"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={editName}
                   maxLength={24}
                   disabled={self.ready}

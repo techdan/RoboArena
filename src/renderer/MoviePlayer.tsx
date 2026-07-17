@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Application, Texture } from "pixi.js";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
 import type { MatchState, ResolutionEvent, Terrain, TileCoord } from "../engine/types";
-import { EFFECT_ASSET_URLS, MARKER_ASSET_URLS, TERRAIN_ASSETS, TERRAIN_ASSET_URLS } from "./assets";
+import {
+  EFFECT_ASSET_URLS,
+  MOVIE_MARKER_ASSET_URLS,
+  TERRAIN_ASSETS,
+  TERRAIN_ASSET_URLS,
+} from "./assets";
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
 import { renderMovieEffects } from "./effects/effects";
 import { loadRobotTextures, robotTextureKey } from "./robotTextures";
@@ -40,6 +45,19 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
   const [speed, setSpeed] = useState<MovieSpeed>(1);
   const [compressIdle, setCompressIdle] = useState(true);
   const [rendererStatus, setRendererStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const currentIndexRef = useRef(currentIndex);
+  const reducedMotionRef = useRef(reducedMotion);
+  currentIndexRef.current = currentIndex;
+  reducedMotionRef.current = reducedMotion;
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setReducedMotion(media.matches);
+    updatePreference();
+    media.addEventListener("change", updatePreference);
+    return () => media.removeEventListener("change", updatePreference);
+  }, []);
 
   const seek = useCallback(
     (index: number) => {
@@ -50,7 +68,7 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
   );
 
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || rendererStatus !== "ready") return;
     if (currentIndex >= timeline.ticks.length - 1) {
       setPlaying(false);
       return;
@@ -61,13 +79,19 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
       setCurrentIndex((index) => Math.min(index + 1, timeline.ticks.length - 1));
     }, presentationDelayMs({ fromTick, toTick, fps, speed, compressIdle }));
     return () => window.clearTimeout(timeout);
-  }, [compressIdle, currentIndex, fps, playing, speed, timeline.ticks]);
+  }, [compressIdle, currentIndex, fps, playing, rendererStatus, speed, timeline.ticks]);
 
-  useEffect(() => renderSnapshotRef.current(currentIndex, true), [currentIndex]);
+  useEffect(
+    () => renderSnapshotRef.current(currentIndex, !reducedMotion),
+    [currentIndex, reducedMotion],
+  );
 
   useEffect(() => {
     let disposed = false;
     let app: Application | undefined;
+    setRendererStatus("loading");
+    setPlaying(false);
+    setCurrentIndex(initialIndex);
 
     const initialize = async () => {
       const { Application, Assets, Container, Sprite } = await import("pixi.js");
@@ -98,7 +122,7 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
       // Effect/marker textures are read synchronously via Assets.get during
       // per-tick effect rendering, so they must be cached before playback.
       await Promise.all(
-        [...EFFECT_ASSET_URLS, ...MARKER_ASSET_URLS].map((url) => Assets.load<Texture>(url)),
+        [...EFFECT_ASSET_URLS, ...MOVIE_MARKER_ASSET_URLS].map((url) => Assets.load<Texture>(url)),
       );
       for (let y = 0; y < initialState.arena.height; y += 1) {
         for (let x = 0; x < initialState.arena.width; x += 1) {
@@ -137,15 +161,17 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
         for (const robot of Object.values(snapshot.robots)) {
           robotPositions[robot.id] = robot.position;
           const visual = visuals.get(robot.id);
-          if (visual !== undefined) updateRobotSprite(visual, robot, animate);
+          if (visual !== undefined)
+            updateRobotSprite(visual, robot, animate && !reducedMotionRef.current);
         }
         renderMovieEffects(
           effectsLayer,
           timeline.eventsByTick.get(snapshot.tick) ?? [],
           robotPositions,
+          reducedMotionRef.current,
         );
       };
-      renderSnapshotRef.current(currentIndex, false);
+      renderSnapshotRef.current(currentIndexRef.current, false);
       setRendererStatus("ready");
     };
 
@@ -160,7 +186,7 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
       renderSnapshotRef.current = () => undefined;
       app?.destroy(true);
     };
-  }, [initialState, timeline]);
+  }, [initialIndex, initialState, timeline]);
 
   const tick = timeline.ticks[currentIndex] ?? 0;
   const animationCues = (timeline.eventsByTick.get(tick) ?? [])
@@ -190,6 +216,7 @@ export function MoviePlayer({ initialState, events, fps = 12, initialTick = 0 }:
         ) : null}
       </div>
       <MovieControls
+        disabled={rendererStatus !== "ready"}
         playing={playing}
         currentIndex={currentIndex}
         maxIndex={timeline.ticks.length - 1}

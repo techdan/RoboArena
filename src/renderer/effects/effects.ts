@@ -6,8 +6,8 @@
  */
 
 import { gsap } from "gsap";
-import { Assets, Graphics, Sprite } from "pixi.js";
-import type { Container, Texture } from "pixi.js";
+import { Assets, Sprite } from "pixi.js";
+import type { Container, Graphics, Texture } from "pixi.js";
 import type { ResolutionEvent, TileCoord } from "../../engine/types";
 import { EFFECT_ASSETS, MARKER_ASSETS } from "../assets";
 import { MOVIE_TILE_SIZE } from "../RobotSprite";
@@ -86,11 +86,13 @@ export const renderMovieEffects = (
   layer: Container,
   events: readonly ResolutionEvent[],
   robotPositions: Readonly<Record<string, TileCoord | "dock">>,
+  reducedMotion = false,
 ) => {
   layer.removeChildren().forEach((child) => {
     gsap.killTweensOf([child, child.scale, child.position]);
     child.destroy();
   });
+  if (reducedMotion) return;
   const tileOf = (robotId: string): { x: number; y: number } | undefined => {
     const position = robotPositions[robotId];
     return position === undefined || position === "dock" ? undefined : center(position);
@@ -134,12 +136,13 @@ export const renderMovieEffects = (
           removeAfter(grenade, 0.36);
         }
       } else {
-        const tracer = new Graphics()
-          .moveTo(from.x, from.y)
-          .lineTo(to.x, to.y)
-          .stroke({ color: 0xffd24a, alpha: 0.9, width: 2 });
-        layer.addChild(tracer);
-        removeAfter(tracer, 0.28);
+        const tracer = spawn(layer, EFFECT_ASSETS.tracerBullet, from, MOVIE_TILE_SIZE * 0.22);
+        if (tracer !== undefined) {
+          tracer.anchor.set(0.5, 0.125);
+          tracer.rotation = rotationToward(from, to);
+          gsap.to(tracer.position, { x: to.x, y: to.y, duration: 0.18, ease: "none" });
+          removeAfter(tracer, 0.2);
+        }
       }
     }
     if (event.kind === "projectile-impacted") {

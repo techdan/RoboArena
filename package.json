@@ -13,15 +13,15 @@
     "build": "next build",
     "start": "next start",
     "start:server": "tsx server/index.ts",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "npm run build && playwright test",
-    "test:room": "npm run build && playwright test --config playwright.room.config.ts"
+    "test:e2e": "npm run build && node tools/testing/run-playwright.mjs",
+    "test:room": "npm run build && node tools/testing/run-playwright.mjs --room"
   },
   "dependencies": {
     "gsap": "^3.15.0",

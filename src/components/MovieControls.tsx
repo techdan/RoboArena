@@ -5,6 +5,7 @@ import { Pause, Play, RotateCcw, SkipBack, SkipForward, Zap } from "lucide-react
 export type MovieSpeed = 0.5 | 1 | 2 | 4;
 
 interface MovieControlsProps {
+  readonly disabled: boolean;
   readonly playing: boolean;
   readonly currentIndex: number;
   readonly maxIndex: number;
@@ -31,6 +32,7 @@ export function MovieControls(props: MovieControlsProps) {
           type="button"
           onClick={props.onRestart}
           aria-label="Restart movie"
+          disabled={props.disabled}
         >
           <RotateCcw aria-hidden="true" className="size-4" />
         </button>
@@ -39,6 +41,7 @@ export function MovieControls(props: MovieControlsProps) {
           type="button"
           onClick={props.onStepBack}
           aria-label="Step backward"
+          disabled={props.disabled}
         >
           <SkipBack aria-hidden="true" className="size-4" />
         </button>
@@ -47,6 +50,7 @@ export function MovieControls(props: MovieControlsProps) {
           type="button"
           onClick={props.onTogglePlaying}
           aria-label={props.playing ? "Pause movie" : "Play movie"}
+          disabled={props.disabled}
         >
           {props.playing ? (
             <Pause aria-hidden="true" className="size-5" />
@@ -59,6 +63,7 @@ export function MovieControls(props: MovieControlsProps) {
           type="button"
           onClick={props.onStepForward}
           aria-label="Step forward"
+          disabled={props.disabled}
         >
           <SkipForward aria-hidden="true" className="size-4" />
         </button>
@@ -73,6 +78,7 @@ export function MovieControls(props: MovieControlsProps) {
           max={props.maxIndex}
           value={props.currentIndex}
           onChange={(event) => props.onScrub(Number(event.currentTarget.value))}
+          disabled={props.disabled}
         />
       </label>
 
@@ -95,18 +101,22 @@ export function MovieControls(props: MovieControlsProps) {
             data-active={props.speed === speed ? "true" : "false"}
             onClick={() => props.onSpeedChange(speed)}
             aria-pressed={props.speed === speed}
+            disabled={props.disabled}
           >
             {speed}x
           </button>
         ))}
       </div>
 
-      <label className="flex cursor-pointer items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
+      <label
+        className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white/55 ${props.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
+      >
         <input
           type="checkbox"
           className="accent-lime-300"
           checked={props.compressIdle}
           onChange={(event) => props.onCompressIdleChange(event.currentTarget.checked)}
+          disabled={props.disabled}
         />
         <Zap aria-hidden="true" className="size-3.5 text-lime-300" />
         Skip idle

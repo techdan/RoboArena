@@ -47,11 +47,15 @@ Deferred deliberately:
 - AI personalities. Original RoboSport includes AI levels; v1 is human-only.
 - Non-Survival sports and their commands. Treasure Hunt / Capture the Flag / Hostage / Baseball plus sport-specific commands are out of v1.
 - Stealth class behavior and Stealth-specific visibility/Scan & Fire rules.
-  The catalog may reserve its original stats, but main-game setup, resolver,
-  visibility, planner, tests, and assets must not depend on Stealth.
+  The catalog may reserve its original stats, and forward-compatible Stealth
+  artwork may exist in the generic asset registry and renderer, but main-game
+  setup, resolver, visibility, planner, and acceptance tests must not expose or
+  depend on Stealth gameplay.
 - Full Custom Game team builder and point-buy roster editing. v1 can start with Quick Start / preset rosters.
 - Full original weapon-system parity. v1 uses the core weapon set currently represented in `catalog.ts`; do not add extra original weapon systems without a new phase.
-- Production persistence, accounts, observability, deployment automation, and full help/tutorial systems.
+- Production-scale database operations, accounts, observability, deployment
+  automation, and full help/tutorial systems. Durable v1 room persistence is
+  required; production uses managed Postgres without adding account features.
 
 ### Closed audit boundary and deferred content
 

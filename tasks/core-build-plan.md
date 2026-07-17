@@ -11,8 +11,8 @@ phase ordering is ambiguous, use this file.
 
 ## Current position
 
-Phases 1R through 7 are draft-complete; Phase 8 is locally implemented with 201
-passing tests and its deployed WSS/two-network restart gate remains open. The engine now
+Phases 1R through 7 are draft-complete; Phase 8 is locally implemented with its
+deployed WSS/two-network restart gate still open. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
@@ -214,6 +214,7 @@ playable end to end.
 
 ## Next actions
 
-1. Deploy the Phase 8 room service with a persistent volume and verify WSS,
-   restart recovery, and rejoin ownership from two real networks/devices.
+1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
+   Vercel frontend and external long-lived room service and verify WSS, restart
+   recovery, and rejoin ownership from two real networks/devices.
 2. Begin Phase 9 planner work only after that external gate passes.

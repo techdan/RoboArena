@@ -18,7 +18,7 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 are
-draft-complete; Phase 8 is locally implemented with 201 passing tests and its
+draft-complete; Phase 8 is locally implemented with 208 passing tests and its
 external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
@@ -32,7 +32,7 @@ hosting gate; visual projectile travel speed remains renderer tuning. See
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 201 tests)
+npm test               # Run all unit tests (currently 208 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -76,8 +76,11 @@ robot and effect presentation, playback transport/scrub/speed/idle controls,
 and a production visual regression test.
 
 **Phase 8 (locally complete; hosting gate open)** — versioned room protocol,
-hashed anonymous seat ownership, long-lived WebSockets, SQLite WAL persistence,
-2-4 player setup/start UI, and four-browser integration coverage.
+hashed anonymous seat ownership, reconnecting long-lived WebSockets, SQLite WAL
+local/test persistence, 2-4 player setup/start UI, and four-browser integration
+coverage. Production targets Vercel for Next.js, Supabase Postgres for durable
+storage, and a separate long-lived host for the room service; the Postgres
+adapter/migrations and external deployment check remain open.
 
 **Everything after Phase 8 (not yet built)** — planner and the authoritative
 online turn loop.
@@ -149,9 +152,10 @@ Don't surface these as gaps unless something has changed about scope.
 ## Stack
 
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
-- Vitest 2.1 for tests
+- Vitest 4.1 for tests
 - Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + GSAP; Zustand remains planned
-- Phase 8+: long-lived WebSocket room service plus SQLite WAL durable room
-  storage; distributed/shared database and accounts remain post-v1
+- Phase 8+: Vercel-hosted Next.js, a separately hosted long-lived WebSocket room
+  service, Supabase Postgres in production, and SQLite only for local/test use;
+  multi-process room distribution and accounts remain post-v1
 
 Parent project `C:\src\DevProjects\CLAUDE.md` adds rules across the workspace (e.g. all clickable elements get `cursor-pointer`, prefer Server Components by default).

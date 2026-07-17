@@ -4,9 +4,30 @@ import { ArrowRight, Film, Gamepad2, RadioTower, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { PROTOCOL_VERSION } from "../../lib/net/protocol";
-import { recentRooms, rememberRoom, requestId, requestOnce } from "../../lib/net/client";
+import { PROTOCOL_VERSION, type PublicRoom } from "../../lib/net/protocol";
+import {
+  forgetRoom,
+  recentRooms,
+  rememberRoom,
+  requestId,
+  requestOnce,
+  roomToken,
+  RoomRequestError,
+} from "../../lib/net/client";
 import { PLAYER_COLORS, type PlayerColor } from "../../lib/setup/validate";
+
+interface RememberedRoom {
+  readonly code: string;
+  readonly status: string;
+}
+
+const roomStatus = (room: PublicRoom): string => {
+  if (room.phase === "active") return "Match started";
+  const ready = room.players.filter((player) => player.ready).length;
+  if (room.players.length < 2) return "Waiting for players";
+  if (ready === room.players.length) return "Ready to start";
+  return `${ready}/${room.players.length} ready`;
+};
 
 export function HomeSetup() {
   const router = useRouter();
@@ -16,9 +37,40 @@ export function HomeSetup() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [remembered, setRemembered] = useState<readonly string[]>([]);
+  const [remembered, setRemembered] = useState<readonly RememberedRoom[]>([]);
 
-  useEffect(() => setRemembered(recentRooms()), []);
+  useEffect(() => {
+    let disposed = false;
+    const rooms = recentRooms();
+    setRemembered(rooms.map((roomCode) => ({ code: roomCode, status: "Checking…" })));
+    void Promise.all(
+      rooms.map(async (roomCode): Promise<RememberedRoom> => {
+        const token = roomToken(roomCode);
+        if (token === null) return { code: roomCode, status: "Rejoin required" };
+        try {
+          const response = await requestOnce({
+            version: PROTOCOL_VERSION,
+            requestId: requestId(),
+            kind: "ResumeRoom",
+            code: roomCode,
+            token,
+          });
+          return { code: roomCode, status: roomStatus(response.room) };
+        } catch (caught) {
+          if (caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED") {
+            forgetRoom(roomCode);
+            return { code: roomCode, status: "Rejoin required" };
+          }
+          return { code: roomCode, status: "Unavailable" };
+        }
+      }),
+    ).then((statuses) => {
+      if (!disposed) setRemembered(statuses);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -114,10 +166,13 @@ export function HomeSetup() {
                   Room code
                   <input
                     className="setup-input font-mono uppercase tracking-[0.2em]"
+                    name="room-code"
+                    autoComplete="off"
+                    spellCheck={false}
                     value={code}
                     maxLength={6}
                     onChange={(event) => setCode(event.currentTarget.value.toUpperCase())}
-                    placeholder="ABC123"
+                    placeholder="ABC123…"
                     required
                   />
                 </label>
@@ -126,6 +181,9 @@ export function HomeSetup() {
                 Team name
                 <input
                   className="setup-input"
+                  name="team-name"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={name}
                   maxLength={24}
                   onChange={(event) => setName(event.currentTarget.value)}
@@ -168,8 +226,9 @@ export function HomeSetup() {
                 <p className="eyebrow mb-3">Recent rooms</p>
                 <div className="flex flex-wrap gap-2">
                   {remembered.map((room) => (
-                    <Link key={room} href={`/room/${room}`} className="recent-room">
-                      {room}
+                    <Link key={room.code} href={`/room/${room.code}`} className="recent-room">
+                      <strong>{room.code}</strong>
+                      <span>{room.status}</span>
                     </Link>
                   ))}
                 </div>

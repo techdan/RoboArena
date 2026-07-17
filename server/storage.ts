@@ -1,5 +1,6 @@
 /** SQLite WAL persistence for v1 rooms, idempotency, and locked orders. */
 
+import { createHmac, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -26,6 +27,7 @@ const decode = <T>(value: string): T =>
 
 export class RoomStorage {
   readonly #database: DatabaseSync;
+  readonly #idempotencySecret: string;
 
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -45,6 +47,10 @@ export class RoomStorage {
         response_json TEXT NOT NULL,
         PRIMARY KEY (principal, request_id)
       );
+      CREATE TABLE IF NOT EXISTS service_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS locked_orders (
         room_code TEXT NOT NULL,
         turn_number INTEGER NOT NULL,
@@ -56,6 +62,15 @@ export class RoomStorage {
       );
       PRAGMA user_version = 1;
     `);
+    const secretRow = this.#database
+      .prepare("SELECT value FROM service_metadata WHERE key = 'idempotency_secret'")
+      .get() as { readonly value: string } | undefined;
+    this.#idempotencySecret = secretRow?.value ?? randomBytes(32).toString("hex");
+    if (secretRow === undefined) {
+      this.#database
+        .prepare("INSERT INTO service_metadata (key, value) VALUES ('idempotency_secret', ?)")
+        .run(this.#idempotencySecret);
+    }
   }
 
   loadRoom(code: string): RoomRecord | undefined {
@@ -83,11 +98,27 @@ export class RoomStorage {
   }
 
   saveRequestResult(principal: string, requestId: string, response: ServerMessage): void {
+    const storedResponse: ServerMessage =
+      response.kind === "RoomSnapshot" && response.participantToken !== undefined
+        ? {
+            version: response.version,
+            requestId: response.requestId,
+            kind: response.kind,
+            room: response.room,
+            selfPlayerId: response.selfPlayerId,
+          }
+        : response;
     this.#database
       .prepare(
         "INSERT OR IGNORE INTO request_results (principal, request_id, response_json) VALUES (?, ?, ?)",
       )
-      .run(principal, requestId, encode(response));
+      .run(principal, requestId, encode(storedResponse));
+  }
+
+  participantTokenForRequest(fingerprint: string): string {
+    return createHmac("sha256", Buffer.from(this.#idempotencySecret, "hex"))
+      .update(fingerprint)
+      .digest("base64url");
   }
 
   lockOrders(input: {

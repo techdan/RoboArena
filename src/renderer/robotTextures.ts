@@ -39,7 +39,7 @@ export interface RobotTextureSet {
 export const robotTextureKey = (robotClass: RobotClass, teamColor: string) =>
   `${robotClass}:${teamColor}`;
 
-const textureCache = new Map<string, Texture>();
+const textureCache = new Map<string, Promise<Texture>>();
 
 const recolor = (svg: string, teamColor: string): string => {
   const palette = TEAM_PAINT[teamColor];
@@ -75,11 +75,18 @@ const loadTeamTexture = async (url: string, teamColor: string, px: number): Prom
   const cacheKey = `${url}#${teamColor}`;
   const cached = textureCache.get(cacheKey);
   if (cached !== undefined) return cached;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not fetch robot sprite ${url}.`);
-  const texture = await rasterize(recolor(await response.text(), teamColor), px);
-  textureCache.set(cacheKey, texture);
-  return texture;
+  const loading = (async () => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not fetch robot sprite ${url}.`);
+    return rasterize(recolor(await response.text(), teamColor), px);
+  })();
+  textureCache.set(cacheKey, loading);
+  try {
+    return await loading;
+  } catch (error) {
+    textureCache.delete(cacheKey);
+    throw error;
+  }
 };
 
 /** Loads (and caches) the recolored body/turret/wreck textures for every
@@ -89,10 +96,14 @@ export const loadRobotTextures = async (
 ): Promise<Map<string, RobotTextureSet>> => {
   const wreck = await Assets.load<Texture>(EFFECT_ASSETS.wreck);
   const sets = new Map<string, RobotTextureSet>();
+  const distinctRobots = [
+    ...new Map(
+      robots.map((robot) => [robotTextureKey(robot.robotClass, robot.teamColor), robot]),
+    ).values(),
+  ];
   await Promise.all(
-    robots.map(async ({ robotClass, teamColor }) => {
+    distinctRobots.map(async ({ robotClass, teamColor }) => {
       const key = robotTextureKey(robotClass, teamColor);
-      if (sets.has(key)) return;
       const bodies = ROBOT_BODY_ASSETS[robotClass];
       const [upright, ducking, crouching, turret] = await Promise.all([
         loadTeamTexture(bodies.upright, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox),
