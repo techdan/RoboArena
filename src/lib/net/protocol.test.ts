@@ -46,6 +46,23 @@ describe("room protocol schemas", () => {
     expect(clientMessageSchema.safeParse({ ...valid, hiddenOrders: [] }).success).toBe(false);
   });
 
+  it("accepts a corner selection and rejects out-of-range or non-integer slots", () => {
+    const setHomeSlot = (homeSlot: unknown) => ({
+      version: 1,
+      requestId: "corner-1",
+      kind: "SetHomeSlot",
+      code: "ABC234",
+      token: "x".repeat(43),
+      homeSlot,
+    });
+    expect(clientMessageSchema.safeParse(setHomeSlot(0)).success).toBe(true);
+    expect(clientMessageSchema.safeParse(setHomeSlot(3)).success).toBe(true);
+    expect(clientMessageSchema.safeParse(setHomeSlot(4)).success).toBe(false);
+    expect(clientMessageSchema.safeParse(setHomeSlot(-1)).success).toBe(false);
+    expect(clientMessageSchema.safeParse(setHomeSlot(1.5)).success).toBe(false);
+    expect(clientMessageSchema.safeParse(setHomeSlot(undefined)).success).toBe(false);
+  });
+
   it("strictly validates bounded private turn orders", () => {
     const valid = {
       version: 1,

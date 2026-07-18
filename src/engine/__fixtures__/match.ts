@@ -79,6 +79,8 @@ export const makeRobot = (
   };
 };
 
+const SIDE_COLORS = ["red", "blue", "green", "yellow"] as const;
+
 export const makeTeam = (
   id: string,
   side: TeamState["side"],
@@ -87,7 +89,7 @@ export const makeTeam = (
 ): TeamState => ({
   id,
   name: id,
-  color: side === 1 ? "red" : "blue",
+  color: SIDE_COLORS[(side - 1) % SIDE_COLORS.length]!,
   side,
   homeSlot,
   brain: "human",
@@ -128,3 +130,33 @@ export const makeMatch = (input?: {
   arena: input?.arena ?? makeOpenArena(),
   lastKnownMarkers: new Map(),
 });
+
+/**
+ * A free-for-all match with one unique Side and Home slot per team, for
+ * three-/four-player lifecycle coverage. Each entry supplies that team's
+ * robots; Side and Home slot follow the (non-compacting) array order.
+ */
+export const makeFfaMatch = (
+  teams: readonly { readonly id: string; readonly robots: readonly RobotState[] }[],
+  input?: { readonly arena?: Arena; readonly turnLengthSeconds?: number },
+): MatchState => {
+  if (teams.length < 2 || teams.length > 4) {
+    throw new Error("A free-for-all match needs two to four teams.");
+  }
+  return {
+    config: {
+      sportType: "survival",
+      formation: "beginner",
+      length: "melee",
+      arenaType: "rubble",
+      arenaSizeName: "Resolver Test",
+      turnLengthSeconds: input?.turnLengthSeconds ?? 15,
+    },
+    turnNumber: 1,
+    teams: teams.map((team, index) =>
+      makeTeam(team.id, (index + 1) as TeamState["side"], team.robots, index as HomeSlot),
+    ),
+    arena: input?.arena ?? makeOpenArena(),
+    lastKnownMarkers: new Map(),
+  };
+};

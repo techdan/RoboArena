@@ -1,7 +1,7 @@
 /** Phase 11 authoritative turn lifecycle and participant projection tests. */
 
 import { describe, expect, it } from "vitest";
-import { makeMatch, makeRobot } from "../src/engine/__fixtures__/match";
+import { makeFfaMatch, makeMatch, makeRobot } from "../src/engine/__fixtures__/match";
 import { verifyReplay } from "../src/engine/replay";
 import type { ResolutionEvent } from "../src/engine/types";
 import {
@@ -223,5 +223,133 @@ describe("authoritative match lifecycle", () => {
         { teamId: "team-2", score: 0 },
       ],
     });
+  });
+});
+
+describe("multi-player free-for-all lifecycle", () => {
+  const FIELD_POSITIONS = [
+    { x: 1, y: 1 },
+    { x: 6, y: 1 },
+    { x: 6, y: 6 },
+    { x: 1, y: 6 },
+  ] as const;
+
+  const ffaIds = (count: number): string[] =>
+    Array.from({ length: count }, (_, index) => `team-${index + 1}`);
+
+  for (const count of [3, 4] as const) {
+    it(`resolves a private, staggered ${count}-player turn once with a byte-identical replay`, () => {
+      const players = ffaIds(count);
+      const state = makeFfaMatch(
+        players.map((id, index) => ({
+          id,
+          robots: [makeRobot(`${id}-r1`, id, "rifle", FIELD_POSITIONS[index]!)],
+        })),
+      );
+      const match = createAuthoritativeMatch(state, players);
+
+      // One player's private draft never leaks into another player's snapshot.
+      const secretDraft = {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: `${players[0]!}-r1`,
+            segments: [{ kind: "set-posture", posture: "ducking" } as const],
+          },
+        ],
+      };
+      submitParticipantOrders(match, players[0]!, secretDraft);
+      const opponentView = participantMatchSnapshot({
+        requestId: "peek",
+        roomCode: "ABC234",
+        matchId: "match-1",
+        playerId: players[1]!,
+        match,
+      });
+      expect(JSON.stringify(opponentView)).not.toContain("set-posture");
+      expect(opponentView.ownOrders).toEqual(emptyOrders(1));
+
+      // Staggered locks: resolution fires only once the final player commits.
+      players.forEach((id, index) => {
+        lockParticipantOrders(
+          match,
+          id,
+          id === players[0]! ? secretDraft : emptyOrders(1),
+          "ffa",
+          "n",
+        );
+        expect(match.phase).toBe(index === players.length - 1 ? "resolving" : "planning");
+      });
+      expect(resolvePendingTurn(match)).toBe(true);
+      expect(resolvePendingTurn(match)).toBe(false);
+      expect(match.turns).toHaveLength(1);
+      expect(match.state.turnNumber).toBe(2);
+
+      // Independent acknowledgement: one player advancing does not move the rest.
+      expect(players.every((id) => participantStatus(match, id) === "turn-ready")).toBe(true);
+      acknowledgeTurn(match, players[0]!, 1);
+      expect(participantStatus(match, players[0]!)).toBe("planning");
+      expect(players.slice(1).every((id) => participantStatus(match, id) === "turn-ready")).toBe(
+        true,
+      );
+
+      // Deterministic byte-identical replay for the whole configuration.
+      expect(verifyReplay(canonicalReplay(match))).toEqual({ ok: true });
+    });
+  }
+
+  it("aggregates a four-player last-Side-standing ceremony by Side", () => {
+    const players = ffaIds(4);
+    const survivorIndex = 2; // team-3 is the lone survivor.
+    const state = makeFfaMatch(
+      players.map((id, index) => ({
+        id,
+        robots: [
+          makeRobot(`${id}-r1`, id, "rifle", index === survivorIndex ? { x: 6, y: 6 } : "dock", {
+            hp: index === survivorIndex ? 140 : 0,
+          }),
+        ],
+      })),
+    );
+    const match = createAuthoritativeMatch(state, players);
+    for (const id of players) lockParticipantOrders(match, id, emptyOrders(1), "seed", "nonce");
+    resolvePendingTurn(match);
+    for (const id of players) acknowledgeTurn(match, id, 1);
+    const result = participantMatchSnapshot({
+      requestId: "ceremony",
+      roomCode: "ABC234",
+      matchId: "match-1",
+      playerId: "team-3",
+      match,
+    });
+    expect(result).toMatchObject({ status: "finished", outcome: "won", winningSide: 3 });
+    const scores = Object.fromEntries(
+      (result.ceremonyScores ?? []).map((row) => [row.teamId, row.score]),
+    );
+    expect(scores["team-3"]).toBe(550); // 1 survivor: 150 robot + 400 team bonus.
+    expect(scores["team-1"]).toBe(0);
+  });
+
+  it("resolves a simultaneous four-player wipeout as a draw", () => {
+    const players = ffaIds(4);
+    const state = makeFfaMatch(
+      players.map((id) => ({
+        id,
+        robots: [makeRobot(`${id}-r1`, id, "rifle", "dock", { hp: 0 })],
+      })),
+    );
+    const match = createAuthoritativeMatch(state, players);
+    for (const id of players) lockParticipantOrders(match, id, emptyOrders(1), "seed", "nonce");
+    resolvePendingTurn(match);
+    for (const id of players) acknowledgeTurn(match, id, 1);
+    const result = participantMatchSnapshot({
+      requestId: "draw",
+      roomCode: "ABC234",
+      matchId: "match-1",
+      playerId: "team-1",
+      match,
+    });
+    expect(result).toMatchObject({ status: "finished", outcome: "draw" });
+    expect(result).not.toHaveProperty("winningSide");
   });
 });

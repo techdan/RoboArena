@@ -12,10 +12,12 @@ import type {
   TurnOrders,
 } from "../../engine/types";
 import {
+  homeSlotSchema,
   playerColorSchema,
   playerNameSchema,
   roomCodeSchema,
   roomConfigSchema,
+  type HomeSlot,
   type PlayerColor,
   type RoomConfig,
 } from "../setup/validate";
@@ -132,6 +134,15 @@ export const clientMessageSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...envelope,
+      kind: z.literal("SetHomeSlot"),
+      code: roomCodeSchema,
+      token: tokenSchema,
+      homeSlot: homeSlotSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...envelope,
       kind: z.literal("SetReady"),
       code: roomCodeSchema,
       token: tokenSchema,
@@ -211,7 +222,7 @@ export interface PublicPlayer {
   readonly connected: boolean;
   readonly isHost: boolean;
   readonly side?: 1 | 2 | 3 | 4;
-  readonly homeSlot?: 0 | 1 | 2 | 3;
+  readonly homeSlot?: HomeSlot;
 }
 
 export interface PublicRoom {
@@ -326,6 +337,7 @@ export type ProtocolErrorCode =
   | "NOT_READY"
   | "DUPLICATE_NAME"
   | "DUPLICATE_COLOR"
+  | "HOME_SLOT_TAKEN"
   | "INVALID_CONFIG"
   | "MATCH_NOT_FOUND"
   | "WRONG_PHASE"

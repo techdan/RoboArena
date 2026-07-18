@@ -2,6 +2,7 @@
 
 import { Crown, Radio, ShieldCheck } from "lucide-react";
 import type { PublicPlayer } from "../../lib/net/protocol";
+import { HOME_CORNER_LABELS } from "../../lib/setup/validate";
 
 export function TeamRow({
   player,
@@ -35,9 +36,11 @@ export function TeamRow({
             Planning
           </span>
         )}
-        {player.side === undefined ? null : (
+        {player.homeSlot === undefined ? null : (
           <p className="mt-1 font-mono text-[10px] text-white/35">
-            SIDE {player.side} · HOME {player.homeSlot! + 1}
+            {player.side === undefined
+              ? `HOME ${HOME_CORNER_LABELS[player.homeSlot]}`
+              : `SIDE ${player.side} · ${HOME_CORNER_LABELS[player.homeSlot]}`}
           </p>
         )}
       </div>

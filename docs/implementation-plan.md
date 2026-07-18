@@ -995,7 +995,7 @@ claimed by emulation.
 
 ---
 
-### Phase 11.6 — Three-/four-player online FFA hardening [⬜ FUNCTIONAL GATE]
+### Phase 11.6 — Three-/four-player online FFA hardening [🟡 IN PROGRESS]
 
 **Goal**: extend the proven two-player online loop to three and four independent
 human players. v1 supports only unique Sides: 1v1v1 and 1v1v1v1. The audited
@@ -1043,6 +1043,33 @@ two-real-network validation, and physical-device release checks close together
 in Phase 12.
 
 **Effort**: L.
+
+**Implemented contract (2026-07-17)**: v1 now lets each player pick a distinct
+NW/NE/SE/SW Home corner in setup. The room service auto-assigns the lowest free
+corner on create/join, a new `SetHomeSlot` protocol message reassigns a free
+corner (rejecting `HOME_SLOT_TAKEN` and re-confirming readiness), and
+`startMatch` carries each player's chosen corner into `homeSlot` — it no longer
+derives the slot from the compacted `teams[]` index. Sides stay unique per
+player; `assertUniqueV1Seating` rejects any duplicate-Side or duplicate-corner
+(2v2/3v1/allied) seating before a match starts. The engine already indexed Home
+Areas by explicit `homeSlot` and sorted actors non-compacting, so nonadjacent
+corners resolve, deploy, and replay without engine changes.
+
+**Verification**: 262 Vitest tests (strict typecheck, ESLint, Prettier, and a
+production Next.js build all green). New server coverage: corner auto-assign /
+free-corner reassignment / taken-corner rejection; chosen nonadjacent corners
+(`[0,3]`) carried through start into match team state; unique-Side/corner
+invariant; parametrized three- and four-player private, staggered turns with
+single resolution, independent acknowledgement, and byte-identical
+`verifyReplay(canonicalReplay)`; four-player last-Side-standing ceremony
+aggregation and simultaneous-wipeout draw; and a four-client staggered turn
+recovered across a restart with a mid-turn disconnect and durable rejoin.
+
+**Deferred to Phase 12**: resignation and abandoned-room handling (not started;
+only durable disconnect/reconnect exists today) and the literal four-separate-
+real-browser-session / two-real-network functional gate, which consolidates with
+the production hosting and physical-device checks. Playwright already exercises
+four emulated-iPad browsers through one authoritative planned turn and reconnect.
 
 ---
 
@@ -2049,7 +2076,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate         |
 | 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay     |
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
-| 11.6    | ⬜ FUNCTIONAL GATE                 | L      | Three-/four-player online free-for-all hardening                                                              |
+| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                         |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                     |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                     |

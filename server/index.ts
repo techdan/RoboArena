@@ -137,6 +137,8 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
         return service.updatePlayer(message.code, message.token, message.name, message.color);
       case "UpdateConfig":
         return service.updateConfig(message.code, message.token, message.config);
+      case "SetHomeSlot":
+        return service.setHomeSlot(message.code, message.token, message.homeSlot);
       case "SetReady":
         return service.setReady(message.code, message.token, message.ready);
       case "StartMatch":

@@ -12,7 +12,13 @@ import {
   roomToken,
   RoomSocket,
 } from "../../lib/net/client";
-import { configForLength, PLAYER_COLORS, type PlayerColor } from "../../lib/setup/validate";
+import {
+  configForLength,
+  HOME_CORNER_LABELS,
+  HOME_SLOTS,
+  PLAYER_COLORS,
+  type PlayerColor,
+} from "../../lib/setup/validate";
 import { TeamRow } from "./TeamRow";
 
 export function RoomSetup({ code }: { readonly code: string }) {
@@ -334,6 +340,44 @@ export function RoomSetup({ code }: { readonly code: string }) {
               >
                 Save team
               </button>
+              <fieldset className="mt-5" disabled={self.ready}>
+                <legend className="setup-label">Home corner</legend>
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {HOME_SLOTS.map((slot) => {
+                    const takenByOther = room.players.some(
+                      (player) => player.id !== selfPlayerId && player.homeSlot === slot,
+                    );
+                    const active = self.homeSlot === slot;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        className={`cursor-pointer rounded-xl border px-2 py-2 text-xs font-bold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                          active
+                            ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100"
+                            : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/25"
+                        }`}
+                        data-active={active ? "true" : "false"}
+                        disabled={self.ready || (takenByOther && !active)}
+                        aria-pressed={active}
+                        aria-label={`Home corner ${HOME_CORNER_LABELS[slot]}`}
+                        onClick={() =>
+                          send({
+                            version: PROTOCOL_VERSION,
+                            requestId: requestId(),
+                            kind: "SetHomeSlot",
+                            code,
+                            token,
+                            homeSlot: slot,
+                          })
+                        }
+                      >
+                        {HOME_CORNER_LABELS[slot]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
             </section>
             <section className="rounded-3xl border border-white/8 bg-white/[0.035] p-6">
               <p className="eyebrow mb-5">Match setup</p>

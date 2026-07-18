@@ -19,6 +19,8 @@ import type {
 } from "../src/lib/net/protocol.js";
 import {
   DEFAULT_ROOM_CONFIG,
+  HOME_SLOTS,
+  type HomeSlot,
   type PlayerColor,
   type RoomConfig,
 } from "../src/lib/setup/validate.js";
@@ -47,7 +49,7 @@ export interface PlayerRecord {
   color: PlayerColor;
   ready: boolean;
   side?: 1 | 2 | 3 | 4;
-  homeSlot?: 0 | 1 | 2 | 3;
+  homeSlot?: HomeSlot;
 }
 
 export interface RoomRecord {
@@ -90,6 +92,32 @@ const hashesMatch = (left: string, right: string): boolean => {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 };
 
+/** The lowest-numbered corner no seated player occupies. Never full with ≤4 seats. */
+const lowestFreeHomeSlot = (players: readonly PlayerRecord[], exceptId?: string): HomeSlot => {
+  const taken = new Set(
+    players.filter((player) => player.id !== exceptId).map((player) => player.homeSlot),
+  );
+  const free = HOME_SLOTS.find((slot) => !taken.has(slot));
+  if (free === undefined) throw new RoomError("ROOM_FULL", "Every Home corner is occupied.");
+  return free;
+};
+
+/**
+ * v1 online free-for-all is unique-Side only: no player may share a Side or a
+ * Home corner. This rejects any 2v2/3v1/allied seating before the match starts.
+ * Alliance seating is deliberately deferred to v2 (Phase 13.5).
+ */
+export const assertUniqueV1Seating = (players: readonly PlayerRecord[]): void => {
+  const sides = players.map((player) => player.side);
+  const slots = players.map((player) => player.homeSlot);
+  if (new Set(sides).size !== sides.length) {
+    throw new RoomError("INVALID_CONFIG", "v1 free-for-all requires one unique Side per player.");
+  }
+  if (new Set(slots).size !== slots.length) {
+    throw new RoomError("INVALID_CONFIG", "Each team must hold a distinct Home corner.");
+  }
+};
+
 export class RoomService {
   readonly #connected = new Map<string, number>();
   readonly #locks = new Map<string, Promise<void>>();
@@ -106,6 +134,7 @@ export class RoomService {
       name,
       color,
       ready: false,
+      homeSlot: 0,
     };
     const room: RoomRecord = {
       code,
@@ -138,6 +167,7 @@ export class RoomService {
         name,
         color,
         ready: false,
+        homeSlot: lowestFreeHomeSlot(room.players),
       };
       room.players.push(player);
       this.storage.saveRoom(room);
@@ -197,6 +227,21 @@ export class RoomService {
     });
   }
 
+  async setHomeSlot(code: string, token: string, homeSlot: HomeSlot): Promise<RoomAccess> {
+    return this.#withLock(code, () => {
+      const room = this.#requireSetupRoom(code);
+      const player = this.#authenticate(room, token);
+      if (room.players.some((other) => other.id !== player.id && other.homeSlot === homeSlot)) {
+        throw new RoomError("HOME_SLOT_TAKEN", "Another team already holds that Home corner.");
+      }
+      player.homeSlot = homeSlot;
+      // Changing a corner is a setup identity change: re-confirm readiness.
+      player.ready = false;
+      this.storage.saveRoom(room);
+      return { room: this.publicRoom(room), selfPlayerId: player.id };
+    });
+  }
+
   async setReady(code: string, token: string, ready: boolean): Promise<RoomAccess> {
     return this.#withLock(code, () => {
       const room = this.#requireSetupRoom(code);
@@ -217,8 +262,13 @@ export class RoomService {
       }
       room.players.forEach((participant, index) => {
         participant.side = (index + 1) as 1 | 2 | 3 | 4;
-        participant.homeSlot = index as 0 | 1 | 2 | 3;
+        // Keep each player's chosen corner; never derive it from the compacted
+        // teams[] index. Legacy records without a corner fall back defensively.
+        if (participant.homeSlot === undefined) {
+          participant.homeSlot = lowestFreeHomeSlot(room.players, participant.id);
+        }
       });
+      assertUniqueV1Seating(room.players);
       room.matchId = randomId(10, ID_ALPHABET);
       room.matchState = await this.#createMatchState(room);
       room.match = createAuthoritativeMatch(

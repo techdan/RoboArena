@@ -11,8 +11,10 @@ import {
   type ServerMessage,
 } from "../src/lib/net/protocol";
 import { configForLength, type PlayerColor } from "../src/lib/setup/validate";
+import { verifyReplay } from "../src/engine/replay";
 import { createRoomServer, MAX_CLIENT_MESSAGE_BYTES, MESSAGE_RATE_LIMIT } from "./index";
-import { RoomError, RoomService } from "./rooms";
+import { canonicalReplay } from "./matches";
+import { assertUniqueV1Seating, RoomError, RoomService, type PlayerRecord } from "./rooms";
 import { RoomStorage } from "./storage";
 
 const requireToken = (token: string | undefined): string => {
@@ -45,6 +47,65 @@ describe("authoritative rooms", () => {
       service.getMatchState(host.room.code, requireToken(host.participantToken)).teams,
     ).toHaveLength(4);
     storage.close();
+  });
+
+  it("auto-assigns corners, lets a player claim a free corner, and rejects taken corners", async () => {
+    const storage = new RoomStorage(":memory:");
+    const service = new RoomService(storage);
+    const host = service.createRoom("Red One", "red");
+    const guest = await service.joinRoom(host.room.code, "Blue Two", "blue");
+    expect(host.room.players[0]!.homeSlot).toBe(0);
+    const seated = service.resumeRoom(host.room.code, requireToken(host.participantToken));
+    expect(seated.room.players.map((player) => player.homeSlot)).toEqual([0, 1]);
+    await expect(
+      service.setHomeSlot(host.room.code, requireToken(guest.participantToken), 0),
+    ).rejects.toMatchObject({ code: "HOME_SLOT_TAKEN" });
+    const moved = await service.setHomeSlot(
+      host.room.code,
+      requireToken(guest.participantToken),
+      3,
+    );
+    expect(moved.room.players.map((player) => player.homeSlot)).toEqual([0, 3]);
+    storage.close();
+  });
+
+  it("carries chosen nonadjacent corners through start into match team state", async () => {
+    const storage = new RoomStorage(":memory:");
+    const service = new RoomService(storage);
+    const host = service.createRoom("Red One", "red");
+    const guest = await service.joinRoom(host.room.code, "Blue Two", "blue");
+    const hostToken = requireToken(host.participantToken);
+    const guestToken = requireToken(guest.participantToken);
+    await service.setHomeSlot(host.room.code, guestToken, 3);
+    await service.setReady(host.room.code, hostToken, true);
+    await service.setReady(host.room.code, guestToken, true);
+    const started = await service.startMatch(host.room.code, hostToken);
+    expect(started.room.players.map((player) => player.homeSlot)).toEqual([0, 3]);
+    expect(started.room.players.map((player) => player.side)).toEqual([1, 2]);
+    expect(
+      service.getMatchState(host.room.code, hostToken).teams.map((team) => team.homeSlot),
+    ).toEqual([0, 3]);
+    storage.close();
+  });
+
+  it("rejects allied (duplicate Side or Home corner) seating before a match starts", () => {
+    const seat = (
+      id: string,
+      side: NonNullable<PlayerRecord["side"]>,
+      homeSlot: NonNullable<PlayerRecord["homeSlot"]>,
+    ) =>
+      ({
+        id,
+        tokenHash: `hash-${id}`,
+        name: id,
+        color: "red",
+        ready: true,
+        side,
+        homeSlot,
+      }) satisfies PlayerRecord;
+    expect(() => assertUniqueV1Seating([seat("a", 1, 0), seat("b", 1, 1)])).toThrow(/unique Side/);
+    expect(() => assertUniqueV1Seating([seat("a", 1, 0), seat("b", 2, 0)])).toThrow(/Home corner/);
+    expect(() => assertUniqueV1Seating([seat("a", 1, 0), seat("b", 2, 1)])).not.toThrow();
   });
 
   it("enforces host authority, unique identity, readiness, and token ownership", async () => {
@@ -199,6 +260,67 @@ describe("authoritative rooms", () => {
     );
     expect(thirdStorage.loadRoom(host.room.code)?.match?.turns).toHaveLength(1);
     thirdStorage.close();
+  });
+
+  it("recovers a staggered four-player turn across a restart, disconnect, and rejoin", async () => {
+    const path = resolve(`test-results/phase11_6-ffa-restart-${crypto.randomUUID()}.sqlite`);
+    const firstStorage = new RoomStorage(path);
+    const firstService = new RoomService(firstStorage);
+    const host = firstService.createRoom("Red One", "red");
+    const tokens = [requireToken(host.participantToken)];
+    const colors: readonly PlayerColor[] = ["blue", "green", "yellow"];
+    const names = ["Blue Two", "Green Three", "Yellow Four"];
+    for (let index = 0; index < 3; index += 1) {
+      const joined = await firstService.joinRoom(host.room.code, names[index]!, colors[index]!);
+      tokens.push(requireToken(joined.participantToken));
+    }
+    for (const token of tokens) await firstService.setReady(host.room.code, token, true);
+    const started = await firstService.startMatch(host.room.code, tokens[0]!);
+    const matchId = started.room.matchId!;
+    const playerIds = started.room.players.map((player) => player.id);
+
+    // Two of four players lock; a third disconnects; then the host process dies.
+    const emptyTurn = { turnNumber: 1, timelines: [] };
+    await firstService.lockOrders(host.room.code, tokens[0]!, matchId, emptyTurn, "lock-0");
+    await firstService.lockOrders(host.room.code, tokens[1]!, matchId, emptyTurn, "lock-1");
+    firstService.markDisconnected(playerIds[2]!);
+    expect(firstService.participantRoomStatus(host.room.code, playerIds[0]!)).toMatchObject({
+      status: "waiting",
+      turnNumber: 1,
+      waitingForPlayers: 2,
+    });
+    firstStorage.close();
+
+    // Fresh process: the disconnected seat resumes and the last two players lock.
+    const secondStorage = new RoomStorage(path);
+    const secondService = new RoomService(secondStorage);
+    const rejoined = secondService.resumeRoom(host.room.code, tokens[2]!);
+    expect(rejoined.selfPlayerId).toBe(playerIds[2]!);
+    secondService.markConnected(playerIds[2]!);
+    await secondService.lockOrders(host.room.code, tokens[2]!, matchId, emptyTurn, "lock-2");
+    const resolved = await secondService.lockOrders(
+      host.room.code,
+      tokens[3]!,
+      matchId,
+      emptyTurn,
+      "lock-3",
+    );
+    expect(resolved).toMatchObject({ status: "turn-ready", unseenTurns: [{ turnNumber: 1 }] });
+
+    // Independent acknowledgement across four clients: one advancing moves no one else.
+    await secondService.acknowledgeTurnResult(host.room.code, tokens[0]!, matchId, 1, "ack-0");
+    expect(secondService.participantRoomStatus(host.room.code, playerIds[0]!)?.status).toBe(
+      "planning",
+    );
+    expect(secondService.participantRoomStatus(host.room.code, playerIds[1]!)?.status).toBe(
+      "turn-ready",
+    );
+
+    // The durable four-player match verifies as a byte-identical canonical replay.
+    const durableMatch = secondStorage.loadRoom(host.room.code)?.match;
+    expect(durableMatch?.turns).toHaveLength(1);
+    expect(verifyReplay(canonicalReplay(durableMatch!))).toEqual({ ok: true });
+    secondStorage.close();
   });
 
   it("never stores a participant token in the idempotency response cache", () => {

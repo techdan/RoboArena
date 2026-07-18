@@ -223,9 +223,15 @@ playable end to end.
 1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
    Vercel frontend and external long-lived room service and verify WSS, restart
    recovery, and rejoin ownership from two real networks/devices.
-2. Implement Phase 11.6 three-/four-player free-for-all hardening and its
-   dedicated ship gates.
-3. Close the consolidated Phase 12 v1 ship gate: required resilience work,
-   deployed production storage/WSS and two-real-network validation, then the
-   physical-iPad Safari room-to-results smoke match. Browser emulation already
-   covers the 1024×768 Field Guide/touch contract.
+2. Phase 11.6 three-/four-player free-for-all hardening is in progress:
+   Home-corner selection (unique NW/NE/SE/SW per player, `SetHomeSlot`,
+   non-compacting slot carry-through) and automated three-/four-player
+   private/staggered/restart/disconnect coverage with byte-identical replay
+   landed 2026-07-17. Remaining: resignation and abandoned-room handling
+   (deferred to Phase 12) and the real four-separate-session/two-network
+   functional gate (consolidated into Phase 12).
+3. Close the consolidated Phase 12 v1 ship gate: required resilience work
+   (including resignation/abandoned-room handling), deployed production
+   storage/WSS and two-real-network validation, the real four-browser FFA
+   match, then the physical-iPad Safari room-to-results smoke match. Browser
+   emulation already covers the 1024×768 Field Guide/touch contract.
