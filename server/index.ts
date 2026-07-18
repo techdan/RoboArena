@@ -27,6 +27,8 @@ interface ConnectionState {
 export const MAX_CLIENT_MESSAGE_BYTES = 256 * 1024;
 export const MESSAGE_RATE_WINDOW_MS = 10_000;
 export const MESSAGE_RATE_LIMIT = 60;
+export const ROOM_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // Reclaim abandoned rooms hourly.
+export const ROOM_MAX_IDLE_MS = 24 * 60 * 60 * 1000; // 24 h without activity is abandoned.
 
 const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
   if (error instanceof RoomError || error instanceof MatchLifecycleError) {
@@ -69,6 +71,14 @@ export interface RoomServer {
 export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")): RoomServer {
   const storage = new RoomStorage(databasePath);
   const service = new RoomService(storage);
+  const sweepTimer = setInterval(() => {
+    try {
+      service.sweepAbandonedRooms(ROOM_MAX_IDLE_MS);
+    } catch {
+      // Best-effort background cleanup; a failed sweep retries next interval.
+    }
+  }, ROOM_SWEEP_INTERVAL_MS);
+  sweepTimer.unref(); // Never keep the process (or a test run) alive for cleanup.
   const http: HttpServer = createServer((request, response) => {
     if (request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
@@ -146,6 +156,7 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
       case "GetMatchState":
       case "SubmitOrders":
       case "LockOrders":
+      case "ResignMatch":
       case "TurnResultAcknowledged":
       case "SetPlaybackPosition":
         throw new Error("Match snapshots use the authenticated snapshot path.");
@@ -244,6 +255,7 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
           if (
             message.kind === "SubmitOrders" ||
             message.kind === "LockOrders" ||
+            message.kind === "ResignMatch" ||
             message.kind === "TurnResultAcknowledged" ||
             message.kind === "SetPlaybackPosition"
           ) {
@@ -266,22 +278,29 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
                       message.orders,
                       requestId,
                     )
-                  : message.kind === "TurnResultAcknowledged"
-                    ? await service.acknowledgeTurnResult(
+                  : message.kind === "ResignMatch"
+                    ? await service.resignMatch(
                         message.code,
                         message.token,
                         message.matchId,
-                        message.turnNumber,
                         requestId,
                       )
-                    : await service.updatePlaybackPosition(
-                        message.code,
-                        message.token,
-                        message.matchId,
-                        message.turnNumber,
-                        message.tick,
-                        requestId,
-                      );
+                    : message.kind === "TurnResultAcknowledged"
+                      ? await service.acknowledgeTurnResult(
+                          message.code,
+                          message.token,
+                          message.matchId,
+                          message.turnNumber,
+                          requestId,
+                        )
+                      : await service.updatePlaybackPosition(
+                          message.code,
+                          message.token,
+                          message.matchId,
+                          message.turnNumber,
+                          message.tick,
+                          requestId,
+                        );
             if (message.kind !== "SetPlaybackPosition") {
               storage.saveRequestResult(principal, requestId, response);
             }
@@ -338,6 +357,7 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
       }),
     close: () =>
       new Promise((resolveClose, reject) => {
+        clearInterval(sweepTimer);
         for (const socket of connections.keys()) socket.terminate();
         sockets.close(() => {
           http.close((error) => {

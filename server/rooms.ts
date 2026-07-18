@@ -28,9 +28,11 @@ import { loadArena } from "../src/lib/arenas/index.js";
 import type { RoomStorage } from "./storage.js";
 import {
   acknowledgeTurn,
+  activePlayerIds,
   createAuthoritativeMatch,
   lockParticipantOrders,
   participantStatus,
+  resignParticipant,
   resolvePendingTurn,
   setPlaybackPosition,
   submitParticipantOrders,
@@ -192,7 +194,7 @@ export class RoomService {
       turnNumber: room.match.state.turnNumber,
       waitingForPlayers: Math.max(
         0,
-        room.match.playerIds.length - room.match.lockedPlayerIds.length,
+        activePlayerIds(room.match).length - room.match.lockedPlayerIds.length,
       ),
     };
   }
@@ -410,6 +412,38 @@ export class RoomService {
     });
   }
 
+  async resignMatch(
+    code: string,
+    token: string,
+    matchId: string,
+    requestId: string,
+  ): Promise<MatchSnapshotMessage> {
+    return this.#withLock(code, () => {
+      const room = this.#requireRoom(code);
+      const player = this.#authenticate(room, token);
+      const match = this.#requireMatch(room, matchId);
+      resignParticipant(
+        match,
+        player.id,
+        randomBytes(32).toString("hex"),
+        randomBytes(16).toString("hex"),
+      );
+      this.storage.saveRoom(room);
+      // Resigning may have been the last thing a turn awaited.
+      if (resolvePendingTurn(match)) {
+        room.matchState = match.state;
+        this.storage.saveRoom(room);
+      }
+      return participantMatchSnapshot({
+        requestId,
+        roomCode: code,
+        matchId,
+        playerId: player.id,
+        match,
+      });
+    });
+  }
+
   async updatePlaybackPosition(
     code: string,
     token: string,
@@ -432,6 +466,16 @@ export class RoomService {
         match,
       });
     });
+  }
+
+  /**
+   * Delete rooms idle longer than `maxIdleMs` (no create/join/config/turn
+   * activity, which each touch the row). Abandoned rooms are reclaimed without
+   * a live connection; returns how many were removed.
+   */
+  sweepAbandonedRooms(maxIdleMs: number): number {
+    const cutoff = new Date(Date.now() - maxIdleMs).toISOString();
+    return this.storage.sweepRoomsUpdatedBefore(cutoff);
   }
 
   markConnected(playerId: string): void {

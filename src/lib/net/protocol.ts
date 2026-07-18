@@ -188,6 +188,15 @@ export const clientMessageSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...envelope,
+      kind: z.literal("ResignMatch"),
+      code: roomCodeSchema,
+      token: tokenSchema,
+      matchId: z.string().min(1).max(80),
+    })
+    .strict(),
+  z
+    .object({
+      ...envelope,
       kind: z.literal("TurnResultAcknowledged"),
       code: roomCodeSchema,
       token: tokenSchema,

@@ -63,6 +63,21 @@ describe("room protocol schemas", () => {
     expect(clientMessageSchema.safeParse(setHomeSlot(undefined)).success).toBe(false);
   });
 
+  it("accepts a well-formed resignation and rejects a missing match id", () => {
+    const resign = (overrides: Record<string, unknown> = {}) => ({
+      version: 1,
+      requestId: "resign-1",
+      kind: "ResignMatch",
+      code: "ABC234",
+      token: "x".repeat(43),
+      matchId: "match-1",
+      ...overrides,
+    });
+    expect(clientMessageSchema.safeParse(resign()).success).toBe(true);
+    expect(clientMessageSchema.safeParse(resign({ matchId: undefined })).success).toBe(false);
+    expect(clientMessageSchema.safeParse(resign({ extra: true })).success).toBe(false);
+  });
+
   it("strictly validates bounded private turn orders", () => {
     const valid = {
       version: 1,

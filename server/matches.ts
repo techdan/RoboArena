@@ -49,7 +49,27 @@ export interface AuthoritativeMatchRecord {
   turns: CanonicalTurnRecord[];
   pendingResolution?: PendingResolution;
   outcome: SurvivalOutcome;
+  resignedPlayerIds: string[];
 }
+
+/** Players who have not resigned; only these gate turn resolution. */
+export const activePlayerIds = (match: AuthoritativeMatchRecord): readonly string[] =>
+  match.playerIds.filter((playerId) => !match.resignedPlayerIds.includes(playerId));
+
+/**
+ * A resignation-aware view of the teams for outcome and ceremony math only. A
+ * resigned Team is scored as if wiped out. This never mutates authoritative
+ * state, so the deterministic replay of the simulated turns stays byte-identical.
+ */
+const effectiveTeams = (
+  teams: MatchState["teams"],
+  resignedPlayerIds: readonly string[],
+): MatchState["teams"] =>
+  teams.map((team) =>
+    resignedPlayerIds.includes(team.id)
+      ? { ...team, robots: team.robots.map((robot) => ({ ...robot, hp: 0 })) }
+      : team,
+  );
 
 export class MatchLifecycleError extends Error {
   constructor(
@@ -77,6 +97,7 @@ export const createAuthoritativeMatch = (
   playbackPositions: {},
   turns: [],
   outcome: { status: "ongoing" },
+  resignedPlayerIds: [],
 });
 
 const requireCurrentPlanningTurn = (
@@ -84,6 +105,9 @@ const requireCurrentPlanningTurn = (
   playerId: string,
   orders: TurnOrders,
 ): void => {
+  if (match.resignedPlayerIds.includes(playerId)) {
+    throw new MatchLifecycleError("WRONG_PHASE", "You have resigned from this match.");
+  }
   if (match.phase !== "planning") {
     throw new MatchLifecycleError("WRONG_PHASE", "This match is not accepting orders.");
   }
@@ -184,7 +208,7 @@ export const lockParticipantOrders = (
   submitParticipantOrders(match, playerId, orders);
   match.lockedPlayerIds.push(playerId);
   match.revision += 1;
-  if (match.lockedPlayerIds.length !== match.playerIds.length) return;
+  if (match.lockedPlayerIds.length !== activePlayerIds(match).length) return;
   match.pendingResolution = {
     turnNumber: match.state.turnNumber,
     seed,
@@ -251,13 +275,62 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
     nextStateDigest: replayTurn.nextStateDigest,
   });
   match.state = result.nextState;
-  match.outcome = resolveSurvivalOutcome(result.nextState.teams);
+  match.outcome = resolveSurvivalOutcome(
+    effectiveTeams(result.nextState.teams, match.resignedPlayerIds),
+  );
   match.phase = match.outcome.status === "ongoing" ? "planning" : "finished";
   match.drafts = {};
   match.lockedPlayerIds = [];
   delete match.pendingResolution;
   match.revision += 1;
   return true;
+};
+
+/**
+ * Forfeit a Team. The resigner's Side is scored as eliminated and never gates
+ * another turn. If that decides the match it finishes immediately; otherwise, if
+ * the remaining active players were only waiting on the resigner, this begins
+ * resolving with the supplied seed/nonce. Resignation touches no simulation
+ * state, so recorded turns still replay byte-identically.
+ */
+export const resignParticipant = (
+  match: AuthoritativeMatchRecord,
+  playerId: string,
+  seed: string,
+  resolutionNonce: string,
+): void => {
+  if (!match.playerIds.includes(playerId)) {
+    throw new MatchLifecycleError("UNAUTHORIZED", "That participant does not own a Team.");
+  }
+  if (match.phase === "finished" || match.resignedPlayerIds.includes(playerId)) return;
+  match.resignedPlayerIds.push(playerId);
+  // A resigned player stops participating and must never gate resolution again.
+  delete match.drafts[playerId];
+  match.lockedPlayerIds = match.lockedPlayerIds.filter((id) => id !== playerId);
+  match.revision += 1;
+  // Mid-resolution: let the pending turn commit; its outcome already sees the
+  // updated resignedPlayerIds through effectiveTeams.
+  if (match.phase !== "planning") return;
+
+  match.outcome = resolveSurvivalOutcome(
+    effectiveTeams(match.state.teams, match.resignedPlayerIds),
+  );
+  if (match.outcome.status !== "ongoing") {
+    match.phase = "finished";
+    delete match.pendingResolution;
+    return;
+  }
+  const active = activePlayerIds(match);
+  if (active.length > 0 && active.every((id) => match.lockedPlayerIds.includes(id))) {
+    match.pendingResolution = {
+      turnNumber: match.state.turnNumber,
+      seed,
+      resolutionNonce,
+      orders: combineLockedOrders(match),
+    };
+    match.phase = "resolving";
+    match.revision += 1;
+  }
 };
 
 export const acknowledgeTurn = (
@@ -296,6 +369,7 @@ export const participantStatus = (
   match: AuthoritativeMatchRecord,
   playerId: string,
 ): "planning" | "waiting" | "turn-ready" | "finished" => {
+  if (match.resignedPlayerIds.includes(playerId)) return "finished";
   if ((match.acknowledgedThrough[playerId] ?? 0) < match.state.turnNumber - 1) return "turn-ready";
   if (match.phase === "finished") return "finished";
   return match.lockedPlayerIds.includes(playerId) ? "waiting" : "planning";
@@ -316,4 +390,6 @@ export const canonicalReplay = (match: AuthoritativeMatchRecord): ReplayLog => (
 export const ceremonyScores = (
   match: AuthoritativeMatchRecord,
 ): readonly { readonly teamId: string; readonly score: number }[] =>
-  [...survivalCeremonyScores(match.state.teams)].map(([teamId, score]) => ({ teamId, score }));
+  [...survivalCeremonyScores(effectiveTeams(match.state.teams, match.resignedPlayerIds))].map(
+    ([teamId, score]) => ({ teamId, score }),
+  );

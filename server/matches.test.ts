@@ -6,11 +6,14 @@ import { verifyReplay } from "../src/engine/replay";
 import type { ResolutionEvent } from "../src/engine/types";
 import {
   acknowledgeTurn,
+  activePlayerIds,
   canonicalReplay,
+  ceremonyScores,
   createAuthoritativeMatch,
   emptyOrders,
   lockParticipantOrders,
   participantStatus,
+  resignParticipant,
   resolvePendingTurn,
   submitParticipantOrders,
   type CanonicalTurnRecord,
@@ -351,5 +354,88 @@ describe("multi-player free-for-all lifecycle", () => {
     });
     expect(result).toMatchObject({ status: "finished", outcome: "draw" });
     expect(result).not.toHaveProperty("winningSide");
+  });
+});
+
+describe("resignation", () => {
+  const POSITIONS = [
+    { x: 1, y: 1 },
+    { x: 6, y: 1 },
+    { x: 6, y: 6 },
+    { x: 1, y: 6 },
+  ] as const;
+
+  const ffaState = (count: number) =>
+    makeFfaMatch(
+      Array.from({ length: count }, (_, index) => `team-${index + 1}`).map((id, index) => ({
+        id,
+        robots: [makeRobot(`${id}-r1`, id, "rifle", POSITIONS[index]!)],
+      })),
+    );
+
+  it("ends a two-player match the moment one side resigns", () => {
+    const match = createAuthoritativeMatch(ffaState(2), ["team-1", "team-2"]);
+    resignParticipant(match, "team-2", "seed", "nonce");
+    expect(match.phase).toBe("finished");
+    expect(match.outcome).toEqual({ status: "won", side: 1 });
+    expect(activePlayerIds(match)).toEqual(["team-1"]);
+    expect(participantStatus(match, "team-2")).toBe("finished");
+    expect(match.turns).toHaveLength(0);
+  });
+
+  it("removes a resigned side from three-player play while others resolve, with a byte-identical replay", () => {
+    const match = createAuthoritativeMatch(ffaState(3), ["team-1", "team-2", "team-3"]);
+    resignParticipant(match, "team-3", "seed", "nonce");
+    expect(match.phase).toBe("planning");
+    expect(match.outcome).toEqual({ status: "ongoing" });
+    expect(activePlayerIds(match)).toEqual(["team-1", "team-2"]);
+
+    // A resigned player can no longer submit or lock orders.
+    expect(() => submitParticipantOrders(match, "team-3", emptyOrders(1))).toThrow(/resigned/);
+    expect(() => lockParticipantOrders(match, "team-3", emptyOrders(1), "x", "y")).toThrow(
+      /resigned/,
+    );
+
+    // The two active players resolve without ever waiting on the resigner.
+    lockParticipantOrders(match, "team-1", emptyOrders(1), "turn-seed", "turn-nonce");
+    expect(match.phase).toBe("planning");
+    lockParticipantOrders(match, "team-2", emptyOrders(1), "turn-seed", "turn-nonce");
+    expect(match.phase).toBe("resolving");
+    expect(resolvePendingTurn(match)).toBe(true);
+    expect(match.turns).toHaveLength(1);
+    expect(verifyReplay(canonicalReplay(match))).toEqual({ ok: true });
+  });
+
+  it("resolves immediately when a resignation was the last thing a turn awaited", () => {
+    const match = createAuthoritativeMatch(ffaState(3), ["team-1", "team-2", "team-3"]);
+    lockParticipantOrders(match, "team-1", emptyOrders(1), "turn-seed", "turn-nonce");
+    lockParticipantOrders(match, "team-2", emptyOrders(1), "turn-seed", "turn-nonce");
+    expect(match.phase).toBe("planning"); // still waiting on team-3
+    resignParticipant(match, "team-3", "resign-seed", "resign-nonce");
+    expect(match.phase).toBe("resolving");
+    expect(resolvePendingTurn(match)).toBe(true);
+    expect(match.pendingResolution).toBeUndefined();
+    expect(match.turns).toHaveLength(1);
+  });
+
+  it("awards the win and full ceremony credit to the last un-resigned side", () => {
+    const match = createAuthoritativeMatch(ffaState(3), ["team-1", "team-2", "team-3"]);
+    resignParticipant(match, "team-1", "s", "n");
+    expect(match.outcome).toEqual({ status: "ongoing" });
+    resignParticipant(match, "team-2", "s", "n");
+    expect(match.phase).toBe("finished");
+    expect(match.outcome).toEqual({ status: "won", side: 3 });
+    const scores = Object.fromEntries(ceremonyScores(match).map((row) => [row.teamId, row.score]));
+    expect(scores).toEqual({ "team-1": 0, "team-2": 0, "team-3": 550 });
+  });
+
+  it("treats a repeat or post-finish resignation as a no-op", () => {
+    const match = createAuthoritativeMatch(ffaState(2), ["team-1", "team-2"]);
+    resignParticipant(match, "team-2", "s", "n");
+    const revision = match.revision;
+    resignParticipant(match, "team-2", "s", "n"); // already resigned
+    resignParticipant(match, "team-1", "s", "n"); // match already finished
+    expect(match.revision).toBe(revision);
+    expect(match.resignedPlayerIds).toEqual(["team-2"]);
   });
 });

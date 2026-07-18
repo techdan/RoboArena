@@ -1065,11 +1065,22 @@ single resolution, independent acknowledgement, and byte-identical
 aggregation and simultaneous-wipeout draw; and a four-client staggered turn
 recovered across a restart with a mid-turn disconnect and durable rejoin.
 
-**Deferred to Phase 12**: resignation and abandoned-room handling (not started;
-only durable disconnect/reconnect exists today) and the literal four-separate-
-real-browser-session / two-real-network functional gate, which consolidates with
-the production hosting and physical-device checks. Playwright already exercises
-four emulated-iPad browsers through one authoritative planned turn and reconnect.
+**Resignation + abandoned-room (added 2026-07-17, service-complete)**:
+resignation is a replay-safe match-lifecycle concern, never a simulation-state
+mutation — a resigned player is tracked in `resignedPlayerIds`, projected as
+wiped-out through an `effectiveTeams` view for outcome/ceremony, and dropped
+from `activePlayerIds` so it never gates another turn; recorded turns still
+replay byte-identically. A `ResignMatch` protocol message and
+`RoomService.resignMatch` finish the match if the resignation decides it, else
+resolve immediately if the remaining active players were only waiting on the
+resigner. Abandoned rooms are reclaimed by an idle-cutoff sweep
+(`sweepAbandonedRooms`, wired to an unref'd hourly server interval). A resign UI
+control is the one remaining thin piece before this is user-facing.
+
+**Still deferred to Phase 12**: the literal four-separate-real-browser-session /
+two-real-network functional gate, which consolidates with the production hosting
+and physical-device checks. Playwright already exercises four emulated-iPad
+browsers through one authoritative planned turn and reconnect.
 
 ---
 

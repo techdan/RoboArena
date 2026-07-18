@@ -18,6 +18,19 @@ resignation/abandoned-room to Phase 12; automated (non-E2E) coverage only.
 - Playwright/E2E changes → revisit separately
 - Real four-browser / two-network gate → manual, Phase 12
 
+## Follow-up: resignation + abandoned-room (Phase 12 resilience, started 2026-07-17)
+
+Design: replay-safe. Resignation is match-lifecycle metadata (`resignedPlayerIds`),
+never a simulation-state mutation — an `effectiveTeams` projection drives
+outcome/ceremony; `activePlayerIds` drives gating. Engine + replay untouched.
+
+- [x] R1. Resignation core (`matches.ts`, `matches.test.ts`)
+- [x] R2. Protocol `ResignMatch` (`protocol.ts`, `protocol.test.ts`)
+- [x] R3. Service wiring (`rooms.ts`, `index.ts`, `rooms.test.ts`)
+- [x] R4. Abandoned-room sweep (`storage.ts`, `rooms.ts`, `index.ts`, tests)
+- [x] R5. Docs
+- [ ] Follow-up: resign UI control in the match view (server path is complete + tested)
+
 ## Review
 
 Landed 2026-07-17. Gates all green: **262 Vitest tests**, strict typecheck,
