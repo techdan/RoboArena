@@ -1076,8 +1076,10 @@ replay byte-identically. A `ResignMatch` protocol message and
 `RoomService.resignMatch` finish the match if the resignation decides it, else
 resolve immediately if the remaining active players were only waiting on the
 resigner. Abandoned rooms are reclaimed by an idle-cutoff sweep
-(`sweepAbandonedRooms`, wired to an unref'd hourly server interval). A resign UI
-control is the one remaining thin piece before this is user-facing.
+(`sweepAbandonedRooms`, wired to an unref'd hourly server interval). A two-step
+`ResignControl` (irreversible, so it confirms) is wired into the planner header
+and the waiting/turn-ready flow views, making resignation user-facing; a
+Playwright room-flow assertion for it remains a follow-up.
 
 **Still deferred to Phase 12**: the literal four-separate-real-browser-session /
 two-real-network functional gate, which consolidates with the production hosting

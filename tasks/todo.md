@@ -30,7 +30,20 @@ outcome/ceremony; `activePlayerIds` drives gating. Engine + replay untouched.
 - [x] R3. Service wiring (`rooms.ts`, `index.ts`, `rooms.test.ts`)
 - [x] R4. Abandoned-room sweep (`storage.ts`, `rooms.ts`, `index.ts`, tests)
 - [x] R5. Docs
-- [ ] Follow-up: resign UI control in the match view (server path is complete + tested)
+- [x] R6. Resign UI control in the match view (2026-07-18)
+
+### R6 verification note
+
+`ResignControl` (two-step confirm — resignation is irreversible) wired into the
+planner header (planning) and the waiting/turn-ready flow views via
+`MatchGate.resign()`; `requestOnce` now routes `ResignMatch` to a MatchSnapshot.
+Verified by strict typecheck, production build, full unit suite (271), lint, and
+Prettier. No behavioral browser test: the repo has no React component-test
+harness (vitest env is `node`; components are Playwright-covered) and no E2E
+change was in scope. Behavioral proof belongs in a Playwright room-flow step
+(offered as a follow-up). No visual baseline is affected — the visual specs
+render only `/movie/demo`, `/preview`, and `/`, none of which mount the planner
+header or the MatchGate flow views.
 
 ## Review
 

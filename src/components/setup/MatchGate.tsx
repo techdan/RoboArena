@@ -26,6 +26,7 @@ import { TeamDataPanel } from "../match/TeamDataPanel";
 import { TurnExplanation } from "../match/TurnExplanation";
 import { ObservedTurnExport } from "../replay/ObservedTurnExport";
 import { FieldGuideButton } from "../help/HelpProvider";
+import { ResignControl } from "../match/ResignControl";
 
 type GateState =
   | { readonly kind: "checking" }
@@ -185,6 +186,31 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       setBusy(false);
     }
   };
+  const resign = async () => {
+    const roomCode = roomForMatch(matchId);
+    const token = roomCode === null ? null : roomToken(roomCode);
+    if (roomCode === null || token === null) return;
+    setBusy(true);
+    try {
+      const response = await requestOnce({
+        version: PROTOCOL_VERSION,
+        requestId: requestId(),
+        kind: "ResignMatch",
+        code: roomCode,
+        token,
+        matchId,
+      });
+      setState({ kind: "authorized", roomCode, snapshot: response });
+      setConnectionError(null);
+    } catch (caught) {
+      setConnectionError(
+        caught instanceof Error ? caught.message : "Resignation could not be sent.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (state.kind === "checking") {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0d100e] text-white">
@@ -228,6 +254,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             syncing={busy}
             onSaveOrders={(orders) => void sendOrders(orders, false)}
             onLockOrders={(orders) => void sendOrders(orders, true)}
+            onResign={() => void resign()}
           />
         </>
       );
@@ -249,6 +276,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               <RefreshCw size={15} aria-hidden="true" /> Refresh status
             </button>
             <Link href={`/room/${state.roomCode}`}>Leave safely</Link>
+            <ResignControl onResign={() => void resign()} disabled={busy} />
           </div>
         </main>
       );
@@ -277,14 +305,17 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
           </div>
           <ObservedTurnExport turn={turn} />
-          <button
-            type="button"
-            className="primary-action match-acknowledge"
-            disabled={busy}
-            onClick={() => void acknowledge(turn.turnNumber)}
-          >
-            {busy ? "Saving playback…" : `Acknowledge Turn ${turn.turnNumber} and plan next`}
-          </button>
+          <div className="match-flow-actions">
+            <button
+              type="button"
+              className="primary-action match-acknowledge"
+              disabled={busy}
+              onClick={() => void acknowledge(turn.turnNumber)}
+            >
+              {busy ? "Saving playback…" : `Acknowledge Turn ${turn.turnNumber} and plan next`}
+            </button>
+            <ResignControl onResign={() => void resign()} disabled={busy} />
+          </div>
         </main>
       );
     }

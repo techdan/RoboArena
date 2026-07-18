@@ -131,6 +131,7 @@ type MatchClientMessage = Extract<
       | "GetMatchState"
       | "SubmitOrders"
       | "LockOrders"
+      | "ResignMatch"
       | "TurnResultAcknowledged"
       | "SetPlaybackPosition";
   }
@@ -163,6 +164,7 @@ export async function requestOnce(
             "GetMatchState",
             "SubmitOrders",
             "LockOrders",
+            "ResignMatch",
             "TurnResultAcknowledged",
             "SetPlaybackPosition",
           ].includes(message.kind) &&
@@ -174,6 +176,7 @@ export async function requestOnce(
             "GetMatchState",
             "SubmitOrders",
             "LockOrders",
+            "ResignMatch",
             "TurnResultAcknowledged",
             "SetPlaybackPosition",
           ].includes(message.kind) &&

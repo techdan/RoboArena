@@ -43,6 +43,7 @@ import { ScanAndFireDialog } from "./ScanAndFireDialog";
 import { Timeline } from "./Timeline";
 import { FieldGuideButton, HelpButton } from "../help/HelpProvider";
 import { FirstTimeHint } from "../help/FirstTimeHint";
+import { ResignControl } from "../match/ResignControl";
 
 const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoord[] => {
   const route: TileCoord[] = [];
@@ -90,6 +91,7 @@ export interface PlannerExperienceProps {
   readonly syncing?: boolean;
   readonly onSaveOrders?: (orders: TurnOrders) => void;
   readonly onLockOrders?: (orders: TurnOrders) => void;
+  readonly onResign?: () => void;
 }
 
 export function PlannerExperience({
@@ -102,6 +104,7 @@ export function PlannerExperience({
   syncing = false,
   onSaveOrders,
   onLockOrders,
+  onResign,
 }: PlannerExperienceProps) {
   const team = match.teams.find((candidate) => candidate.id === selfPlayerId);
   if (team === undefined)
@@ -563,6 +566,7 @@ export function PlannerExperience({
               <HelpButton topic="action:lock-orders" label="Lock orders" />
             </span>
           )}
+          {onResign === undefined ? null : <ResignControl onResign={onResign} disabled={syncing} />}
         </div>
       </header>
       <FirstTimeHint />
