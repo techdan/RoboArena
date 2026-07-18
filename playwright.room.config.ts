@@ -21,7 +21,11 @@ export default defineConfig({
   testDir: "./tests/room",
   fullyParallel: false,
   reporter: [["list"], ["./tools/testing/completion-reporter.mjs"]],
-  timeout: 45_000,
+  // The four-browser turn test's own waits (15s turn-ready + 30s movie-ready)
+  // exceed 45s on slow CI runners; it failed there at 46.1s while passing
+  // locally. Match the visual config's CI retry policy.
+  timeout: 120_000,
+  retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
