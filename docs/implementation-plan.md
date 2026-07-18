@@ -1044,10 +1044,12 @@ in Phase 12.
 
 **Effort**: L.
 
-**Implemented contract (2026-07-17)**: v1 now lets each player pick a distinct
-NW/NE/SE/SW Home corner in setup. The room service auto-assigns the lowest free
-corner on create/join, a new `SetHomeSlot` protocol message reassigns a free
-corner (rejecting `HOME_SLOT_TAKEN` and re-confirming readiness), and
+**Implemented contract (2026-07-17, swap semantics 2026-07-18)**: v1 now lets
+each player pick a distinct NW/NE/SE/SW Home corner in setup. The room service
+auto-assigns the lowest free corner on create/join, a new `SetHomeSlot`
+protocol message claims a free corner or swaps seats with the corner's current
+occupant (both affected players re-confirm readiness), so selection never
+deadlocks in a full four-player room, and
 `startMatch` carries each player's chosen corner into `homeSlot` — it no longer
 derives the slot from the compacted `teams[]` index. Sides stay unique per
 player; `assertUniqueV1Seating` rejects any duplicate-Side or duplicate-corner
@@ -2071,29 +2073,29 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 ## 17. Phase summary table
 
-| Phase   | Status                             | Effort | Goal                                                                                                          |
-| ------- | ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
-| 1       | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M      | Engine skeleton and old-model primitives/tests                                                                |
-| **1R**  | ✅ DRAFT COMPLETE                  | M      | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth                             |
-| **1.5** | ✅ COMPLETE                        | S      | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass                    |
-| 2       | ✅ DRAFT COMPLETE                  | L      | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation                     |
-| 3       | ✅ DRAFT COMPLETE                  | M      | Locked projectile/blast outcomes + deterministic presentation events                                          |
-| 4       | ✅ DRAFT COMPLETE                  | L      | Scan & Fire mode + ordinary visibility resolver (no Stealth)                                                  |
-| 5       | ✅ DRAFT COMPLETE                  | S      | Replay format (serialize/deserialize/verify)                                                                  |
-| 6       | ✅ DRAFT COMPLETE                  | M      | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import                                  |
-| 7       | ✅ DRAFT COMPLETE                  | L      | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls                               |
-| 8       | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L      | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains                            |
-| 9       | ✅ DRAFT COMPLETE                  | L      | Planner UI: movement / posture / scan, exact timeline, local draft recovery                                   |
-| 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate         |
-| 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay     |
-| 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12) |
+| Phase   | Status                             | Effort | Goal                                                                                                                                         |
+| ------- | ---------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M      | Engine skeleton and old-model primitives/tests                                                                                               |
+| **1R**  | ✅ DRAFT COMPLETE                  | M      | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth                                                            |
+| **1.5** | ✅ COMPLETE                        | S      | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass                                                   |
+| 2       | ✅ DRAFT COMPLETE                  | L      | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation                                                    |
+| 3       | ✅ DRAFT COMPLETE                  | M      | Locked projectile/blast outcomes + deterministic presentation events                                                                         |
+| 4       | ✅ DRAFT COMPLETE                  | L      | Scan & Fire mode + ordinary visibility resolver (no Stealth)                                                                                 |
+| 5       | ✅ DRAFT COMPLETE                  | S      | Replay format (serialize/deserialize/verify)                                                                                                 |
+| 6       | ✅ DRAFT COMPLETE                  | M      | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import                                                                 |
+| 7       | ✅ DRAFT COMPLETE                  | L      | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls                                                              |
+| 8       | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L      | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains                                                           |
+| 9       | ✅ DRAFT COMPLETE                  | L      | Planner UI: movement / posture / scan, exact timeline, local draft recovery                                                                  |
+| 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                        |
+| 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                    |
+| 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                |
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
-| 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                         |
-| 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                     |
-| 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                     |
-| 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                |
-| 15      | ⏸ POST-MAIN-GAME                   | XL     | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring                                 |
-| 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                             |
+| 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                        |
+| 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                    |
+| 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                    |
+| 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                                               |
+| 15      | ⏸ POST-MAIN-GAME                   | XL     | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring                                                                |
+| 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                                                            |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
 5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 12. The concise gate-by-gate

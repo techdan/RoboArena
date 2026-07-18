@@ -1,6 +1,7 @@
 /** Shared v1 room/setup validation. Server remains authoritative. */
 
 import { z } from "zod";
+import type { HomeSlot } from "../../engine/types";
 
 export const PLAYER_COLORS = ["red", "blue", "green", "yellow"] as const;
 export const playerColorSchema = z.enum(PLAYER_COLORS);
@@ -8,8 +9,13 @@ export type PlayerColor = z.infer<typeof playerColorSchema>;
 
 /** Home slots are the four fixed Team boxes; v1 lets each player pick a corner. */
 export const HOME_SLOTS = [0, 1, 2, 3] as const;
-export const homeSlotSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]);
-export type HomeSlot = z.infer<typeof homeSlotSchema>;
+export const homeSlotSchema: z.ZodType<HomeSlot> = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+]);
+export type { HomeSlot };
 
 /** Corner labels match the engine arena home-area order (NW/NE/SE/SW). */
 export const HOME_CORNER_LABELS: Readonly<Record<HomeSlot, string>> = {

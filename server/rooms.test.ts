@@ -49,7 +49,7 @@ describe("authoritative rooms", () => {
     storage.close();
   });
 
-  it("auto-assigns corners, lets a player claim a free corner, and rejects taken corners", async () => {
+  it("auto-assigns corners, lets a player claim a free corner, and swaps a taken corner", async () => {
     const storage = new RoomStorage(":memory:");
     const service = new RoomService(storage);
     const host = service.createRoom("Red One", "red");
@@ -57,15 +57,40 @@ describe("authoritative rooms", () => {
     expect(host.room.players[0]!.homeSlot).toBe(0);
     const seated = service.resumeRoom(host.room.code, requireToken(host.participantToken));
     expect(seated.room.players.map((player) => player.homeSlot)).toEqual([0, 1]);
-    await expect(
-      service.setHomeSlot(host.room.code, requireToken(guest.participantToken), 0),
-    ).rejects.toMatchObject({ code: "HOME_SLOT_TAKEN" });
+    // Requesting a held corner swaps the two seats; both must re-confirm readiness.
+    await service.setReady(host.room.code, requireToken(host.participantToken), true);
+    const swapped = await service.setHomeSlot(
+      host.room.code,
+      requireToken(guest.participantToken),
+      0,
+    );
+    expect(swapped.room.players.map((player) => player.homeSlot)).toEqual([1, 0]);
+    expect(swapped.room.players.map((player) => player.ready)).toEqual([false, false]);
     const moved = await service.setHomeSlot(
       host.room.code,
       requireToken(guest.participantToken),
       3,
     );
-    expect(moved.room.players.map((player) => player.homeSlot)).toEqual([0, 3]);
+    expect(moved.room.players.map((player) => player.homeSlot)).toEqual([1, 3]);
+    storage.close();
+  });
+
+  it("swaps corners in a full four-player room where every corner is held", async () => {
+    const storage = new RoomStorage(":memory:");
+    const service = new RoomService(storage);
+    const host = service.createRoom("Red One", "red");
+    const guests = [
+      await service.joinRoom(host.room.code, "Blue Two", "blue"),
+      await service.joinRoom(host.room.code, "Green Three", "green"),
+      await service.joinRoom(host.room.code, "Yellow Four", "yellow"),
+    ];
+    // Every corner is auto-assigned; the last joiner can still take NW from the host.
+    const swapped = await service.setHomeSlot(
+      host.room.code,
+      requireToken(guests[2]!.participantToken),
+      0,
+    );
+    expect(swapped.room.players.map((player) => player.homeSlot)).toEqual([3, 1, 2, 0]);
     storage.close();
   });
 

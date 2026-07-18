@@ -97,13 +97,15 @@ export const makeTeam = (
   score: 0,
 });
 
-export const makeMatch = (input?: {
-  readonly teamOneRobots?: readonly RobotState[];
-  readonly teamTwoRobots?: readonly RobotState[];
-  readonly arena?: Arena;
-  readonly turnLengthSeconds?: number;
-  readonly turnNumber?: number;
-}): MatchState => ({
+/** The non-team match scaffold shared by every fixture builder. */
+const makeMatchState = (
+  teams: readonly TeamState[],
+  input?: {
+    readonly arena?: Arena;
+    readonly turnLengthSeconds?: number;
+    readonly turnNumber?: number;
+  },
+): MatchState => ({
   config: {
     sportType: "survival",
     formation: "beginner",
@@ -113,23 +115,35 @@ export const makeMatch = (input?: {
     turnLengthSeconds: input?.turnLengthSeconds ?? 15,
   },
   turnNumber: input?.turnNumber ?? 1,
-  teams: [
-    makeTeam(
-      "team-1",
-      1,
-      input?.teamOneRobots ?? [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 })],
-      0,
-    ),
-    makeTeam(
-      "team-2",
-      2,
-      input?.teamTwoRobots ?? [makeRobot("r2", "team-2", "rifle", { x: 6, y: 6 })],
-      2,
-    ),
-  ],
+  teams,
   arena: input?.arena ?? makeOpenArena(),
   lastKnownMarkers: new Map(),
 });
+
+export const makeMatch = (input?: {
+  readonly teamOneRobots?: readonly RobotState[];
+  readonly teamTwoRobots?: readonly RobotState[];
+  readonly arena?: Arena;
+  readonly turnLengthSeconds?: number;
+  readonly turnNumber?: number;
+}): MatchState =>
+  makeMatchState(
+    [
+      makeTeam(
+        "team-1",
+        1,
+        input?.teamOneRobots ?? [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 })],
+        0,
+      ),
+      makeTeam(
+        "team-2",
+        2,
+        input?.teamTwoRobots ?? [makeRobot("r2", "team-2", "rifle", { x: 6, y: 6 })],
+        2,
+      ),
+    ],
+    input,
+  );
 
 /**
  * A free-for-all match with one unique Side and Home slot per team, for
@@ -143,20 +157,10 @@ export const makeFfaMatch = (
   if (teams.length < 2 || teams.length > 4) {
     throw new Error("A free-for-all match needs two to four teams.");
   }
-  return {
-    config: {
-      sportType: "survival",
-      formation: "beginner",
-      length: "melee",
-      arenaType: "rubble",
-      arenaSizeName: "Resolver Test",
-      turnLengthSeconds: input?.turnLengthSeconds ?? 15,
-    },
-    turnNumber: 1,
-    teams: teams.map((team, index) =>
+  return makeMatchState(
+    teams.map((team, index) =>
       makeTeam(team.id, (index + 1) as TeamState["side"], team.robots, index as HomeSlot),
     ),
-    arena: input?.arena ?? makeOpenArena(),
-    lastKnownMarkers: new Map(),
-  };
+    input,
+  );
 };

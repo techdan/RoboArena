@@ -233,10 +233,19 @@ export class RoomService {
     return this.#withLock(code, () => {
       const room = this.#requireSetupRoom(code);
       const player = this.#authenticate(room, token);
-      if (room.players.some((other) => other.id !== player.id && other.homeSlot === homeSlot)) {
-        throw new RoomError("HOME_SLOT_TAKEN", "Another team already holds that Home corner.");
-      }
+      // Requesting a held corner swaps seats with its occupant, so selection
+      // never deadlocks in a full room where every corner is taken.
+      const previous = player.homeSlot;
+      const occupant = room.players.find(
+        (other) => other.id !== player.id && other.homeSlot === homeSlot,
+      );
       player.homeSlot = homeSlot;
+      if (occupant !== undefined) {
+        // Legacy records may lack a corner; assigned after the requester's
+        // move so the vacated target is never handed straight back.
+        occupant.homeSlot = previous ?? lowestFreeHomeSlot(room.players, occupant.id);
+        occupant.ready = false;
+      }
       // Changing a corner is a setup identity change: re-confirm readiness.
       player.ready = false;
       this.storage.saveRoom(room);

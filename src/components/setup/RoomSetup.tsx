@@ -344,10 +344,14 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 <legend className="setup-label">Home corner</legend>
                 <div className="mt-2 grid grid-cols-4 gap-2">
                   {HOME_SLOTS.map((slot) => {
-                    const takenByOther = room.players.some(
+                    const occupant = room.players.find(
                       (player) => player.id !== selfPlayerId && player.homeSlot === slot,
                     );
                     const active = self.homeSlot === slot;
+                    // A held corner stays clickable: the server swaps the two seats.
+                    const label = occupant
+                      ? `Home corner ${HOME_CORNER_LABELS[slot]} (swap with ${occupant.name})`
+                      : `Home corner ${HOME_CORNER_LABELS[slot]}`;
                     return (
                       <button
                         key={slot}
@@ -358,9 +362,10 @@ export function RoomSetup({ code }: { readonly code: string }) {
                             : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/25"
                         }`}
                         data-active={active ? "true" : "false"}
-                        disabled={self.ready || (takenByOther && !active)}
+                        disabled={self.ready}
                         aria-pressed={active}
-                        aria-label={`Home corner ${HOME_CORNER_LABELS[slot]}`}
+                        aria-label={label}
+                        title={label}
                         onClick={() =>
                           send({
                             version: PROTOCOL_VERSION,

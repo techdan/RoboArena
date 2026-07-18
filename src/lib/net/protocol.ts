@@ -346,7 +346,6 @@ export type ProtocolErrorCode =
   | "NOT_READY"
   | "DUPLICATE_NAME"
   | "DUPLICATE_COLOR"
-  | "HOME_SLOT_TAKEN"
   | "INVALID_CONFIG"
   | "MATCH_NOT_FOUND"
   | "WRONG_PHASE"
