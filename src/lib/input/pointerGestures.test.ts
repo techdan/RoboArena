@@ -3,8 +3,10 @@ import {
   GESTURE_MOVE_THRESHOLD_PX,
   MAX_ARENA_SCALE,
   MIN_ARENA_SCALE,
+  TouchGestureArbitrator,
   movedBeyondGestureThreshold,
   scaleForPinch,
+  transformForPinch,
 } from "./pointerGestures.js";
 
 describe("pointer gesture arbitration", () => {
@@ -21,5 +23,50 @@ describe("pointer gesture arbitration", () => {
     expect(scaleForPinch(1, 100, 150)).toBe(1.5);
     expect(scaleForPinch(1, 100, 1000)).toBe(MAX_ARENA_SCALE);
     expect(scaleForPinch(1, 100, 1)).toBe(MIN_ARENA_SCALE);
+  });
+
+  it("keeps the original world point under the moving pinch midpoint", () => {
+    const transformed = transformForPinch({
+      initialTransform: { x: 20, y: -10, scale: 1 },
+      initialMidpoint: { x: 120, y: 90 },
+      currentMidpoint: { x: 130, y: 100 },
+      initialDistance: 100,
+      currentDistance: 150,
+    });
+    expect(transformed).toEqual({ x: -20, y: -50, scale: 1.5 });
+    expect((130 - transformed.x) / transformed.scale).toBe((120 - 20) / 1);
+    expect((100 - transformed.y) / transformed.scale).toBe((90 - -10) / 1);
+  });
+
+  it("cancels long press and tap after a drag", () => {
+    const gesture = new TouchGestureArbitrator();
+    gesture.beginPrimary(1);
+    expect(gesture.markMoved(1, { x: 0, y: 0 }, { x: 9, y: 0 })).toBe(true);
+    expect(gesture.markMoved(1, { x: 0, y: 0 }, { x: 20, y: 0 })).toBe(true);
+    expect(gesture.markLongPressed(1)).toBe(false);
+    expect(gesture.end(1)).toBe(false);
+  });
+
+  it("cancels the pending tap when a second pointer starts a pinch", () => {
+    const gesture = new TouchGestureArbitrator();
+    gesture.beginPrimary(1);
+    gesture.beginPinch();
+    expect(gesture.markLongPressed(1)).toBe(false);
+    expect(gesture.end(1)).toBe(false);
+  });
+
+  it("does not activate after pointer cancellation", () => {
+    const gesture = new TouchGestureArbitrator();
+    gesture.beginPrimary(1);
+    gesture.cancel();
+    expect(gesture.end(1)).toBe(false);
+  });
+
+  it("activates a tap once and consumes its compatibility click", () => {
+    const gesture = new TouchGestureArbitrator();
+    gesture.beginPrimary(1);
+    expect(gesture.end(1)).toBe(true);
+    expect(gesture.consumeSyntheticClick()).toBe(true);
+    expect(gesture.consumeSyntheticClick()).toBe(false);
   });
 });

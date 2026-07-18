@@ -13,11 +13,14 @@ import {
   type ReactNode,
 } from "react";
 import type { HelpTab, HelpTopicId } from "../../lib/help/content";
-import { InfoPopover, type PopoverAnchor } from "./InfoPopover";
+import type { PopoverAnchor } from "./InfoPopover";
 import { Tooltip } from "./Tooltip";
 
 const FieldGuideDialog = lazy(() =>
   import("./FieldGuideDialog").then((module) => ({ default: module.FieldGuideDialog })),
+);
+const InfoPopover = lazy(() =>
+  import("./InfoPopover").then((module) => ({ default: module.InfoPopover })),
 );
 
 interface HelpContextValue {
@@ -39,30 +42,30 @@ export function HelpProvider({ children }: { readonly children: ReactNode }) {
     readonly id: HelpTopicId;
     readonly anchor: PopoverAnchor;
   } | null>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const guideRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const popoverRestoreFocusRef = useRef<HTMLElement | null>(null);
   const closePopover = useCallback(() => {
     setPopover(null);
-    queueMicrotask(() => restoreFocusRef.current?.focus());
+    queueMicrotask(() => popoverRestoreFocusRef.current?.focus());
   }, []);
   const openTopic = useCallback((id: HelpTopicId, anchor: HTMLElement | PopoverAnchor) => {
-    restoreFocusRef.current =
+    popoverRestoreFocusRef.current =
       anchor instanceof HTMLElement
         ? anchor
         : document.activeElement instanceof HTMLElement
           ? document.activeElement
           : null;
-    setGuideTab(null);
     setPopover({ id, anchor: pointFor(anchor) });
   }, []);
   const openGuide = useCallback((tab: HelpTab = "robots") => {
-    restoreFocusRef.current =
+    guideRestoreFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPopover(null);
     setGuideTab(tab);
   }, []);
   const closeGuide = useCallback(() => {
     setGuideTab(null);
-    queueMicrotask(() => restoreFocusRef.current?.focus());
+    queueMicrotask(() => guideRestoreFocusRef.current?.focus());
   }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -96,7 +99,9 @@ export function HelpProvider({ children }: { readonly children: ReactNode }) {
         </Suspense>
       )}
       {popover === null ? null : (
-        <InfoPopover topicId={popover.id} anchor={popover.anchor} onClose={closePopover} />
+        <Suspense fallback={null}>
+          <InfoPopover topicId={popover.id} anchor={popover.anchor} onClose={closePopover} />
+        </Suspense>
       )}
     </HelpContext.Provider>
   );

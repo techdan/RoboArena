@@ -35,13 +35,10 @@ export function InfoPopover({
   useEffect(() => {
     const dialog = ref.current;
     closeRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", closeOnEscape);
     return () => {
-      window.removeEventListener("keydown", closeOnEscape);
       if (dialog?.open) dialog.close();
     };
-  }, [onClose]);
+  }, []);
   return (
     <dialog
       ref={ref}

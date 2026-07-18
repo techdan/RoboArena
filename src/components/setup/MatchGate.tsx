@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, LoaderCircle, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
+import { LoaderCircle, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TurnOrders } from "../../engine/types";
@@ -314,13 +314,6 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             are not included in participant downloads.
           </p>
           <div className="match-flow-actions">
-            <button
-              type="button"
-              disabled
-              title="Participant-safe replay export lands in Phase 11.5"
-            >
-              <Download size={15} aria-hidden="true" /> Replay stored server-side
-            </button>
             <Link href={`/room/${state.roomCode}`}>Return to room</Link>
           </div>
         </section>

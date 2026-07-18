@@ -19,7 +19,8 @@ replay recording/verification. The Next.js/PixiJS shell and verified Rubble
 arena imports, deterministic local movie playback, and authoritative room/setup
 boundary, planner, and durable private plan/lock/resolve/watch loop are built.
 Phase 11.5 explainability/replay UX and browser-emulated iPad input are
-draft-complete while the external Phase 8 gate
+draft-complete with both Playwright suites passing on the emulated iPad touch
+context, while the external Phase 8 gate
 remains tracked independently.
 
 The immediate critical path is:

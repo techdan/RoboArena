@@ -16,7 +16,7 @@ import { renderMovieEffects } from "./effects/effects";
 import {
   movedBeyondGestureThreshold,
   pointDistance,
-  scaleForPinch,
+  transformForPinch,
   type Point,
 } from "../lib/input/pointerGestures";
 import { loadRobotTextures, robotTextureKey } from "./robotTextures";
@@ -266,9 +266,13 @@ export function MoviePlayer({
           } else if (points.length === 2) {
             const [first, second] = points;
             if (first === undefined || second === undefined) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
             pinchRef.current = {
               distance: pointDistance(first, second),
-              midpoint: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+              midpoint: {
+                x: (first.x + second.x) / 2 - bounds.left,
+                y: (first.y + second.y) / 2 - bounds.top,
+              },
               transform: viewTransformRef.current,
             };
             if (panRef.current !== null) panRef.current.moved = true;
@@ -284,16 +288,20 @@ export function MoviePlayer({
             const [first, second] = points;
             const pinch = pinchRef.current;
             if (first === undefined || second === undefined || pinch === null) return;
-            const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-            setViewTransform({
-              x: pinch.transform.x + midpoint.x - pinch.midpoint.x,
-              y: pinch.transform.y + midpoint.y - pinch.midpoint.y,
-              scale: scaleForPinch(
-                pinch.transform.scale,
-                pinch.distance,
-                pointDistance(first, second),
-              ),
-            });
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const midpoint = {
+              x: (first.x + second.x) / 2 - bounds.left,
+              y: (first.y + second.y) / 2 - bounds.top,
+            };
+            setViewTransform(
+              transformForPinch({
+                initialTransform: pinch.transform,
+                initialMidpoint: pinch.midpoint,
+                currentMidpoint: midpoint,
+                initialDistance: pinch.distance,
+                currentDistance: pointDistance(first, second),
+              }),
+            );
             return;
           }
           const pan = panRef.current;

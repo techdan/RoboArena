@@ -978,9 +978,18 @@ persists locally. The authorized event inspector filters movement, contacts,
 combat, and system events, explains redacted unseen sources without guessing,
 and exports only the participant-observed initial state/events.
 
-**Verification**: 248 Vitest tests, strict typecheck, ESLint, production build,
-four visual/browser tests including a 1024×768 touch context, and the complete
-four-browser authoritative room/planner/movie regression pass. A physical iPad
+**Verification**: 253 Vitest tests (the gesture suite now covers drag
+continuation, long-press cancellation, second-pointer/pinch transitions, pointer
+cancellation, midpoint-preserving zoom, and synthetic-click suppression), strict
+typecheck, ESLint, Prettier, and a production build. The visual suite's four
+Playwright browser tests pass, including the iPad-emulated (1024×768, `hasTouch`)
+Field Guide/pinch-zoom coverage; the intentional movie-header Field Guide control
+was reviewed and its snapshot baseline updated. The rewritten 1024×768 touch-only
+four-browser authoritative room/planner/movie/reconnect regression pass now runs
+green after the corrective pass fixed three real defects it surfaced: the board
+cleared its selection notice on touch `pointerleave`, the Aim/Scan dialogs closed
+themselves on the tap's touch-compatibility ghost mousedown, and the emulated
+iPad context wrongly forced Chromium's phone `isMobile` layout. A physical iPad
 Safari room-to-results smoke match remains the Phase 12 release gate and is not
 claimed by emulation.
 

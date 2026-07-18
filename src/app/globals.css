@@ -1150,11 +1150,18 @@ canvas {
   width: min(54rem, calc(100vw - 2rem));
   max-height: min(46rem, calc(100vh - 2rem));
   overflow: hidden;
+  overscroll-behavior: contain;
   border: 1px solid rgb(190 242 100 / 20%);
   border-radius: 1.2rem;
+  margin: auto;
+  padding: 0;
   color: white;
   background: #111713;
   box-shadow: 0 30px 100px rgb(0 0 0 / 65%);
+}
+.field-guide::backdrop {
+  background: rgb(3 7 5 / 78%);
+  backdrop-filter: blur(10px);
 }
 .field-guide > header,
 .info-popover > header {
@@ -1261,6 +1268,7 @@ canvas {
   width: min(25rem, calc(100vw - 1.5rem));
   max-height: calc(100vh - 1.5rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgb(190 242 100 / 30%);
   border-radius: 1rem;
   padding: 1rem;
@@ -1767,7 +1775,12 @@ canvas {
     max-width: 100%;
   }
   button,
-  a,
+  a {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgb(190 242 100 / 18%);
+  }
   input[type="range"] {
     min-height: 44px;
   }

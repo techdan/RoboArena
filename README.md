@@ -10,7 +10,8 @@ event-driven movie playback, local authoritative room/setup/turn flow, and the
 movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
 remains open alongside continued local phases. Phase 11.5 Field Guide,
 contextual explanations, observed-turn inspection, and browser-emulated iPad
-touch controls are draft-complete. v1 targets online
+touch controls are draft-complete, with both Playwright suites passing on the
+emulated iPad touch context. v1 targets online
 free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 

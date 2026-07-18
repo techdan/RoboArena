@@ -8,9 +8,9 @@ import { isTileInScanGate } from "../../planner/firingHelpers";
 import { useHelp } from "../help/HelpProvider";
 import {
   LONG_PRESS_MS,
-  movedBeyondGestureThreshold,
+  TouchGestureArbitrator,
   pointDistance,
-  scaleForPinch,
+  transformForPinch,
   type Point,
 } from "../../lib/input/pointerGestures";
 
@@ -87,17 +87,14 @@ export function ArenaCanvas({
     readonly tile: TileCoord;
     readonly startTransform: typeof transform;
     readonly canPan: boolean;
-    moved: boolean;
-    longPressed: boolean;
     timer: number | null;
   } | null>(null);
   const pinchRef = useRef<{
     readonly distance: number;
-    readonly scale: number;
     readonly midpoint: Point;
     readonly startTransform: typeof transform;
   } | null>(null);
-  const suppressClickRef = useRef(false);
+  const gestureRef = useRef(new TouchGestureArbitrator());
 
   useEffect(() => {
     let disposed = false;
@@ -309,23 +306,28 @@ export function ArenaCanvas({
           cancelLongPress();
           const [first, second] = points;
           if (first === undefined || second === undefined) return;
-          const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const midpoint = {
+            x: (first.x + second.x) / 2 - bounds.left,
+            y: (first.y + second.y) / 2 - bounds.top,
+          };
           const pinch = pinchRef.current;
           if (pinch === null) return;
-          const scale = scaleForPinch(pinch.scale, pinch.distance, pointDistance(first, second));
-          setTransform({
-            x: pinch.startTransform.x + midpoint.x - pinch.midpoint.x,
-            y: pinch.startTransform.y + midpoint.y - pinch.midpoint.y,
-            scale,
-          });
-          if (touchRef.current !== null) touchRef.current.moved = true;
+          setTransform(
+            transformForPinch({
+              initialTransform: pinch.startTransform,
+              initialMidpoint: pinch.midpoint,
+              currentMidpoint: midpoint,
+              initialDistance: pinch.distance,
+              currentDistance: pointDistance(first, second),
+            }),
+          );
           return;
         }
         const active = touchRef.current;
         if (active === null || active.pointerId !== event.pointerId) return;
         const current = { x: event.clientX, y: event.clientY };
-        if (!movedBeyondGestureThreshold(active.start, current)) return;
-        active.moved = true;
+        if (!gestureRef.current.markMoved(event.pointerId, active.start, current)) return;
         cancelLongPress();
         if (active.canPan) {
           setTransform({
@@ -336,6 +338,11 @@ export function ArenaCanvas({
         }
       }}
       onPointerLeave={(event) => {
+        // pointerleave is a hover concept. Touch fires it when the finger lifts
+        // (and again as re-renders shuffle the hit-test target), so honoring it
+        // would clear the cursor and clobber the tap's own notice. Only mouse or
+        // pen hover should clear the board cursor.
+        if (event.pointerType === "touch") return;
         if (document.activeElement !== event.currentTarget) onCursor(null);
       }}
       onPointerDown={(event) => {
@@ -352,14 +359,15 @@ export function ArenaCanvas({
             tile,
             startTransform: transformRef.current,
             canPan: robotAt(tile) === undefined,
-            moved: false,
-            longPressed: false,
             timer: null as number | null,
           };
+          gestureRef.current.beginPrimary(event.pointerId);
           active.timer = window.setTimeout(() => {
-            if (active.moved || pointersRef.current.size !== 1) return;
-            active.longPressed = true;
-            suppressClickRef.current = true;
+            if (
+              pointersRef.current.size !== 1 ||
+              !gestureRef.current.markLongPressed(event.pointerId)
+            )
+              return;
             inspect(active.tile, { x: point.x + 10, y: point.y + 10 });
           }, LONG_PRESS_MS);
           touchRef.current = active;
@@ -367,13 +375,16 @@ export function ArenaCanvas({
           cancelLongPress();
           const [first, second] = points;
           if (first === undefined || second === undefined) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
           pinchRef.current = {
             distance: pointDistance(first, second),
-            scale: transformRef.current.scale,
-            midpoint: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+            midpoint: {
+              x: (first.x + second.x) / 2 - bounds.left,
+              y: (first.y + second.y) / 2 - bounds.top,
+            },
             startTransform: transformRef.current,
           };
-          if (touchRef.current !== null) touchRef.current.moved = true;
+          gestureRef.current.beginPinch();
         }
       }}
       onPointerUp={(event) => {
@@ -383,12 +394,11 @@ export function ArenaCanvas({
         if (
           active !== null &&
           active.pointerId === event.pointerId &&
-          !active.moved &&
-          !active.longPressed
+          gestureRef.current.end(event.pointerId)
         ) {
-          suppressClickRef.current = true;
           onChooseTile(active.tile, { ctrl: false, shift: false });
         }
+        window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
         pointersRef.current.delete(event.pointerId);
         if (pointersRef.current.size < 2) pinchRef.current = null;
         if (active?.pointerId === event.pointerId) touchRef.current = null;
@@ -398,13 +408,11 @@ export function ArenaCanvas({
         pointersRef.current.delete(event.pointerId);
         touchRef.current = null;
         pinchRef.current = null;
-        suppressClickRef.current = true;
+        gestureRef.current.cancel();
+        window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
       }}
       onClick={(event) => {
-        if (suppressClickRef.current) {
-          suppressClickRef.current = false;
-          return;
-        }
+        if (gestureRef.current.consumeSyntheticClick()) return;
         onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
       }}
       onContextMenu={(event) => {

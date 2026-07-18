@@ -52,9 +52,25 @@ export const usePlannerDialogFocus = <T extends HTMLElement>(onCancel: () => voi
       }
     };
 
+    // Outside-press dismissal is armed only after a frame. A board tap that
+    // opens the dialog is followed by a touch-compatibility ghost mousedown at
+    // the same point (now over the backdrop); that ghost fires before the frame
+    // and must not immediately re-close the dialog. Genuine later presses do.
+    let armed = false;
+    const raf = requestAnimationFrame(() => {
+      armed = true;
+    });
+    const onPointerDownOutside = (event: PointerEvent) => {
+      if (!armed) return;
+      if (!dialog.contains(event.target as Node)) onCancelRef.current();
+    };
+
     dialog.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDownOutside, true);
     return () => {
+      cancelAnimationFrame(raf);
       dialog.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDownOutside, true);
       opener?.focus();
     };
   }, []);

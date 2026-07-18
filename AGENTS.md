@@ -69,9 +69,11 @@ implemented with its external WSS/two-network hosting gate still open; Phase
 - The durable plan/lock/resolve/watch loop, participant projections, independent
   acknowledgement/playback resume, Final Ceremony, and canonical server replay
   are built.
-- Phase 11.5 is draft-complete: typed Field Guide/context help, first-use
+- Phase 11.5 is draft complete: typed Field Guide/context help, first-use
   guidance, authorized event inspection/export, and Pointer Events-based iPad
-  planner/movie controls. Physical iPad Safari validation, production hosting,
+  planner/movie controls. Both Playwright suites now pass on the emulated iPad
+  touch context and the changed movie visual baseline was reviewed and updated.
+  Physical iPad Safari validation, production hosting,
   and resilience closure form the Phase 12 v1 ship gate; Phase 11.6 multiplayer
   hardening is next.
 

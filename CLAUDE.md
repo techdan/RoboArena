@@ -27,7 +27,8 @@ movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
 alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
-inspection, and browser-emulated iPad input are draft-complete; its physical
+inspection, and browser-emulated iPad input are draft-complete with both
+Playwright suites passing on the emulated iPad touch context; its physical
 iPad Safari smoke match and the independent Phase 8 production-hosting closure
 are now consolidated in the Phase 12 v1 ship gate. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
@@ -103,7 +104,9 @@ Ceremony scoring, and canonical Phase 5 replay storage/verification.
 
 **Phase 11.5 (draft-complete)** — typed Robots/Terrain/Actions Field Guide,
 contextual help dialogs, first-use guidance, authorized event filters/export,
-and Pointer Events-based iPad planner/movie controls.
+and Pointer Events-based iPad planner/movie controls. Both Playwright suites
+pass on the emulated iPad touch context and the changed movie visual baseline
+was reviewed and updated.
 
 **Everything after Phase 11.5 (not yet built)** — Phase 11.6 multiplayer
 hardening followed by the Phase 12 production, resilience, real-network, and

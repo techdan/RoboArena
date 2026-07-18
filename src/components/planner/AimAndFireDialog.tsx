@@ -44,13 +44,7 @@ export function AimAndFireDialog({
     [arena, authorizedContacts, shooter, target, weapon],
   );
   return (
-    <div
-      className="planner-dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
+    <div className="planner-dialog-backdrop" role="presentation">
       <section
         ref={dialogRef}
         className="planner-dialog"

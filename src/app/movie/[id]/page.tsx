@@ -1,5 +1,6 @@
 import { Activity, Crosshair, Film, Gauge, MoveRight } from "lucide-react";
 import { notFound } from "next/navigation";
+import { FieldGuideButton } from "../../../components/help/HelpProvider";
 import { MovieExperience } from "../../../components/MovieExperience";
 import { createCannedMovie } from "../../../lib/replays/cannedMovie";
 
@@ -28,16 +29,19 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
             </div>
             <h1 className="text-4xl font-black tracking-[-0.055em]">After-action playback</h1>
           </div>
-          <div className="flex gap-7 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
-            <span>
-              <strong className="block text-base text-white">12</strong>FPS
-            </span>
-            <span>
-              <strong className="block text-base text-white">240</strong>Ticks
-            </span>
-            <span>
-              <strong className="block text-base text-emerald-300">Verified</strong>Event order
-            </span>
+          <div className="flex items-center gap-5">
+            <FieldGuideButton />
+            <div className="flex gap-7 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
+              <span>
+                <strong className="block text-base text-white">12</strong>FPS
+              </span>
+              <span>
+                <strong className="block text-base text-white">240</strong>Ticks
+              </span>
+              <span>
+                <strong className="block text-base text-emerald-300">Verified</strong>Event order
+              </span>
+            </div>
           </div>
         </header>
 
