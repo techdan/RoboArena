@@ -87,3 +87,31 @@ Files touched (9): `src/lib/setup/validate.ts`, `src/lib/net/protocol.ts`,
 
 Follow-ups (Phase 12): resignation + abandoned-room handling; the real
 four-separate-session / two-network functional gate.
+
+## Phase 11 turn-loop review pass (2026-07-18)
+
+High-effort review of 36af312 (authoritative turn loop). Five fixes landed:
+
+- **Scan privacy leak** (`view.ts`): `scan-target-acquired` was delivered to
+  the scanned player even when the scanner was unseen, leaking the hidden
+  robot's id and exact range. Now gated on scanner authorization only (test:
+  "never reveals an unseen scanner to its target").
+- **`broadcastMatch` no longer swallows all errors** (`server/index.ts`): only
+  the expected `MATCH_NOT_FOUND` (setup-only subscriber) is ignored; anything
+  else logs instead of silently starving a participant of updates.
+- **Dead `CanonicalTurnRecord.nextState` removed** (`matches.ts`): a full
+  deep-cloned MatchState persisted per turn with zero readers. Old stored
+  rooms carry the extra JSON key harmlessly; new saves shrink.
+- **Engine constants imported** (`matches.ts`): `REPLAY_FORMAT_VERSION`
+  replaces two hardcoded `formatVersion: 1`; `secondsToTicks` replaces
+  `turnLengthSeconds * 60` in the playback clamp.
+- **Single match-kind list** (`client.ts`): `MATCH_MESSAGE_KINDS` const drives
+  both the `MatchClientMessage` type and one `isMatchMessage` guard, replacing
+  three hand-synced lists.
+
+Deferred (tracked for a rooms/matches refactor pass): move the two snapshot
+getters' `resolvePendingTurn` inside `#withLock` before storage goes async
+(Postgres); centralize the 4x-duplicated resolve-and-persist block in a
+`#mutateMatch` helper; drop the O(turns²) replay rebuild in `resolvePendingTurn`.
+Phase 12 storage work: playback-position side table; decide the orphaned
+`locked_orders` table's fate.

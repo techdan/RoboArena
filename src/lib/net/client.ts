@@ -124,18 +124,23 @@ export class RoomSocket {
   }
 }
 
+/** Message kinds answered with a MatchSnapshot; every other kind gets a RoomSnapshot. */
+const MATCH_MESSAGE_KINDS = [
+  "GetMatchState",
+  "SubmitOrders",
+  "LockOrders",
+  "ResignMatch",
+  "TurnResultAcknowledged",
+  "SetPlaybackPosition",
+] as const;
+
 type MatchClientMessage = Extract<
   ClientMessage,
-  {
-    readonly kind:
-      | "GetMatchState"
-      | "SubmitOrders"
-      | "LockOrders"
-      | "ResignMatch"
-      | "TurnResultAcknowledged"
-      | "SetPlaybackPosition";
-  }
+  { readonly kind: (typeof MATCH_MESSAGE_KINDS)[number] }
 >;
+
+const isMatchMessage = (message: ClientMessage): message is MatchClientMessage =>
+  (MATCH_MESSAGE_KINDS as readonly string[]).includes(message.kind);
 
 export function requestOnce(message: MatchClientMessage): Promise<MatchSnapshotMessage>;
 export function requestOnce(
@@ -145,6 +150,7 @@ export async function requestOnce(
   message: ClientMessage,
 ): Promise<RoomSnapshotMessage | MatchSnapshotMessage> {
   const socket = new RoomSocket();
+  const expectsMatchSnapshot = isMatchMessage(message);
   try {
     return await new Promise<RoomSnapshotMessage | MatchSnapshotMessage>((resolve, reject) => {
       let settled = false;
@@ -159,29 +165,9 @@ export async function requestOnce(
         if (response.requestId !== message.requestId) return;
         if (response.kind === "ProtocolError")
           finish(() => reject(new RoomRequestError(response.code, response.message)));
-        else if (
-          [
-            "GetMatchState",
-            "SubmitOrders",
-            "LockOrders",
-            "ResignMatch",
-            "TurnResultAcknowledged",
-            "SetPlaybackPosition",
-          ].includes(message.kind) &&
-          response.kind === "MatchSnapshot"
-        ) {
+        else if (expectsMatchSnapshot && response.kind === "MatchSnapshot") {
           finish(() => resolve(response));
-        } else if (
-          ![
-            "GetMatchState",
-            "SubmitOrders",
-            "LockOrders",
-            "ResignMatch",
-            "TurnResultAcknowledged",
-            "SetPlaybackPosition",
-          ].includes(message.kind) &&
-          response.kind === "RoomSnapshot"
-        ) {
+        } else if (!expectsMatchSnapshot && response.kind === "RoomSnapshot") {
           finish(() => resolve(response));
         }
       });

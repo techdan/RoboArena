@@ -1,6 +1,7 @@
 /** Durable authoritative match phase machine for the private online turn loop. */
 
-import { createReplayLog, verifyReplay } from "../src/engine/replay.js";
+import { secondsToTicks } from "../src/engine/constants.js";
+import { createReplayLog, REPLAY_FORMAT_VERSION, verifyReplay } from "../src/engine/replay.js";
 import { resolveTurn } from "../src/engine/resolver.js";
 import {
   resolveSurvivalOutcome,
@@ -23,7 +24,6 @@ export interface CanonicalTurnRecord {
   readonly orders: TurnOrders;
   readonly participantOrders: Readonly<Record<string, TurnOrders>>;
   readonly initialState: MatchState;
-  readonly nextState: MatchState;
   readonly events: readonly ResolutionEvent[];
   readonly eventDigest: string;
   readonly nextStateDigest: string;
@@ -236,7 +236,7 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
   });
   const replayTurn = replay.turns.at(-1)!;
   const candidateReplay: ReplayLog = {
-    formatVersion: 1,
+    formatVersion: REPLAY_FORMAT_VERSION,
     initialState: match.initialState,
     turns: [
       ...match.turns.map((turn): ReplayTurn => ({
@@ -269,7 +269,6 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
     orders: pending.orders,
     participantOrders: structuredClone(match.drafts),
     initialState,
-    nextState: result.nextState,
     events: result.events,
     eventDigest: replayTurn.eventDigest,
     nextStateDigest: replayTurn.nextStateDigest,
@@ -358,7 +357,7 @@ export const setPlaybackPosition = (
   if (turn === undefined) {
     throw new MatchLifecycleError("STALE_TURN", "That turn result is not available.");
   }
-  const maximumTick = turn.initialState.config.turnLengthSeconds * 60;
+  const maximumTick = secondsToTicks(turn.initialState.config.turnLengthSeconds);
   match.playbackPositions[playerId] = {
     turnNumber,
     tick: Math.max(0, Math.min(maximumTick, tick)),
@@ -376,7 +375,7 @@ export const participantStatus = (
 };
 
 export const canonicalReplay = (match: AuthoritativeMatchRecord): ReplayLog => ({
-  formatVersion: 1,
+  formatVersion: REPLAY_FORMAT_VERSION,
   initialState: match.initialState,
   turns: match.turns.map((turn): ReplayTurn => ({
     seed: turn.seed,

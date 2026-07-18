@@ -126,8 +126,12 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
       if (state.roomCode !== code || state.playerId === undefined) continue;
       try {
         send(socket, service.getMatchSnapshotForPlayer(code, state.playerId, "broadcast"));
-      } catch {
-        // A setup-only subscriber does not have a match snapshot yet.
+      } catch (error) {
+        // A setup-only subscriber does not have a match snapshot yet. Anything
+        // else would silently starve this participant of updates — log it.
+        if (!(error instanceof RoomError && error.code === "MATCH_NOT_FOUND")) {
+          console.error(`Match broadcast to ${state.playerId} in ${code} failed:`, error);
+        }
       }
     }
   };

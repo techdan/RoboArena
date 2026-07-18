@@ -122,7 +122,6 @@ describe("authoritative match lifecycle", () => {
       orders: emptyOrders(1),
       participantOrders: {},
       initialState: state,
-      nextState: state,
       events,
       eventDigest: "unused",
       nextStateDigest: "unused",
@@ -147,6 +146,59 @@ describe("authoritative match lifecycle", () => {
       damage: 17,
     });
     expect(JSON.stringify(projected.events)).not.toContain('"x":2');
+  });
+
+  it("never reveals an unseen scanner to its target", () => {
+    const state = makeMatch({
+      teamOneRobots: [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 }, { scanHeading: "N" })],
+      teamTwoRobots: [makeRobot("r2", "team-2", "rifle", "dock")],
+    });
+    const events: readonly ResolutionEvent[] = [
+      {
+        tick: 10,
+        seq: 0,
+        kind: "scan-target-acquired",
+        shooterId: "r2",
+        targetId: "r1",
+        distance: 6,
+      },
+      {
+        tick: 20,
+        seq: 1,
+        kind: "enemy-spotted",
+        teamId: "team-1",
+        enemyId: "r2",
+        at: { x: 1, y: 0 },
+      },
+      {
+        tick: 30,
+        seq: 2,
+        kind: "scan-target-acquired",
+        shooterId: "r2",
+        targetId: "r1",
+        distance: 5,
+      },
+    ];
+    const turn: CanonicalTurnRecord = {
+      turnNumber: 1,
+      seed: "scan-privacy-seed",
+      resolutionNonce: "scan-privacy-nonce",
+      orders: emptyOrders(1),
+      participantOrders: {},
+      initialState: state,
+      events,
+      eventDigest: "unused",
+      nextStateDigest: "unused",
+    };
+
+    const projected = projectTurnResult(turn, "team-1");
+    // The pre-spotting acquisition would leak the hidden scanner's id and exact
+    // range; only the acquisition made while r2 is visible may be delivered.
+    expect(projected.events.map((event) => event.kind)).toEqual([
+      "enemy-spotted",
+      "scan-target-acquired",
+    ]);
+    expect(projected.events[1]).toMatchObject({ tick: 30, shooterId: "r2" });
   });
 
   it("rejects a divergent stored replay before appending another turn", () => {

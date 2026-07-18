@@ -63,7 +63,9 @@ const eventIsAuthorized = (
     case "command-aborted":
       return authorizedRobotIds.has(event.robotId);
     case "scan-target-acquired":
-      return authorizedRobotIds.has(event.shooterId) || authorizedRobotIds.has(event.targetId);
+      // Gate on the scanner only: delivering this to the target's owner while
+      // the scanner is unseen would leak the hidden robot's id and exact range.
+      return authorizedRobotIds.has(event.shooterId);
     case "fired":
     case "shot-missed":
       return authorizedRobotIds.has(event.shooterId);
