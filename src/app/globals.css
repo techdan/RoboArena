@@ -1658,28 +1658,6 @@ a.planner-menu-item:focus-visible {
   background: rgb(4 7 5 / 76%);
   backdrop-filter: blur(8px);
 }
-.planner-dialog-backdrop[data-board-preview="true"] {
-  z-index: 60;
-  justify-items: end;
-  padding-right: clamp(1rem, 4vw, 4rem);
-  pointer-events: none;
-  background: linear-gradient(90deg, rgb(4 7 5 / 10%) 0 48%, rgb(4 7 5 / 82%) 78% 100%);
-  backdrop-filter: none;
-}
-.planner-dialog-backdrop[data-board-preview="true"] .planner-dialog {
-  width: min(25rem, 42vw);
-  pointer-events: auto;
-}
-@media (max-width: 800px) {
-  .planner-dialog-backdrop[data-board-preview="true"] {
-    justify-items: center;
-    padding-right: 2rem;
-    background: rgb(4 7 5 / 72%);
-  }
-  .planner-dialog-backdrop[data-board-preview="true"] .planner-dialog {
-    width: min(34rem, 100%);
-  }
-}
 .planner-dialog {
   width: min(34rem, 100%);
   max-height: calc(100vh - 4rem);
@@ -1694,6 +1672,26 @@ a.planner-menu-item:focus-visible {
 }
 .robot-command-dialog {
   width: min(28rem, 100%);
+}
+/* Firing-tool forms docked inside the targeting rail keep the dialog's inner
+   styling but drop the modal sizing and shadow. */
+.planner-dialog--docked {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  border-radius: 0.75rem;
+  padding: 0.7rem;
+  box-shadow: none;
+}
+.planner-dialog--docked h2 {
+  font-size: 0.95rem;
+}
+.planner-dialog--docked > header {
+  margin-bottom: 0.6rem;
+}
+.planner-dialog--docked > footer {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
 }
 .robot-command-sections {
   display: grid;

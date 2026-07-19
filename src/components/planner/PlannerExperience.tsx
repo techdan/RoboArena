@@ -889,6 +889,33 @@ export function PlannerExperience({
                   }`}
             </button>
             <div className="targeting-rail-body">
+              {scanDialog === null ? null : (
+                <ScanAndFireDialog
+                  weapons={weapons}
+                  initialWeapon={scanDialog.weapon}
+                  {...(scanDialog.maxDistance === undefined
+                    ? {}
+                    : { initialMaxDistance: scanDialog.maxDistance })}
+                  {...(scanDialog.seconds === undefined
+                    ? {}
+                    : { initialSeconds: scanDialog.seconds })}
+                  remainingTicks={budgetTicks - selectedEndTick}
+                  onDistanceChange={setScanOverlayDistance}
+                  onSecondsChange={setScanOverlaySeconds}
+                  onWeaponChange={setScanOverlayWeapon}
+                  onCancel={() => {
+                    setScanDialog(null);
+                    setScanOverlayPinned(editing !== null);
+                    setEditing(null);
+                  }}
+                  onConfirm={(weapon, maxDistance, seconds) =>
+                    commitSegment(
+                      { kind: "scan-and-fire", weapon, maxDistance, seconds },
+                      `Scan & Fire added · ${maxDistance} tiles for ${seconds} seconds.`,
+                    )
+                  }
+                />
+              )}
               <TargetingAnalysis
                 mode={targetingBase.mode}
                 weapon={targetingBase.weapon}
@@ -976,31 +1003,6 @@ export function PlannerExperience({
             commitSegment(
               { kind: "aim-and-fire", target: aimDialog.target, weapon, repeat },
               `${repeat ? "Repeat " : ""}Aim & Fire added at ${aimDialog.target.x},${aimDialog.target.y}.`,
-            )
-          }
-        />
-      )}
-      {scanDialog === null ? null : (
-        <ScanAndFireDialog
-          weapons={weapons}
-          initialWeapon={scanDialog.weapon}
-          {...(scanDialog.maxDistance === undefined
-            ? {}
-            : { initialMaxDistance: scanDialog.maxDistance })}
-          {...(scanDialog.seconds === undefined ? {} : { initialSeconds: scanDialog.seconds })}
-          remainingTicks={budgetTicks - selectedEndTick}
-          onDistanceChange={setScanOverlayDistance}
-          onSecondsChange={setScanOverlaySeconds}
-          onWeaponChange={setScanOverlayWeapon}
-          onCancel={() => {
-            setScanDialog(null);
-            setScanOverlayPinned(editing !== null);
-            setEditing(null);
-          }}
-          onConfirm={(weapon, maxDistance, seconds) =>
-            commitSegment(
-              { kind: "scan-and-fire", weapon, maxDistance, seconds },
-              `Scan & Fire added · ${maxDistance} tiles for ${seconds} seconds.`,
             )
           }
         />
