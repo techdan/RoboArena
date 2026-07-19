@@ -463,6 +463,13 @@ export function PlannerExperience({
       commitSegment({ kind: "deploy", to: tile }, `Deploy programmed at ${tile.x},${tile.y}.`);
       return;
     }
+    if (aimDialog !== null) {
+      // The docked confirm keeps the board interactive: clicking re-picks the
+      // aimed tile without cancelling, preserving weapon/repeat choices.
+      setAimDialog((current) => (current === null ? null : { ...current, target: tile }));
+      setNotice(`Aim & Fire target moved to ${tile.x},${tile.y}.`);
+      return;
+    }
     if ((modifiers.ctrl && modifiers.shift) || aimTool) {
       setScanOverlayPinned(false);
       setAimDialog({
@@ -889,6 +896,31 @@ export function PlannerExperience({
                   }`}
             </button>
             <div className="targeting-rail-body">
+              {aimDialog === null ? null : (
+                <AimAndFireDialog
+                  arena={match.arena}
+                  shooter={projectedShooter}
+                  target={aimDialog.target}
+                  weapons={weapons}
+                  initialWeapon={aimDialog.weapon}
+                  initialRepeat={aimDialog.repeat}
+                  authorizedContacts={authorizedContacts}
+                  onWeaponChange={(weapon) =>
+                    setAimDialog((current) => (current === null ? null : { ...current, weapon }))
+                  }
+                  onCancel={() => {
+                    setAimDialog(null);
+                    setAimTool(false);
+                    setEditing(null);
+                  }}
+                  onConfirm={(weapon, repeat) =>
+                    commitSegment(
+                      { kind: "aim-and-fire", target: aimDialog.target, weapon, repeat },
+                      `${repeat ? "Repeat " : ""}Aim & Fire added at ${aimDialog.target.x},${aimDialog.target.y}.`,
+                    )
+                  }
+                />
+              )}
               {scanDialog === null ? null : (
                 <ScanAndFireDialog
                   weapons={weapons}
@@ -982,31 +1014,6 @@ export function PlannerExperience({
           }}
         />
       ) : null}
-      {aimDialog === null ? null : (
-        <AimAndFireDialog
-          arena={match.arena}
-          shooter={projectedShooter}
-          target={aimDialog.target}
-          weapons={weapons}
-          initialWeapon={aimDialog.weapon}
-          initialRepeat={aimDialog.repeat}
-          authorizedContacts={authorizedContacts}
-          onWeaponChange={(weapon) =>
-            setAimDialog((current) => (current === null ? null : { ...current, weapon }))
-          }
-          onCancel={() => {
-            setAimDialog(null);
-            setAimTool(false);
-            setEditing(null);
-          }}
-          onConfirm={(weapon, repeat) =>
-            commitSegment(
-              { kind: "aim-and-fire", target: aimDialog.target, weapon, repeat },
-              `${repeat ? "Repeat " : ""}Aim & Fire added at ${aimDialog.target.x},${aimDialog.target.y}.`,
-            )
-          }
-        />
-      )}
     </main>
   );
 }
