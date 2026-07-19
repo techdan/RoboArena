@@ -27,10 +27,9 @@ export const scaleForPinch = (
   initialScale: number,
   initialDistance: number,
   distance: number,
+  clampScale: (scale: number) => number = clampArenaScale,
 ): number =>
-  clampArenaScale(
-    initialDistance <= 0 ? initialScale : initialScale * (distance / initialDistance),
-  );
+  clampScale(initialDistance <= 0 ? initialScale : initialScale * (distance / initialDistance));
 
 export const transformForPinch = ({
   initialTransform,
@@ -38,14 +37,21 @@ export const transformForPinch = ({
   currentMidpoint,
   initialDistance,
   currentDistance,
+  clampScale = clampArenaScale,
 }: {
   readonly initialTransform: ArenaTransform;
   readonly initialMidpoint: Point;
   readonly currentMidpoint: Point;
   readonly initialDistance: number;
   readonly currentDistance: number;
+  readonly clampScale?: (scale: number) => number;
 }): ArenaTransform => {
-  const scale = scaleForPinch(initialTransform.scale, initialDistance, currentDistance);
+  const scale = scaleForPinch(
+    initialTransform.scale,
+    initialDistance,
+    currentDistance,
+    clampScale,
+  );
   const scaleRatio = scale / initialTransform.scale;
   return {
     x: currentMidpoint.x - (initialMidpoint.x - initialTransform.x) * scaleRatio,

@@ -25,6 +25,23 @@ describe("pointer gesture arbitration", () => {
     expect(scaleForPinch(1, 100, 1)).toBe(MIN_ARENA_SCALE);
   });
 
+  it("honors a caller-supplied clamp so the movie can use its own zoom bounds", () => {
+    const clampMovie = (scale: number): number => Math.min(3, Math.max(0.5, scale));
+    // Beyond the planner's 2x ceiling but within the movie's 3x ceiling.
+    expect(scaleForPinch(1, 100, 250, clampMovie)).toBe(2.5);
+    expect(scaleForPinch(1, 100, 1000, clampMovie)).toBe(3);
+    expect(scaleForPinch(1, 100, 1, clampMovie)).toBe(0.5);
+    const transformed = transformForPinch({
+      initialTransform: { x: 0, y: 0, scale: 1 },
+      initialMidpoint: { x: 100, y: 100 },
+      currentMidpoint: { x: 100, y: 100 },
+      initialDistance: 100,
+      currentDistance: 250,
+      clampScale: clampMovie,
+    });
+    expect(transformed.scale).toBe(2.5);
+  });
+
   it("keeps the original world point under the moving pinch midpoint", () => {
     const transformed = transformForPinch({
       initialTransform: { x: 20, y: -10, scale: 1 },

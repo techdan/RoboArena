@@ -1,5 +1,6 @@
 import { Layers3, Radar } from "lucide-react";
 import { ArenaPreview } from "../../components/ArenaPreview";
+import { LobbyBreadcrumb } from "../../components/LobbyBreadcrumb";
 import { arenaProvenance, loadArena } from "../../lib/arenas";
 
 export default async function PreviewPage() {
@@ -13,6 +14,7 @@ export default async function PreviewPage() {
     <main className="min-h-screen overflow-hidden bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
       <div className="relative mx-auto max-w-[1280px] px-8 py-10 2xl:px-4">
+        <LobbyBreadcrumb />
         <header className="mb-8 flex items-end justify-between gap-8 border-b border-white/8 pb-7">
           <div className="max-w-3xl">
             <div className="mb-4 flex items-center gap-3">

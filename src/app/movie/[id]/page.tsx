@@ -1,6 +1,7 @@
 import { Activity, Crosshair, Film, Gauge, MoveRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { FieldGuideButton } from "../../../components/help/HelpProvider";
+import { LobbyBreadcrumb } from "../../../components/LobbyBreadcrumb";
 import { MovieExperience } from "../../../components/MovieExperience";
 import { createCannedMovie } from "../../../lib/replays/cannedMovie";
 
@@ -19,6 +20,7 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
     <main className="desktop-viewport-gate min-h-screen overflow-hidden bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
       <div className="relative mx-auto max-w-[1180px] px-8 py-9">
+        <LobbyBreadcrumb />
         <header className="mb-7 flex items-end justify-between border-b border-white/8 pb-6">
           <div>
             <div className="mb-3 flex items-center gap-3">

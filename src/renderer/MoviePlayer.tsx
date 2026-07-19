@@ -35,6 +35,14 @@ export interface MoviePlayerProps {
   readonly onTickChange?: (tick: number) => void;
 }
 
+/** Zoom bounds shared by buttons, wheel, and pinch clamping. */
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+/** Multiplier applied per zoom-in/out button press. */
+const ZOOM_STEP = 1.25;
+
+const clampZoom = (scale: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+
 export function MoviePlayer({
   initialState,
   events,
@@ -43,6 +51,7 @@ export function MoviePlayer({
   onTickChange,
 }: MoviePlayerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const renderSnapshotRef = useRef<(index: number, animate: boolean) => void>(() => undefined);
   const timeline = useMemo(() => buildMovieTimeline(initialState, events), [initialState, events]);
   const initialIndex = useMemo(() => {
@@ -61,6 +70,7 @@ export function MoviePlayer({
   const [rendererStatus, setRendererStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reducedMotion, setReducedMotion] = useState(false);
   const [viewTransform, setViewTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [grabbing, setGrabbing] = useState(false);
   const viewTransformRef = useRef(viewTransform);
   viewTransformRef.current = viewTransform;
   const viewPointersRef = useRef(new Map<number, Point>());
@@ -95,6 +105,49 @@ export function MoviePlayer({
     },
     [timeline.ticks.length],
   );
+
+  // Zoom about a viewport-local focal point, keeping that point stationary
+  // on screen. The CSS transform is `translate(x,y) scale(s)` with a 0,0
+  // origin, so the content point under the focus is (focus - translate) / s;
+  // holding it fixed at the new scale yields the corrected translation.
+  const zoomAbout = useCallback((focal: Point, nextScale: number) => {
+    setViewTransform((transform) => {
+      const scale = clampZoom(nextScale);
+      if (scale === transform.scale) return transform;
+      const contentX = (focal.x - transform.x) / transform.scale;
+      const contentY = (focal.y - transform.y) / transform.scale;
+      return { scale, x: focal.x - contentX * scale, y: focal.y - contentY * scale };
+    });
+  }, []);
+
+  const viewportCenter = useCallback((): Point => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (rect === undefined) return { x: 0, y: 0 };
+    return { x: rect.width / 2, y: rect.height / 2 };
+  }, []);
+
+  const zoomByStep = useCallback(
+    (factor: number) => zoomAbout(viewportCenter(), viewTransformRef.current.scale * factor),
+    [viewportCenter, zoomAbout],
+  );
+
+  const resetView = useCallback(() => setViewTransform({ x: 0, y: 0, scale: 1 }), []);
+
+  // Wheel zoom needs a non-passive native listener so preventDefault can stop
+  // the page from scrolling underneath the movie. React's synthetic onWheel is
+  // registered passively and cannot cancel the default.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      zoomAbout(focal, viewTransformRef.current.scale * Math.pow(1.0015, -event.deltaY));
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [zoomAbout]);
 
   useEffect(() => {
     if (!playing || rendererStatus !== "ready") return;
@@ -244,14 +297,17 @@ export function MoviePlayer({
       data-animation-cues={animationCues}
     >
       <div
+        ref={viewportRef}
         className="movie-viewport"
         style={{
           width: initialState.arena.width * MOVIE_TILE_SIZE,
           height: initialState.arena.height * MOVIE_TILE_SIZE,
           touchAction: "none",
+          cursor: grabbing ? "grabbing" : viewTransform.scale > 1 ? "grab" : "default",
         }}
         onPointerDown={(event) => {
-          if (event.pointerType !== "touch") return;
+          // Mouse: only the primary button drags. Touch/pen: always pan/pinch.
+          if (event.pointerType === "mouse" && event.button !== 0) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           const point = { x: event.clientX, y: event.clientY };
           viewPointersRef.current.set(event.pointerId, point);
@@ -263,6 +319,7 @@ export function MoviePlayer({
               transform: viewTransformRef.current,
               moved: false,
             };
+            if (event.pointerType !== "touch") setGrabbing(true);
           } else if (points.length === 2) {
             const [first, second] = points;
             if (first === undefined || second === undefined) return;
@@ -279,8 +336,7 @@ export function MoviePlayer({
           }
         }}
         onPointerMove={(event) => {
-          if (event.pointerType !== "touch" || !viewPointersRef.current.has(event.pointerId))
-            return;
+          if (!viewPointersRef.current.has(event.pointerId)) return;
           const point = { x: event.clientX, y: event.clientY };
           viewPointersRef.current.set(event.pointerId, point);
           const points = [...viewPointersRef.current.values()];
@@ -300,6 +356,7 @@ export function MoviePlayer({
                 currentMidpoint: midpoint,
                 initialDistance: pinch.distance,
                 currentDistance: pointDistance(first, second),
+                clampScale: clampZoom,
               }),
             );
             return;
@@ -322,11 +379,13 @@ export function MoviePlayer({
           viewPointersRef.current.delete(event.pointerId);
           if (viewPointersRef.current.size < 2) pinchRef.current = null;
           if (panRef.current?.pointerId === event.pointerId) panRef.current = null;
+          if (viewPointersRef.current.size === 0) setGrabbing(false);
         }}
         onPointerCancel={(event) => {
           viewPointersRef.current.delete(event.pointerId);
           panRef.current = null;
           pinchRef.current = null;
+          setGrabbing(false);
         }}
       >
         <div
@@ -353,6 +412,9 @@ export function MoviePlayer({
         tick={tick}
         speed={speed}
         compressIdle={compressIdle}
+        zoom={viewTransform.scale}
+        canZoomIn={viewTransform.scale < MAX_ZOOM}
+        canZoomOut={viewTransform.scale > MIN_ZOOM}
         onTogglePlaying={() => setPlaying((value) => !value)}
         onStepBack={() => seek(currentIndex - 1)}
         onStepForward={() => seek(currentIndex + 1)}
@@ -360,6 +422,9 @@ export function MoviePlayer({
         onScrub={seek}
         onSpeedChange={setSpeed}
         onCompressIdleChange={setCompressIdle}
+        onZoomIn={() => zoomByStep(ZOOM_STEP)}
+        onZoomOut={() => zoomByStep(1 / ZOOM_STEP)}
+        onZoomReset={resetView}
       />
       <p className="sr-only" aria-live="polite">
         Movie at tick {tick}

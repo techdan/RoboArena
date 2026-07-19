@@ -1,6 +1,16 @@
 "use client";
 
-import { Pause, Play, RotateCcw, SkipBack, SkipForward, Zap } from "lucide-react";
+import {
+  Maximize2,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+  Zap,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 export type MovieSpeed = 0.5 | 1 | 2 | 4;
 
@@ -12,6 +22,9 @@ interface MovieControlsProps {
   readonly tick: number;
   readonly speed: MovieSpeed;
   readonly compressIdle: boolean;
+  readonly zoom: number;
+  readonly canZoomIn: boolean;
+  readonly canZoomOut: boolean;
   readonly onTogglePlaying: () => void;
   readonly onStepBack: () => void;
   readonly onStepForward: () => void;
@@ -19,6 +32,9 @@ interface MovieControlsProps {
   readonly onScrub: (index: number) => void;
   readonly onSpeedChange: (speed: MovieSpeed) => void;
   readonly onCompressIdleChange: (enabled: boolean) => void;
+  readonly onZoomIn: () => void;
+  readonly onZoomOut: () => void;
+  readonly onZoomReset: () => void;
 }
 
 const SPEEDS: readonly MovieSpeed[] = [0.5, 1, 2, 4];
@@ -106,6 +122,46 @@ export function MovieControls(props: MovieControlsProps) {
             {speed}x
           </button>
         ))}
+      </div>
+
+      <div
+        className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/20 p-1"
+        aria-label="Movie zoom"
+      >
+        <button
+          className="transport-button"
+          type="button"
+          onClick={props.onZoomOut}
+          aria-label="Zoom out"
+          disabled={props.disabled || !props.canZoomOut}
+        >
+          <ZoomOut aria-hidden="true" className="size-4" />
+        </button>
+        <span
+          className="w-12 text-center font-mono text-[11px] font-bold tracking-[0.08em] text-white/70"
+          aria-live="polite"
+          data-movie-zoom
+        >
+          {Math.round(props.zoom * 100)}%
+        </span>
+        <button
+          className="transport-button"
+          type="button"
+          onClick={props.onZoomIn}
+          aria-label="Zoom in"
+          disabled={props.disabled || !props.canZoomIn}
+        >
+          <ZoomIn aria-hidden="true" className="size-4" />
+        </button>
+        <button
+          className="transport-button"
+          type="button"
+          onClick={props.onZoomReset}
+          aria-label="Reset zoom"
+          disabled={props.disabled}
+        >
+          <Maximize2 aria-hidden="true" className="size-4" />
+        </button>
       </div>
 
       <label
