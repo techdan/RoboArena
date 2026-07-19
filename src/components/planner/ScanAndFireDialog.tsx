@@ -136,11 +136,10 @@ export function ScanAndFireDialog({
       </div>
       <div className="fire-preview">
         <p>
-          Shot Analysis is open beside the board. Hover or keyboard-focus a tile to inspect it and
-          change the assumed target posture there. Checks immediately, then every{" "}
-          {formatGameTime(WEAPON_TIMING[weapon].scanFiringIntervalTicks)}
-          {` for ${seconds}s`}. Range and cone are deterministic. Estimated hit chance includes
-          cover and sight strength for an authorized contact; the actual RNG roll is never shown.
+          Hover a board tile to inspect it in the Shot Analysis below. Checks immediately, then
+          every {formatGameTime(WEAPON_TIMING[weapon].scanFiringIntervalTicks)}
+          {` for ${seconds}s`}. Range and cone are deterministic; the actual RNG roll is never
+          shown.
         </p>
       </div>
       <footer>

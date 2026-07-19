@@ -10,6 +10,7 @@ import {
   type HitChanceBand,
   type TargetingTilePreview,
 } from "../../planner/firingHelpers";
+import { targetingStatusLabel } from "../../planner/overlayLabels";
 import { TARGETING_PALETTE, type TargetingCategory } from "../../planner/targetingPalette";
 import styles from "./TargetingAnalysis.module.css";
 
@@ -33,13 +34,12 @@ const BAND_LABELS: Readonly<Record<HitChanceBand, string>> = {
   zero: "No chance · 0%",
 };
 
-const STATUS_LABELS: Readonly<Record<TargetingTilePreview["status"], string>> = {
-  eligible: "Eligible",
-  "shooter-docked": "Deploy the robot before firing",
-  "out-of-range": "Outside selected range",
-  "angle-blocked": "Behind the firing arc",
-  "sight-blocked": "Line of sight blocked",
-};
+/** Short legend names for the blocked statuses (full wording on hover/panel). */
+const LEGEND_STATUS_LABELS = {
+  "sight-blocked": "Wall blocks sight",
+  "out-of-range": "Outside range",
+  "angle-blocked": "Behind scan cone",
+} as const;
 
 const coverLabel = (coverClass: 1 | 2 | 3 | 4): string =>
   ({ 1: "Strong cover", 2: "Good cover", 3: "Partial cover", 4: "Exposed" })[coverClass];
@@ -84,7 +84,11 @@ export function TargetingAnalysis({
   const timing =
     mode === "scan"
       ? `Checks now, then every ${formatGameTime(opportunityTicks)}${seconds === null ? "" : ` for ${seconds}s`}`
-      : `Fixed-tile shot · fires in ${formatGameTime(opportunityTicks)}`;
+      : `Fires in ${formatGameTime(opportunityTicks)}`;
+  const modeExplainer =
+    mode === "aim"
+      ? "Chance vs a robot on this exact tile when the shot resolves"
+      : "Chance if an enemy is acquired on that tile at a check";
 
   return (
     <section
@@ -94,9 +98,7 @@ export function TargetingAnalysis({
     >
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>
-            {mode === "aim" ? "Fixed tile" : "Automatic acquisition"}
-          </p>
+          <p className={styles.eyebrow}>{mode === "aim" ? "Aim & Fire" : "Scan & Fire"}</p>
           <h3 id="targeting-analysis-title">
             {mode === "aim" ? (
               <Crosshair size={17} aria-hidden="true" />
@@ -105,6 +107,7 @@ export function TargetingAnalysis({
             )}
             {WEAPON_LABELS[weapon]} Shot Analysis
           </h3>
+          <p className={styles.modeSummary}>{modeExplainer}.</p>
           <p className={styles.modeSummary}>
             {timing} · {maxDistance}-tile limit
           </p>
@@ -151,6 +154,14 @@ export function TargetingAnalysis({
                 <i data-band={band} style={targetingSwatchStyle(band)} /> {BAND_LABELS[band]}
               </span>
             ))}
+            {(Object.keys(LEGEND_STATUS_LABELS) as (keyof typeof LEGEND_STATUS_LABELS)[]).map(
+              (status) => (
+                <span key={status}>
+                  <i data-band={status} style={targetingSwatchStyle(status)} />{" "}
+                  {LEGEND_STATUS_LABELS[status]}
+                </span>
+              ),
+            )}
           </div>
         )}
       </div>
@@ -164,7 +175,8 @@ export function TargetingAnalysis({
           <ShieldX size={18} aria-hidden="true" />
           <div>
             <strong>
-              Tile {preview.tile.x},{preview.tile.y} · {STATUS_LABELS[preview.status]}
+              Tile {preview.tile.x},{preview.tile.y} ·{" "}
+              {targetingStatusLabel(preview.status, maxDistance)}
             </strong>
             <span>
               Range {preview.distance}/{maxDistance}
