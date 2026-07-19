@@ -1,9 +1,11 @@
 "use client";
 
 import { ArrowRight, Film, Gamepad2, RadioTower, Users } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import type { Arena } from "../../engine/types";
 import { PROTOCOL_VERSION, type RoomSnapshotMessage } from "../../lib/net/protocol";
 import {
   forgetRoom,
@@ -16,9 +18,18 @@ import {
 } from "../../lib/net/client";
 import { PLAYER_COLORS, type PlayerColor } from "../../lib/setup/validate";
 
+const PixiArena = dynamic(
+  () => import("../../renderer/PixiArena").then((module) => module.PixiArena),
+  { ssr: false },
+);
+
 interface RememberedRoom {
   readonly code: string;
   readonly status: string;
+}
+
+interface HomeSetupProps {
+  readonly arena: Arena;
 }
 
 const roomStatus = (snapshot: RoomSnapshotMessage): string => {
@@ -38,7 +49,7 @@ const roomStatus = (snapshot: RoomSnapshotMessage): string => {
   return `${ready}/${room.players.length} ready`;
 };
 
-export function HomeSetup() {
+export function HomeSetup({ arena }: HomeSetupProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"create" | "join">("create");
   const [name, setName] = useState("Ember Unit");
@@ -153,6 +164,19 @@ export function HomeSetup() {
                 Separate devices
               </span>
             </div>
+
+            <figure className="mt-9 w-fit max-w-full">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <figcaption className="eyebrow">Battlefield · {arena.sizeName}</figcaption>
+                <Link className="secondary-link" href="/preview">
+                  Terrain lab
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="max-w-full overflow-auto rounded-[20px]">
+                <PixiArena arena={arena} />
+              </div>
+            </figure>
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_30px_90px_rgba(0,0,0,.35)]">
