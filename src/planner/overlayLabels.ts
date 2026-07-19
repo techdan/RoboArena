@@ -6,7 +6,7 @@
  */
 
 import type { TileCoord } from "../engine/types.js";
-import type { TargetingTilePreview } from "./firingHelpers.js";
+import type { AimPreviewStatus, TargetingTilePreview } from "./firingHelpers.js";
 
 /**
  * Label text for one previewed tile, or null when a number would mislead or
@@ -28,3 +28,50 @@ export const tileLabel = (tile: TargetingTilePreview, origin: TileCoord): string
  */
 export const labelAlpha = (effectiveTilePx: number): number =>
   Math.min(1, Math.max(0, (effectiveTilePx - 17) / 6));
+
+/**
+ * Plain-language blocked-status wording shared by the cursor tooltip, the
+ * Shot Analysis panel, and the legend, so the same state is never named three
+ * different ways.
+ */
+export const targetingStatusLabel = (
+  status: Exclude<AimPreviewStatus, "eligible">,
+  maxDistance: number,
+): string => {
+  switch (status) {
+    case "shooter-docked":
+      return "Deploy this robot before firing";
+    case "out-of-range":
+      return `Outside the ${maxDistance}-tile range`;
+    case "angle-blocked":
+      return "Behind the scan cone — robots can’t fire backward";
+    case "sight-blocked":
+      return "A wall blocks line of sight";
+  }
+};
+
+/**
+ * Compact cursor-tooltip lines for the hovered tile: the precision fallback
+ * when the per-tile labels fade out, and the place the cone-edge `+2`
+ * acquisition-distance rule is explained.
+ */
+export const tooltipLines = (
+  tile: TargetingTilePreview,
+  maxDistance: number,
+): readonly string[] => {
+  if (tile.status !== "eligible") return [targetingStatusLabel(tile.status, maxDistance)];
+  if (tile.resolution === "blast") return [`Blast impact · ${tile.distance} tiles`];
+  const estimate = tile.estimates[0] ?? null;
+  const chance = tile.chancePercent ?? estimate?.chancePercent ?? 0;
+  const lines: string[] = [`${chance}% hit · ${tile.distance} tiles`];
+  const damage = estimate?.damageRange ?? null;
+  if (damage !== null)
+    lines.push(
+      `${damage.minimum}–${damage.maximum} dmg${
+        damage.bulletsPerClick > 1 ? ` × ${damage.bulletsPerClick} bullets` : ""
+      }`,
+    );
+  if (tile.fireMode === "scan" && tile.onConeBoundary)
+    lines.push(`Cone edge — counts as ${tile.distance + 2} tiles for acquisition`);
+  return lines;
+};

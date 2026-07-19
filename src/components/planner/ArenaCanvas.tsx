@@ -18,7 +18,7 @@ import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from ".
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import type { TargetingTilePreview } from "../../planner/firingHelpers";
 import { coneWedge, damageRings, ringRadiusPx } from "../../planner/overlayGeometry";
-import { labelAlpha, tileLabel } from "../../planner/overlayLabels";
+import { labelAlpha, tileLabel, tooltipLines } from "../../planner/overlayLabels";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
 import { createRobotSprite } from "../../renderer/RobotSprite";
 import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
@@ -724,6 +724,34 @@ export function ArenaCanvas({
     if (active !== null) active.timer = null;
   };
 
+  // Cursor tooltip: the precision readout that survives when the per-tile
+  // labels fade at small tile sizes. Pointer-events: none, so it never steals
+  // hover from the board.
+  const hoverPreview =
+    targetingOverlay === null || cursor === null || grabbing
+      ? null
+      : (targetingOverlay.tiles[cursor.y * arena.width + cursor.x] ?? null);
+  const tooltip =
+    hoverPreview === null || targetingOverlay === null
+      ? null
+      : tooltipLines(hoverPreview, targetingOverlay.maxDistance);
+  const tooltipScale = fitScale * transform.scale;
+  const tooltipFlip = cursor !== null && cursor.x > arena.width / 2;
+  const tooltipLeft =
+    cursor === null
+      ? 0
+      : fit.offsetX +
+        transform.x +
+        (cursor.x + (tooltipFlip ? 0 : 1)) * TILE_SIZE * tooltipScale +
+        (tooltipFlip ? -10 : 10);
+  const tooltipTop =
+    cursor === null
+      ? 0
+      : Math.min(
+          viewportSize.height - 64,
+          Math.max(4, fit.offsetY + transform.y + cursor.y * TILE_SIZE * tooltipScale - 4),
+        );
+
   return (
     <div className="planner-canvas-shell">
       <div
@@ -953,6 +981,18 @@ export function ArenaCanvas({
         >
           <div ref={hostRef} className="absolute inset-0" />
         </div>
+        {tooltip === null ? null : (
+          <div
+            className="planner-tile-tooltip"
+            data-flip={tooltipFlip ? "true" : "false"}
+            style={{ left: tooltipLeft, top: tooltipTop }}
+            aria-hidden="true"
+          >
+            {tooltip.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </div>
+        )}
         {status !== "ready" ? (
           <div className="planner-canvas-loading" role="status">
             {status === "error" ? "Renderer unavailable" : "Loading tactical grid…"}

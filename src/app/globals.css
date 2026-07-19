@@ -1200,6 +1200,32 @@ a.planner-menu-item:focus-visible {
 .planner-canvas[data-cursor-state="out-of-home"] {
   cursor: not-allowed;
 }
+.planner-tile-tooltip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  color: rgb(255 255 255 / 88%);
+  background: rgb(6 10 8 / 92%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.planner-tile-tooltip[data-flip="true"] {
+  transform: translateX(-100%);
+}
+.planner-tile-tooltip span:first-child {
+  color: #d9f99d;
+  font-size: 0.68rem;
+}
 .planner-canvas-loading {
   position: absolute;
   inset: 0;
