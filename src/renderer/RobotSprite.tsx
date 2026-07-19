@@ -12,8 +12,9 @@ import type { RobotTextureSet } from "./robotTextures";
 export const MOVIE_TILE_SIZE = 28;
 
 /** Slightly over one tile so the chassis fills its footprint on the board. */
-const BODY_SIZE = MOVIE_TILE_SIZE * 1.15;
-const TURRET_SIZE = BODY_SIZE * (ROBOT_SPRITE_GEOMETRY.turretBox / ROBOT_SPRITE_GEOMETRY.bodyBox);
+const bodySize = (tileSize: number) => tileSize * 1.15;
+const turretSize = (tileSize: number) =>
+  bodySize(tileSize) * (ROBOT_SPRITE_GEOMETRY.turretBox / ROBOT_SPRITE_GEOMETRY.bodyBox);
 
 const HEADING_RADIANS: Readonly<Record<Heading, number>> = {
   N: -Math.PI / 2,
@@ -30,53 +31,55 @@ const HEADING_RADIANS: Readonly<Record<Heading, number>> = {
 const headingRotation = (heading: Heading) => HEADING_RADIANS[heading] + Math.PI / 2;
 
 /** The turret mount drops as the hull hunkers; offset from the body center. */
-const turretOffsetY = (posture: Posture) =>
+const turretOffsetY = (posture: Posture, tileSize: number) =>
   ((ROBOT_SPRITE_GEOMETRY.turretPivotY[posture] - ROBOT_SPRITE_GEOMETRY.bodyBox / 2) /
     ROBOT_SPRITE_GEOMETRY.bodyBox) *
-  BODY_SIZE;
+  bodySize(tileSize);
 
 export interface RobotVisual {
   readonly container: Container;
   readonly body: Sprite;
   readonly turret: Sprite;
   readonly textures: RobotTextureSet;
+  readonly tileSize: number;
   destroyed: boolean;
 }
 
 export const createRobotSprite = (
   robot: MovieRobotSnapshot,
   textures: RobotTextureSet,
+  tileSize = MOVIE_TILE_SIZE,
 ): RobotVisual => {
   const container = new Container();
   container.label = `robot:${robot.id}`;
 
   const body = new Sprite(robot.destroyed ? textures.wreck : textures.bodies[robot.posture]);
   body.anchor.set(0.5);
-  body.width = BODY_SIZE;
-  body.height = BODY_SIZE;
+  body.width = bodySize(tileSize);
+  body.height = bodySize(tileSize);
 
   const turret = new Sprite(textures.turret);
   turret.anchor.set(0.5);
-  turret.width = TURRET_SIZE;
-  turret.height = TURRET_SIZE;
-  turret.position.set(0, turretOffsetY(robot.posture));
+  turret.width = turretSize(tileSize);
+  turret.height = turretSize(tileSize);
+  turret.position.set(0, turretOffsetY(robot.posture, tileSize));
   turret.rotation = headingRotation(robot.scanHeading);
   turret.visible = !robot.destroyed;
 
   container.addChild(body, turret);
-  placeRobot(container, robot);
-  return { container, body, turret, textures, destroyed: robot.destroyed };
+  placeRobot(container, robot, tileSize);
+  return { container, body, turret, textures, tileSize, destroyed: robot.destroyed };
 };
 
-const placeRobot = (container: Container, robot: MovieRobotSnapshot) => {
+const placeRobot = (container: Container, robot: MovieRobotSnapshot, tileSize: number) => {
   if (robot.position === "dock") {
     container.visible = false;
     return;
   }
   container.visible = true;
   container.position.set(
-    robot.position.x * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2,
-    robot.position.y * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2,
+    robot.position.x * tileSize + tileSize / 2,
+    robot.position.y * tileSize + tileSize / 2,
   );
 };
 
@@ -90,9 +93,9 @@ export const updateRobotSprite = (
     return;
   }
   visual.container.visible = true;
-  const x = robot.position.x * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2;
-  const y = robot.position.y * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2;
-  const turretY = turretOffsetY(robot.posture);
+  const x = robot.position.x * visual.tileSize + visual.tileSize / 2;
+  const y = robot.position.y * visual.tileSize + visual.tileSize / 2;
+  const turretY = turretOffsetY(robot.posture, visual.tileSize);
   const turretRotation = headingRotation(robot.scanHeading);
 
   visual.body.texture = robot.destroyed

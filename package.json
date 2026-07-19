@@ -19,9 +19,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "test:e2e": "npm run build && node tools/testing/run-playwright.mjs",
-    "test:room": "npm run build && node tools/testing/run-playwright.mjs --room"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "gsap": "^3.15.0",

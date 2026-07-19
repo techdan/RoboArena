@@ -13,8 +13,9 @@ const playwrightBin = fileURLToPath(
   new URL("../../node_modules/@playwright/test/cli.js", import.meta.url),
 );
 const roomMode = process.argv.includes("--room");
+const forwardedPlaywrightArgs = process.argv.slice(2).filter((argument) => argument !== "--room");
 const webPort = Number(process.env.PLAYWRIGHT_WEB_PORT ?? 3100);
-const roomPort = 3001;
+const roomPort = Number(process.env.PLAYWRIGHT_ROOM_PORT ?? 3001);
 const webUrl = `http://127.0.0.1:${webPort}/`;
 const roomUrl = `http://127.0.0.1:${roomPort}/health`;
 
@@ -58,7 +59,7 @@ for (const target of occupiedTargets) {
     const hint =
       target.label === "web"
         ? "Set PLAYWRIGHT_WEB_PORT to an unused port."
-        : "Stop the existing room service on port 3001 before running the room suite.";
+        : `Set PLAYWRIGHT_ROOM_PORT to an unused port (current: ${roomPort}).`;
     throw new Error(`Playwright ${target.label} port is already in use at ${target.url}. ${hint}`);
   }
 }
@@ -150,7 +151,7 @@ const stopServices = () => {
 let exitCode;
 try {
   await Promise.all(services.map(waitForService));
-  const playwrightArgs = ["test"];
+  const playwrightArgs = ["test", ...forwardedPlaywrightArgs];
   if (roomMode) playwrightArgs.push("--config", "playwright.room.config.ts");
   const playwright = spawn(process.execPath, [playwrightBin, ...playwrightArgs], {
     cwd: projectRoot,

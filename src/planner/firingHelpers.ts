@@ -1,5 +1,6 @@
 /** Phase 10 authorized firing previews. These helpers never consume RNG or full enemy state. */
 
+import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
 import {
   COVER_CLASS_HIT_SCORE,
   LIVE_FIRE_HIT_THRESHOLDS,
@@ -27,11 +28,6 @@ const HEADING_VECTORS: Readonly<Record<Heading, readonly [number, number]>> = {
   SW: [-1, 1],
   W: [-1, 0],
   NW: [-1, -1],
-};
-const AIM_ACCURACY_INDEX: Readonly<Partial<Record<WeaponId, 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7>>> = {
-  rifle: 0,
-  "burst-gun": 3,
-  "auto-rifle": 6,
 };
 export const PLANNER_WEAPON_RANGE: Readonly<Record<WeaponId, number>> = {
   rifle: WEAPON_MAX_RANGE,
@@ -80,6 +76,9 @@ export interface AimPreview {
   readonly weapon: WeaponId;
   readonly authorizedContact: AuthorizedContact | null;
   readonly resolution: "direct-hit-roll" | "blast";
+  readonly fireMode: "aim" | "scan";
+  readonly scanStrength: number;
+  readonly onConeBoundary: boolean;
   readonly estimates: readonly HitEstimate[];
   readonly stoppedAt?: TileCoord;
 }
@@ -149,7 +148,24 @@ const lineExclusive = (from: TileCoord, to: TileCoord): readonly TileCoord[] => 
   return tiles;
 };
 
+const isOnScanGateBoundary = (from: TileCoord, heading: Heading, target: TileCoord): boolean => {
+  if (from.x === target.x && from.y === target.y) return false;
+  const [headingX, headingY] = HEADING_VECTORS[heading];
+  return headingX * (target.x - from.x) + headingY * (target.y - from.y) === 0;
+};
+
 const terrainAt = (arena: Arena, tile: TileCoord) => arena.tiles[tile.y]?.[tile.x]?.terrain;
+
+const previewScanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord): number => {
+  if (from.x === to.x && from.y === to.y) return 16;
+  let strength = 16;
+  for (const tile of [from, ...lineExclusive(from, to), to]) {
+    const terrain = terrainAt(arena, tile);
+    if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") return 0;
+    if (terrain === "low-wall" || terrain === "bush") strength = Math.max(0, strength - 3);
+  }
+  return strength;
+};
 
 const targetSamples = (from: TileCoord, to: TileCoord) => {
   const dx = Math.abs(to.x - from.x);
@@ -183,13 +199,6 @@ const coverAt = (arena: Arena, from: TileCoord, to: TileCoord, posture: Posture)
   return posture === "crouching" ? 3 : 4;
 };
 
-const distanceAdjustment = (distance: number, accuracyBase: number): number => {
-  if (distance > 12) return Math.floor(accuracyBase / 2) - 4;
-  if (distance >= 7) return accuracyBase - 2;
-  if (distance >= 3) return Math.floor(accuracyBase / 2) + (6 - distance);
-  return accuracyBase + 2 * (3 - distance) + 2;
-};
-
 const estimate = (
   arena: Arena,
   from: TileCoord,
@@ -198,19 +207,38 @@ const estimate = (
   accuracy: AccuracyTier,
   weapon: WeaponId,
   damageStaggered: boolean,
+  fireMode: "aim" | "scan",
+  scanStrength: number,
 ): HitEstimate => {
   const distance = floorDistance(from, target);
   const coverClass = coverAt(arena, from, target, posture);
   const terrain = terrainAt(arena, target);
-  const weaponAdd = WEAPON_ACCURACY_ADDS[AIM_ACCURACY_INDEX[weapon] ?? 0] ?? 0;
+  const accuracyBase = accuracy + 4;
+  const distanceAdd =
+    distance > 12
+      ? Math.floor(accuracyBase / 2) - 4
+      : distance >= 7
+        ? accuracyBase - 2
+        : distance >= 3
+          ? Math.floor(accuracyBase / 2) + (6 - distance)
+          : accuracyBase + 2 * (3 - distance) + 2;
+  const weaponData = WEAPON_CATALOG_DATA[weapon];
+  const accuracyIndex =
+    fireMode === "scan"
+      ? (weaponData.scanAccuracyAddIndex ?? weaponData.accuracyAddIndex ?? 0)
+      : (weaponData.accuracyAddIndex ?? 0);
   const terrainAdd =
-    terrain === "rough" ? 2 : terrain === "bush" ? -1 : terrain === "low-wall" ? -3 : weaponAdd;
+    terrain === "rough"
+      ? 2
+      : terrain === "bush"
+        ? -1
+        : terrain === "low-wall"
+          ? -3
+          : (WEAPON_ACCURACY_ADDS[accuracyIndex] ?? 0);
+  const scanPenalty = fireMode === "scan" ? (scanStrength <= 4 ? 4 : scanStrength <= 8 ? 2 : 0) : 0;
   let score = Math.max(
     0,
-    Math.min(
-      19,
-      COVER_CLASS_HIT_SCORE[coverClass] + distanceAdjustment(distance, accuracy + 4) + terrainAdd,
-    ),
+    Math.min(19, COVER_CLASS_HIT_SCORE[coverClass] + distanceAdd + terrainAdd - scanPenalty),
   );
   if (damageStaggered) score >>= 1;
   const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
@@ -229,8 +257,11 @@ export const previewAim = (input: {
   readonly target: TileCoord;
   readonly weapon: WeaponId;
   readonly authorizedContacts: readonly AuthorizedContact[];
+  readonly fireMode?: "aim" | "scan";
+  readonly maxDistance?: number;
 }): AimPreview => {
   const resolution = WEAPON_RESOLUTION[input.weapon];
+  const fireMode = input.fireMode ?? "aim";
   const position = input.shooter.position;
   if (position === "dock")
     return {
@@ -240,10 +271,18 @@ export const previewAim = (input: {
       weapon: input.weapon,
       authorizedContact: null,
       resolution,
+      fireMode,
+      scanStrength: 0,
+      onConeBoundary: false,
       estimates: [],
     };
   const distance = floorDistance(position, input.target);
-  if (distance > PLANNER_WEAPON_RANGE[input.weapon])
+  const maxDistance = Math.min(
+    PLANNER_WEAPON_RANGE[input.weapon],
+    input.maxDistance ?? PLANNER_WEAPON_RANGE[input.weapon],
+  );
+  const onConeBoundary = isOnScanGateBoundary(position, input.shooter.scanHeading, input.target);
+  if (distance > maxDistance)
     return {
       status: "out-of-range",
       distance,
@@ -251,6 +290,9 @@ export const previewAim = (input: {
       weapon: input.weapon,
       authorizedContact: null,
       resolution,
+      fireMode,
+      scanStrength: 0,
+      onConeBoundary,
       estimates: [],
     };
   if (!isTileInScanGate(position, input.shooter.scanHeading, input.target))
@@ -261,13 +303,18 @@ export const previewAim = (input: {
       weapon: input.weapon,
       authorizedContact: null,
       resolution,
+      fireMode,
+      scanStrength: 0,
+      onConeBoundary,
       estimates: [],
     };
+  const scanStrength =
+    fireMode === "scan" ? previewScanSightStrength(input.arena, position, input.target) : 16;
   const stoppedAt = [...lineExclusive(position, input.target), input.target].find((tile) => {
     const terrain = terrainAt(input.arena, tile);
     return terrain === "wall" || terrain === "outer-wall";
   });
-  if (stoppedAt !== undefined)
+  if (stoppedAt !== undefined || scanStrength === 0)
     return {
       status: "sight-blocked",
       distance,
@@ -275,8 +322,11 @@ export const previewAim = (input: {
       weapon: input.weapon,
       authorizedContact: null,
       resolution,
+      fireMode,
+      scanStrength,
+      onConeBoundary,
       estimates: [],
-      stoppedAt,
+      ...(stoppedAt === undefined ? {} : { stoppedAt }),
     };
   const contact =
     input.authorizedContacts.find(
@@ -291,6 +341,9 @@ export const previewAim = (input: {
     weapon: input.weapon,
     authorizedContact: contact,
     resolution,
+    fireMode,
+    scanStrength,
+    onConeBoundary,
     estimates:
       resolution === "blast"
         ? []
@@ -303,9 +356,54 @@ export const previewAim = (input: {
               input.shooter.definition.accuracy,
               input.weapon,
               input.shooter.damageStaggerActionsRemaining > 0,
+              fireMode,
+              scanStrength,
             ),
           ),
   };
+};
+
+export interface TargetingTilePreview extends AimPreview {
+  readonly tile: TileCoord;
+  readonly chancePercent: number | null;
+}
+
+/**
+ * Deterministic, participant-authorized planner overlay. Empty tiles use the
+ * three public posture assumptions; only explicit contacts narrow that set.
+ */
+export const previewTargetingTiles = (input: {
+  readonly arena: Arena;
+  readonly shooter: RobotState;
+  readonly weapon: WeaponId;
+  readonly authorizedContacts: readonly AuthorizedContact[];
+  readonly fireMode: "aim" | "scan";
+  readonly maxDistance: number;
+}): readonly TargetingTilePreview[] => {
+  const tiles: TargetingTilePreview[] = [];
+  for (let y = 0; y < input.arena.height; y += 1) {
+    for (let x = 0; x < input.arena.width; x += 1) {
+      const tile = { x, y };
+      const preview = previewAim({
+        arena: input.arena,
+        shooter: input.shooter,
+        target: tile,
+        weapon: input.weapon,
+        authorizedContacts: input.authorizedContacts,
+        fireMode: input.fireMode,
+        maxDistance: input.maxDistance,
+      });
+      const chancePercent =
+        preview.estimates.length === 0
+          ? null
+          : Math.round(
+              preview.estimates.reduce((total, estimate) => total + estimate.chancePercent, 0) /
+                preview.estimates.length,
+            );
+      tiles.push({ ...preview, tile, chancePercent });
+    }
+  }
+  return tiles;
 };
 
 export const defaultScanSettings = (weapon: WeaponId, remainingTicks: number) => ({

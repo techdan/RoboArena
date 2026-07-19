@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  Maximize2,
-  Pause,
-  Play,
-  RotateCcw,
-  SkipBack,
-  SkipForward,
-  Zap,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { Pause, Play, RotateCcw, SkipBack, SkipForward, Zap } from "lucide-react";
+import { CameraControls } from "./CameraControls";
 
 export type MovieSpeed = 0.5 | 1 | 2 | 4;
 
@@ -124,45 +115,17 @@ export function MovieControls(props: MovieControlsProps) {
         ))}
       </div>
 
-      <div
-        className="flex items-center gap-1 rounded-xl border border-white/8 bg-black/20 p-1"
-        aria-label="Movie zoom"
-      >
-        <button
-          className="transport-button"
-          type="button"
-          onClick={props.onZoomOut}
-          aria-label="Zoom out"
-          disabled={props.disabled || !props.canZoomOut}
-        >
-          <ZoomOut aria-hidden="true" className="size-4" />
-        </button>
-        <span
-          className="w-12 text-center font-mono text-[11px] font-bold tracking-[0.08em] text-white/70"
-          aria-live="polite"
-          data-movie-zoom
-        >
-          {Math.round(props.zoom * 100)}%
-        </span>
-        <button
-          className="transport-button"
-          type="button"
-          onClick={props.onZoomIn}
-          aria-label="Zoom in"
-          disabled={props.disabled || !props.canZoomIn}
-        >
-          <ZoomIn aria-hidden="true" className="size-4" />
-        </button>
-        <button
-          className="transport-button"
-          type="button"
-          onClick={props.onZoomReset}
-          aria-label="Reset zoom"
-          disabled={props.disabled}
-        >
-          <Maximize2 aria-hidden="true" className="size-4" />
-        </button>
-      </div>
+      <CameraControls
+        label="Movie zoom"
+        zoom={props.zoom}
+        canZoomIn={props.canZoomIn}
+        canZoomOut={props.canZoomOut}
+        disabled={props.disabled}
+        dataAttribute="movie"
+        onZoomIn={props.onZoomIn}
+        onZoomOut={props.onZoomOut}
+        onZoomReset={props.onZoomReset}
+      />
 
       <label
         className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white/55 ${props.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}

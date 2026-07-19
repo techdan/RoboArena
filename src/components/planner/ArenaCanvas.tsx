@@ -1,26 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import type { Application, Container, Graphics as PixiGraphics } from "pixi.js";
-import type { Arena, Heading, Posture, RobotClass, TileCoord } from "../../engine/types";
+import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from "../../engine/types";
+import { formatGameTime } from "../../lib/formatTime";
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
-import { isTileInScanGate } from "../../planner/firingHelpers";
+import type { TargetingTilePreview } from "../../planner/firingHelpers";
+import { createRobotSprite } from "../../renderer/RobotSprite";
+import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
 import { useHelp } from "../help/HelpProvider";
+import { CameraControls } from "../CameraControls";
 import {
   LONG_PRESS_MS,
   TouchGestureArbitrator,
+  movedBeyondGestureThreshold,
   pointDistance,
   transformForPinch,
   type Point,
 } from "../../lib/input/pointerGestures";
 
 const TILE_SIZE = 24;
-const TEAM_COLORS: Readonly<Record<string, number>> = {
-  red: 0xef5350,
-  blue: 0x4c8dff,
-  green: 0x42c77a,
-  yellow: 0xf2c94c,
-};
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 1.25;
+const clampZoom = (scale: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 // Brighter than the robot-body hues so a thin outline reads over both dark grass
 // and red brick. The home overlay leans on these plus a dark halo, not opacity.
 const HOME_OVERLAY_COLORS: Readonly<Record<string, number>> = {
@@ -62,6 +72,19 @@ export interface HomeAreaOverlay {
   readonly corner: "NW" | "NE" | "SE" | "SW";
 }
 
+export interface PlannerTargetingOverlay {
+  readonly mode: "aim" | "scan";
+  readonly origin: TileCoord;
+  readonly heading: Heading;
+  readonly maxDistance: number;
+  readonly weapon: WeaponId;
+  readonly target: TileCoord | null;
+  readonly seconds: number | null;
+  readonly opportunityTicks: number;
+  readonly resolution: "direct-hit-roll" | "blast";
+  readonly tiles: readonly TargetingTilePreview[];
+}
+
 export interface ArenaCanvasProps {
   readonly arena: Arena;
   readonly robots: readonly PlannerRobotView[];
@@ -69,11 +92,7 @@ export interface ArenaCanvasProps {
   readonly route: readonly TileCoord[];
   readonly cursor: TileCoord | null;
   readonly cursorState: "valid" | "blocked" | "out-of-home" | "out-of-bounds";
-  readonly scanOverlay: {
-    readonly origin: TileCoord;
-    readonly heading: Heading;
-    readonly maxDistance: number;
-  } | null;
+  readonly targetingOverlay: PlannerTargetingOverlay | null;
   readonly onCursor: (tile: TileCoord | null) => void;
   readonly onChooseTile: (
     tile: TileCoord,
@@ -88,17 +107,22 @@ export function ArenaCanvas({
   route,
   cursor,
   cursorState,
-  scanOverlay,
+  targetingOverlay,
   onCursor,
   onChooseTile,
 }: ArenaCanvasProps) {
   const { openTopic } = useHelp();
   const hostRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const overlayRef = useRef<Container | null>(null);
+  const targetOverlayRef = useRef<Container | null>(null);
+  const cursorOverlayRef = useRef<Container | null>(null);
+  const overlayGenerationRef = useRef(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [keyboardTile, setKeyboardTile] = useState<TileCoord>({ x: 0, y: 0 });
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [grabbing, setGrabbing] = useState(false);
   const transformRef = useRef(transform);
   transformRef.current = transform;
   const pointersRef = useRef(new Map<number, Point>());
@@ -116,6 +140,49 @@ export function ArenaCanvas({
     readonly startTransform: typeof transform;
   } | null>(null);
   const gestureRef = useRef(new TouchGestureArbitrator());
+  const mousePanRef = useRef<{
+    readonly pointerId: number;
+    readonly start: Point;
+    readonly startTransform: typeof transform;
+    moved: boolean;
+  } | null>(null);
+  const suppressMouseClickRef = useRef(false);
+
+  const zoomAbout = useCallback((focal: Point, nextScale: number) => {
+    setTransform((current) => {
+      const scale = clampZoom(nextScale);
+      if (scale === current.scale) return current;
+      const contentX = (focal.x - current.x) / current.scale;
+      const contentY = (focal.y - current.y) / current.scale;
+      return { scale, x: focal.x - contentX * scale, y: focal.y - contentY * scale };
+    });
+  }, []);
+
+  const zoomByStep = useCallback(
+    (factor: number) => {
+      const bounds = viewportRef.current?.getBoundingClientRect();
+      zoomAbout(
+        bounds === undefined ? { x: 0, y: 0 } : { x: bounds.width / 2, y: bounds.height / 2 },
+        transformRef.current.scale * factor,
+      );
+    },
+    [zoomAbout],
+  );
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const bounds = viewport.getBoundingClientRect();
+      zoomAbout(
+        { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
+        transformRef.current.scale * Math.pow(1.0015, -event.deltaY),
+      );
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [zoomAbout]);
 
   useEffect(() => {
     let disposed = false;
@@ -162,8 +229,12 @@ export function ArenaCanvas({
         }
       }
       const overlay = new PixiContainer();
+      const targetOverlay = new PixiContainer();
+      const cursorOverlay = new PixiContainer();
       overlayRef.current = overlay;
-      app.stage.addChild(overlay);
+      targetOverlayRef.current = targetOverlay;
+      cursorOverlayRef.current = cursorOverlay;
+      app.stage.addChild(overlay, targetOverlay, cursorOverlay);
       app.render();
       setStatus("ready");
     })().catch((error: unknown) => {
@@ -174,16 +245,37 @@ export function ArenaCanvas({
       disposed = true;
       appRef.current = null;
       overlayRef.current = null;
+      targetOverlayRef.current = null;
+      cursorOverlayRef.current = null;
       destroy?.();
     };
   }, [arena]);
 
   useEffect(() => {
     const app = appRef.current;
+    if (status !== "ready" || app === null) return;
+    const density = Math.min(window.devicePixelRatio, 2) * transform.scale;
+    const resolution = Math.min(4, Math.max(1, Math.ceil(density * 2) / 2));
+    if (app.renderer.resolution === resolution) return;
+    app.renderer.resize(arena.width * TILE_SIZE, arena.height * TILE_SIZE, resolution);
+  }, [arena.height, arena.width, status, transform.scale]);
+
+  useEffect(() => {
+    const app = appRef.current;
     const overlay = overlayRef.current;
     if (app === null || overlay === null || status !== "ready") return;
+    const generation = ++overlayGenerationRef.current;
     void (async () => {
       const { Graphics, Text } = await import("pixi.js");
+      const robotTextures = await loadRobotTextures(
+        robots.map((robot) => ({ robotClass: robot.robotClass, teamColor: robot.color })),
+      );
+      if (
+        generation !== overlayGenerationRef.current ||
+        appRef.current !== app ||
+        overlayRef.current !== overlay
+      )
+        return;
       overlay.removeChildren().forEach((child) => child.destroy());
       for (const homeArea of homeAreas) {
         if (homeArea.tiles.length === 0) continue;
@@ -239,20 +331,65 @@ export function ArenaCanvas({
         outline.stroke({ width: 1.5, color, alpha: 0.7 });
         overlay.addChild(outline);
       }
-      if (scanOverlay !== null) {
-        const gate = new Graphics();
-        for (let y = 0; y < arena.height; y += 1) {
-          for (let x = 0; x < arena.width; x += 1) {
-            const dx = x - scanOverlay.origin.x;
-            const dy = y - scanOverlay.origin.y;
-            if (Math.floor(Math.sqrt(dx * dx + dy * dy)) > scanOverlay.maxDistance) continue;
-            const eligible = isTileInScanGate(scanOverlay.origin, scanOverlay.heading, { x, y });
-            gate
-              .rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-              .fill({ color: eligible ? 0x86efac : 0xfb7185, alpha: eligible ? 0.09 : 0.075 });
+      if (targetingOverlay !== null) {
+        if (targetingOverlay.mode === "scan") {
+          const footprintTiles = targetingOverlay.tiles.filter(
+            (tile) => tile.status !== "angle-blocked" && tile.status !== "out-of-range",
+          );
+          const footprintKeys = new Set(
+            footprintTiles.map((tile) => `${tile.tile.x},${tile.tile.y}`),
+          );
+          const footprint = new Graphics();
+          for (const { tile } of footprintTiles) {
+            const x = tile.x * TILE_SIZE;
+            const y = tile.y * TILE_SIZE;
+            footprint.rect(x, y, TILE_SIZE, TILE_SIZE).fill({ color: 0x22d3ee, alpha: 0.1 });
+            if (!footprintKeys.has(`${tile.x},${tile.y - 1}`))
+              footprint.moveTo(x, y).lineTo(x + TILE_SIZE, y);
+            if (!footprintKeys.has(`${tile.x + 1},${tile.y}`))
+              footprint.moveTo(x + TILE_SIZE, y).lineTo(x + TILE_SIZE, y + TILE_SIZE);
+            if (!footprintKeys.has(`${tile.x},${tile.y + 1}`))
+              footprint.moveTo(x + TILE_SIZE, y + TILE_SIZE).lineTo(x, y + TILE_SIZE);
+            if (!footprintKeys.has(`${tile.x - 1},${tile.y}`))
+              footprint.moveTo(x, y + TILE_SIZE).lineTo(x, y);
+          }
+          footprint.stroke({ width: 2, color: 0x67e8f9, alpha: 0.9 });
+          overlay.addChild(footprint);
+        }
+        const heat = new Graphics();
+        for (const tile of targetingOverlay.tiles) {
+          if (tile.status === "angle-blocked" || tile.status === "out-of-range") continue;
+          const color =
+            tile.status === "sight-blocked"
+              ? 0x64748b
+              : tile.resolution === "blast"
+                ? 0x60a5fa
+                : (tile.chancePercent ?? 0) >= 70
+                  ? 0x4ade80
+                  : (tile.chancePercent ?? 0) >= 40
+                    ? 0xfacc15
+                    : 0xfb7185;
+          const alpha =
+            tile.status === "sight-blocked"
+              ? 0.13
+              : targetingOverlay.mode === "scan"
+                ? 0.08 + (tile.scanStrength / 16) * 0.12
+                : 0.09;
+          heat
+            .rect(tile.tile.x * TILE_SIZE, tile.tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+            .fill({ color, alpha });
+          if (tile.onConeBoundary && tile.status === "eligible") {
+            heat
+              .rect(
+                tile.tile.x * TILE_SIZE + 1,
+                tile.tile.y * TILE_SIZE + 1,
+                TILE_SIZE - 2,
+                TILE_SIZE - 2,
+              )
+              .stroke({ width: 1, color: 0x93c5fd, alpha: 0.5 });
           }
         }
-        overlay.addChild(gate);
+        overlay.addChild(heat);
       }
       if (route.length > 0) {
         const line = new Graphics();
@@ -269,18 +406,37 @@ export function ArenaCanvas({
         if (robot.position === "dock") continue;
         const centerX = robot.position.x * TILE_SIZE + TILE_SIZE / 2;
         const centerY = robot.position.y * TILE_SIZE + TILE_SIZE / 2;
-        const body = new Graphics()
-          .circle(centerX, centerY, robot.posture === "crouching" ? 7 : 9)
-          .fill({ color: TEAM_COLORS[robot.color] ?? 0xffffff, alpha: 0.95 });
-        body
-          .circle(centerX, centerY, robot.selected ? 11 : 10)
-          .stroke({ width: robot.selected ? 3 : 1, color: robot.selected ? 0xd9f99d : 0x111111 });
-        const vector = HEADING_VECTOR[robot.scanHeading];
-        body
-          .moveTo(centerX, centerY)
-          .lineTo(centerX + vector.x * 14, centerY + vector.y * 14)
-          .stroke({ width: 2, color: 0xffffff, alpha: 0.85 });
-        overlay.addChild(body);
+        if (robot.selected) {
+          const vector = HEADING_VECTOR[robot.scanHeading];
+          overlay.addChild(
+            new Graphics()
+              .circle(centerX, centerY, 13)
+              .stroke({ width: 2, color: 0xd9f99d, alpha: 0.9 })
+              .moveTo(centerX, centerY)
+              .lineTo(centerX + vector.x * 17, centerY + vector.y * 17)
+              .stroke({ width: 2, color: 0xd9f99d, alpha: 0.55 }),
+          );
+        }
+        const textureSet = robotTextures.get(robotTextureKey(robot.robotClass, robot.color));
+        if (textureSet !== undefined) {
+          const visual = createRobotSprite(
+            {
+              id: robot.id,
+              teamId: "planner",
+              teamColor: robot.color,
+              robotClass: robot.robotClass,
+              position: robot.position,
+              hp: 1,
+              armor: 1,
+              posture: robot.posture,
+              scanHeading: robot.scanHeading,
+              destroyed: false,
+            },
+            textureSet,
+            TILE_SIZE,
+          );
+          overlay.addChild(visual.container);
+        }
         const label = new Text({
           text: robot.label,
           style: {
@@ -294,6 +450,63 @@ export function ArenaCanvas({
         label.position.set(centerX, centerY + 10);
         overlay.addChild(label);
       }
+      app.render();
+    })().catch((error: unknown) => {
+      console.error("Planner overlays could not render.", error);
+    });
+    return () => {
+      overlayGenerationRef.current += 1;
+    };
+  }, [
+    arena.height,
+    arena.width,
+    homeAreas,
+    robots,
+    route,
+    targetingOverlay?.mode,
+    targetingOverlay?.tiles,
+    status,
+  ]);
+
+  useEffect(() => {
+    const app = appRef.current;
+    const overlay = targetOverlayRef.current;
+    if (app === null || overlay === null || status !== "ready") return;
+    void import("pixi.js").then(({ Graphics }) => {
+      if (appRef.current !== app || targetOverlayRef.current !== overlay) return;
+      overlay.removeChildren().forEach((child) => child.destroy());
+      if (targetingOverlay?.target === null || targetingOverlay?.target === undefined) {
+        app.render();
+        return;
+      }
+      const target = targetingOverlay.target;
+      const originX = targetingOverlay.origin.x * TILE_SIZE + TILE_SIZE / 2;
+      const originY = targetingOverlay.origin.y * TILE_SIZE + TILE_SIZE / 2;
+      const targetX = target.x * TILE_SIZE + TILE_SIZE / 2;
+      const targetY = target.y * TILE_SIZE + TILE_SIZE / 2;
+      const aim = new Graphics()
+        .moveTo(originX, originY)
+        .lineTo(targetX, targetY)
+        .stroke({ width: 2, color: 0xfef08a, alpha: 0.85 })
+        .rect(target.x * TILE_SIZE + 2, target.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)
+        .stroke({ width: 2, color: 0xfef08a, alpha: 0.95 });
+      if (targetingOverlay.resolution === "blast") {
+        aim
+          .circle(targetX, targetY, TILE_SIZE * 2)
+          .stroke({ width: 1.5, color: 0x60a5fa, alpha: 0.7 });
+      }
+      overlay.addChild(aim);
+      app.render();
+    });
+  }, [status, targetingOverlay?.origin, targetingOverlay?.resolution, targetingOverlay?.target]);
+
+  useEffect(() => {
+    const app = appRef.current;
+    const overlay = cursorOverlayRef.current;
+    if (app === null || overlay === null || status !== "ready") return;
+    void import("pixi.js").then(({ Graphics }) => {
+      if (appRef.current !== app || cursorOverlayRef.current !== overlay) return;
+      overlay.removeChildren().forEach((child) => child.destroy());
       const activeCursor = cursor ?? keyboardTile;
       const cursorColor =
         cursorState === "valid" ? 0xbef264 : cursorState === "out-of-home" ? 0xfbbf24 : 0xfb7185;
@@ -308,19 +521,8 @@ export function ArenaCanvas({
           .stroke({ width: 2, color: cursorColor, alpha: 0.95 }),
       );
       app.render();
-    })();
-  }, [
-    arena.height,
-    arena.width,
-    cursor,
-    homeAreas,
-    cursorState,
-    keyboardTile,
-    robots,
-    route,
-    scanOverlay,
-    status,
-  ]);
+    });
+  }, [cursor, cursorState, keyboardTile, status]);
 
   const tileFromClient = (clientX: number, clientY: number, element: HTMLDivElement): TileCoord => {
     const bounds = element.getBoundingClientRect();
@@ -360,197 +562,262 @@ export function ArenaCanvas({
   };
 
   return (
-    <div
-      className="planner-canvas"
-      role="application"
-      aria-label={`${arena.sizeName} planning board. Use arrow keys and Enter to choose a tile.`}
-      tabIndex={0}
-      style={{
-        width: arena.width * TILE_SIZE,
-        height: arena.height * TILE_SIZE,
-        touchAction: "none",
-      }}
-      onFocus={() => onCursor(keyboardTile)}
-      onPointerMove={(event) => {
-        const tile = tileFromPointer(event);
-        setKeyboardTile(tile);
-        onCursor(tile);
-        if (event.pointerType !== "touch") return;
-        pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        const points = [...pointersRef.current.values()];
-        if (points.length >= 2) {
-          cancelLongPress();
-          const [first, second] = points;
-          if (first === undefined || second === undefined) return;
-          const bounds = event.currentTarget.getBoundingClientRect();
-          const midpoint = {
-            x: (first.x + second.x) / 2 - bounds.left,
-            y: (first.y + second.y) / 2 - bounds.top,
-          };
-          const pinch = pinchRef.current;
-          if (pinch === null) return;
-          setTransform(
-            transformForPinch({
-              initialTransform: pinch.startTransform,
-              initialMidpoint: pinch.midpoint,
-              currentMidpoint: midpoint,
-              initialDistance: pinch.distance,
-              currentDistance: pointDistance(first, second),
-            }),
-          );
-          return;
-        }
-        const active = touchRef.current;
-        if (active === null || active.pointerId !== event.pointerId) return;
-        const current = { x: event.clientX, y: event.clientY };
-        if (!gestureRef.current.markMoved(event.pointerId, active.start, current)) return;
-        cancelLongPress();
-        if (active.canPan) {
-          setTransform({
-            ...active.startTransform,
-            x: active.startTransform.x + current.x - active.start.x,
-            y: active.startTransform.y + current.y - active.start.y,
-          });
-        }
-      }}
-      onPointerLeave={(event) => {
-        // pointerleave is a hover concept. Touch fires it when the finger lifts
-        // (and again as re-renders shuffle the hit-test target), so honoring it
-        // would clear the cursor and clobber the tap's own notice. Only mouse or
-        // pen hover should clear the board cursor.
-        if (event.pointerType === "touch") return;
-        if (document.activeElement !== event.currentTarget) onCursor(null);
-      }}
-      onPointerDown={(event) => {
-        if (event.pointerType !== "touch") return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        const point = { x: event.clientX, y: event.clientY };
-        pointersRef.current.set(event.pointerId, point);
-        const points = [...pointersRef.current.values()];
-        if (points.length === 1) {
+    <div className="planner-canvas-shell" style={{ width: arena.width * TILE_SIZE }}>
+      <div
+        ref={viewportRef}
+        className="planner-canvas"
+        role="application"
+        aria-label={`${arena.sizeName} planning board. Use arrow keys and Enter to choose a tile.`}
+        tabIndex={0}
+        style={{
+          width: arena.width * TILE_SIZE,
+          height: arena.height * TILE_SIZE,
+          touchAction: "none",
+          cursor: grabbing ? "grabbing" : undefined,
+        }}
+        onFocus={() => onCursor(keyboardTile)}
+        onPointerMove={(event) => {
           const tile = tileFromPointer(event);
-          const active = {
-            pointerId: event.pointerId,
-            start: point,
-            tile,
-            startTransform: transformRef.current,
-            canPan: robotAt(tile) === undefined,
-            timer: null as number | null,
-          };
-          gestureRef.current.beginPrimary(event.pointerId);
-          active.timer = window.setTimeout(() => {
-            if (
-              pointersRef.current.size !== 1 ||
-              !gestureRef.current.markLongPressed(event.pointerId)
-            )
-              return;
-            inspect(active.tile, { x: point.x + 10, y: point.y + 10 });
-          }, LONG_PRESS_MS);
-          touchRef.current = active;
-        } else if (points.length === 2) {
-          cancelLongPress();
-          const [first, second] = points;
-          if (first === undefined || second === undefined) return;
-          const bounds = event.currentTarget.getBoundingClientRect();
-          pinchRef.current = {
-            distance: pointDistance(first, second),
-            midpoint: {
+          setKeyboardTile(tile);
+          onCursor(tile);
+          if (event.pointerType !== "touch") {
+            const pan = mousePanRef.current;
+            if (pan === null || pan.pointerId !== event.pointerId) return;
+            const point = { x: event.clientX, y: event.clientY };
+            if (!movedBeyondGestureThreshold(pan.start, point)) return;
+            pan.moved = true;
+            suppressMouseClickRef.current = true;
+            setGrabbing(true);
+            setTransform({
+              ...pan.startTransform,
+              x: pan.startTransform.x + point.x - pan.start.x,
+              y: pan.startTransform.y + point.y - pan.start.y,
+            });
+            return;
+          }
+          pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          const points = [...pointersRef.current.values()];
+          if (points.length >= 2) {
+            cancelLongPress();
+            const [first, second] = points;
+            if (first === undefined || second === undefined) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const midpoint = {
               x: (first.x + second.x) / 2 - bounds.left,
               y: (first.y + second.y) / 2 - bounds.top,
-            },
-            startTransform: transformRef.current,
-          };
-          gestureRef.current.beginPinch();
-        }
-      }}
-      onPointerUp={(event) => {
-        if (event.pointerType !== "touch") return;
-        cancelLongPress();
-        const active = touchRef.current;
-        if (
-          active !== null &&
-          active.pointerId === event.pointerId &&
-          gestureRef.current.end(event.pointerId)
-        ) {
-          onChooseTile(active.tile, { ctrl: false, shift: false });
-        }
-        window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
-        pointersRef.current.delete(event.pointerId);
-        if (pointersRef.current.size < 2) pinchRef.current = null;
-        if (active?.pointerId === event.pointerId) touchRef.current = null;
-      }}
-      onPointerCancel={(event) => {
-        cancelLongPress();
-        pointersRef.current.delete(event.pointerId);
-        touchRef.current = null;
-        pinchRef.current = null;
-        gestureRef.current.cancel();
-        window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
-      }}
-      onClick={(event) => {
-        if (gestureRef.current.consumeSyntheticClick()) return;
-        onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
-      }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        inspect(tileFromPointer(event), { x: event.clientX + 8, y: event.clientY + 8 });
-      }}
-      onKeyDown={(event) => {
-        const delta =
-          event.key === "ArrowUp"
-            ? { x: 0, y: -1 }
-            : event.key === "ArrowDown"
-              ? { x: 0, y: 1 }
-              : event.key === "ArrowLeft"
-                ? { x: -1, y: 0 }
-                : event.key === "ArrowRight"
-                  ? { x: 1, y: 0 }
-                  : null;
-        if (delta !== null) {
-          event.preventDefault();
-          const next = {
-            x: Math.min(arena.width - 1, Math.max(0, keyboardTile.x + delta.x)),
-            y: Math.min(arena.height - 1, Math.max(0, keyboardTile.y + delta.y)),
-          };
-          setKeyboardTile(next);
-          onCursor(next);
-        } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-          event.preventDefault();
-          const bounds = event.currentTarget.getBoundingClientRect();
-          inspect(keyboardTile, {
-            x: bounds.left + transform.x + (keyboardTile.x + 1) * TILE_SIZE * transform.scale,
-            y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * transform.scale,
-          });
-        } else if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onChooseTile(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
-        }
-      }}
-      data-cursor-state={cursorState}
-    >
-      <div
-        className="planner-canvas-content"
-        style={{
-          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+            };
+            const pinch = pinchRef.current;
+            if (pinch === null) return;
+            setTransform(
+              transformForPinch({
+                initialTransform: pinch.startTransform,
+                initialMidpoint: pinch.midpoint,
+                currentMidpoint: midpoint,
+                initialDistance: pinch.distance,
+                currentDistance: pointDistance(first, second),
+                clampScale: clampZoom,
+              }),
+            );
+            return;
+          }
+          const active = touchRef.current;
+          if (active === null || active.pointerId !== event.pointerId) return;
+          const current = { x: event.clientX, y: event.clientY };
+          if (!gestureRef.current.markMoved(event.pointerId, active.start, current)) return;
+          cancelLongPress();
+          if (active.canPan) {
+            setTransform({
+              ...active.startTransform,
+              x: active.startTransform.x + current.x - active.start.x,
+              y: active.startTransform.y + current.y - active.start.y,
+            });
+          }
         }}
+        onPointerLeave={(event) => {
+          // pointerleave is a hover concept. Touch fires it when the finger lifts
+          // (and again as re-renders shuffle the hit-test target), so honoring it
+          // would clear the cursor and clobber the tap's own notice. Only mouse or
+          // pen hover should clear the board cursor.
+          if (event.pointerType === "touch") return;
+          if (document.activeElement !== event.currentTarget) onCursor(null);
+        }}
+        onPointerDown={(event) => {
+          if (event.pointerType !== "touch") {
+            if (event.button !== 0) return;
+            const tile = tileFromPointer(event);
+            if (robotAt(tile) !== undefined) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            mousePanRef.current = {
+              pointerId: event.pointerId,
+              start: { x: event.clientX, y: event.clientY },
+              startTransform: transformRef.current,
+              moved: false,
+            };
+            return;
+          }
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const point = { x: event.clientX, y: event.clientY };
+          pointersRef.current.set(event.pointerId, point);
+          const points = [...pointersRef.current.values()];
+          if (points.length === 1) {
+            const tile = tileFromPointer(event);
+            const active = {
+              pointerId: event.pointerId,
+              start: point,
+              tile,
+              startTransform: transformRef.current,
+              canPan: robotAt(tile) === undefined,
+              timer: null as number | null,
+            };
+            gestureRef.current.beginPrimary(event.pointerId);
+            active.timer = window.setTimeout(() => {
+              if (
+                pointersRef.current.size !== 1 ||
+                !gestureRef.current.markLongPressed(event.pointerId)
+              )
+                return;
+              inspect(active.tile, { x: point.x + 10, y: point.y + 10 });
+            }, LONG_PRESS_MS);
+            touchRef.current = active;
+          } else if (points.length === 2) {
+            cancelLongPress();
+            const [first, second] = points;
+            if (first === undefined || second === undefined) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            pinchRef.current = {
+              distance: pointDistance(first, second),
+              midpoint: {
+                x: (first.x + second.x) / 2 - bounds.left,
+                y: (first.y + second.y) / 2 - bounds.top,
+              },
+              startTransform: transformRef.current,
+            };
+            gestureRef.current.beginPinch();
+          }
+        }}
+        onPointerUp={(event) => {
+          if (event.pointerType !== "touch") {
+            if (mousePanRef.current?.pointerId === event.pointerId) mousePanRef.current = null;
+            setGrabbing(false);
+            return;
+          }
+          cancelLongPress();
+          const active = touchRef.current;
+          if (
+            active !== null &&
+            active.pointerId === event.pointerId &&
+            gestureRef.current.end(event.pointerId)
+          ) {
+            onChooseTile(active.tile, { ctrl: false, shift: false });
+          }
+          window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
+          pointersRef.current.delete(event.pointerId);
+          if (pointersRef.current.size < 2) pinchRef.current = null;
+          if (active?.pointerId === event.pointerId) touchRef.current = null;
+        }}
+        onPointerCancel={(event) => {
+          if (event.pointerType !== "touch") {
+            mousePanRef.current = null;
+            setGrabbing(false);
+            return;
+          }
+          cancelLongPress();
+          pointersRef.current.delete(event.pointerId);
+          touchRef.current = null;
+          pinchRef.current = null;
+          gestureRef.current.cancel();
+          window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
+        }}
+        onClick={(event) => {
+          if (suppressMouseClickRef.current) {
+            suppressMouseClickRef.current = false;
+            return;
+          }
+          if (gestureRef.current.consumeSyntheticClick()) return;
+          onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          inspect(tileFromPointer(event), { x: event.clientX + 8, y: event.clientY + 8 });
+        }}
+        onKeyDown={(event) => {
+          const delta =
+            event.key === "ArrowUp"
+              ? { x: 0, y: -1 }
+              : event.key === "ArrowDown"
+                ? { x: 0, y: 1 }
+                : event.key === "ArrowLeft"
+                  ? { x: -1, y: 0 }
+                  : event.key === "ArrowRight"
+                    ? { x: 1, y: 0 }
+                    : null;
+          if (delta !== null) {
+            event.preventDefault();
+            const next = {
+              x: Math.min(arena.width - 1, Math.max(0, keyboardTile.x + delta.x)),
+              y: Math.min(arena.height - 1, Math.max(0, keyboardTile.y + delta.y)),
+            };
+            setKeyboardTile(next);
+            onCursor(next);
+          } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.preventDefault();
+            const bounds = event.currentTarget.getBoundingClientRect();
+            inspect(keyboardTile, {
+              x: bounds.left + transform.x + (keyboardTile.x + 1) * TILE_SIZE * transform.scale,
+              y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * transform.scale,
+            });
+          } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onChooseTile(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
+          }
+        }}
+        data-cursor-state={cursorState}
+        data-zoomed={transform.scale > 1 ? "true" : "false"}
       >
-        <div ref={hostRef} className="absolute inset-0" />
+        <div
+          className="planner-canvas-content"
+          style={{
+            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+          }}
+        >
+          <div ref={hostRef} className="absolute inset-0" />
+        </div>
+        {targetingOverlay === null ? null : (
+          <div className="scan-gate-legend" aria-label="Targeting overlay legend">
+            <span>
+              <i data-kind="eligible" />
+              {targetingOverlay.mode === "aim" ? "Fixed tile" : "Auto-acquire"}
+            </span>
+            <span>
+              <i data-kind="blocked" /> Blocked / low chance
+            </span>
+            <small>
+              {targetingOverlay.maxDistance} tiles
+              {targetingOverlay.seconds === null ? "" : ` · ${targetingOverlay.seconds}s`}
+              {` · opportunity every ${formatGameTime(targetingOverlay.opportunityTicks)}`}
+            </small>
+          </div>
+        )}
+        {status !== "ready" ? (
+          <div className="planner-canvas-loading" role="status">
+            {status === "error" ? "Renderer unavailable" : "Loading tactical grid…"}
+          </div>
+        ) : null}
       </div>
-      {scanOverlay === null ? null : (
-        <div className="scan-gate-legend" aria-label="Scan gate overlay legend">
-          <span>
-            <i data-kind="eligible" /> Eligible angle
-          </span>
-          <span>
-            <i data-kind="blocked" /> Angle blocked
-          </span>
-        </div>
-      )}
-      {status !== "ready" ? (
-        <div className="planner-canvas-loading" role="status">
-          {status === "error" ? "Renderer unavailable" : "Loading tactical grid…"}
-        </div>
-      ) : null}
+      <div className="planner-camera-controls">
+        <span>Drag to pan · wheel or pinch to zoom</span>
+        <CameraControls
+          label="Planning board zoom"
+          zoom={transform.scale}
+          canZoomIn={transform.scale < MAX_ZOOM}
+          canZoomOut={transform.scale > MIN_ZOOM}
+          disabled={status !== "ready"}
+          dataAttribute="planner"
+          onZoomIn={() => zoomByStep(ZOOM_STEP)}
+          onZoomOut={() => zoomByStep(1 / ZOOM_STEP)}
+          onZoomReset={() => setTransform({ x: 0, y: 0, scale: 1 })}
+        />
+      </div>
     </div>
   );
 }

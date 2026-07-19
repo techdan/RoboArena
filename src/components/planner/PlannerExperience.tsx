@@ -3,7 +3,7 @@
 import { AlertTriangle, CloudOff, LockKeyhole, Save, ShieldCheck, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { TICKS_PER_SECOND } from "../../engine/constants";
+import { TICKS_PER_SECOND, WEAPON_TIMING } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
   Heading,
@@ -20,12 +20,12 @@ import {
   appendSegment,
   deleteSegment,
   planMovement,
+  previewParkingTick,
   projectRobotAtTick,
   rebaseTurnOrders,
   replaceSegmentAt,
   replaceTimeline,
   timelineForRobot,
-  timelineTiming,
   validatedTimelinePrefix,
 } from "../../planner/segments";
 import { tileAt } from "../../planner/pathfind";
@@ -34,10 +34,11 @@ import {
   defaultScanSettings,
   PLANNER_WEAPON_RANGE,
   previewAim,
+  previewTargetingTiles,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
 import { AimAndFireDialog } from "./AimAndFireDialog";
-import { ArenaCanvas, type PlannerRobotView } from "./ArenaCanvas";
+import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
 import { ScanAndFireDialog } from "./ScanAndFireDialog";
 import { Timeline } from "./Timeline";
@@ -72,6 +73,8 @@ interface ScanDialogState {
   readonly maxDistance?: number;
   readonly seconds?: number;
 }
+
+type PlannerTargetingBase = Omit<PlannerTargetingOverlay, "target">;
 
 const browserLocalStorage = (): Storage | null => {
   try {
@@ -165,10 +168,12 @@ export function PlannerExperience({
   const [aimTool, setAimTool] = useState(false);
   const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
   const [scanDialog, setScanDialog] = useState<ScanDialogState | null>(null);
+  const [scanOverlayPinned, setScanOverlayPinned] = useState(false);
   const [scanOverlayDistance, setScanOverlayDistance] = useState(18);
+  const [scanOverlayWeapon, setScanOverlayWeapon] = useState<WeaponId>("rifle");
+  const [scanOverlaySeconds, setScanOverlaySeconds] = useState(1);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
-  const [previewTick, setPreviewTick] = useState(budgetTicks);
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
     initialDraft.current.kind === "unavailable" ? "error" : "saved",
   );
@@ -187,12 +192,20 @@ export function PlannerExperience({
   const selectedRobot = team.robots.find((robot) => robot.id === selectedRobotId) ?? team.robots[0];
   if (selectedRobot === undefined) throw new Error("This team has no programmable robots.");
   const selectedTimeline = timelineForRobot(orders, selectedRobot.id);
+  const [previewTick, setPreviewTick] = useState(() =>
+    previewParkingTick(selectedRobot, selectedTimeline.segments, budgetTicks),
+  );
   const editingIndex = editing?.robotId === selectedRobot.id ? editing.index : null;
   const commandPrefix =
     editingIndex === null
       ? selectedTimeline.segments
       : selectedTimeline.segments.slice(0, editingIndex);
   const projected = projectRobotAtTick(selectedRobot, commandPrefix);
+  const previewProjected = projectRobotAtTick(
+    selectedRobot,
+    selectedTimeline.segments,
+    previewTick,
+  );
   const projectedShooter = useMemo(
     () => ({
       ...selectedRobot,
@@ -202,8 +215,11 @@ export function PlannerExperience({
     }),
     [projected.position, projected.posture, projected.scanHeading, selectedRobot],
   );
-  const selectedEndTick =
-    timelineTiming(selectedRobot, selectedTimeline.segments, budgetTicks).at(-1)?.endTick ?? 0;
+  const selectedEndTick = previewParkingTick(selectedRobot, selectedTimeline.segments, budgetTicks);
+  const selectedRoute = useMemo(
+    () => routeTiles(selectedTimeline.segments),
+    [selectedTimeline.segments],
+  );
   const weapons = availableWeapons(selectedRobot, commandPrefix);
   const homeTiles = useMemo(
     () =>
@@ -281,14 +297,22 @@ export function PlannerExperience({
     });
   }, [authoritativeOrders, revision]);
 
-  const edit = (next: TurnOrders, message: string) => {
+  const edit = (next: TurnOrders, message: string, parkTick?: number) => {
     dispatch({ type: "edit", orders: next });
     setEditing(null);
     setAimTool(false);
     setAimDialog(null);
     setScanDialog(null);
+    setScanOverlayPinned(false);
     setNotice(message);
-    setPreviewTick(budgetTicks);
+    setPreviewTick(
+      parkTick ??
+        previewParkingTick(
+          selectedRobot,
+          timelineForRobot(next, selectedRobot.id).segments,
+          budgetTicks,
+        ),
+    );
   };
   const commitSegment = (segment: RobotCommandSegment, message: string) => {
     const candidate =
@@ -307,7 +331,9 @@ export function PlannerExperience({
       validated.droppedCount === 0
         ? message
         : `${message} ${validated.droppedCount} dependent command${validated.droppedCount === 1 ? " was" : "s were"} removed because the edit made them invalid.`,
+      previewParkingTick(selectedRobot, validated.segments, budgetTicks, editingIndex ?? undefined),
     );
+    setScanOverlayPinned(segment.kind === "scan-and-fire");
   };
   const removeCommand = (robotId: string, index: number) => {
     const robot = team.robots.find((candidate) => candidate.id === robotId);
@@ -319,25 +345,38 @@ export function PlannerExperience({
       team.homeSlot,
       timelineForRobot(candidate, robotId).segments,
     );
+    setSelectedRobotId(robotId);
     edit(
       replaceTimeline(orders, robotId, validated.segments),
       validated.droppedCount === 0
         ? "Command removed. Undo remains available."
         : `Command and ${validated.droppedCount} invalid dependent command${validated.droppedCount === 1 ? "" : "s"} removed. Undo remains available.`,
+      previewParkingTick(robot, validated.segments, budgetTicks),
     );
   };
   const selectRobot = (robotId: string) => {
+    const robot = team.robots.find((candidate) => candidate.id === robotId);
     setSelectedRobotId(robotId);
     setEditing(null);
     setAimTool(false);
     setAimDialog(null);
     setScanDialog(null);
+    setScanOverlayPinned(false);
+    if (robot !== undefined)
+      setPreviewTick(
+        previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
+      );
   };
   const beginEdit = (robotId: string, index: number) => {
     setSelectedRobotId(robotId);
     setEditing({ robotId, index });
-    setPreviewTick(budgetTicks);
+    const robot = team.robots.find((candidate) => candidate.id === robotId);
+    if (robot !== undefined)
+      setPreviewTick(
+        previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks, index),
+      );
     const segment = timelineForRobot(orders, robotId).segments[index];
+    setScanOverlayPinned(false);
     if (segment?.kind === "aim-and-fire") {
       setAimDialog({ target: segment.target, weapon: segment.weapon, repeat: segment.repeat });
       setNotice(`Editing Aim & Fire command ${index + 1}.`);
@@ -350,17 +389,30 @@ export function PlannerExperience({
         seconds: segment.seconds,
       });
       setScanOverlayDistance(segment.maxDistance);
+      setScanOverlayWeapon(segment.weapon);
+      setScanOverlaySeconds(segment.seconds);
+      setScanOverlayPinned(true);
       setNotice(`Editing Scan & Fire command ${index + 1}.`);
       return;
     }
     setNotice(`Editing command ${index + 1}. Choose a tile, posture, or heading to replace it.`);
   };
   const changeHistory = (type: "undo" | "redo") => {
+    const nextOrders =
+      type === "undo" ? (state.history.past.at(-1) ?? orders) : (state.history.future[0] ?? orders);
     dispatch({ type });
     setEditing(null);
     setAimDialog(null);
     setScanDialog(null);
+    setScanOverlayPinned(false);
     setAimTool(false);
+    setPreviewTick(
+      previewParkingTick(
+        selectedRobot,
+        timelineForRobot(nextOrders, selectedRobot.id).segments,
+        budgetTicks,
+      ),
+    );
   };
   const chooseTile = (
     tile: TileCoord,
@@ -379,6 +431,7 @@ export function PlannerExperience({
       return;
     }
     if ((modifiers.ctrl && modifiers.shift) || aimTool) {
+      setScanOverlayPinned(false);
       setAimDialog({
         target: tile,
         weapon: weapons[0]!,
@@ -413,7 +466,7 @@ export function PlannerExperience({
       setNotice(`Already ${posture}; no time is added.`);
       return;
     }
-    commitSegment({ kind: "set-posture", posture }, `${posture} posture added · 10 ticks.`);
+    commitSegment({ kind: "set-posture", posture }, `${posture} posture added · 0.17s.`);
   };
   const addHeading = (heading: Heading) => {
     if (heading === projected.scanHeading) {
@@ -422,37 +475,93 @@ export function PlannerExperience({
     }
     commitSegment(
       { kind: "set-scan-direction", heading },
-      `Scan heading ${heading} added · 5 ticks.`,
+      `Scan heading ${heading} added · 0.08s.`,
     );
   };
-  const robotViews: readonly PlannerRobotView[] = team.robots.map((robot, index) => {
-    const view = projectRobotAtTick(
-      robot,
-      timelineForRobot(orders, robot.id).segments,
-      previewTick,
-    );
-    return {
-      id: robot.id,
-      label: `R${index + 1}`,
-      robotClass: robot.definition.class,
-      color: team.color,
-      position: view.position,
-      posture: view.posture,
-      scanHeading: view.scanHeading,
-      selected: robot.id === selectedRobot.id,
-    };
-  });
-  const scanOverlay =
-    projected.position === "dock" || (!aimTool && aimDialog === null && scanDialog === null)
-      ? null
-      : {
-          origin: projected.position,
-          heading: projected.scanHeading,
-          maxDistance:
-            scanDialog === null
-              ? PLANNER_WEAPON_RANGE[aimDialog?.weapon ?? weapons[0]!]
-              : scanOverlayDistance,
+  const robotViews = useMemo<readonly PlannerRobotView[]>(
+    () =>
+      team.robots.map((robot, index) => {
+        const view = projectRobotAtTick(
+          robot,
+          timelineForRobot(orders, robot.id).segments,
+          previewTick,
+        );
+        return {
+          id: robot.id,
+          label: `R${index + 1}`,
+          robotClass: robot.definition.class,
+          color: team.color,
+          position: view.position,
+          posture: view.posture,
+          scanHeading: view.scanHeading,
+          selected: robot.id === selectedRobot.id,
         };
+      }),
+    [orders, previewTick, selectedRobot.id, team.color, team.robots],
+  );
+  const targetingBase = useMemo<PlannerTargetingBase | null>(() => {
+    const scanActive = scanDialog !== null || scanOverlayPinned;
+    const overlayProjection =
+      scanOverlayPinned && scanDialog === null ? previewProjected : projected;
+    if (overlayProjection.position === "dock" || (!aimTool && aimDialog === null && !scanActive))
+      return null;
+    const mode = scanActive ? "scan" : "aim";
+    const weapon = mode === "scan" ? scanOverlayWeapon : (aimDialog?.weapon ?? weapons[0]!);
+    const maxDistance = mode === "scan" ? scanOverlayDistance : PLANNER_WEAPON_RANGE[weapon];
+    const overlayShooter = {
+      ...selectedRobot,
+      position: overlayProjection.position,
+      posture: overlayProjection.posture,
+      scanHeading: overlayProjection.scanHeading,
+    };
+    return {
+      mode,
+      origin: overlayProjection.position,
+      heading: overlayProjection.scanHeading,
+      maxDistance,
+      weapon,
+      seconds: mode === "scan" ? scanOverlaySeconds : null,
+      opportunityTicks: WEAPON_TIMING[weapon].firingIntervalTicks,
+      resolution:
+        weapon === "missile-launcher" || weapon === "grenade-launcher"
+          ? ("blast" as const)
+          : ("direct-hit-roll" as const),
+      tiles: previewTargetingTiles({
+        arena: match.arena,
+        shooter: overlayShooter,
+        weapon,
+        authorizedContacts,
+        fireMode: mode,
+        maxDistance,
+      }),
+    };
+  }, [
+    aimDialog,
+    aimTool,
+    authorizedContacts,
+    match.arena,
+    projected.position,
+    projected.posture,
+    projected.scanHeading,
+    previewProjected,
+    scanDialog,
+    scanOverlayPinned,
+    scanOverlayDistance,
+    scanOverlaySeconds,
+    scanOverlayWeapon,
+    selectedRobot,
+    weapons,
+  ]);
+  const targetingOverlay = useMemo<PlannerTargetingOverlay | null>(
+    () =>
+      targetingBase === null
+        ? null
+        : {
+            ...targetingBase,
+            target: targetingBase.mode === "aim" ? (aimDialog?.target ?? cursor) : null,
+          },
+    [aimDialog?.target, cursor, targetingBase],
+  );
 
   const keepOrRecoverConflict = () => {
     const conflictOrders = state.conflictOrders;
@@ -488,11 +597,15 @@ export function PlannerExperience({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && (aimTool || aimDialog !== null || scanDialog !== null)) {
+      if (
+        event.key === "Escape" &&
+        (aimTool || aimDialog !== null || scanDialog !== null || scanOverlayPinned)
+      ) {
         event.preventDefault();
         setAimTool(false);
         setAimDialog(null);
         setScanDialog(null);
+        setScanOverlayPinned(false);
         setEditing(null);
         setNotice("Firing action canceled.");
         return;
@@ -528,7 +641,7 @@ export function PlannerExperience({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aimDialog, aimTool, scanDialog, selectedRobot.id, team.robots]);
+  }, [aimDialog, aimTool, scanDialog, scanOverlayPinned, selectedRobot.id, team.robots]);
 
   return (
     <main className="planner-page desktop-viewport-gate">
@@ -616,21 +729,24 @@ export function PlannerExperience({
             <div>
               <p className="eyebrow">{selectedRobot.definition.class} robot</p>
               <h2>
-                {projected.position === "dock"
+                {previewProjected.position === "dock"
                   ? "Awaiting deployment"
-                  : `Projected at ${projected.position.x},${projected.position.y}`}
+                  : `At tile ${previewProjected.position.x},${previewProjected.position.y}`}
               </h2>
             </div>
-            <span data-state={cursorState}>{cursorState.replaceAll("-", " ")}</span>
+            <span data-state={cursorState}>
+              {cursor === null ? "Outside grid" : `${cursor.x},${cursor.y} · `}
+              {cursorState.replaceAll("-", " ")}
+            </span>
           </div>
           <ArenaCanvas
             arena={match.arena}
             robots={robotViews}
             homeAreas={homeAreaOverlays}
-            route={routeTiles(selectedTimeline.segments)}
+            route={selectedRoute}
             cursor={cursor}
             cursorState={cursorState}
-            scanOverlay={scanOverlay}
+            targetingOverlay={targetingOverlay}
             onCursor={(tile) => {
               setCursor(tile);
               if (tile === null) setNotice("Out of bounds — move back inside the tactical grid.");
@@ -658,12 +774,21 @@ export function PlannerExperience({
             setEditing(null);
             setAimDialog(null);
             setScanDialog(null);
+            setScanOverlayPinned(false);
           }}
           fireDisabled={projected.position === "dock"}
           aimActive={aimTool}
           onAim={() => {
+            if (aimTool) {
+              setAimTool(false);
+              setAimDialog(null);
+              setScanOverlayPinned(false);
+              setNotice("Aim & Fire canceled.");
+              return;
+            }
             setAimTool(true);
             setScanDialog(null);
+            setScanOverlayPinned(false);
             setNotice("Aim & Fire active — choose a target tile. Ctrl+Shift adds repeat fire.");
           }}
           onScanFire={() => {
@@ -672,7 +797,10 @@ export function PlannerExperience({
             setAimTool(false);
             setAimDialog(null);
             setScanDialog({ weapon });
+            setScanOverlayWeapon(weapon);
             setScanOverlayDistance(defaults.maxDistance);
+            setScanOverlaySeconds(defaults.seconds);
+            setScanOverlayPinned(true);
             setNotice("Configure how long and how far this robot should scan for a target.");
           }}
           onReset={() =>
@@ -692,6 +820,9 @@ export function PlannerExperience({
           initialWeapon={aimDialog.weapon}
           initialRepeat={aimDialog.repeat}
           authorizedContacts={authorizedContacts}
+          onWeaponChange={(weapon) =>
+            setAimDialog((current) => (current === null ? null : { ...current, weapon }))
+          }
           onCancel={() => {
             setAimDialog(null);
             setAimTool(false);
@@ -715,8 +846,11 @@ export function PlannerExperience({
           {...(scanDialog.seconds === undefined ? {} : { initialSeconds: scanDialog.seconds })}
           remainingTicks={budgetTicks - selectedEndTick}
           onDistanceChange={setScanOverlayDistance}
+          onSecondsChange={setScanOverlaySeconds}
+          onWeaponChange={setScanOverlayWeapon}
           onCancel={() => {
             setScanDialog(null);
+            setScanOverlayPinned(editing !== null);
             setEditing(null);
           }}
           onConfirm={(weapon, maxDistance, seconds) =>

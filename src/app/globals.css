@@ -931,15 +931,37 @@ canvas {
   background: #111512;
   outline: none;
 }
+.planner-canvas-shell {
+  max-width: 100%;
+  margin-inline: auto;
+}
 .planner-canvas-content {
   position: absolute;
   inset: 0;
   transform-origin: 0 0;
   will-change: transform;
 }
+.planner-camera-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  color: rgb(255 255 255 / 35%);
+  font-size: 0.55rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.planner-camera-controls .camera-controls {
+  background: rgb(8 12 9 / 88%);
+  backdrop-filter: blur(6px);
+}
 .planner-canvas:focus-visible {
   outline: 3px solid rgb(190 242 100 / 55%);
   outline-offset: 3px;
+}
+.planner-canvas[data-zoomed="true"] {
+  cursor: grab;
 }
 .planner-canvas[data-cursor-state="blocked"],
 .planner-canvas[data-cursor-state="out-of-home"] {
@@ -1410,6 +1432,7 @@ canvas {
 }
 .fire-box small {
   grid-column: 1 / -1;
+  min-height: 2.8em;
   color: rgb(255 255 255 / 30%);
   font-size: 0.55rem;
   line-height: 1.4;
@@ -1429,11 +1452,18 @@ canvas {
   font-size: 0.52rem;
   font-weight: 750;
   pointer-events: none;
+  flex-wrap: wrap;
+  max-width: calc(100% - 0.8rem);
 }
 .scan-gate-legend span {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+.scan-gate-legend small {
+  flex-basis: 100%;
+  color: rgb(255 255 255 / 45%);
+  font-family: ui-monospace, monospace;
 }
 .scan-gate-legend i {
   display: block;
@@ -1456,6 +1486,25 @@ canvas {
   padding: 2rem;
   background: rgb(4 7 5 / 76%);
   backdrop-filter: blur(8px);
+}
+.planner-dialog-backdrop[data-board-preview="true"] {
+  justify-items: end;
+  padding-right: clamp(1rem, 4vw, 4rem);
+  background: linear-gradient(90deg, rgb(4 7 5 / 10%) 0 48%, rgb(4 7 5 / 82%) 78% 100%);
+  backdrop-filter: none;
+}
+.planner-dialog-backdrop[data-board-preview="true"] .planner-dialog {
+  width: min(25rem, 42vw);
+}
+@media (max-width: 800px) {
+  .planner-dialog-backdrop[data-board-preview="true"] {
+    justify-items: center;
+    padding-right: 2rem;
+    background: rgb(4 7 5 / 72%);
+  }
+  .planner-dialog-backdrop[data-board-preview="true"] .planner-dialog {
+    width: min(34rem, 100%);
+  }
 }
 .planner-dialog {
   width: min(34rem, 100%);

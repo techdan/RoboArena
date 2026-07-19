@@ -18,8 +18,8 @@ per Side/alliances, Stealth, and every non-Survival sport are post-v1 and must
 not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
-**Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11 are
-draft-complete; Phase 8 is locally implemented with 236 passing tests and its
+**Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
+draft-complete; Phase 8 is locally implemented with 276 passing tests and its
 external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
@@ -27,8 +27,9 @@ movement, damage stagger, Side-based combat/visibility/scoring, arena
 orientation/Home slots, and movie FPS. v1 consumes the unique-Side FFA subset;
 three-/four-player online integration remains the Phase 11.6 gate, while
 alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
-inspection, and browser-emulated iPad input are draft-complete with both
-Playwright suites passing on the emulated iPad touch context; its physical
+inspection, and Pointer Events-based iPad input are draft-complete. Automated
+Playwright execution is temporarily disabled in favor of manual browser/iPad
+checks and user-provided screenshots; the physical
 iPad Safari smoke match and the independent Phase 8 production-hosting closure
 are now consolidated in the Phase 12 v1 ship gate. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
@@ -45,8 +46,9 @@ npx vitest run path/to/file.test.ts    # Single test file
 npx vitest run -t "floored Euclidean"  # Tests matching a name
 ```
 
-`dev`, `build`, and `start` run the Next.js application; `test:e2e` builds and
-runs the Playwright visual smoke test.
+`dev`, `build`, and `start` run the Next.js application. Playwright specs are
+retained but their package scripts and CI job are temporarily disabled; use
+manual browser/iPad checks and screenshots for UI validation.
 
 ## Architecture
 
@@ -102,14 +104,15 @@ redaction, bounded WebSocket payload/rate handling, participant-specific recent
 room status, independent movie acknowledgement and playback resume, Final
 Ceremony scoring, and canonical Phase 5 replay storage/verification.
 
-**Phase 11.5 (draft-complete)** — typed Robots/Terrain/Actions Field Guide,
+**Phase 11.5-11.7 (draft-complete)** — typed Robots/Terrain/Actions Field Guide,
 contextual help dialogs, first-use guidance, authorized event filters/export,
-and Pointer Events-based iPad planner/movie controls. Both Playwright suites
-pass on the emulated iPad touch context and the changed movie visual baseline
-was reviewed and updated.
+Pointer Events-based iPad planner/movie controls, high-resolution planner robot
+sprites, honest timeline projection, targeting overlays, and planner camera
+controls. Retained Playwright specs/baselines are not part of automated
+validation; UI review is currently manual.
 
-**Everything after Phase 11.5 (not yet built)** — Phase 11.6 multiplayer
-hardening followed by the Phase 12 production, resilience, real-network, and
+**Everything after Phase 11.7** — Phase 11.6's remaining real-session gate is
+followed by the Phase 12 production, resilience, real-network, and
 physical-iPad v1 ship gate. Phase 13 polishes and enhances the core battle game;
 Phase 13.5 then adds online alliances before Stealth or additional sports, while
 Phase 16 keeps hot-seat/local-device work last.

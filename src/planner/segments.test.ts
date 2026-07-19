@@ -10,6 +10,7 @@ import {
   replaceSegmentAt,
   timelineForRobot,
   timelineTiming,
+  previewParkingTick,
   validatedTimelinePrefix,
 } from "./segments";
 
@@ -150,6 +151,32 @@ describe("planner segments", () => {
         { kind: "set-posture", posture: "ducking" },
       ]),
     ).toEqual({ segments: [repeat], droppedCount: 1 });
+  });
+
+  it("parks planner previews at the plan end or the edited command boundary", () => {
+    const robot = makeRobot("r1", "t1", "rifle", { x: 1, y: 1 });
+    const segments = [
+      { kind: "set-posture", posture: "ducking" },
+      { kind: "set-scan-direction", heading: "S" },
+      { kind: "scan-and-fire", weapon: "rifle", maxDistance: 12, seconds: 2 },
+    ] as const;
+    expect(previewParkingTick(robot, [], 900)).toBe(0);
+    expect(previewParkingTick(robot, segments, 900)).toBe(135);
+    expect(previewParkingTick(robot, segments, 900, 1)).toBe(15);
+    expect(
+      previewParkingTick(
+        robot,
+        [
+          {
+            kind: "aim-and-fire",
+            target: { x: 2, y: 1 },
+            weapon: "rifle",
+            repeat: true,
+          },
+        ],
+        900,
+      ),
+    ).toBe(900);
   });
 
   it("rejects deterministic finite-ammo overcommit and reserves finite scan ammo", () => {

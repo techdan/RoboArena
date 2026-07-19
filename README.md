@@ -10,8 +10,9 @@ event-driven movie playback, local authoritative room/setup/turn flow, and the
 movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
 remains open alongside continued local phases. Phase 11.5 Field Guide,
 contextual explanations, observed-turn inspection, and browser-emulated iPad
-touch controls are draft-complete, with both Playwright suites passing on the
-emulated iPad touch context. v1 targets online
+touch controls are draft-complete. Automated Playwright runs are temporarily
+disabled; UI validation currently uses manual browser/iPad testing and user
+screenshots. v1 targets online
 free-for-all Survival. See
 `docs/implementation-plan.md` for the roadmap.
 
@@ -20,7 +21,7 @@ free-for-all Survival. See
 - TypeScript strict mode
 - Next.js 16 + React 19 + Tailwind v4
 - PixiJS 8 terrain/movie renderer + GSAP presentation effects
-- Vitest 4 unit tests + Playwright visual smoke test
+- Vitest 4 unit tests; retained Playwright specs are temporarily disabled
 - Long-lived WebSocket room service; SQLite local/test storage with Supabase
   Postgres as the production target
 
@@ -34,9 +35,11 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
-npm run test:e2e
-npm run test:room        # four-browser room + planner flow
 ```
+
+Playwright specs and reviewed baselines remain in `tests/`, but their package
+scripts and CI job are disabled. Use manual browser/iPad testing and attach
+screenshots for UI feedback until the suite is deliberately re-enabled.
 
 ## Repository layout
 

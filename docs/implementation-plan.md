@@ -122,7 +122,7 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Test runner  | Vitest 4.1                                                                                           | Already configured. Fast, ESM-native, plays well with pure-TS engine.                                                                                       |
 | Linter       | ESLint (flat config)                                                                                 | Standard for Next.js; large plugin ecosystem; widely understood by AI coding agents.                                                                        |
 | Formatter    | Prettier                                                                                             | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later.                                                                       |
-| E2E test     | Playwright                                                                                           | Added with the room flow, then expanded through the full 2-4 player online turn loop.                                                                       |
+| E2E test     | Retained Playwright specs (automation paused)                                                       | Specs/baselines remain available, but package scripts and CI execution are disabled; current UI validation is manual browser/iPad testing with screenshots. |
 | CI           | GitHub Actions                                                                                       | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands.                                     |
 | Deploy       | Vercel web client + long-lived WebSocket service + Supabase Postgres                                 | Vercel does not provide the sticky process ownership or persistent SQLite filesystem assumed by the room service. Validate the split deployment in Phase 8. |
 | Branching    | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed.         |
@@ -1078,13 +1078,103 @@ resolve immediately if the remaining active players were only waiting on the
 resigner. Abandoned rooms are reclaimed by an idle-cutoff sweep
 (`sweepAbandonedRooms`, wired to an unref'd hourly server interval). A two-step
 `ResignControl` (irreversible, so it confirms) is wired into the planner header
-and the waiting/turn-ready flow views, making resignation user-facing; a
-Playwright room-flow assertion for it remains a follow-up.
+and the waiting/turn-ready flow views, making resignation user-facing; its
+browser validation is part of the manual Phase 12 pass.
 
 **Still deferred to Phase 12**: the literal four-separate-real-browser-session /
 two-real-network functional gate, which consolidates with the production hosting
-and physical-device checks. Playwright already exercises four emulated-iPad
-browsers through one authoritative planned turn and reconnect.
+and physical-device checks. The retained Playwright suite previously exercised
+four emulated-iPad browsers through one authoritative planned turn and
+reconnect, but automated execution is paused and is not a substitute for the
+manual real-device gate.
+
+---
+
+### Phase 11.7 — planner sprite, timeline, and heading polish [✅ DRAFT COMPLETE]
+
+**Goal**: make the planning board readable and its turn-budget honest before the
+v1 ship gate. Four targeted fixes on the existing Phase 11.5 planner:
+
+- **Real robot sprites** — render programmed robots with the Foundry Plate
+  sprites (class body, posture swap, aim turret, team paint) instead of the
+  placeholder circle + direction line, reusing the movie renderer's
+  `createRobotSprite`/`loadRobotTextures` (`src/renderer/RobotSprite.tsx`,
+  `src/renderer/robotTextures.ts`). Parameterize the renderer's hardcoded 28px
+  `MOVIE_TILE_SIZE` so the planner's 24px board reuses it without forking.
+- **Honest timeline** — the Program Horizon readout and preview scrubber share
+  one value that auto-parks at the end of the current plan (`0.00s` when empty)
+  and advances as actions are added: appends park at plan end, middle edits park
+  at that action's end, and the user can scrub back. Fixes the readout being
+  pinned at `15.00s / 15.00s`.
+- **Live heading + hovered coordinates** — the board heading becomes a live
+  "At tile X,Y" position readout that tracks the scrubber (agreeing with the
+  on-board sprite), and the status chip shows the hovered tile's coordinates.
+  The end-of-plan projection that seeds next-action planning stays separate.
+- **Playback-parity camera controls** — bring the movie viewer's camera model to
+  the planning board: mouse-wheel zoom about the pointer, primary-button drag
+  on empty board space, one-finger touch pan, midpoint-preserving pinch zoom,
+  visible zoom-out/percentage/zoom-in/reset controls, the same 0.5×–3× bounds,
+  and density-matched Pixi backing resolution at high zoom. Panning must not
+  accidentally program a tile or suppress robot/terrain contextual help.
+- **Mode-aware targeting visual** — keep a subtle always-on heading glyph for
+  the selected robot, then change the overlay when a firing tool is selected.
+  Both firing modes use the same confirmed closed forward ±90° half-plane, so
+  do not draw different cone widths or imply that Aim & Fire can shoot behind
+  the robot. Instead, make their different intent explicit:
+  - **Aim & Fire** shows the legal half-plane/range quietly, emphasizes the
+    pointer-to-tile aim ray and fixed target tile, and colors eligible tiles
+    with the Aim hit estimate (scan strength is always 16). Repeat fire keeps
+    the same tile marked so movement away from it is visibly risky.
+  - **Scan & Fire** shows the active acquisition half-disk clipped to the
+    player-selected maximum distance, its inclusive boundary, and its firing-
+    opportunity cadence/duration. Color eligible tiles with the Scan estimate,
+    including the weapon's Scan accuracy column and the exact sight-strength
+    penalty bands; wall-hidden tiles are blocked, and partial-obstacle tiles
+    cool as strength falls. The exact perpendicular boundary may carry a
+    distinct edge treatment because candidates there receive the confirmed
+    +2 adjusted-distance acquisition penalty.
+  - The Scan configuration sheet leaves the board visible, redraws the exact
+    stepped half-disk as maximum distance changes, and keeps the overlay pinned
+    after confirmation or when the timeline action is selected for editing.
+  - Switching modes updates one overlay rather than stacking two cones. Pair
+    color with a compact legend/labels such as `fixed tile` versus `auto-acquire`,
+    hit percentage or score band, and blocked/out-of-range states. Derive every
+    tile only from the scrubbed friendly state, terrain, and currently
+    authorized contacts; never infer or expose hidden enemy positions/orders.
+  - Direct-fire heat colors represent hit chance, not damage. For the same
+    weapon, distance, and resolved cover, Aim versus Scan does not change the
+    on-hit damage roll; it changes acquisition/tile locking, cadence, and
+    potentially hit score. Target posture matters only through resolved cover;
+    shooter posture has no independent accuracy/damage modifier. Explosive
+    weapons do not use the direct-fire hit table, so show legal acquisition or
+    target coverage, impact tile, and blast radius rather than a hit heatmap.
+    Drive the estimates from a shared engine-faithful helper (extending the
+    existing authorized `previewAim`/`estimate` path for Scan mode) rather than
+    duplicating combat math in the renderer.
+
+**Dependencies**: shipped Phase 11.5 planner. Non-blocking for the Phase 12 v1
+ship gate, but is the immediate next work.
+
+**Acceptance**: robots read as their class/posture/aim at a glance; the timeline
+tracks planned time and auto-parks correctly on add/edit/delete/scrub; the
+heading and hovered coordinates update live; the neutral heading glyph, fixed-
+tile Aim overlay, and auto-acquire Scan overlay remain visually distinct while
+sharing the same legal half-plane; planner wheel/drag/button/pinch camera input
+matches Playback without click-through; mode-specific estimates match engine
+score tests and render deterministically from authorized facts only. Unit tests
+stay green and planner screenshots receive manual review.
+
+**Draft-complete verification (2026-07-18)**: 276 Vitest tests, TypeScript,
+formatting, and the production build pass. The four-client touch/browser room
+flow was exercised during implementation with planner button/wheel zoom, drag
+pan, touch help, live Aim and Scan overlays, range updates, post-confirm Scan
+persistence, and reconnect. The high-resolution movie, terrain-preview, and new
+planner Aim/Scan images were reviewed. Automated Playwright commands and CI
+were subsequently disabled by user direction; browser/iPad validation and
+future UI feedback are manual and screenshot-driven.
+Physical iPad Safari and production-network validation remain Phase 12 gates.
+
+**Effort**: S–M.
 
 ---
 
@@ -1159,6 +1249,11 @@ enhancements.
 device coverage, and deeper performance optimization. Audio, phone layouts,
 native app packaging, and full screen-reader game-board support remain later
 work.
+
+**Pulled forward into Phase 11.7**: planner robot-sprite rendering and its
+visual-regression coverage, plus the mode-aware targeting/hit-chance overlay.
+Once 11.7 lands, Phase 13's remaining art and regression work is therefore the
+non-planner surfaces (movie, lobby, results) rather than the planning board.
 
 **Effort**: L.
 
@@ -1917,7 +2012,7 @@ post-v1. iPad touch support is part of the v1 ship gate.
 | Replay regression | Vitest                    | Curated `ReplayLog`s verify byte-equal across engine refactors — `src/engine/__golden__/` |
 | Component         | Vitest + @testing-library | React components — colocated `*.test.tsx`                                                 |
 | Protocol          | Vitest                    | Runtime schemas, authorization, idempotency, visibility projections                       |
-| E2E               | Playwright                | Create/join plus full 2-4 browser online match flow — `e2e/` (Phases 8-11.6)              |
+| E2E (paused)      | Retained Playwright specs | Package scripts/CI disabled; manual browser/iPad checks and screenshots are current policy |
 
 ### Documentation conventions
 
@@ -2092,6 +2187,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                    |
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                |
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
+| 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                  |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                        |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                    |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                    |

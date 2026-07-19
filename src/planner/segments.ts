@@ -127,6 +127,18 @@ export const timelineTiming = (
   });
 };
 
+/** Tick where the planner preview should park after an append or direct edit. */
+export const previewParkingTick = (
+  robot: RobotState,
+  segments: readonly RobotCommandSegment[],
+  budgetTicks: number,
+  segmentIndex?: number,
+): number => {
+  const timing = timelineTiming(robot, segments, budgetTicks);
+  if (segmentIndex === undefined) return timing.at(-1)?.endTick ?? 0;
+  return timing[segmentIndex]?.endTick ?? timing.at(-1)?.endTick ?? 0;
+};
+
 /** Projection applies a command only when its completion boundary is at or before previewTick. */
 export const projectRobotAtTick = (
   robot: RobotState,

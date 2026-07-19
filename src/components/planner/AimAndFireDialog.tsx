@@ -14,6 +14,7 @@ export interface AimAndFireDialogProps {
   readonly initialWeapon: WeaponId;
   readonly initialRepeat: boolean;
   readonly authorizedContacts: readonly AuthorizedContact[];
+  readonly onWeaponChange?: (weapon: WeaponId) => void;
   readonly onConfirm: (weapon: WeaponId, repeat: boolean) => void;
   readonly onCancel: () => void;
 }
@@ -33,6 +34,7 @@ export function AimAndFireDialog({
   initialWeapon,
   initialRepeat,
   authorizedContacts,
+  onWeaponChange,
   onConfirm,
   onCancel,
 }: AimAndFireDialogProps) {
@@ -82,7 +84,11 @@ export function AimAndFireDialog({
             autoComplete="off"
             data-dialog-initial-focus
             value={weapon}
-            onChange={(event) => setWeapon(event.currentTarget.value as WeaponId)}
+            onChange={(event) => {
+              const next = event.currentTarget.value as WeaponId;
+              setWeapon(next);
+              onWeaponChange?.(next);
+            }}
           >
             {weapons.map((id) => (
               <option key={id} value={id}>

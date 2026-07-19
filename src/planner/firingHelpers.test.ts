@@ -10,6 +10,7 @@ import {
   defaultScanSettings,
   PLANNER_WEAPON_RANGE,
   previewAim,
+  previewTargetingTiles,
 } from "./firingHelpers";
 
 describe("authorized firing previews", () => {
@@ -140,5 +141,53 @@ describe("authorized firing previews", () => {
         definition.maxRange,
       );
     }
+  });
+
+  it("builds Scan overlays from exact sight strength and the inclusive boundary", () => {
+    const open = makeOpenArena(7, 7);
+    const tiles = open.tiles.map((row) => [...row]);
+    tiles[3]![4] = { terrain: "bush" };
+    tiles[3]![5] = { terrain: "bush" };
+    const arena: Arena = { ...open, tiles };
+    const shooter = makeRobot("r1", "t1", "rifle", { x: 3, y: 3 }, { scanHeading: "N" });
+    const previews = previewTargetingTiles({
+      arena,
+      shooter,
+      weapon: "rifle",
+      authorizedContacts: [],
+      fireMode: "scan",
+      maxDistance: 4,
+    });
+    const boundary = previews.find((entry) => entry.tile.x === 5 && entry.tile.y === 3);
+    expect(boundary).toMatchObject({
+      status: "eligible",
+      onConeBoundary: true,
+      scanStrength: 10,
+      fireMode: "scan",
+    });
+    const behind = previews.find((entry) => entry.tile.x === 3 && entry.tile.y === 5);
+    expect(behind?.status).toBe("angle-blocked");
+    expect(boundary?.estimates).toHaveLength(3);
+    expect(boundary?.chancePercent).toEqual(expect.any(Number));
+    const cover = resolveCover({
+      from: shooter.position as { x: number; y: number },
+      to: { x: 5, y: 3 },
+      targetPosture: "upright",
+      arenaTileAt: (tile) => arena.tiles[tile.y]?.[tile.x],
+    });
+    expect(cover.outcome).toBe("cover");
+    if (cover.outcome !== "cover") return;
+    expect(boundary?.estimates[0]?.score).toBe(
+      calculateLiveFireScore({
+        accuracy: shooter.definition.accuracy,
+        distance: 2,
+        coverClass: cover.coverClass,
+        targetTerrain: "bush",
+        weapon: WEAPONS.rifle,
+        targetOnAimedTile: true,
+        fireMode: "scan",
+        scanStrength: 10,
+      }),
+    );
   });
 });

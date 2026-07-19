@@ -93,9 +93,7 @@ const candidateMoves = (
  * hug the straight line instead of zigzagging.
  */
 const lineDeviation = (start: TileCoord, goal: TileCoord, tile: TileCoord): number =>
-  Math.abs(
-    (tile.x - start.x) * (goal.y - start.y) - (tile.y - start.y) * (goal.x - start.x),
-  );
+  Math.abs((tile.x - start.x) * (goal.y - start.y) - (tile.y - start.y) * (goal.x - start.x));
 
 /** Returns unit waypoints and deliberately ignores robot occupancy: robots may stack. */
 export const findPath = (

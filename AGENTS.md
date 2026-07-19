@@ -71,8 +71,10 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   are built.
 - Phase 11.5 is draft complete: typed Field Guide/context help, first-use
   guidance, authorized event inspection/export, and Pointer Events-based iPad
-  planner/movie controls. Both Playwright suites now pass on the emulated iPad
-  touch context and the changed movie visual baseline was reviewed and updated.
+  planner/movie controls. Phase 11.7 planner sprites, timeline/coordinate polish,
+  targeting overlays, and planner pan/zoom are also draft complete. Automated
+  Playwright execution is temporarily disabled; retain its specs/baselines and
+  use manual browser/iPad testing plus screenshots for current UI validation.
   Physical iPad Safari validation, production hosting,
   and resilience closure form the Phase 12 v1 ship gate; Phase 11.6 multiplayer
   hardening is next.
@@ -104,7 +106,11 @@ Current scripts:
 - `npm run dev` - run the Next.js development server.
 - `npm run build` - build the production Next.js application.
 - `npm run start` - serve the production Next.js build.
-- `npm run test:e2e` - build and run the Playwright visual test.
+
+Playwright specs and baselines are retained, but automated Playwright package
+scripts and CI execution are temporarily disabled. Validate UI behavior
+manually in browsers/iPad Safari and use screenshots for review until the suite
+is deliberately re-enabled.
 
 ## Architecture
 

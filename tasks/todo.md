@@ -16,7 +16,7 @@ resignation/abandoned-room to Phase 12; automated (non-E2E) coverage only.
 ## Out of scope this pass
 
 - Resignation / abandoned-room handling → Phase 12
-- Playwright/E2E changes → revisit separately
+- Automated Playwright/E2E → disabled by user direction; retain specs for possible re-enable
 - Real four-browser / two-network gate → manual, Phase 12
 
 ## Follow-up: resignation + abandoned-room (Phase 12 resilience, started 2026-07-17)
@@ -88,15 +88,20 @@ Files touched (9): `src/lib/setup/validate.ts`, `src/lib/net/protocol.ts`,
 Follow-ups (Phase 12): resignation + abandoned-room handling; the real
 four-separate-session / two-network functional gate.
 
-## ⚠ Pending: Playwright visual baselines stale (2026-07-18)
+## ⏸ Playwright automation disabled after baseline review (2026-07-18)
 
 The movie-zoom sharpness pass (zoom-following renderer resolution, 4× SVG
-texture density, 2× robot rasterization) changes rendered output at every zoom
-level — even 1× minifies more smoothly. `test:e2e` was deliberately skipped at
-commit time (user call). **Before trusting the visual suite again: run
-`npm run test:e2e`, eyeball the movie/preview diffs, and re-approve the
-`movie.spec.ts` / `preview.spec.ts` baselines.** A failure there is expected
-staleness, not a rendering regression — but look at the diff images first.
+texture density, 2× robot rasterization) and Phase 11.7 planner sprite reuse
+were exercised in Playwright. The four-test visual suite passes. The movie and
+terrain-preview images were inspected at native resolution: the movie baseline
+was re-approved for its smoother high-density rendering, while the terrain-only
+preview remained pixel-identical. New planner Aim-overlay and live Scan-range
+configuration baselines were also inspected and approved; the latter verifies
+the exact stepped acquisition boundary remains readable beside the side sheet.
+After that review, automated Playwright commands and CI execution were disabled
+by user direction because of their runtime and low feedback value. Keep the
+specs and baselines for a possible later re-enable. Current UI validation is
+manual browser/iPad testing with screenshots and direct feedback.
 
 ## Phase 11 turn-loop review pass (2026-07-18)
 

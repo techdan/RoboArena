@@ -17,6 +17,8 @@ export interface ScanAndFireDialogProps {
   readonly initialSeconds?: number;
   readonly remainingTicks: number;
   readonly onDistanceChange: (distance: number) => void;
+  readonly onSecondsChange?: (seconds: number) => void;
+  readonly onWeaponChange?: (weapon: WeaponId) => void;
   readonly onConfirm: (weapon: WeaponId, maxDistance: number, seconds: number) => void;
   readonly onCancel: () => void;
 }
@@ -28,6 +30,8 @@ export function ScanAndFireDialog({
   initialSeconds,
   remainingTicks,
   onDistanceChange,
+  onSecondsChange,
+  onWeaponChange,
   onConfirm,
   onCancel,
 }: ScanAndFireDialogProps) {
@@ -37,7 +41,7 @@ export function ScanAndFireDialog({
   const [seconds, setSeconds] = useState(initialSeconds ?? defaults.seconds);
   const dialogRef = usePlannerDialogFocus<HTMLElement>(onCancel);
   return (
-    <div className="planner-dialog-backdrop" role="presentation">
+    <div className="planner-dialog-backdrop" data-board-preview="true" role="presentation">
       <section
         ref={dialogRef}
         className="planner-dialog"
@@ -74,6 +78,7 @@ export function ScanAndFireDialog({
               const next = event.currentTarget.value as WeaponId;
               const distance = PLANNER_WEAPON_RANGE[next];
               setWeapon(next);
+              onWeaponChange?.(next);
               setMaxDistance(distance);
               onDistanceChange(distance);
             }}
@@ -120,9 +125,11 @@ export function ScanAndFireDialog({
               min={1}
               max={40}
               value={seconds}
-              onChange={(event) =>
-                setSeconds(Math.max(1, Math.min(40, Number(event.currentTarget.value))))
-              }
+              onChange={(event) => {
+                const value = Math.max(1, Math.min(40, Number(event.currentTarget.value)));
+                setSeconds(value);
+                onSecondsChange?.(value);
+              }}
             />
           </label>
         </div>
