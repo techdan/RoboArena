@@ -396,6 +396,13 @@ export function ArenaCanvas({
               .moveTo(x - 4, y + TILE_SIZE - 2)
               .lineTo(x + TILE_SIZE - 2, y - 4)
               .stroke({ width: 1, color: 0xf8fafc, alpha: 0.34 });
+          } else if (visual.pattern === "reverse-hatch") {
+            // Opposite diagonal, sparser and quieter: angle-blocked covers half
+            // the board, so its texture must recede rather than shout.
+            heat
+              .moveTo(x + 2, y + 2)
+              .lineTo(x + TILE_SIZE - 2, y + TILE_SIZE - 2)
+              .stroke({ width: 1, color: 0xf8fafc, alpha: 0.16 });
           }
         }
         overlay.addChild(heat);

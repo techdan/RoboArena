@@ -1,6 +1,7 @@
 "use client";
 
 import { Crosshair, Pin, PinOff, Radar, ShieldX } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { Posture, WeaponId } from "../../engine/types";
 import { WEAPON_CATALOG_DATA } from "../../engine/catalogData";
 import { formatGameTime } from "../../lib/formatTime";
@@ -9,7 +10,18 @@ import {
   type HitChanceBand,
   type TargetingTilePreview,
 } from "../../planner/firingHelpers";
+import { TARGETING_PALETTE, type TargetingCategory } from "../../planner/targetingPalette";
 import styles from "./TargetingAnalysis.module.css";
+
+/** Legend/indicator swatch backgrounds derived from the shared palette. */
+export const targetingSwatchStyle = (category: TargetingCategory): CSSProperties => {
+  const { css, pattern } = TARGETING_PALETTE[category];
+  if (pattern === "hatch")
+    return { background: `repeating-linear-gradient(135deg, ${css} 0 3px, #0b0b0b 3px 6px)` };
+  if (pattern === "reverse-hatch")
+    return { background: `repeating-linear-gradient(45deg, ${css} 0 3px, #0b0b0b 3px 6px)` };
+  return { background: css };
+};
 
 const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
 
@@ -136,7 +148,7 @@ export function TargetingAnalysis({
           <div className={styles.legend} aria-label="Estimated hit chance bands">
             {(Object.keys(BAND_LABELS) as HitChanceBand[]).map((band) => (
               <span key={band}>
-                <i data-band={band} /> {BAND_LABELS[band]}
+                <i data-band={band} style={targetingSwatchStyle(band)} /> {BAND_LABELS[band]}
               </span>
             ))}
           </div>
@@ -200,6 +212,11 @@ export function TargetingAnalysis({
                 Tile {preview.tile.x},{preview.tile.y} · Range {preview.distance}/{maxDistance}
               </span>
               <strong data-band={preview.chanceBand ?? "zero"}>
+                <i
+                  className={styles.bandDot}
+                  style={targetingSwatchStyle(preview.chanceBand ?? "zero")}
+                  aria-hidden="true"
+                />
                 {estimate.chancePercent}% estimated hit chance
               </strong>
             </div>

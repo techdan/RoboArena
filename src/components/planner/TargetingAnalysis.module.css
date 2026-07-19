@@ -156,31 +156,12 @@
   white-space: nowrap;
 }
 
+/* Swatch backgrounds come inline from the shared targeting palette. */
 .legend i {
   width: 0.7rem;
   height: 0.7rem;
   border: 1px solid rgb(255 255 255 / 28%);
   border-radius: 0.16rem;
-}
-
-.legend i[data-band="excellent"] {
-  background: #fde725;
-}
-
-.legend i[data-band="good"] {
-  background: #46c7ef;
-}
-
-.legend i[data-band="risky"] {
-  background: #7c83ff;
-}
-
-.legend i[data-band="poor"] {
-  background: #c05bd8;
-}
-
-.legend i[data-band="zero"] {
-  background: repeating-linear-gradient(135deg, #4b2634 0 3px, #111 3px 6px);
 }
 
 .blastLegend {
@@ -247,21 +228,16 @@
   font-variant-numeric: tabular-nums;
 }
 
-.headlineRow strong[data-band="excellent"] {
-  color: #fde725;
-}
-
-.headlineRow strong[data-band="good"] {
-  color: #67e8f9;
-}
-
-.headlineRow strong[data-band="risky"] {
-  color: #a5b4fc;
-}
-
-.headlineRow strong[data-band="poor"],
-.headlineRow strong[data-band="zero"] {
-  color: #f0abfc;
+/* Band identity rides on a palette swatch dot, keeping the number readable
+   even for the darker end of the luminance ramp. */
+.bandDot {
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 50%;
+  margin-right: 0.32rem;
+  vertical-align: baseline;
 }
 
 .basis {

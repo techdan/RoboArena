@@ -1536,9 +1536,6 @@ canvas {
 .scan-gate-legend i[data-kind="eligible"] {
   background: rgb(134 239 172 / 55%);
 }
-.scan-gate-legend i[data-kind="blocked"] {
-  background: rgb(251 113 133 / 55%);
-}
 .planner-dialog-backdrop {
   position: fixed;
   z-index: 80;
