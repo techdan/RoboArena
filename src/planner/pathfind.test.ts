@@ -53,6 +53,15 @@ describe("planner A*", () => {
     });
   });
 
+  it("hugs the straight line between equal-cost routes across open ground", () => {
+    const arena = arenaWith(Array.from({ length: 9 }, () => Array<Terrain>(11).fill("open")));
+    const route = findPath(arena, { x: 1, y: 4 }, { x: 9, y: 4 }, "upright");
+    expect(route.kind).toBe("path");
+    if (route.kind === "path") {
+      expect(route.steps.every((step) => step.y === 4)).toBe(true);
+    }
+  });
+
   it("prefers the lowest tick-cost route over an equally short slow route", () => {
     const arena = arenaWith(
       Array.from({ length: 7 }, (_, y) =>

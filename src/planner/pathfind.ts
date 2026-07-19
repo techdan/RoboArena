@@ -87,6 +87,16 @@ const candidateMoves = (
   return moves;
 };
 
+/**
+ * Twice the tile's Euclidean-area deviation from the start→goal line (integer
+ * cross product). Used only to break exact tick-cost ties so co-optimal routes
+ * hug the straight line instead of zigzagging.
+ */
+const lineDeviation = (start: TileCoord, goal: TileCoord, tile: TileCoord): number =>
+  Math.abs(
+    (tile.x - start.x) * (goal.y - start.y) - (tile.y - start.y) * (goal.x - start.x),
+  );
+
 /** Returns unit waypoints and deliberately ignores robot occupancy: robots may stack. */
 export const findPath = (
   arena: Arena,
@@ -108,6 +118,7 @@ export const findPath = (
   const cameFrom = new Map<string, PathEdge>();
   const coords = new Map<string, TileCoord>([[startKey, start]]);
   const costs = new Map<string, number>([[startKey, 0]]);
+  const deviations = new Map<string, number>([[startKey, 0]]);
   let insertionOrder = 0;
   open.set(startKey, { coord: start, order: insertionOrder });
 
@@ -115,11 +126,18 @@ export const findPath = (
     let currentKey: string | undefined;
     let currentOrder = Number.POSITIVE_INFINITY;
     let currentScore = Number.POSITIVE_INFINITY;
+    let currentDeviation = Number.POSITIVE_INFINITY;
     for (const [key, candidate] of open) {
       const score = (costs.get(key) ?? Number.POSITIVE_INFINITY) + heuristic(candidate.coord, goal);
-      if (score < currentScore || (score === currentScore && candidate.order < currentOrder)) {
+      const deviation = deviations.get(key) ?? Number.POSITIVE_INFINITY;
+      if (
+        score < currentScore ||
+        (score === currentScore && deviation < currentDeviation) ||
+        (score === currentScore && deviation === currentDeviation && candidate.order < currentOrder)
+      ) {
         currentKey = key;
         currentScore = score;
+        currentDeviation = deviation;
         currentOrder = candidate.order;
       }
     }
@@ -145,15 +163,22 @@ export const findPath = (
     closed.add(currentKey);
     for (const move of candidateMoves(arena, current, posture)) {
       const nextCost = (costs.get(currentKey) ?? 0) + move.cost;
+      const nextDeviation =
+        (deviations.get(currentKey) ?? 0) +
+        move.steps.reduce((sum, step) => sum + lineDeviation(start, goal, step), 0);
       const neighborKey = tileKey(move.destination);
-      if (closed.has(neighborKey) && nextCost >= (costs.get(neighborKey) ?? Infinity)) continue;
-      if (nextCost < (costs.get(neighborKey) ?? Infinity)) {
-        cameFrom.set(neighborKey, { previous: currentKey, steps: move.steps });
-        coords.set(neighborKey, move.destination);
-        costs.set(neighborKey, nextCost);
-        insertionOrder += 1;
-        open.set(neighborKey, { coord: move.destination, order: insertionOrder });
-      }
+      const knownCost = costs.get(neighborKey) ?? Infinity;
+      const knownDeviation = deviations.get(neighborKey) ?? Infinity;
+      const improves =
+        nextCost < knownCost || (nextCost === knownCost && nextDeviation < knownDeviation);
+      if (!improves) continue;
+      if (closed.has(neighborKey)) closed.delete(neighborKey);
+      cameFrom.set(neighborKey, { previous: currentKey, steps: move.steps });
+      coords.set(neighborKey, move.destination);
+      costs.set(neighborKey, nextCost);
+      deviations.set(neighborKey, nextDeviation);
+      insertionOrder += 1;
+      open.set(neighborKey, { coord: move.destination, order: insertionOrder });
     }
   }
   return { kind: "error", reason: "unreachable" };
