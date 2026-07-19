@@ -50,6 +50,7 @@ import {
 import { AimAndFireDialog } from "./AimAndFireDialog";
 import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
+import { PlannerMenu } from "./PlannerMenu";
 import { ScanAndFireDialog } from "./ScanAndFireDialog";
 import { TargetingAnalysis } from "./TargetingAnalysis";
 import { Timeline } from "./Timeline";
@@ -706,24 +707,35 @@ export function PlannerExperience({
     <main className="planner-page desktop-viewport-gate">
       <div className="ambient-grid" aria-hidden="true" />
       <header className="planner-header">
-        <div>
-          <p className="eyebrow">Turn {match.turnNumber} · Private draft</p>
-          <h1>{team.name} command board</h1>
+        <div className="planner-header-lead">
+          <PlannerMenu alert={draftStorageStatus === "error"}>
+            <FieldGuideButton />
+            <Link className="planner-menu-item" href={`/room/${roomCode}`}>
+              Room {roomCode}
+            </Link>
+            <span className="planner-menu-item">
+              <ShieldCheck size={14} aria-hidden="true" /> Seat verified
+            </span>
+            <span className="planner-menu-item" role="status" aria-live="polite">
+              {draftStorageStatus === "saved" ? (
+                <Save size={14} aria-hidden="true" />
+              ) : (
+                <CloudOff size={14} aria-hidden="true" />
+              )}
+              {draftStorageStatus === "saved"
+                ? "Saved locally"
+                : "Memory only — storage unavailable"}
+            </span>
+            {onResign === undefined ? null : (
+              <ResignControl onResign={onResign} disabled={syncing} />
+            )}
+          </PlannerMenu>
+          <div className="planner-header-title">
+            <p className="eyebrow">Turn {match.turnNumber} · Private draft</p>
+            <h1>{team.name} command board</h1>
+          </div>
         </div>
         <div className="planner-header-status">
-          <FieldGuideButton />
-          <span>
-            <ShieldCheck size={14} aria-hidden="true" /> Seat verified
-          </span>
-          <span role="status" aria-live="polite">
-            {draftStorageStatus === "saved" ? (
-              <Save size={14} aria-hidden="true" />
-            ) : (
-              <CloudOff size={14} aria-hidden="true" />
-            )}
-            {draftStorageStatus === "saved" ? "Saved locally" : "Memory only — storage unavailable"}
-          </span>
-          <Link href={`/room/${roomCode}`}>Room {roomCode}</Link>
           {onSaveOrders === undefined ? null : (
             <button
               type="button"
@@ -748,7 +760,6 @@ export function PlannerExperience({
               <HelpButton topic="action:lock-orders" label="Lock orders" />
             </span>
           )}
-          {onResign === undefined ? null : <ResignControl onResign={onResign} disabled={syncing} />}
         </div>
       </header>
       <FirstTimeHint />
