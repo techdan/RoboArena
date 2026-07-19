@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { ROBOT_DEFINITIONS, WEAPONS } from "../../engine/catalog.js";
-import { MOVE_SINGLE_COST_TICKS } from "../../engine/constants.js";
 import { ACTION_HELP, HELP_TOPICS, ROBOT_HELP, helpTopic } from "./content.js";
 
 describe("Phase 11.5 help content", () => {
@@ -29,7 +28,7 @@ describe("Phase 11.5 help content", () => {
     const movement = ACTION_HELP.find((topic) => topic.id === "action:movement");
     expect(movement?.facts).toContainEqual({
       label: "One tile",
-      value: `${MOVE_SINGLE_COST_TICKS} ticks · 0.50s`,
+      value: "0.50s",
     });
   });
 });

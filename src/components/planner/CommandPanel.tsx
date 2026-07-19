@@ -2,6 +2,7 @@
 
 import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2, X } from "lucide-react";
 import type { Heading, Posture } from "../../engine/types";
+import { formatGameTime } from "../../lib/formatTime";
 import { HelpButton } from "../help/HelpProvider";
 import { FireBox } from "./FireBox";
 
@@ -123,10 +124,10 @@ export function CommandPanel({
       <div className="planner-budget">
         <span>Remaining horizon</span>
         <strong data-over={remainingTicks < 0}>
-          {remainingTicks >= 0 ? remainingTicks : 0} ticks
+          {formatGameTime(remainingTicks >= 0 ? remainingTicks : 0)}
         </strong>
         {remainingTicks < 0 ? (
-          <small>{Math.abs(remainingTicks)} ticks execute beyond this turn</small>
+          <small>{formatGameTime(Math.abs(remainingTicks))} executes beyond this turn</small>
         ) : null}
       </div>
       <button type="button" className="secondary-action w-full" onClick={onReset}>

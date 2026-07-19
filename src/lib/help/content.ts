@@ -5,12 +5,12 @@ import {
   MOVE_SINGLE_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
-  TICKS_PER_SECOND,
   WEAPON_MAX_RANGE,
   WEAPON_TIMING,
 } from "../../engine/constants";
 import { canTraverse, isFullSpeedTerrain } from "../../engine/traversal";
 import type { Posture, RobotClass, Terrain, WeaponId } from "../../engine/types";
+import { formatGameTime } from "../formatTime";
 
 export type HelpTab = "robots" | "terrain" | "actions";
 export type V1RobotClass = Exclude<RobotClass, "stealth">;
@@ -49,9 +49,6 @@ const titleCase = (value: string): string =>
     .split("-")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
-
-const ticks = (value: number): string =>
-  `${value} ticks · ${(value / TICKS_PER_SECOND).toFixed(2)}s`;
 
 const weaponSummary = (weaponId: WeaponId): string => {
   const weapon = WEAPON_CATALOG_DATA[weaponId];
@@ -134,11 +131,11 @@ const weaponCadences = (mode: "aim" | "scan"): string =>
     .filter((weaponId) => weaponId !== "grenade-launcher")
     .map(
       (weaponId) =>
-        `${WEAPON_CATALOG_DATA[weaponId].displayName} ${
+        `${WEAPON_CATALOG_DATA[weaponId].displayName} ${formatGameTime(
           mode === "aim"
             ? WEAPON_TIMING[weaponId].firingIntervalTicks
-            : WEAPON_TIMING[weaponId].scanFiringIntervalTicks
-        }t`,
+            : WEAPON_TIMING[weaponId].scanFiringIntervalTicks,
+        )}`,
     )
     .join(" · ");
 
@@ -154,9 +151,9 @@ export const ACTION_HELP: readonly HelpTopic[] = [
       "Editing an earlier command removes later commands that no longer form a legal timeline.",
     ],
     facts: [
-      { label: "One tile", value: ticks(MOVE_SINGLE_COST_TICKS) },
-      { label: "Two tiles", value: ticks(MOVE_DOUBLE_COST_TICKS) },
-      { label: "Deploy", value: ticks(DEPLOY_COST_TICKS) },
+      { label: "One tile", value: formatGameTime(MOVE_SINGLE_COST_TICKS) },
+      { label: "Two tiles", value: formatGameTime(MOVE_DOUBLE_COST_TICKS) },
+      { label: "Deploy", value: formatGameTime(DEPLOY_COST_TICKS) },
     ],
   },
   {
@@ -167,7 +164,7 @@ export const ACTION_HELP: readonly HelpTopic[] = [
     details: [
       "Posture affects movement permission, cover, and the projected state used by later commands.",
     ],
-    facts: [{ label: "Change cost", value: ticks(POSTURE_CHANGE_COST_TICKS) }],
+    facts: [{ label: "Change cost", value: formatGameTime(POSTURE_CHANGE_COST_TICKS) }],
   },
   {
     id: "action:scan-direction",
@@ -175,7 +172,7 @@ export const ACTION_HELP: readonly HelpTopic[] = [
     title: "Scan Direction",
     summary: "Set the center heading of the inclusive forward scan semicircle.",
     details: ["The two perpendicular boundary rays are included in the scan gate."],
-    facts: [{ label: "Change cost", value: ticks(SCAN_DIRECTION_COST_TICKS) }],
+    facts: [{ label: "Change cost", value: formatGameTime(SCAN_DIRECTION_COST_TICKS) }],
   },
   {
     id: "action:aim-fire",
@@ -205,12 +202,12 @@ export const ACTION_HELP: readonly HelpTopic[] = [
     id: "action:timeline",
     tab: "actions",
     title: "Program Timeline",
-    summary: "Commands execute from left to right over the 60-tick-per-second turn clock.",
+    summary: "Commands execute from left to right over the turn clock.",
     details: [
       "Commands beyond the turn horizon stay in the draft but do not execute this turn.",
       "Scrubbing previews each robot’s projected position, posture, and scan heading without resolving combat.",
     ],
-    facts: [{ label: "Clock", value: `${TICKS_PER_SECOND} ticks per second` }],
+    facts: [{ label: "Clock", value: "Time shown in seconds" }],
   },
   {
     id: "action:lock-orders",

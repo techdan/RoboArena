@@ -1,7 +1,9 @@
 "use client";
 
 import { Pencil, ScanLine, Trash2 } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import type { RobotState, TurnOrders } from "../../engine/types";
+import { formatGameTime } from "../../lib/formatTime";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
 import { HelpButton } from "../help/HelpProvider";
 
@@ -40,6 +42,24 @@ export function Timeline({
   onEdit,
   onDelete,
 }: TimelineProps) {
+  const segmentRowsRef = useRef(new Map<string, HTMLDivElement>());
+  const previousSegmentCountsRef = useRef(new Map<string, number>());
+  const segmentCountKey = robots
+    .map((robot) => `${robot.id}:${timelineForRobot(orders, robot.id).segments.length}`)
+    .join("|");
+
+  useLayoutEffect(() => {
+    for (const robot of robots) {
+      const count = timelineForRobot(orders, robot.id).segments.length;
+      const previousCount = previousSegmentCountsRef.current.get(robot.id);
+      const row = segmentRowsRef.current.get(robot.id);
+      if (row !== undefined && (previousCount === undefined || count > previousCount)) {
+        row.scrollLeft = row.scrollWidth;
+      }
+      previousSegmentCountsRef.current.set(robot.id, count);
+    }
+  }, [robots, orders, segmentCountKey]);
+
   const longestTick = robots.reduce((maximum, robot) => {
     const timing = timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks);
     return Math.max(maximum, timing.at(-1)?.endTick ?? 0);
@@ -52,11 +72,11 @@ export function Timeline({
             Program horizon <HelpButton topic="action:timeline" label="Program timeline" />
           </p>
           <strong>
-            {(previewTick / 60).toFixed(2)}s / {(budgetTicks / 60).toFixed(2)}s
+            {formatGameTime(previewTick)} / {formatGameTime(budgetTicks)}
           </strong>
         </div>
         <label className="timeline-scrubber-label">
-          Preview tick {previewTick}
+          Preview time {formatGameTime(previewTick)}
           <input
             className="movie-scrubber"
             type="range"
@@ -88,7 +108,13 @@ export function Timeline({
                 <span>{robotIndex + 1}</span>
                 {robot.definition.class}
               </button>
-              <div className="timeline-segments">
+              <div
+                className="timeline-segments"
+                ref={(node) => {
+                  if (node === null) segmentRowsRef.current.delete(robot.id);
+                  else segmentRowsRef.current.set(robot.id, node);
+                }}
+              >
                 {timing.length === 0 ? (
                   <span className="timeline-empty">No commands</span>
                 ) : (
@@ -98,12 +124,13 @@ export function Timeline({
                       data-over-budget={entry.overBudget}
                       data-editing={editing?.robotId === robot.id && editing.index === entry.index}
                       key={`${robot.id}-${entry.index}`}
-                      title={`${entry.startTick}–${entry.endTick} ticks`}
+                      title={`${formatGameTime(entry.startTick)}–${formatGameTime(entry.endTick)}`}
                     >
                       <span>
                         <strong>{commandLabel(entry.segment.kind)}</strong>
                         <small>
-                          {entry.startTick} → {entry.endTick} · {entry.durationTicks}t
+                          {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
+                          {formatGameTime(entry.durationTicks)}
                         </small>
                       </span>
                       {entry.createsScanOpportunity ? (

@@ -17,8 +17,15 @@ export function FireBox({
   return (
     <div className="fire-box">
       <div className="action-with-help">
-        <button type="button" data-active={aimActive} disabled={disabled} onClick={onAim}>
-          <Crosshair size={15} aria-hidden="true" /> Aim &amp; Fire
+        <button
+          type="button"
+          aria-pressed={aimActive}
+          data-active={aimActive}
+          disabled={disabled}
+          onClick={onAim}
+        >
+          <Crosshair size={15} aria-hidden="true" />
+          {aimActive ? "Cancel Aim & Fire" : "Aim & Fire"}
         </button>
         <HelpButton topic="action:aim-fire" label="Aim and Fire" />
       </div>
@@ -30,6 +37,8 @@ export function FireBox({
       </div>
       {disabled ? (
         <small>Deploy this robot to enable firing tools.</small>
+      ) : aimActive ? (
+        <small>Choose a target tile, or press this button again to cancel.</small>
       ) : (
         <small>Use Repeat in the firing dialog; Ctrl+Shift+click remains a desktop shortcut.</small>
       )}
