@@ -702,7 +702,7 @@ real WSS/two-network restart check is not yet claimed.
 - `src/planner/state.ts` — immutable reducer for current `TurnOrders` and conflict recovery
 - `src/planner/pathfind.ts` — A* on the arena tile grid for movement paths
 - `src/planner/segments.ts` — helpers to append/edit/delete `RobotCommandSegment`s
-- `src/planner/history.ts` — bounded undo/redo history for the local draft
+- `src/planner/history.ts` — full turn-scoped undo/redo history for the local draft
 
 **Tests required**:
 
@@ -715,8 +715,9 @@ real WSS/two-network restart check is not yet claimed.
 - route compression calls the shared `chunkMovementPath`: Open+Open may become
   one 40-tick double, while entering Rough/Bush/Low-wall retains a 30-tick
   single; include straight, mixed, and diagonal route tests
-- undo/redo restores byte-equivalent orders and projected positions; movement
-  previews apply each selector at its own completion boundary
+- undo/redo restores byte-equivalent orders and projected positions across the
+  complete current-turn edit history, including changes on different robots;
+  movement previews apply each selector at its own completion boundary
 - server snapshots never overwrite a newer unsent local draft without an
   explicit conflict/recovery path
 
@@ -733,8 +734,11 @@ real WSS/two-network restart check is not yet claimed.
 canonical setup snapshot without exposing another player's draft. Browser-local
 drafts use a versioned, failure-safe envelope. Reloading a prior-turn draft
 preserves it behind an explicit recover-compatible/use-server choice; same-turn
-server revision conflicts retain the keep-local/use-server choice. Direct edits
-and deletions retain only the resolver-legal command prefix.
+server revision conflicts retain the keep-local/use-server choice. Phase 9
+originally exposed direct middle edits/deletions and retained only the
+resolver-legal command prefix afterward; Phase 11.8.1 supersedes that planner
+interaction with append/remove-last editing while keeping prefix validation for
+imported, recovered, and authoritative drafts.
 
 **Risks**:
 
@@ -1303,24 +1307,337 @@ environment-dependent hosting and physical-device work.
 
 **Implemented 2026-07-19 (revised same day)**: live resolution and planner
 previews share a dependency-free, typed score-arithmetic primitive. The board
-shows per-tile final percentages (pooled BitmapText, zoom-faded), a
+shows a final-chance heatmap without per-tile percentage text, plus a
 single-source luminance-ordered palette with dim/hatch/reverse-hatch blocked
 treatments, the half-plane wedge plus `(r + 1)`-tile damage/range arcs
 replacing the cone-edge outlines, and a cursor tooltip with chance/distance/
 damage and the Scan cone-edge `+2` note. Shot Analysis and the active firing
 tool's settings dock in a contextual right rail (bottom drawer under 1024px);
 the analyzed tile is sticky across pointer-leave, pinnable via button or `P`,
-and Aim & Fire retargets on board click. The planner shell is board-first: a
+and Aim & Fire retargets on board click. Scan & Fire board clicks pin the
+hovered analysis without programming movement; all firing tools own left-click
+until canceled or completed. The planner shell is board-first: a
 slim hamburger header, a collapsed-by-default timeline, and a full-height
 letterboxed canvas replace the fixed width cap. Explosive weapons retain
 coverage/blast analysis rather than showing a false hit percentage.
 
-**Verification**: 315 Vitest tests (fit transform, palette ordering, label and
-tooltip rules, wedge/ring geometry vs preview-truth property test), strict
+**Verification**: Vitest coverage includes fit transform, palette ordering,
+tooltip rules, and wedge/ring geometry vs preview-truth property tests; strict
 typecheck, ESLint, Prettier, and a Next.js production build pass. Phase
 remains in progress until the specified 100%/125% desktop terrain,
 grayscale/color-vision, and retained-screenshot review is completed; automated
 Playwright execution remains paused by policy.
+
+---
+
+### Phase 11.8.1 — board-first planner commands, timeline, and full-width targeting board [🟡 IN PROGRESS]
+
+**Goal**: augment Phase 11.8 without changing its combat math or targeting
+overlay. The planner should be one stable, board-first workspace: selecting a
+robot, changing posture/heading, configuring fire, or editing its timeline must
+not open a full-board command modal or resize/fade the arena. The timeline must
+remain readable as a command sequence while communicating useful time
+proportionality and preserving a simple original-style append/remove-last
+programming model. The persistent vertical order is **global header → robot
+selector → selected-robot timeline → robot actions → arena**, leaving the
+entire lower workspace to the board.
+
+**Dependencies**: Phase 11.8 targeting calculations, heatmap, structural guides,
+tooltip, and fire-mode click ownership. This is a presentation and interaction
+cleanup; it must not change authoritative command shape, timing, legality,
+visibility, or resolution.
+
+**Layout and shared interaction**:
+
+- Remove the contextual targeting rail and its narrow-viewport drawer from the
+  active planner layout. Entering, switching, confirming, or canceling a firing
+  tool must never change the arena's rendered width or camera transform.
+- Remove the full-screen **Robot Commands** modal and its faded backdrop.
+  Routine planner actions must leave the board visible and interactive; the Aim
+  review card may overlap a small board area temporarily but must not apply a
+  board-wide fade or blur.
+- Put the compact selected-robot timeline between the robot selector and the
+  robot-action strip. Keep posture, scan direction, conditional weapon/ammo,
+  **Aim & Fire**, **Scan & Fire**, and the active firing tool's contextual
+  controls in one stable strip immediately above the arena. Switching modes may
+  replace controls within that strip but must not move the timeline, resize the
+  arena, or cause unrelated controls to jump.
+- Keep the default timeline to one compact selected-robot lane plus its ruler
+  and playhead. **All Programs** is a temporary expanded coordination view; it
+  must collapse back to the single lane and must not reserve permanent height
+  that would otherwise belong to the arena.
+- Keep one slim global header. Place menu, Undo, and Redo together in its upper
+  left; keep save/sync and **Lock Orders** in the upper right. Coordinates and
+  routine cursor status belong on the map or in its tooltip, not in the center
+  of the global header.
+- Show a weapon selector only when the selected robot has more than one weapon
+  currently available at the append point. In the v1 roster this applies only
+  to the Missile robot while both its finite Missile Launcher and unlimited
+  Rifle are available. A single available weapon is read-only identity, not a
+  one-option selector.
+- Keep hypothetical-target posture as the one shared analysis control, defaulted
+  to Upright. Authorized visible contacts continue to use their observed posture
+  regardless of this assumption.
+- Preserve the exact cursor tooltip for tile-level chance, distance, adjusted
+  damage, blocked status, and Scan cone-edge acquisition information. A desktop
+  board click in Scan mode has no effect. A touch tap positions and retains the
+  same tooltip as the iPad replacement for hover; it does not create separate
+  locked-analysis state.
+- Move the chance/status legend into a readable translucent overlay at the
+  bottom center of the arena and group the hypothetical-target posture control
+  with it. The whole panel blocks board hover, click, drag, and touch input and
+  clears the board tooltip on entry, so it feels like separate interaction
+  chrome. The panel wraps without covering an excessive portion of the board at
+  the 1024×768 landscape target.
+- Place damage-zone and range labels along the cone boundary with the longest
+  visible run to the arena edge, retaining each label's ring radius and clamping
+  by its rendered bounds so labels neither overlap on the centerline nor crop.
+- Overlay the compact zoom controls at the arena's bottom right. Keep zoom out,
+  percentage, and zoom in prominent; demote reset/fit to the percentage control,
+  a shortcut, or overflow rather than spending a permanent fourth button.
+  Remove the persistent pan/zoom instruction after first-use guidance.
+- Replace the permanent bottom planner notice with transient, severity-correct
+  feedback. Do not use a disconnected/cloud-off icon for routine command
+  messages or repeat the global private-draft/lock state beneath the map.
+- Let the canvas consume the remaining workspace while preserving square tiles
+  and whole-arena fit below the action strip. The top controls use content-sized
+  fixed bands rather than a competing dashboard or vertically growing sidebar.
+  Add a thin presentation-only arena bezel outside the playable grid so the
+  battlefield reads as a contained arena; it must not add targetable terrain,
+  coordinates, or engine state.
+
+**Robot selection and direct commands**:
+
+- Clicking/tapping a robot on the board or in the timeline/roster selects it
+  only. It must not open a dialog. Switching selection cancels or safely exits
+  an incomplete targeting mode and updates the board projection and timeline.
+- Show robot identity by class, with a duplicate ordinal only when required:
+  **Rifle**, **Burst**, **Auto**, **Missile** for the four-robot roster and
+  **Rifle 1**, **Rifle 2**, **Burst 1**, and so on when classes repeat. Keep the
+  numeric keyboard shortcut as a separate badge rather than naming robots
+  `R1`, `R2`, etc.
+- Movement remains the default map interaction for the selected robot. Put the
+  selected robot's posture plus **Aim & Fire** and **Scan & Fire** actions in the
+  stable board toolbar.
+- Put one original-inspired circular **Scan direction** control beside posture
+  in the stable action strip; do not surround the selected robot with eight
+  map-overlay arrows. The circle shows the current centerline, one uniformly
+  styled legal forward semicircle, and a muted rear semicircle. Do not reproduce
+  dark-center/light-edge accuracy bands: live fire has no general center-90°
+  bonus or outer-45° penalty, and the board overlay already communicates the
+  actual terrain/cover/chance model.
+- The scan circle quantizes click/tap/drag and keyboard input to the eight
+  absolute headings. Pointer movement previews the corresponding board wedge;
+  commit queues one absolute scan-heading command. It must retain a visible
+  direction name, semantic label, focus state, and coarse-pointer target without
+  making the control world-scaled or camera-dependent.
+- Posture choices use the same recognizable **Upright**, **Ducking**, and
+  **Crouching** silhouettes in the action strip and timeline. An icon-first
+  treatment is acceptable when the group/current posture is visibly named and
+  each option retains an accessible name and hover/focus help. A standalone
+  minus-in-a-box is not an understandable Ducking control.
+- Do not display command-cost badges or timing copy beside these direct action
+  controls. Command timing belongs in the resulting timeline entry and its
+  details, keeping the board toolbar compact.
+
+**Weapon and ammunition presentation**:
+
+- Compute weapon availability from the selected robot's projected state at the
+  end of its current plan, because all new commands append there. For the
+  Missile robot, combine the only meaningful choice and count in a compact
+  control such as **Missile Launcher · 2** / **Rifle**.
+- Show ammunition only for finite resources. The v1 Rifle, Burst Gun, and Auto
+  Rifle are unlimited and receive no infinity/ammo badge; Burst's three bullets
+  per shot describe one attack's damage behavior, not an ammunition pool, and
+  belong in targeting details/Field Guide rather than persistent planner chrome.
+- When planned commands spend or conservatively reserve every missile, collapse
+  the selector to read-only **Rifle** while retaining a compact **Missiles 0**
+  status so the fallback is understandable. Undo/remove-last restores both the
+  projected count and selector when missiles become available again.
+- Keep firing cadence contextual rather than permanent: Aim/Scan configuration,
+  confirmation, timeline details, and the Field Guide may state the relevant
+  interval or opportunity count. Do not turn cadence back into cost badges on
+  the direct-action buttons.
+
+**Timeline and edit history**:
+
+- Use a consistent original-inspired glyph language so every command remains
+  immediately identifiable without forcing a full text label into every short
+  block: movement is a sequence of directional arrows; posture uses the same
+  silhouette as the action strip; scan-heading change uses a miniature oriented
+  scan circle rather than a movement arrow; Aim uses the selected weapon icon
+  plus target coordinates; Scan uses scan/weapon identity plus maximum distance
+  and duration; deploy uses robot/position identity plus coordinates.
+- Keep essential parameters visible beside the glyph where they define the
+  command. Full command name, exact timing, route, weapon, and other details
+  remain available on hover/focus/long-press and through semantic labels. Do not
+  reduce an unfamiliar command to an unexplained symbol.
+- Use hybrid sizing: every command receives a readable visual minimum width,
+  while longer commands grow relative to duration. The 0–15 second ruler,
+  scrubber/playhead, and exact start/end positions communicate authoritative
+  timing even where the minimum exaggerates a short command.
+- Place the scrubber directly below the command-glyph lane on the same horizontal
+  time axis, forming one compact two-row timeline band. Show current/end time at
+  the edges or playhead; do not spend a separate header row on a disconnected
+  **Program Horizon** panel or duplicate scrubber.
+- Treat the scrubber as a read-only preview playhead, not an insertion point or
+  timeline editor. Dragging or tapping it updates the predicted board snapshot
+  for every friendly robot at that time and shows the current time beside the
+  playhead. It never reorders, splits, inserts, or removes commands.
+- The playhead auto-parks at the selected robot's program end after appending,
+  remove-last, clear, undo/redo, or switching robots. Adding an action while
+  previewing an earlier time first returns the preview to the end; commands are
+  still appended there. Selecting a command previews its completion boundary.
+- Give the scrubber a coarse-pointer hit region of at least 44 CSS px without
+  making its visible rule disproportionately thick. Scrubbing and command
+  long-press must have distinct Pointer Events ownership so either gesture can
+  be canceled without page scrolling or accidentally mutating the program.
+- Hover or keyboard focus shows exact start, end, duration, and command details.
+  On iPad, a cancellable long-press opens the same detail popover without
+  removing the command, triggering timeline scrub, or scrolling the page.
+- Treat each robot's timeline as an append-only draft stack. Only its final
+  command exposes a clearly labeled **Remove Last Action** control. To change an
+  earlier action, remove later commands from the end, remove that action, then
+  program the replacement and suffix again. Do not preserve or silently shift a
+  downstream suffix whose position, posture, heading, ammo, or legality may have
+  depended on the removed command.
+- Do not place edit/trash controls on every command block. Clicking/tapping a
+  block previews its completion boundary and exposes its details; it does not
+  mutate the plan. Replace any unexplained bracketed minus or other unlabeled
+  indicator with a named/icon-labeled state or remove it.
+- Show one selected-robot lane by default and an expandable all-programs view
+  for cross-robot coordination. Robot selectors switch selection without
+  opening command controls, and the lane/selector must not duplicate ambiguous
+  `R1`–`R4` identities. The expanded view aligns all lanes to the same 0–15
+  second ruler and playhead, then collapses without changing the preview time.
+- **Clear plan** names the selected robot explicitly and remains undoable.
+- Undo and Redo operate on one full, turn-scoped history across all robot
+  timelines, not only the immediately preceding state. Every append,
+  remove-last, clear, route, posture, heading, Aim, and Scan mutation
+  participates; a new action after undo clears the redo branch. History remains
+  available until lock, authoritative rebase, or explicit draft replacement.
+
+**Scan & Fire flow**:
+
+- The fire-control strip contains only the mode/weapon identity or conditional
+  multi-weapon choice, maximum distance, duration in seconds, **Cancel**, and
+  **Add Scan & Fire**. The shared hypothetical-target posture remains with the
+  bottom legend rather than being duplicated here.
+- Omit a weapon selector when only one weapon is available; retain the compact
+  conditional Missile Launcher/Rifle choice when both are available. Remove the
+  long acquisition explanation, persistent detailed Shot Analysis, and
+  calculation breakdown. Timing and legality remain available through concise
+  inline copy, the map overlay, tooltip, and existing Field Guide/context help.
+- Changing distance, duration, or posture updates the overlay immediately.
+  Confirming or canceling restores normal movement and robot-selection clicks.
+
+**Aim & Fire flow**:
+
+- The fire-control strip contains the mode/weapon identity or conditional
+  multi-weapon choice, selected target, finite **Fire time** in seconds, its
+  derived shot count, **Cancel**, and a **Review Shot** action. Board clicks
+  select or retarget while the mode is active. Fire time advances in exact
+  weapon intervals and caps its shot count by remaining budget and finite ammo.
+  The posture assumption remains grouped with the bottom legend.
+- Keep the useful posture-estimate breakdown out of the persistent planner
+  chrome. **Review Shot** opens a small confirmation card after a legal target
+  is selected: show target coordinate and distance, fire time, derived shot count, and the 3
+  compact posture estimates for a hypothetical target. For an authorized
+  visible contact, show only its observed-posture estimate.
+- The confirmation card provides **Back** and **Add Aim & Fire**. It may cover a
+  small portion of the arena temporarily, but primary controls must not be
+  world-anchored behind the robot because edge placement, pan/zoom, and touch
+  would make that location unstable.
+
+**Responsive, accessibility, and verification**:
+
+- Preserve visible keyboard focus, semantic labels, Escape cancellation, arrow
+  key board navigation, and Pointer Events-based mouse/touch parity. Interactive
+  controls remain at least 44×44 CSS px on coarse pointers.
+- At desktop 100%/125% zoom and iPad landscape 1024×768, verify that the control
+  stack remains legible, the default timeline stays to one lane, the legend
+  does not block required board interaction, and the arena dimensions do not
+  change between movement, Aim, and Scan modes.
+- Add focused component/state coverage for Scan parameter changes and locked
+  hover readout, Aim retarget/repeat/review/confirm, cancellation, tail-only
+  timeline behavior, robot-only selection, heading/posture controls, full
+  multi-action undo/redo across robot switches, timeline hybrid sizing/details,
+  scrub-to-preview and auto-park-at-end behavior, shared-time all-program lanes,
+  scan-circle direction input/preview and uniform forward-half rendering,
+  conditional Missile weapon selection and projected finite-ammo restoration,
+  and restoration of movement after the action completes.
+- Update retained screenshots for idle, Aim targeting, Aim confirmation, Scan
+  targeting, the posture/scan-circle action strip, Missile weapon/ammo states,
+  icon-based selected/all-program timelines with their directly attached
+  scrubber, and the narrowest supported landscape layout. Automated Playwright
+  execution remains paused until deliberately re-enabled.
+
+**Acceptance criteria**:
+
+- Aim and Scan can be fully configured and confirmed without a side rail or any
+  horizontal arena shrink.
+- Scan exposes only distance, duration, and action controls; Aim exposes target,
+  finite fire time with derived shot count, and an on-demand confirmation. Their shared posture
+  assumption remains with the bottom legend.
+- The bottom map legend and mouse/touch tooltip preserve the useful Phase 11.8
+  information without restoring persistent detailed Shot Analysis.
+- Firing-mode left click never programs movement, and normal board behavior
+  returns immediately after confirm or cancel.
+- Selecting a robot never opens a board-blocking modal; posture, heading, Aim,
+  and Scan are fully programmable with the arena continuously visible.
+- The stable action strip uses shared posture silhouettes and a circular scan
+  direction control; no robot selection produces eight on-board heading arrows.
+  The scan circle depicts one uniform legal forward semicircle and does not
+  invent center/edge accuracy bands.
+- Only a robot with more than one currently available weapon receives a weapon
+  selector. Finite Missile ammunition remains visible and plan-aware; unlimited
+  weapons and Burst's per-shot bullet count do not create ammo clutter.
+- Timeline blocks use consistent command glyphs and essential parameters, add
+  useful duration proportionality without reducing short actions to mysteries,
+  and expose exact details on hover/focus/long-press. Only the final action is
+  removable; changing an earlier action requires removing and rebuilding the
+  suffix.
+- The compact selected-robot timeline sits between robot selection and robot
+  actions. Its 0–15 second scrubber sits directly beneath the command lane,
+  previews the board without editing orders, auto-parks at the program end after
+  mutations, and shares one time across the temporary all-programs view.
+- Undo/redo can traverse the complete current-turn mutation history across
+  multiple robots, and the controls remain in the global header's upper left.
+- The fitted arena and its presentation-only bezel consume the complete lower
+  workspace beneath the compact header/selector/timeline/action stack. The
+  1280×720 desktop and 1024×768 iPad landscape layouts introduce neither page
+  scroll nor unstable mode-dependent dimensions.
+
+**Effort**: M.
+
+**Fire-control slice implemented 2026-07-19**: the targeting rail,
+narrow-viewport drawer, weapon selectors, persistent Shot Analysis, and explicit
+Pin Tile control are removed. Aim and Scan now use controlled contextual strips
+in the board heading, so the workspace contains only the full-width arena. Scan
+exposes distance, seconds, and confirm/cancel; Aim exposes target, repeat, and a
+legal-target-gated **Review Shot** confirmation containing the existing
+authorized posture estimates. The shared posture control and enlarged
+chance/status legend form a bottom-center map overlay that blocks board input
+across its complete bounds. Aim has a finite fire-time input that advances in
+exact weapon intervals and displays the resulting shot count, capped by budget
+and finite ammo. Confirmation materializes that count as consecutive ordinary
+Aim selectors, leaving room for later commands. Ctrl+Shift defaults to 2 firing
+intervals. Legacy continuous-repeat commands remain accepted for
+draft/replay compatibility. Scan desktop clicks are inert, touch taps retain
+the ordinary cursor tooltip, and damage/range labels follow the longest visible
+cone boundary. Confirm/cancel restores ordinary board interaction.
+
+The expanded robot-command, posture/scan-circle, conditional Missile
+weapon/ammo, icon timeline, history, map-chrome, and arena-bezel work above
+remains open; the phase therefore remains in progress.
+
+**Verification**: focused server-rendered component tests cover the compact Scan
+surface, Aim review gating, fire-time controls, and posture/legend panel; the retained
+four-client browser spec covers full-width mode entry, Aim review/confirm, Scan
+configuration/touch-tooltip/confirm, and restored overlay state. Vitest, strict typecheck,
+ESLint, Prettier, and the production build pass. Manual desktop/iPad screenshot
+review remains open because the in-app browser bridge was unavailable in this
+environment; automated Playwright execution remains paused by policy.
 
 ---
 
@@ -1332,9 +1649,9 @@ logic with four clients; this phase proves that the same product survives real
 hosting, real networks, real reconnects, and touch-only play on physical iPadOS
 Safari. Placeholder/vector art is acceptable and does not block this gate.
 
-**Dependencies**: Phase 11.6 functional gate and Phase 11.8 planner UX closure.
-The locally complete Phase 8 work may proceed in parallel, but its production
-hosting gate must close here.
+**Dependencies**: Phase 11.6 functional gate and Phase 11.8.1 planner UX
+closure. The locally complete Phase 8 work may proceed in parallel, but its
+production hosting gate must close here.
 
 **Production and network gate**:
 
@@ -2317,37 +2634,39 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 ## 17. Phase summary table
 
-| Phase   | Status                             | Effort | Goal                                                                                                                                         |
-| ------- | ---------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1       | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M      | Engine skeleton and old-model primitives/tests                                                                                               |
-| **1R**  | ✅ DRAFT COMPLETE                  | M      | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth                                                            |
-| **1.5** | ✅ COMPLETE                        | S      | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass                                                   |
-| 2       | ✅ DRAFT COMPLETE                  | L      | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation                                                    |
-| 3       | ✅ DRAFT COMPLETE                  | M      | Locked projectile/blast outcomes + deterministic presentation events                                                                         |
-| 4       | ✅ DRAFT COMPLETE                  | L      | Scan & Fire mode + ordinary visibility resolver (no Stealth)                                                                                 |
-| 5       | ✅ DRAFT COMPLETE                  | S      | Replay format (serialize/deserialize/verify)                                                                                                 |
-| 6       | ✅ DRAFT COMPLETE                  | M      | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import                                                                 |
-| 7       | ✅ DRAFT COMPLETE                  | L      | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls                                                              |
-| 8       | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L      | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains                                                           |
-| 9       | ✅ DRAFT COMPLETE                  | L      | Planner UI: movement / posture / scan, exact timeline, local draft recovery                                                                  |
-| 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                        |
-| 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                    |
-| 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                |
-| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
-| 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                  |
-| 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, tile %s, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
-| 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                        |
-| 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                    |
-| 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                    |
-| 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                                               |
-| 15      | ⏸ POST-MAIN-GAME                   | XL     | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring                                                                |
-| 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                                                            |
+| Phase   | Status                             | Effort | Goal                                                                                                                                                                 |
+| ------- | ---------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | ✅ DRAFT COMPLETE / OBSOLETE MODEL | M      | Engine skeleton and old-model primitives/tests                                                                                                                       |
+| **1R**  | ✅ DRAFT COMPLETE                  | M      | Realign timing, geometry, posture, cover, fire, and blast to audited binary truth                                                                                    |
+| **1.5** | ✅ COMPLETE                        | S      | ESLint nondeterminism bans, Prettier, GitHub Actions workflow; local and remote gates pass                                                                           |
+| 2       | ✅ DRAFT COMPLETE                  | L      | Turn resolver core — per-tick orchestration, immediate Aim & Fire, command interpretation                                                                            |
+| 3       | ✅ DRAFT COMPLETE                  | M      | Locked projectile/blast outcomes + deterministic presentation events                                                                                                 |
+| 4       | ✅ DRAFT COMPLETE                  | L      | Scan & Fire mode + ordinary visibility resolver (no Stealth)                                                                                                         |
+| 5       | ✅ DRAFT COMPLETE                  | S      | Replay format (serialize/deserialize/verify)                                                                                                                         |
+| 6       | ✅ DRAFT COMPLETE                  | M      | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import                                                                                         |
+| 7       | ✅ DRAFT COMPLETE                  | L      | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls                                                                                      |
+| 8       | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L      | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains                                                                                   |
+| 9       | ✅ DRAFT COMPLETE                  | L      | Planner UI: movement / posture / scan, exact timeline, local draft recovery                                                                                          |
+| 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                                                |
+| 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                                            |
+| 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                                        |
+| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12)                         |
+| 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
+| 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
+| 11.8.1  | 🟡 IN PROGRESS                     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, full undo/redo history, and full-width arena                                      |
+| 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
+| 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
+| 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
+| 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                                                                       |
+| 15      | ⏸ POST-MAIN-GAME                   | XL     | Treasure Hunt, Capture the Flag, Hostage, Baseball and sport commands/scoring                                                                                        |
+| 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                                                                                    |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
-5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 12. Phase 11.8
-may run alongside Phase 12's environment-dependent setup, but both must close
-before the v1 gate is declared complete. The concise gate-by-gate sequence is
-in `tasks/core-build-plan.md`. Phase 13 presentation polish and Phases 13.5–16
+5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 11.8.1 → 12.
+Phases 11.8 and 11.8.1 may run alongside Phase 12's environment-dependent
+setup, but both must close before the v1 gate is declared complete. The concise
+gate-by-gate sequence is in `tasks/core-build-plan.md`. Phase 13 presentation
+polish and Phases 13.5–16
 are post-v1 and are not on this path. The post-v1 core-battle sequence is Phase
 13 polish → Phase 13.5 online alliances → Phase 14 Stealth; Phase 15 additional
 sports also requires Phase 13.5, and Phase 16 hot-seat is last. Neither Stealth

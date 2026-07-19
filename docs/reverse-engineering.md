@@ -1123,6 +1123,14 @@ handlers by `seg6:0x4CF2`. Scan commands remain active for the player's
 Timed parameters (including Scan & Fire duration, zap, and bomb fuse) are
 multiplied by 60 in `seg13:0x08C5`.
 
+The static evidence confirms the Aim selector intervals and the documented
+Ctrl+Shift/Alt repeat-fire shortcut, but it does **not** yet prove whether the
+original planner bounded repeat by a shot count, a duration, or the remaining
+turn. RoboArena's finite fire-time control is therefore a PROPOSED planner
+choice. It advances in exact selector intervals, displays the resulting shot
+count, and is represented as consecutive ordinary Aim selectors so it does not
+alter confirmed timing.
+
 ### Movie playback rate
 
 The eight 16-bit frame-decimation divisors at DGROUP `0x1028` are

@@ -19,8 +19,9 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
-draft-complete; Phase 8 is locally implemented with 276 passing tests and its
-external WSS/two-network hosting gate still open. Phase 1.5 lint/format/CI is
+draft-complete; Phases 11.8 and 11.8.1 are implemented with visual review open.
+Phase 8 is locally implemented with its external WSS/two-network hosting gate
+still open. The repository has 312 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -95,7 +96,9 @@ preview, direct legal-prefix editing, posture/scan tools, and bounded undo/redo.
 
 **Phase 10 (draft-complete)** — Aim & Fire, repeat-fire shortcut, Scan & Fire,
 inclusive scan-gate overlay, exact score-table estimates from authorized facts,
-and terminal repeat-fire timing without consuming authoritative RNG.
+and exact fire-selector timing without consuming authoritative RNG. Phase
+11.8.1 presents bounded Aim fire time and its derived shot count as consecutive
+selectors while retaining legacy continuous-repeat replay compatibility.
 
 **Phase 11 (draft-complete)** — durable private drafts and locks, persisted
 seed/nonce recovery, exact-once deterministic resolution, participant-specific
@@ -111,11 +114,17 @@ sprites, honest timeline projection, targeting overlays, and planner camera
 controls. Retained Playwright specs/baselines are not part of automated
 validation; UI review is currently manual.
 
-**Everything after Phase 11.7** — Phase 11.6's remaining real-session gate is
-followed by the Phase 12 production, resilience, real-network, and
-physical-iPad v1 ship gate. Phase 13 polishes and enhances the core battle game;
-Phase 13.5 then adds online alliances before Stealth or additional sports, while
-Phase 16 keeps hot-seat/local-device work last.
+**Phases 11.8-11.8.1 (implemented; visual review open)** — engine-faithful
+targeting heatmaps, longest-edge wedge/ring labels, exact mouse and touch
+tooltips, compact board-header Aim/Scan controls, a larger bottom-map
+posture/legend panel, and on-demand Aim posture review preserve a full-width
+planner arena. Scan desktop clicks are inert; touch taps retain its tooltip.
+
+**Everything after Phase 11.8.1** — Phase 11.6's remaining real-session gate is
+followed by the Phase 12 production, resilience, real-network, and physical-iPad
+v1 ship gate. Phase 13 polishes and enhances the core battle game; Phase 13.5
+then adds online alliances before Stealth or additional sports, while Phase 16
+keeps hot-seat/local-device work last.
 Architecture is sketched in `docs/implementation-plan.md` §1.
 
 ### Hard rules for `src/engine/`

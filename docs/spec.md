@@ -222,6 +222,11 @@ Scan & Fire repeat intervals are Rifle/Burst/Auto/Missile/Grenade =
 `30/20/10/20/20` ticks. Named selectors and both timing columns are confirmed;
 range uses **floored Euclidean distance** and is uniform at 18. ✅
 
+Finite ammunition is match-persistent in RoboArena v1. A Missile robot starts
+the match with 3 missiles; every launch decrements that stored value and it does
+not regenerate at a turn boundary. The starting count is observed, while the
+no-regeneration policy is PROPOSED and enforced by the durable `MatchState`.
+
 ### Bullet weapon damage
 
 Each direct-fire hit rolls `base + (random & mask)`, then applies cover and
@@ -402,16 +407,14 @@ same inputs and operation order as the live resolver:
 The heatmap uses final probability bands: **Excellent 75-94%**, **Good
 50-74%**, **Risky 25-49%**, and **Poor 1-24%**. Band, blocked-state, and
 legend colors come from one shared palette module consumed by both the board
-renderer and the DOM legend/panel; the bands are strictly luminance-ordered so
-their ranking survives grayscale and common color-vision deficiencies. A
+renderer and the bottom-of-map legend; the bands are strictly
+luminance-ordered so their ranking survives grayscale and common color-vision deficiencies. A
 zero-probability tile is not merged with an illegal tile. Outside-range,
 outside-angle, and wall-blocked states use distinct non-color-only treatments
 (heavy dim, tight hatch, and sparse reverse-diagonal hatch respectively).
 Unrelated Home-area outlines are hidden while a firing tool is active. Exact
-percentage text is shown by default on every eligible direct-fire tile
-(including 0%) and fades out below roughly 17-23 effective on-screen pixels
-per tile; below that threshold the cursor tooltip and the Shot Analysis panel
-carry the exact numbers.
+tile percentages remain in the cursor tooltip and Aim review card rather than
+being printed on every tile, keeping the damage and range rings legible.
 
 The board also draws shooter-centered structural guides. The confirmed firing
 half-plane appears as two boundary rays plus an arc on the allowed side; the
@@ -421,9 +424,8 @@ subtracts 4 — with short labels, suppressed when they fall at or beyond the
 selected maximum distance. Every guide radius is drawn at `(r + 1)` tile units
 from the shooter center, the exact floored-Euclidean threshold, so the guides
 always agree with the per-tile fills. Explosive tools draw only the range
-limit. A hover tooltip beside the cursor repeats the tile's percentage,
-distance, and adjusted on-hit damage range so precision survives when tile
-labels fade.
+limit. A hover tooltip beside the cursor shows the tile's percentage, distance,
+and adjusted on-hit damage range.
 
 Cover depends on target posture. An empty tile therefore has no single
 posture-independent chance. The planner defaults hypothetical tiles to an
@@ -433,43 +435,41 @@ percentage. A currently authorized visible contact uses its observed posture
 and is labeled as an observed-current-state estimate. Future movement, future
 posture, hidden orders, and the server RNG remain unknown.
 
-Shot Analysis lives in a contextual rail docked beside the board while a
-firing tool is active (merged with that tool's settings form); on viewports
-narrower than 1024px it becomes a collapsible bottom drawer whose header
-live-updates with the analyzed tile and chance. Hover and keyboard focus
-update it, the analyzed tile stays sticky when the pointer leaves the board so
-the panel's own controls remain reachable, and pinning (panel button or the
-`P` key) freezes it. Board left-click keeps its movement/targeting meaning and
-right-click keeps the terrain/robot help contract. While the Aim & Fire
-confirm is open, clicking the board retargets the aimed tile in place.
+Firing controls live in the center of the stable board heading; activating Aim
+or Scan never creates a side rail or changes arena width. The single equipped
+weapon is read-only context. Scan exposes distance and duration while Aim
+exposes target and finite **Fire time** in seconds. Fire time advances in the
+weapon's exact Aim interval; the strip also shows the derived shot count, capped
+by remaining turn budget and finite ammunition. The planner materializes those
+shots as consecutive ordinary Aim & Fire selectors, so later commands can
+follow them. Ctrl+Shift starts the control at 2 firing intervals. The
+reverse-engineering record confirms the repeat-fire shortcut and selector
+intervals but does not prove that repeat must
+consume the remainder of the turn; this bounded planner behavior is PROPOSED.
+Legacy `repeat: true` commands remain replay-compatible. Hypothetical-target
+posture is grouped with the larger chance/status legend overlay at the bottom
+center of the arena because both control or explain the preview. Right-click
+keeps the terrain/robot help contract.
 
-Hover or keyboard focus presents the percentage first and explains the
-strategic causes in plain language. The internal `0..19` score is a lookup-table
-tier, not a percentage, a rating, or "hits out of 19"; it appears only in an
-expanded **Show calculation** view. Every shown contribution must reconcile in
-the engine's real order: sum cover + accuracy-at-distance + weapon/terrain -
-Scan penalty; clamp to `0..19`; apply damage-stagger and off-aimed-tile integer
-halving when relevant; then map the final tier through
-`LIVE_FIRE_HIT_THRESHOLDS` and divide by 256.
+Damage-breakpoint and maximum-range labels sit just inside whichever cone
+boundary ray has the longest visible run to the arena edge. Each label keeps
+its ring radius along that edge and clamps by its rendered bounds, avoiding
+centerline overlap and map-edge clipping.
 
-For example, an illustrative Burst Scan shot against an Upright target at
-distance 9 might explain:
+The posture/legend panel is separate interaction chrome above the arena. Its
+entire bounds block board hover, click, drag, and touch behavior; entering it
+clears any board tooltip, and board hover resumes only after leaving the panel.
 
-```text
-Partial cover                         +12
-Medium robot accuracy at 9 tiles       +3
-Burst Scan weapon / Open Ground        +4
-Obscured Scan sight (7/16)             -2
-Pre-clamp subtotal                     17
-Final hit-table tier                17/19
-Threshold                         208/256 = 81%
-```
-
-The default player-facing summary is **81% estimated hit chance** plus the
-plain-language factors. `17/19` is available only to show how the exact table
-lookup was reached. If the inputs instead produce a subtotal above 19, the
-calculation shows both the subtotal and the clamp; if stagger or Aim tile
-departure applies, it shows the before/after tier and resulting probability.
+Hover or keyboard focus presents exact tile information in the cursor tooltip.
+In Scan mode, a desktop left-click has no effect and never programs movement; a
+touch tap positions and leaves the same tooltip visible as the iPad replacement
+for hover. Aim left-click selects or retargets the fixed tile. **Review Shot**
+opens a temporary confirmation card with coordinate,
+distance, fire time, derived shot count, and the 3 posture estimates for a
+hypothetical target, or only the observed posture for an authorized contact.
+The internal reconciled
+`0..19` lookup-table calculation remains verified by tests but is not persistent
+planner chrome.
 
 Aim & Fire labels the heatmap as the chance against a robot on that fixed tile
 when the command resolves and explains the conditional off-aimed-tile penalty.
@@ -479,13 +479,13 @@ accuracy mapping, and terrain-derived sight strength. Scan timing copy says
 that acquisition checks immediately and then at the weapon's
 `scanFiringIntervalTicks` for the chosen duration. The exact perpendicular cone
 boundary's `+2` adjusted-distance acquisition rule is explained in the cursor
-tooltip and Shot Analysis on hover/focus; the drawn wedge replaces both
+tooltip on hover/focus; the drawn wedge replaces both
 per-tile boundary boxes and any footprint perimeter outline.
 
-Heat color always represents hit chance, not damage. The detail panel separately
-shows adjusted on-hit bullet damage ranges and names the near/far and cover
-effects. Aim and Scan do not change on-hit damage for the same weapon, distance,
-and resolved cover. Explosive weapons do not use the direct-fire hit table, so
+Heat color always represents hit chance, not damage. The cursor tooltip and Aim
+review show adjusted on-hit bullet damage where applicable. Aim and Scan do not
+change on-hit damage for the same weapon, distance, and resolved cover.
+Explosive weapons do not use the direct-fire hit table, so
 their board layer shows legal impact/acquisition coverage, blast radius, and
 authorized radius-by-radius damage ranges instead of a fictitious hit-chance
 heatmap.
