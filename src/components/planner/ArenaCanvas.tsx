@@ -8,10 +8,16 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import type { Application, Container, Graphics as PixiGraphics } from "pixi.js";
+import type {
+  Application,
+  BitmapText as PixiBitmapText,
+  Container,
+  Graphics as PixiGraphics,
+} from "pixi.js";
 import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from "../../engine/types";
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import type { TargetingTilePreview } from "../../planner/firingHelpers";
+import { labelAlpha, tileLabel } from "../../planner/overlayLabels";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
 import { createRobotSprite } from "../../renderer/RobotSprite";
 import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
@@ -120,6 +126,8 @@ export function ArenaCanvas({
   const viewportRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const overlayRef = useRef<Container | null>(null);
+  const labelLayerRef = useRef<Container | null>(null);
+  const labelPoolRef = useRef<PixiBitmapText[]>([]);
   const targetOverlayRef = useRef<Container | null>(null);
   const cursorOverlayRef = useRef<Container | null>(null);
   const overlayGenerationRef = useRef(0);
@@ -269,12 +277,15 @@ export function ArenaCanvas({
         }
       }
       const overlay = new PixiContainer();
+      const labelLayer = new PixiContainer();
       const targetOverlay = new PixiContainer();
       const cursorOverlay = new PixiContainer();
       overlayRef.current = overlay;
+      labelLayerRef.current = labelLayer;
+      labelPoolRef.current = [];
       targetOverlayRef.current = targetOverlay;
       cursorOverlayRef.current = cursorOverlay;
-      app.stage.addChild(overlay, targetOverlay, cursorOverlay);
+      app.stage.addChild(overlay, labelLayer, targetOverlay, cursorOverlay);
       app.render();
       setStatus("ready");
     })().catch((error: unknown) => {
@@ -285,6 +296,8 @@ export function ArenaCanvas({
       disposed = true;
       appRef.current = null;
       overlayRef.current = null;
+      labelLayerRef.current = null;
+      labelPoolRef.current = [];
       targetOverlayRef.current = null;
       cursorOverlayRef.current = null;
       destroy?.();
@@ -306,7 +319,7 @@ export function ArenaCanvas({
     if (app === null || overlay === null || status !== "ready") return;
     const generation = ++overlayGenerationRef.current;
     void (async () => {
-      const { Graphics, Text } = await import("pixi.js");
+      const { BitmapText, Graphics, Text } = await import("pixi.js");
       const robotTextures = await loadRobotTextures(
         robots.map((robot) => ({ robotClass: robot.robotClass, teamColor: robot.color })),
       );
@@ -419,6 +432,47 @@ export function ArenaCanvas({
         }
         overlay.addChild(heat);
       }
+      // Per-tile hit-% labels: pooled BitmapText instances share one dynamic
+      // glyph atlas (digits + %), so a 32×32 board stays cheap. Instances are
+      // reused across rebuilds and surplus ones are hidden, never destroyed.
+      const labelLayer = labelLayerRef.current;
+      if (labelLayer !== null) {
+        const pool = labelPoolRef.current;
+        let used = 0;
+        if (targetingOverlay !== null) {
+          for (const tile of targetingOverlay.tiles) {
+            const textValue = tileLabel(tile, targetingOverlay.origin);
+            if (textValue === null) continue;
+            let label = pool[used];
+            if (label === undefined) {
+              label = new BitmapText({
+                text: textValue,
+                style: {
+                  fontFamily: "Inter, sans-serif",
+                  // Rendered at 0.5 scale for crispness under zoom upscaling.
+                  fontSize: 17,
+                  fontWeight: "700",
+                  fill: 0xffffff,
+                  stroke: { color: 0x000000, width: 3 },
+                },
+              });
+              label.anchor.set(0.5);
+              label.scale.set(0.5);
+              pool.push(label);
+              labelLayer.addChild(label);
+            } else {
+              label.text = textValue;
+              label.visible = true;
+            }
+            label.position.set(
+              tile.tile.x * TILE_SIZE + TILE_SIZE / 2,
+              tile.tile.y * TILE_SIZE + TILE_SIZE / 2,
+            );
+            used += 1;
+          }
+        }
+        for (let index = used; index < pool.length; index += 1) pool[index]!.visible = false;
+      }
       if (route.length > 0) {
         const line = new Graphics();
         const first = route[0];
@@ -495,6 +549,18 @@ export function ArenaCanvas({
     targetingOverlay?.tiles,
     status,
   ]);
+
+  useEffect(() => {
+    // Fade the label layer with the effective on-screen tile size so a
+    // zoomed-out 32×32 board is not carpeted in unreadable numbers.
+    const app = appRef.current;
+    const labelLayer = labelLayerRef.current;
+    if (app === null || labelLayer === null || status !== "ready") return;
+    const alpha = labelAlpha(TILE_SIZE * fitScale * transform.scale);
+    if (labelLayer.alpha === alpha) return;
+    labelLayer.alpha = alpha;
+    app.render();
+  }, [fitScale, status, transform.scale]);
 
   useEffect(() => {
     const app = appRef.current;
