@@ -212,6 +212,16 @@ export function PlannerExperience({
       ),
     [match.arena.homeAreas, team.homeSlot],
   );
+  const homeAreaOverlays = useMemo(
+    () =>
+      match.teams.flatMap((candidate) => {
+        const home = match.arena.homeAreas[candidate.homeSlot];
+        return home === undefined
+          ? []
+          : [{ tiles: home.tiles, color: candidate.color, corner: home.corner }];
+      }),
+    [match.arena.homeAreas, match.teams],
+  );
   const hoverPlan = useMemo(() => {
     if (cursor === null || projected.position === "dock") return null;
     return planMovement(match.arena, projected.position, cursor, projected.posture);
@@ -616,6 +626,7 @@ export function PlannerExperience({
           <ArenaCanvas
             arena={match.arena}
             robots={robotViews}
+            homeAreas={homeAreaOverlays}
             route={routeTiles(selectedTimeline.segments)}
             cursor={cursor}
             cursorState={cursorState}
