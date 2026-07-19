@@ -1,12 +1,21 @@
 /** Phase 10 authorized firing previews. These helpers never consume RNG or full enemy state. */
 
-import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
 import {
+  COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
   LIVE_FIRE_HIT_THRESHOLDS,
   WEAPON_ACCURACY_ADDS,
   WEAPON_MAX_RANGE,
+  WEAPON_TIMING,
 } from "../engine/constants";
+import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
+import {
+  calculateDirectDamageRangeFromFactors,
+  calculateLiveFireBreakdownFromFactors,
+  distanceScoreAdjustment,
+  type DirectDamageRange,
+  type LiveFireScoreBreakdown,
+} from "../engine/liveFireMath";
 import type {
   AccuracyTier,
   Arena,
@@ -64,7 +73,25 @@ export interface HitEstimate {
   readonly score: number;
   readonly threshold: number;
   readonly chancePercent: number;
+  readonly breakdown: LiveFireScoreBreakdown;
+  readonly offTileBreakdown: LiveFireScoreBreakdown | null;
+  readonly damageRange: DirectDamageRange | null;
 }
+
+export type HitChanceBand = "excellent" | "good" | "risky" | "poor" | "zero";
+
+export const hitChanceBand = (chancePercent: number): HitChanceBand => {
+  if (chancePercent >= 75) return "excellent";
+  if (chancePercent >= 50) return "good";
+  if (chancePercent >= 25) return "risky";
+  if (chancePercent > 0) return "poor";
+  return "zero";
+};
+
+export const targetingOpportunityTicks = (weapon: WeaponId, fireMode: "aim" | "scan"): number =>
+  fireMode === "scan"
+    ? WEAPON_TIMING[weapon].scanFiringIntervalTicks
+    : WEAPON_TIMING[weapon].firingIntervalTicks;
 
 export type AimPreviewStatus =
   "eligible" | "shooter-docked" | "out-of-range" | "angle-blocked" | "sight-blocked";
@@ -212,42 +239,62 @@ const estimate = (
 ): HitEstimate => {
   const distance = floorDistance(from, target);
   const coverClass = coverAt(arena, from, target, posture);
-  const terrain = terrainAt(arena, target);
-  const accuracyBase = accuracy + 4;
-  const distanceAdd =
-    distance > 12
-      ? Math.floor(accuracyBase / 2) - 4
-      : distance >= 7
-        ? accuracyBase - 2
-        : distance >= 3
-          ? Math.floor(accuracyBase / 2) + (6 - distance)
-          : accuracyBase + 2 * (3 - distance) + 2;
-  const weaponData = WEAPON_CATALOG_DATA[weapon];
+  const weaponDefinition = {
+    id: weapon,
+    ...WEAPON_CATALOG_DATA[weapon],
+    ...WEAPON_TIMING[weapon],
+    maxRange: WEAPON_MAX_RANGE,
+  } as const;
+  const targetTerrain = terrainAt(arena, target);
   const accuracyIndex =
     fireMode === "scan"
-      ? (weaponData.scanAccuracyAddIndex ?? weaponData.accuracyAddIndex ?? 0)
-      : (weaponData.accuracyAddIndex ?? 0);
-  const terrainAdd =
-    terrain === "rough"
+      ? (weaponDefinition.scanAccuracyAddIndex ?? weaponDefinition.accuracyAddIndex ?? 0)
+      : (weaponDefinition.accuracyAddIndex ?? 0);
+  const weaponTerrainAdjustment =
+    targetTerrain === "rough"
       ? 2
-      : terrain === "bush"
+      : targetTerrain === "bush"
         ? -1
-        : terrain === "low-wall"
+        : targetTerrain === "low-wall"
           ? -3
           : (WEAPON_ACCURACY_ADDS[accuracyIndex] ?? 0);
-  const scanPenalty = fireMode === "scan" ? (scanStrength <= 4 ? 4 : scanStrength <= 8 ? 2 : 0) : 0;
-  let score = Math.max(
-    0,
-    Math.min(19, COVER_CLASS_HIT_SCORE[coverClass] + distanceAdd + terrainAdd - scanPenalty),
-  );
-  if (damageStaggered) score >>= 1;
-  const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
+  const breakdownInput = {
+    fireMode,
+    coverAdjustment: COVER_CLASS_HIT_SCORE[coverClass],
+    distanceAccuracyAdjustment: distanceScoreAdjustment(distance, accuracy + 4),
+    weaponTerrainAdjustment,
+    scanStrength: fireMode === "scan" ? scanStrength : 16,
+    damageStaggered,
+    hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
+  } as const;
+  const breakdown = calculateLiveFireBreakdownFromFactors({
+    ...breakdownInput,
+    targetOnAimedTile: true,
+  });
+  const offTileBreakdown =
+    fireMode === "aim"
+      ? calculateLiveFireBreakdownFromFactors({ ...breakdownInput, targetOnAimedTile: false })
+      : null;
+  const damageRoll = weaponDefinition.damageRoll;
+  const damageRange =
+    damageRoll === undefined
+      ? null
+      : calculateDirectDamageRangeFromFactors({
+          rawMinimum: damageRoll.base,
+          rawMaximum: damageRoll.base + damageRoll.mask,
+          coverAdjustment: COVER_CLASS_BULLET_DAMAGE_ADJUST[coverClass],
+          distanceAdjustment: distance > 12 ? -4 : distance < 5 ? 4 : 0,
+          bulletsPerClick: weaponDefinition.bulletsPerClick,
+        });
   return {
     posture,
     coverClass,
-    score,
-    threshold,
-    chancePercent: Math.round((threshold / 256) * 100),
+    score: breakdown.finalScore,
+    threshold: breakdown.threshold,
+    chancePercent: breakdown.chancePercent,
+    breakdown,
+    offTileBreakdown,
+    damageRange,
   };
 };
 
@@ -259,6 +306,7 @@ export const previewAim = (input: {
   readonly authorizedContacts: readonly AuthorizedContact[];
   readonly fireMode?: "aim" | "scan";
   readonly maxDistance?: number;
+  readonly assumedPostures?: readonly Posture[];
 }): AimPreview => {
   const resolution = WEAPON_RESOLUTION[input.weapon];
   const fireMode = input.fireMode ?? "aim";
@@ -333,7 +381,9 @@ export const previewAim = (input: {
       (candidate) => candidate.tile.x === input.target.x && candidate.tile.y === input.target.y,
     ) ?? null;
   const postures: readonly Posture[] =
-    contact === null ? ["upright", "ducking", "crouching"] : [contact.posture];
+    contact === null
+      ? (input.assumedPostures ?? ["upright", "ducking", "crouching"])
+      : [contact.posture];
   return {
     status: "eligible",
     distance,
@@ -366,6 +416,7 @@ export const previewAim = (input: {
 export interface TargetingTilePreview extends AimPreview {
   readonly tile: TileCoord;
   readonly chancePercent: number | null;
+  readonly chanceBand: HitChanceBand | null;
 }
 
 /**
@@ -379,6 +430,7 @@ export const previewTargetingTiles = (input: {
   readonly authorizedContacts: readonly AuthorizedContact[];
   readonly fireMode: "aim" | "scan";
   readonly maxDistance: number;
+  readonly assumedPosture?: Posture;
 }): readonly TargetingTilePreview[] => {
   const tiles: TargetingTilePreview[] = [];
   for (let y = 0; y < input.arena.height; y += 1) {
@@ -392,15 +444,15 @@ export const previewTargetingTiles = (input: {
         authorizedContacts: input.authorizedContacts,
         fireMode: input.fireMode,
         maxDistance: input.maxDistance,
+        assumedPostures: [input.assumedPosture ?? "upright"],
       });
-      const chancePercent =
-        preview.estimates.length === 0
-          ? null
-          : Math.round(
-              preview.estimates.reduce((total, estimate) => total + estimate.chancePercent, 0) /
-                preview.estimates.length,
-            );
-      tiles.push({ ...preview, tile, chancePercent });
+      const chancePercent = preview.estimates[0]?.chancePercent ?? null;
+      tiles.push({
+        ...preview,
+        tile,
+        chancePercent,
+        chanceBand: chancePercent === null ? null : hitChanceBand(chancePercent),
+      });
     }
   }
   return tiles;

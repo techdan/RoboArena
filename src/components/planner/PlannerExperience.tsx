@@ -1,9 +1,18 @@
 "use client";
 
-import { AlertTriangle, CloudOff, LockKeyhole, Save, ShieldCheck, UploadCloud } from "lucide-react";
+import {
+  AlertTriangle,
+  CloudOff,
+  LockKeyhole,
+  Redo2,
+  Save,
+  ShieldCheck,
+  Undo2,
+  UploadCloud,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { TICKS_PER_SECOND, WEAPON_TIMING } from "../../engine/constants";
+import { TICKS_PER_SECOND } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
   Heading,
@@ -35,12 +44,14 @@ import {
   PLANNER_WEAPON_RANGE,
   previewAim,
   previewTargetingTiles,
+  targetingOpportunityTicks,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
 import { AimAndFireDialog } from "./AimAndFireDialog";
 import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
 import { CommandPanel } from "./CommandPanel";
 import { ScanAndFireDialog } from "./ScanAndFireDialog";
+import { TargetingAnalysis } from "./TargetingAnalysis";
 import { Timeline } from "./Timeline";
 import { FieldGuideButton, HelpButton } from "../help/HelpProvider";
 import { FirstTimeHint } from "../help/FirstTimeHint";
@@ -168,10 +179,13 @@ export function PlannerExperience({
   const [aimTool, setAimTool] = useState(false);
   const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
   const [scanDialog, setScanDialog] = useState<ScanDialogState | null>(null);
+  const [commandDialogOpen, setCommandDialogOpen] = useState(false);
   const [scanOverlayPinned, setScanOverlayPinned] = useState(false);
   const [scanOverlayDistance, setScanOverlayDistance] = useState(18);
   const [scanOverlayWeapon, setScanOverlayWeapon] = useState<WeaponId>("rifle");
   const [scanOverlaySeconds, setScanOverlaySeconds] = useState(1);
+  const [targetingPosture, setTargetingPosture] = useState<Posture>("upright");
+  const [pinnedAnalysisTile, setPinnedAnalysisTile] = useState<TileCoord | null>(null);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
@@ -367,6 +381,10 @@ export function PlannerExperience({
         previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
       );
   };
+  const openRobotCommands = (robotId: string) => {
+    selectRobot(robotId);
+    setCommandDialogOpen(true);
+  };
   const beginEdit = (robotId: string, index: number) => {
     setSelectedRobotId(robotId);
     setEditing({ robotId, index });
@@ -395,6 +413,7 @@ export function PlannerExperience({
       setNotice(`Editing Scan & Fire command ${index + 1}.`);
       return;
     }
+    setCommandDialogOpen(true);
     setNotice(`Editing command ${index + 1}. Choose a tile, posture, or heading to replace it.`);
   };
   const changeHistory = (type: "undo" | "redo") => {
@@ -406,6 +425,7 @@ export function PlannerExperience({
     setScanDialog(null);
     setScanOverlayPinned(false);
     setAimTool(false);
+    setCommandDialogOpen(false);
     setPreviewTick(
       previewParkingTick(
         selectedRobot,
@@ -521,7 +541,8 @@ export function PlannerExperience({
       maxDistance,
       weapon,
       seconds: mode === "scan" ? scanOverlaySeconds : null,
-      opportunityTicks: WEAPON_TIMING[weapon].firingIntervalTicks,
+      opportunityTicks: targetingOpportunityTicks(weapon, mode),
+      assumedPosture: targetingPosture,
       resolution:
         weapon === "missile-launcher" || weapon === "grenade-launcher"
           ? ("blast" as const)
@@ -533,6 +554,7 @@ export function PlannerExperience({
         authorizedContacts,
         fireMode: mode,
         maxDistance,
+        assumedPosture: targetingPosture,
       }),
     };
   }, [
@@ -550,6 +572,7 @@ export function PlannerExperience({
     scanOverlaySeconds,
     scanOverlayWeapon,
     selectedRobot,
+    targetingPosture,
     weapons,
   ]);
   const targetingOverlay = useMemo<PlannerTargetingOverlay | null>(
@@ -562,6 +585,14 @@ export function PlannerExperience({
           },
     [aimDialog?.target, cursor, targetingBase],
   );
+  const analysisTile = pinnedAnalysisTile ?? aimDialog?.target ?? cursor;
+  const analysisX = analysisTile?.x ?? -1;
+  const analysisY = analysisTile?.y ?? -1;
+  const targetingAnalysisPreview = useMemo(() => {
+    if (targetingBase === null || analysisX < 0 || analysisY < 0) return null;
+    const preview = targetingBase.tiles[analysisY * match.arena.width + analysisX];
+    return preview?.tile.x === analysisX && preview.tile.y === analysisY ? preview : null;
+  }, [analysisX, analysisY, match.arena.width, targetingBase]);
 
   const keepOrRecoverConflict = () => {
     const conflictOrders = state.conflictOrders;
@@ -719,7 +750,14 @@ export function PlannerExperience({
         previewTick={previewTick}
         onPreviewTick={setPreviewTick}
         editing={editing}
-        onSelectRobot={selectRobot}
+        remainingTicks={budgetTicks - selectedEndTick}
+        onReset={() =>
+          edit(
+            replaceTimeline(orders, selectedRobot.id, []),
+            "Selected robot timeline reset. Undo remains available.",
+          )
+        }
+        onSelectRobot={openRobotCommands}
         onEdit={beginEdit}
         onDelete={removeCommand}
       />
@@ -734,10 +772,30 @@ export function PlannerExperience({
                   : `At tile ${previewProjected.position.x},${previewProjected.position.y}`}
               </h2>
             </div>
-            <span data-state={cursorState}>
-              {cursor === null ? "Outside grid" : `${cursor.x},${cursor.y} · `}
-              {cursorState.replaceAll("-", " ")}
-            </span>
+            <div className="planner-board-actions">
+              <span className="planner-cursor-status" data-state={cursorState}>
+                {cursor === null ? "Outside grid" : `${cursor.x},${cursor.y} · `}
+                {cursorState.replaceAll("-", " ")}
+              </span>
+              <div className="history-buttons" aria-label="Draft history">
+                <button
+                  type="button"
+                  onClick={() => changeHistory("undo")}
+                  disabled={state.history.past.length === 0}
+                  aria-label="Undo"
+                >
+                  <Undo2 size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeHistory("redo")}
+                  disabled={state.history.future.length === 0}
+                  aria-label="Redo"
+                >
+                  <Redo2 size={16} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
           </div>
           <ArenaCanvas
             arena={match.arena}
@@ -752,29 +810,46 @@ export function PlannerExperience({
               if (tile === null) setNotice("Out of bounds — move back inside the tactical grid.");
             }}
             onChooseTile={chooseTile}
+            onChooseRobot={openRobotCommands}
           />
+          {targetingBase === null ? null : (
+            <TargetingAnalysis
+              mode={targetingBase.mode}
+              weapon={targetingBase.weapon}
+              maxDistance={targetingBase.maxDistance}
+              seconds={targetingBase.seconds}
+              opportunityTicks={targetingBase.opportunityTicks}
+              assumedPosture={targetingPosture}
+              preview={targetingAnalysisPreview}
+              pinned={pinnedAnalysisTile !== null}
+              onAssumedPosture={setTargetingPosture}
+              onTogglePinned={() =>
+                setPinnedAnalysisTile((current) => (current === null ? cursor : null))
+              }
+            />
+          )}
           <div className="planner-notice" role="status" aria-live="polite">
             <CloudOff size={15} aria-hidden="true" />
             <span>{notice}</span>
             <small>Draft is private and has not been locked.</small>
           </div>
         </section>
+      </div>
+      {commandDialogOpen ? (
         <CommandPanel
+          robotLabel={`R${team.robots.findIndex((robot) => robot.id === selectedRobot.id) + 1} · ${selectedRobot.definition.class} robot`}
           posture={projected.posture}
           heading={projected.scanHeading}
-          canUndo={state.history.past.length > 0}
-          canRedo={state.history.future.length > 0}
           editingCommandNumber={editingIndex === null ? null : editingIndex + 1}
-          remainingTicks={budgetTicks - selectedEndTick}
           onPosture={addPosture}
           onHeading={addHeading}
-          onUndo={() => changeHistory("undo")}
-          onRedo={() => changeHistory("redo")}
+          onClose={() => setCommandDialogOpen(false)}
           onCancelEdit={() => {
             setEditing(null);
             setAimDialog(null);
             setScanDialog(null);
             setScanOverlayPinned(false);
+            setPinnedAnalysisTile(null);
           }}
           fireDisabled={projected.position === "dock"}
           aimActive={aimTool}
@@ -783,12 +858,14 @@ export function PlannerExperience({
               setAimTool(false);
               setAimDialog(null);
               setScanOverlayPinned(false);
+              setPinnedAnalysisTile(null);
               setNotice("Aim & Fire canceled.");
               return;
             }
             setAimTool(true);
             setScanDialog(null);
             setScanOverlayPinned(false);
+            setPinnedAnalysisTile(null);
             setNotice("Aim & Fire active — choose a target tile. Ctrl+Shift adds repeat fire.");
           }}
           onScanFire={() => {
@@ -801,16 +878,11 @@ export function PlannerExperience({
             setScanOverlayDistance(defaults.maxDistance);
             setScanOverlaySeconds(defaults.seconds);
             setScanOverlayPinned(true);
+            setPinnedAnalysisTile(null);
             setNotice("Configure how long and how far this robot should scan for a target.");
           }}
-          onReset={() =>
-            edit(
-              replaceTimeline(orders, selectedRobot.id, []),
-              "Selected robot timeline reset. Undo remains available.",
-            )
-          }
         />
-      </div>
+      ) : null}
       {aimDialog === null ? null : (
         <AimAndFireDialog
           arena={match.arena}

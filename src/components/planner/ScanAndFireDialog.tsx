@@ -2,7 +2,9 @@
 
 import { Radar, X } from "lucide-react";
 import { useState } from "react";
+import { WEAPON_TIMING } from "../../engine/constants";
 import type { WeaponId } from "../../engine/types";
+import { formatGameTime } from "../../lib/formatTime";
 import {
   defaultScanSettings,
   PLANNER_WEAPON_RANGE,
@@ -39,14 +41,14 @@ export function ScanAndFireDialog({
   const [weapon, setWeapon] = useState(initialWeapon);
   const [maxDistance, setMaxDistance] = useState(initialMaxDistance ?? defaults.maxDistance);
   const [seconds, setSeconds] = useState(initialSeconds ?? defaults.seconds);
-  const dialogRef = usePlannerDialogFocus<HTMLElement>(onCancel);
+  const dialogRef = usePlannerDialogFocus<HTMLElement>(onCancel, { modal: false });
   return (
     <div className="planner-dialog-backdrop" data-board-preview="true" role="presentation">
       <section
         ref={dialogRef}
         className="planner-dialog"
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         aria-labelledby="scan-fire-title"
         tabIndex={-1}
       >
@@ -135,9 +137,11 @@ export function ScanAndFireDialog({
         </div>
         <div className="fire-preview">
           <p>
-            Range and cone are deterministic. Hit score, cover, and sight strength are evaluated
-            only against an authorized contact at each firing opportunity; the actual RNG roll is
-            never shown here.
+            Shot Analysis is open beside the board. Hover or keyboard-focus a tile to inspect it and
+            change the assumed target posture there. Checks immediately, then every{" "}
+            {formatGameTime(WEAPON_TIMING[weapon].scanFiringIntervalTicks)}
+            {` for ${seconds}s`}. Range and cone are deterministic. Estimated hit chance includes
+            cover and sight strength for an authorized contact; the actual RNG roll is never shown.
           </p>
         </div>
         <footer>

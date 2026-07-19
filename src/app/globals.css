@@ -680,7 +680,6 @@ canvas {
 .planner-header,
 .planner-header-status,
 .timeline-heading,
-.planner-panel-heading,
 .planner-board-heading,
 .planner-notice,
 .planner-conflict {
@@ -694,8 +693,7 @@ canvas {
   margin-bottom: 1rem;
 }
 .planner-header h1,
-.planner-board-heading h2,
-.planner-panel h2 {
+.planner-board-heading h2 {
   margin: 0.2rem 0 0;
   font-weight: 900;
   letter-spacing: -0.035em;
@@ -725,7 +723,6 @@ canvas {
   color: #d9f99d;
 }
 .planner-timeline,
-.planner-panel,
 .planner-board-card {
   position: relative;
   z-index: 1;
@@ -738,7 +735,8 @@ canvas {
   padding: 0.8rem;
 }
 .timeline-heading {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto auto minmax(12rem, 1fr) auto;
   gap: 1rem;
 }
 .timeline-heading strong {
@@ -746,7 +744,7 @@ canvas {
   font-size: 0.8rem;
 }
 .timeline-scrubber-label {
-  width: min(52rem, 72%);
+  width: 100%;
   color: rgb(255 255 255 / 38%);
   font-family: ui-monospace, monospace;
   font-size: 0.62rem;
@@ -755,10 +753,90 @@ canvas {
   display: block;
   margin-top: 0.3rem;
 }
+.timeline-utilities {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.timeline-utilities > span {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.57rem;
+  white-space: nowrap;
+}
+.timeline-utilities > span strong {
+  display: block;
+  margin-top: 0.15rem;
+  color: #d9f99d;
+}
+.timeline-utilities > span strong[data-over="true"] {
+  color: #fda4af;
+}
+.timeline-reset-button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgb(190 242 100 / 28%);
+  border-radius: 0.5rem;
+  padding: 0 0.6rem;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 7%);
+  font-size: 0.58rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.timeline-reset-button:hover,
+.timeline-reset-button:focus-visible {
+  border-color: rgb(190 242 100 / 60%);
+  outline: 2px solid rgb(190 242 100 / 22%);
+  outline-offset: 2px;
+}
 .timeline-rows {
   display: grid;
   gap: 0.35rem;
   margin-top: 0.65rem;
+}
+.timeline-heading-controls,
+.timeline-robot-tabs {
+  display: flex;
+  align-items: center;
+}
+.timeline-heading-controls {
+  gap: 0.5rem;
+}
+.timeline-robot-tabs {
+  gap: 0.25rem;
+}
+.timeline-robot-tabs button,
+.timeline-expand-button {
+  min-height: 2.25rem;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.5rem;
+  color: rgb(255 255 255 / 50%);
+  background: rgb(0 0 0 / 18%);
+  font-size: 0.58rem;
+  font-weight: 850;
+}
+.timeline-robot-tabs button {
+  min-width: 2.4rem;
+}
+.timeline-robot-tabs button:hover,
+.timeline-robot-tabs button:focus-visible,
+.timeline-robot-tabs button[data-selected="true"],
+.timeline-expand-button:hover,
+.timeline-expand-button:focus-visible {
+  border-color: rgb(190 242 100 / 45%);
+  color: #d9f99d;
+  outline: none;
+}
+.timeline-expand-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.55rem;
+  white-space: nowrap;
 }
 .timeline-row {
   display: grid;
@@ -860,15 +938,14 @@ canvas {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(600px, 1fr) 18rem;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   margin-top: 1rem;
   align-items: start;
 }
-.planner-board-card,
-.planner-panel {
+.planner-board-card {
   border-radius: 1rem;
-  padding: 0.9rem;
+  padding: 0.7rem;
 }
 .planner-editing {
   display: flex;
@@ -903,7 +980,13 @@ canvas {
 .planner-board-heading h2 {
   font-size: 1.05rem;
 }
-.planner-board-heading > span {
+.planner-board-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+.planner-cursor-status {
   border-radius: 999px;
   padding: 0.35rem 0.55rem;
   color: #d9f99d;
@@ -912,12 +995,12 @@ canvas {
   font-weight: 900;
   text-transform: uppercase;
 }
-.planner-board-heading > span[data-state="blocked"],
-.planner-board-heading > span[data-state="out-of-bounds"] {
+.planner-cursor-status[data-state="blocked"],
+.planner-cursor-status[data-state="out-of-bounds"] {
   color: #fda4af;
   background: rgb(251 113 133 / 10%);
 }
-.planner-board-heading > span[data-state="out-of-home"] {
+.planner-cursor-status[data-state="out-of-home"] {
   color: #fcd34d;
   background: rgb(251 191 36 / 10%);
 }
@@ -932,6 +1015,7 @@ canvas {
   outline: none;
 }
 .planner-canvas-shell {
+  width: min(100%, calc(100dvh - 9.5rem));
   max-width: 100%;
   margin-inline: auto;
 }
@@ -989,28 +1073,6 @@ canvas {
   margin-left: auto;
   color: rgb(255 255 255 / 28%);
 }
-.planner-panel {
-  display: grid;
-  gap: 0.8rem;
-}
-.planner-panel-heading {
-  justify-content: space-between;
-}
-.planner-panel h2 {
-  font-size: 1.05rem;
-}
-.planner-panel section {
-  border-top: 1px solid rgb(255 255 255 / 7%);
-  padding-top: 0.7rem;
-}
-.planner-panel h3 {
-  margin: 0 0 0.5rem;
-  color: rgb(255 255 255 / 42%);
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.planner-panel h3,
 .timeline-heading .eyebrow {
   display: flex;
   align-items: center;
@@ -1488,13 +1550,16 @@ canvas {
   backdrop-filter: blur(8px);
 }
 .planner-dialog-backdrop[data-board-preview="true"] {
+  z-index: 60;
   justify-items: end;
   padding-right: clamp(1rem, 4vw, 4rem);
+  pointer-events: none;
   background: linear-gradient(90deg, rgb(4 7 5 / 10%) 0 48%, rgb(4 7 5 / 82%) 78% 100%);
   backdrop-filter: none;
 }
 .planner-dialog-backdrop[data-board-preview="true"] .planner-dialog {
   width: min(25rem, 42vw);
+  pointer-events: auto;
 }
 @media (max-width: 800px) {
   .planner-dialog-backdrop[data-board-preview="true"] {
@@ -1517,6 +1582,32 @@ canvas {
   color: white;
   background: linear-gradient(145deg, #20261f, #141814);
   box-shadow: 0 32px 90px rgb(0 0 0 / 65%);
+}
+.robot-command-dialog {
+  width: min(28rem, 100%);
+}
+.robot-command-sections {
+  display: grid;
+  gap: 0.85rem;
+}
+.robot-command-section {
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  padding-top: 0.75rem;
+}
+.robot-command-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  color: rgb(255 255 255 / 42%);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.posture-icon-grid button {
+  display: grid;
+  min-height: 3rem;
+  place-items: center;
 }
 .planner-dialog > header,
 .planner-dialog > footer,
@@ -1749,9 +1840,9 @@ canvas {
   }
 }
 
-@media (max-width: 1279px) and (pointer: fine) {
+@media (max-width: 899px) and (pointer: fine) {
   .desktop-viewport-gate::before {
-    content: "RoboArena’s planner and movie tools require a 1280 × 720 desktop display.";
+    content: "RoboArena’s planner and movie tools require at least a 900-pixel-wide display.";
     position: fixed;
     z-index: 100;
     inset: 0;
@@ -1812,11 +1903,10 @@ canvas {
     justify-content: flex-end;
   }
   .planner-workspace {
-    grid-template-columns: minmax(0, 1fr) 16rem;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.65rem;
   }
   .planner-board-card,
-  .planner-panel,
   .planner-timeline {
     padding: 0.65rem;
   }

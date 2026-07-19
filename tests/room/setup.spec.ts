@@ -84,6 +84,7 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await guide.getByRole("button", { name: "Close Field Guide" }).tap();
     const board = planner.getByRole("application", { name: /planning board/ });
     const timelines = planner.getByRole("region", { name: "Command timelines" });
+    const robotCommands = timelines.getByRole("button", { name: "Robot 1, rifle" });
     await expect(timelines.getByText("0.00s / 15.00s", { exact: true })).toBeVisible();
     await planner.getByRole("button", { name: "Zoom in" }).tap();
     await expect(planner.locator("[data-planner-zoom]")).toHaveText("125%");
@@ -121,11 +122,16 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await expect(planner.getByText("Deploy", { exact: true })).toBeVisible();
     await expect(timelines.getByText("2.00s / 15.00s", { exact: true })).toBeVisible();
     await expect(planner.getByRole("heading", { name: "At tile 0,0" })).toBeVisible();
+    await board.tap({ position: { x: 12, y: 12 } });
+    await expect(planner.getByRole("dialog", { name: /R1 · rifle robot/ })).toBeVisible();
+    await planner.getByRole("button", { name: "Close robot commands" }).tap();
     await board.tap({ position: { x: 36, y: 36 } });
     await expect(planner.getByText(/Blocked/)).toBeVisible();
     await board.tap({ position: { x: 108, y: 12 } });
     await expect(planner.getByText("Move route", { exact: true })).toBeVisible();
-    await planner.getByRole("button", { name: "ducking" }).tap();
+    await robotCommands.tap();
+    await planner.getByRole("button", { name: "ducking posture" }).tap();
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "S", exact: true }).tap();
     await expect(timelines.getByText("Posture", { exact: true })).toBeVisible();
     await expect(timelines.getByText("Scan heading", { exact: true })).toBeVisible();
@@ -142,7 +148,9 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await planner.getByRole("button", { name: "Undo" }).tap();
     await expect(timelines.getByText("Deploy", { exact: true })).toBeVisible();
 
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "E", exact: true }).tap();
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Fixed tile");
     await expect(planner.locator(".planner-board-card")).toHaveScreenshot(
@@ -153,11 +161,13 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await expect(planner.getByText(/Angle blocked/)).toBeVisible();
     await planner.getByRole("button", { name: "Cancel", exact: true }).tap();
 
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 564, y: 12 } });
     await expect(planner.getByText(/Out of range/)).toBeVisible();
     await planner.getByRole("button", { name: "Cancel", exact: true }).tap();
 
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 204, y: 12 } });
     await expect(planner.getByText(/Hypothetical target posture estimates/)).toBeVisible();
@@ -165,6 +175,7 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toBeVisible();
 
     const scanButton = planner.getByRole("button", { name: "Scan & Fire", exact: true });
+    await robotCommands.tap();
     await scanButton.tap();
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Auto-acquire");
     const maximumDistance = planner.getByLabel("Maximum Distance");
@@ -177,6 +188,7 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     );
     await planner.getByRole("button", { name: "Close Scan and Fire dialog" }).tap();
 
+    await robotCommands.tap();
     await scanButton.tap();
     await expect(planner.getByLabel("Maximum Distance")).toHaveValue("18");
     await expect(planner.getByLabel("Seconds")).toHaveValue("10");
@@ -185,6 +197,7 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Auto-acquire");
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("18 tiles");
 
+    await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 204, y: 12 } });
     await planner.locator(".repeat-choice").tap();

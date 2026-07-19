@@ -26,6 +26,15 @@ const STATUS_COPY = {
   "sight-blocked": "Sight blocked — a wall interrupts the center line.",
 } as const;
 
+const COVER_LABELS = {
+  1: "strong cover",
+  2: "good cover",
+  3: "partial cover",
+  4: "exposed",
+} as const;
+
+const signed = (value: number): string => (value >= 0 ? `+${value}` : `−${Math.abs(value)}`);
+
 export function AimAndFireDialog({
   arena,
   shooter,
@@ -125,9 +134,15 @@ export function AimAndFireDialog({
                   <span>{entry.posture}</span>
                   <strong>{entry.chancePercent}% estimate</strong>
                   <small>
-                    score {entry.score}/19 · cover {entry.coverClass} · threshold {entry.threshold}
-                    /256
+                    {COVER_LABELS[entry.coverClass]} {signed(entry.breakdown.coverAdjustment)} ·
+                    accuracy at range {signed(entry.breakdown.distanceAccuracyAdjustment)} ·
+                    weapon/terrain {signed(entry.breakdown.weaponTerrainAdjustment)}
                   </small>
+                  {entry.offTileBreakdown === null ? null : (
+                    <small>
+                      If the target leaves this tile: {entry.offTileBreakdown.chancePercent}%
+                    </small>
+                  )}
                 </div>
               ))}
             </div>

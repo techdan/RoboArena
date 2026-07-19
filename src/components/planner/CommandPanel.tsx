@@ -1,27 +1,23 @@
 "use client";
 
-import { Crosshair, LocateFixed, Redo2, RotateCcw, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Minus, X } from "lucide-react";
 import type { Heading, Posture } from "../../engine/types";
-import { formatGameTime } from "../../lib/formatTime";
 import { HelpButton } from "../help/HelpProvider";
 import { FireBox } from "./FireBox";
+import { usePlannerDialogFocus } from "./usePlannerDialogFocus";
 
 const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
 const HEADINGS: readonly Heading[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
 export interface CommandPanelProps {
+  readonly robotLabel: string;
   readonly posture: Posture;
   readonly heading: Heading;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
   readonly editingCommandNumber: number | null;
-  readonly remainingTicks: number;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeading: (heading: Heading) => void;
-  readonly onUndo: () => void;
-  readonly onRedo: () => void;
   readonly onCancelEdit: () => void;
-  readonly onReset: () => void;
+  readonly onClose: () => void;
   readonly fireDisabled: boolean;
   readonly aimActive: boolean;
   readonly onAim: () => void;
@@ -29,110 +25,117 @@ export interface CommandPanelProps {
 }
 
 export function CommandPanel({
+  robotLabel,
   posture,
   heading,
-  canUndo,
-  canRedo,
   editingCommandNumber,
-  remainingTicks,
   onPosture,
   onHeading,
-  onUndo,
-  onRedo,
   onCancelEdit,
-  onReset,
+  onClose,
   fireDisabled,
   aimActive,
   onAim,
   onScanFire,
 }: CommandPanelProps) {
+  const dialogRef = usePlannerDialogFocus<HTMLElement>(onClose);
+  const closeAfter = (action: () => void) => {
+    action();
+    onClose();
+  };
+
   return (
-    <aside className="planner-panel">
-      <div className="planner-panel-heading">
-        <div>
-          <p className="eyebrow">Tools</p>
-          <h2>Program robot</h2>
-        </div>
-        <div className="history-buttons">
-          <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="Undo">
-            <Undo2 size={16} aria-hidden="true" />
+    <div className="planner-dialog-backdrop" role="presentation">
+      <section
+        ref={dialogRef}
+        className="planner-dialog robot-command-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="robot-command-dialog-title"
+        tabIndex={-1}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">Robot commands</p>
+            <h2 id="robot-command-dialog-title">{robotLabel}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close robot commands">
+            <X size={18} aria-hidden="true" />
           </button>
-          <button type="button" onClick={onRedo} disabled={!canRedo} aria-label="Redo">
-            <Redo2 size={16} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-      {editingCommandNumber === null ? null : (
-        <div className="planner-editing" role="status">
-          <span>Replacing command {editingCommandNumber}</span>
-          <button type="button" onClick={onCancelEdit} aria-label="Cancel command edit">
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
-      )}
-      <section>
-        <h3>
-          Movement <HelpButton topic="action:movement" label="Movement" />
-        </h3>
-        <p className="planner-help">
-          <LocateFixed size={15} aria-hidden="true" /> Choose a home tile to deploy, then choose
-          destinations. Routes avoid terrain your current posture cannot cross.
-        </p>
-      </section>
-      <section>
-        <h3>
-          Posture <HelpButton topic="action:posture" label="Posture" />
-        </h3>
-        <div className="posture-grid">
-          {POSTURES.map((choice) => (
+        </header>
+
+        {editingCommandNumber === null ? null : (
+          <div className="planner-editing" role="status">
+            <span>Replacing command {editingCommandNumber}</span>
             <button
               type="button"
-              key={choice}
-              data-active={choice === posture}
-              onClick={() => onPosture(choice)}
+              onClick={() => closeAfter(onCancelEdit)}
+              aria-label="Cancel command edit"
             >
-              {choice}
+              <X size={14} aria-hidden="true" />
             </button>
-          ))}
+          </div>
+        )}
+
+        <div className="robot-command-sections">
+          <section className="robot-command-section">
+            <h3>
+              Posture <HelpButton topic="action:posture" label="Posture" />
+            </h3>
+            <div className="posture-grid posture-icon-grid">
+              {POSTURES.map((choice) => (
+                <button
+                  type="button"
+                  key={choice}
+                  title={choice}
+                  aria-label={`${choice} posture`}
+                  aria-pressed={choice === posture}
+                  data-active={choice === posture}
+                  data-dialog-initial-focus={choice === posture ? "" : undefined}
+                  onClick={() => closeAfter(() => onPosture(choice))}
+                >
+                  {choice === "upright" ? (
+                    <ArrowUp size={21} aria-hidden="true" />
+                  ) : choice === "ducking" ? (
+                    <Minus size={21} aria-hidden="true" />
+                  ) : (
+                    <ArrowDown size={21} aria-hidden="true" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="robot-command-section">
+            <h3>
+              Scan direction <HelpButton topic="action:scan-direction" label="Scan direction" />
+            </h3>
+            <div className="heading-grid">
+              {HEADINGS.map((choice) => (
+                <button
+                  type="button"
+                  key={choice}
+                  aria-pressed={choice === heading}
+                  data-active={choice === heading}
+                  onClick={() => closeAfter(() => onHeading(choice))}
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="robot-command-section">
+            <h3>Fire</h3>
+            <FireBox
+              disabled={fireDisabled}
+              aimActive={aimActive}
+              onAim={() => closeAfter(onAim)}
+              onScan={() => closeAfter(onScanFire)}
+            />
+          </section>
         </div>
       </section>
-      <section>
-        <h3>
-          Scan direction <HelpButton topic="action:scan-direction" label="Scan direction" />
-        </h3>
-        <div className="heading-grid">
-          {HEADINGS.map((choice) => (
-            <button
-              type="button"
-              key={choice}
-              data-active={choice === heading}
-              onClick={() => onHeading(choice)}
-            >
-              {choice}
-            </button>
-          ))}
-        </div>
-        <p className="planner-help">
-          <Crosshair size={15} aria-hidden="true" /> The white heading line points through the
-          center of the inclusive forward scan semicircle.
-        </p>
-      </section>
-      <section>
-        <h3>Fire</h3>
-        <FireBox disabled={fireDisabled} aimActive={aimActive} onAim={onAim} onScan={onScanFire} />
-      </section>
-      <div className="planner-budget">
-        <span>Remaining horizon</span>
-        <strong data-over={remainingTicks < 0}>
-          {formatGameTime(remainingTicks >= 0 ? remainingTicks : 0)}
-        </strong>
-        {remainingTicks < 0 ? (
-          <small>{formatGameTime(Math.abs(remainingTicks))} executes beyond this turn</small>
-        ) : null}
-      </div>
-      <button type="button" className="secondary-action w-full" onClick={onReset}>
-        <RotateCcw size={15} aria-hidden="true" /> Reset this draft
-      </button>
-    </aside>
+    </div>
   );
 }

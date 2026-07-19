@@ -11,9 +11,17 @@ import {
   PLANNER_WEAPON_RANGE,
   previewAim,
   previewTargetingTiles,
+  targetingOpportunityTicks,
 } from "./firingHelpers";
 
 describe("authorized firing previews", () => {
+  it("uses each weapon's real aim and scan opportunity cadence", () => {
+    expect(targetingOpportunityTicks("burst-gun", "aim")).toBe(15);
+    expect(targetingOpportunityTicks("burst-gun", "scan")).toBe(20);
+    expect(targetingOpportunityTicks("missile-launcher", "aim")).toBe(30);
+    expect(targetingOpportunityTicks("missile-launcher", "scan")).toBe(20);
+  });
+
   it("surfaces angle, range, and line-of-sight gates without rolling", () => {
     const base = makeOpenArena(30, 5);
     const shooter = makeRobot("r1", "t1", "rifle", { x: 5, y: 2 }, { scanHeading: "E" });
@@ -157,6 +165,7 @@ describe("authorized firing previews", () => {
       authorizedContacts: [],
       fireMode: "scan",
       maxDistance: 4,
+      assumedPosture: "upright",
     });
     const boundary = previews.find((entry) => entry.tile.x === 5 && entry.tile.y === 3);
     expect(boundary).toMatchObject({
@@ -167,7 +176,8 @@ describe("authorized firing previews", () => {
     });
     const behind = previews.find((entry) => entry.tile.x === 3 && entry.tile.y === 5);
     expect(behind?.status).toBe("angle-blocked");
-    expect(boundary?.estimates).toHaveLength(3);
+    expect(boundary?.estimates).toHaveLength(1);
+    expect(boundary?.estimates[0]?.posture).toBe("upright");
     expect(boundary?.chancePercent).toEqual(expect.any(Number));
     const cover = resolveCover({
       from: shooter.position as { x: number; y: number },
@@ -189,5 +199,36 @@ describe("authorized firing previews", () => {
         scanStrength: 10,
       }),
     );
+  });
+
+  it("uses an explicit hypothetical posture and observed posture without averaging", () => {
+    const arena = makeOpenArena(8, 5);
+    const shooter = makeRobot("r1", "t1", "rifle", { x: 1, y: 2 }, { scanHeading: "E" });
+    const target = { x: 5, y: 2 };
+    const hypothetical = previewTargetingTiles({
+      arena,
+      shooter,
+      weapon: "rifle",
+      authorizedContacts: [],
+      fireMode: "aim",
+      maxDistance: 18,
+      assumedPosture: "crouching",
+    }).find((entry) => entry.tile.x === target.x && entry.tile.y === target.y);
+    expect(hypothetical?.estimates.map((entry) => entry.posture)).toEqual(["crouching"]);
+    expect(hypothetical?.chancePercent).toBe(hypothetical?.estimates[0]?.chancePercent);
+
+    const observed = previewTargetingTiles({
+      arena,
+      shooter,
+      weapon: "rifle",
+      authorizedContacts: [
+        { id: "visible", label: "Visible contact", tile: target, posture: "ducking" },
+      ],
+      fireMode: "aim",
+      maxDistance: 18,
+      assumedPosture: "crouching",
+    }).find((entry) => entry.tile.x === target.x && entry.tile.y === target.y);
+    expect(observed?.estimates.map((entry) => entry.posture)).toEqual(["ducking"]);
+    expect(observed?.authorizedContact?.label).toBe("Visible contact");
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { Pencil, ScanLine, Trash2 } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { ChevronDown, ChevronUp, Pencil, RotateCcw, ScanLine, Trash2 } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
@@ -23,11 +23,13 @@ export interface TimelineProps {
   readonly selectedRobotId: string;
   readonly budgetTicks: number;
   readonly previewTick: number;
+  readonly remainingTicks: number;
   readonly editing: { readonly robotId: string; readonly index: number } | null;
   readonly onPreviewTick: (tick: number) => void;
   readonly onSelectRobot: (robotId: string) => void;
   readonly onEdit: (robotId: string, segmentIndex: number) => void;
   readonly onDelete: (robotId: string, segmentIndex: number) => void;
+  readonly onReset: () => void;
 }
 
 export function Timeline({
@@ -36,12 +38,15 @@ export function Timeline({
   selectedRobotId,
   budgetTicks,
   previewTick,
+  remainingTicks,
   editing,
   onPreviewTick,
   onSelectRobot,
   onEdit,
   onDelete,
+  onReset,
 }: TimelineProps) {
+  const [showAllRobots, setShowAllRobots] = useState(false);
   const segmentRowsRef = useRef(new Map<string, HTMLDivElement>());
   const previousSegmentCountsRef = useRef(new Map<string, number>());
   const segmentCountKey = robots
@@ -64,6 +69,9 @@ export function Timeline({
     const timing = timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks);
     return Math.max(maximum, timing.at(-1)?.endTick ?? 0);
   }, budgetTicks);
+  const visibleRobots = showAllRobots
+    ? robots
+    : robots.filter((robot) => robot.id === selectedRobotId);
   return (
     <section className="planner-timeline" aria-label="Command timelines">
       <div className="timeline-heading">
@@ -74,6 +82,35 @@ export function Timeline({
           <strong>
             {formatGameTime(previewTick)} / {formatGameTime(budgetTicks)}
           </strong>
+        </div>
+        <div className="timeline-heading-controls">
+          <div className="timeline-robot-tabs" aria-label="Choose robot timeline">
+            {robots.map((robot, robotIndex) => (
+              <button
+                type="button"
+                key={robot.id}
+                data-selected={robot.id === selectedRobotId}
+                aria-pressed={robot.id === selectedRobotId}
+                aria-label={`Robot ${robotIndex + 1}, ${robot.definition.class}`}
+                onClick={() => onSelectRobot(robot.id)}
+              >
+                R{robotIndex + 1}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="timeline-expand-button"
+            aria-expanded={showAllRobots}
+            onClick={() => setShowAllRobots((current) => !current)}
+          >
+            {showAllRobots ? (
+              <ChevronUp size={15} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={15} aria-hidden="true" />
+            )}
+            {showAllRobots ? "Selected only" : "All timelines"}
+          </button>
         </div>
         <label className="timeline-scrubber-label">
           Preview time {formatGameTime(previewTick)}
@@ -86,9 +123,21 @@ export function Timeline({
             onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
           />
         </label>
+        <div className="timeline-utilities">
+          <span>
+            Remaining horizon
+            <strong data-over={remainingTicks < 0}>
+              {formatGameTime(Math.max(0, remainingTicks))}
+            </strong>
+          </span>
+          <button type="button" className="timeline-reset-button" onClick={onReset}>
+            <RotateCcw size={15} aria-hidden="true" /> Reset this draft
+          </button>
+        </div>
       </div>
-      <div className="timeline-rows">
-        {robots.map((robot, robotIndex) => {
+      <div className="timeline-rows" data-expanded={showAllRobots}>
+        {visibleRobots.map((robot) => {
+          const robotIndex = robots.findIndex((candidate) => candidate.id === robot.id);
           const timing = timelineTiming(
             robot,
             timelineForRobot(orders, robot.id).segments,

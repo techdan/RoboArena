@@ -13,6 +13,13 @@ import {
 } from "./constants.js";
 import { resolveCover } from "./cover.js";
 import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
+import {
+  calculateDirectDamageRangeFromFactors,
+  calculateLiveFireBreakdownFromFactors,
+  distanceScoreAdjustment,
+  type DirectDamageRange,
+  type LiveFireScoreBreakdown,
+} from "./liveFireMath.js";
 import type { Rng } from "./rng.js";
 import type {
   AccuracyTier,
@@ -62,14 +69,21 @@ export interface FireContext {
   readonly scanStrength?: number;
 }
 
-const clampScore = (score: number): number => Math.max(0, Math.min(19, score));
+export interface LiveFireScoreInput {
+  readonly accuracy: AccuracyTier;
+  readonly distance: number;
+  readonly coverClass: CoverClass;
+  readonly targetTerrain: ArenaTile["terrain"] | undefined;
+  readonly weapon: WeaponDefinition;
+  readonly targetOnAimedTile: boolean;
+  readonly damageStaggered?: boolean;
+  readonly fireMode?: "aim" | "scan";
+  readonly scanStrength?: number;
+}
 
-export const distanceScoreAdjustment = (distance: number, accuracyBase: number): number => {
-  if (distance > 12) return Math.floor(accuracyBase / 2) - 4;
-  if (distance >= 7) return accuracyBase - 2;
-  if (distance >= 3) return Math.floor(accuracyBase / 2) + (6 - distance);
-  return accuracyBase + 2 * (3 - distance) + 2;
-};
+/** Exact, presentation-safe explanation of the live-fire score lookup. */
+export { distanceScoreAdjustment } from "./liveFireMath.js";
+export type { DirectDamageRange, LiveFireScoreBreakdown } from "./liveFireMath.js";
 
 const terrainScoreAdjustment = (
   terrain: ArenaTile["terrain"] | undefined,
@@ -86,31 +100,54 @@ const terrainScoreAdjustment = (
   return WEAPON_ACCURACY_ADDS[index];
 };
 
-export const calculateLiveFireScore = (input: {
-  readonly accuracy: AccuracyTier;
-  readonly distance: number;
-  readonly coverClass: CoverClass;
-  readonly targetTerrain: ArenaTile["terrain"] | undefined;
-  readonly weapon: WeaponDefinition;
-  readonly targetOnAimedTile: boolean;
-  readonly damageStaggered?: boolean;
-  readonly fireMode?: "aim" | "scan";
-  readonly scanStrength?: number;
-}): number => {
+export const calculateLiveFireScoreBreakdown = (
+  input: LiveFireScoreInput,
+): LiveFireScoreBreakdown => {
   const accuracyBase = input.accuracy + 4;
   const fireMode = input.fireMode ?? "aim";
   const scanStrength = fireMode === "scan" ? (input.scanStrength ?? 16) : 16;
-  const scanPenalty = scanStrength <= 4 ? 4 : scanStrength <= 8 ? 2 : 0;
-  let score =
-    COVER_CLASS_HIT_SCORE[input.coverClass] +
-    distanceScoreAdjustment(input.distance, accuracyBase) +
-    terrainScoreAdjustment(input.targetTerrain, input.weapon, fireMode) -
-    scanPenalty;
+  const coverAdjustment = COVER_CLASS_HIT_SCORE[input.coverClass];
+  const distanceAccuracyAdjustment = distanceScoreAdjustment(input.distance, accuracyBase);
+  const weaponTerrainAdjustment = terrainScoreAdjustment(
+    input.targetTerrain,
+    input.weapon,
+    fireMode,
+  );
+  const damageStaggered = input.damageStaggered === true;
+  return calculateLiveFireBreakdownFromFactors({
+    fireMode,
+    coverAdjustment,
+    distanceAccuracyAdjustment,
+    weaponTerrainAdjustment,
+    scanStrength,
+    damageStaggered,
+    targetOnAimedTile: input.targetOnAimedTile,
+    hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
+  });
+};
 
-  score = clampScore(score);
-  if (input.damageStaggered) score >>= 1;
-  if (!input.targetOnAimedTile) score >>= 1;
-  return score;
+export const calculateLiveFireScore = (input: LiveFireScoreInput): number =>
+  calculateLiveFireScoreBreakdown(input).finalScore;
+
+/** Exact direct-fire damage range before the authoritative RNG roll. */
+export const calculateDirectDamageRange = (input: {
+  readonly weapon: WeaponDefinition;
+  readonly coverClass: CoverClass;
+  readonly distance: number;
+}): DirectDamageRange | null => {
+  const damageRoll = input.weapon.damageRoll;
+  if (damageRoll === undefined) return null;
+  const rawMinimum = damageRoll.base;
+  const rawMaximum = damageRoll.base + damageRoll.mask;
+  const coverAdjustment = COVER_CLASS_BULLET_DAMAGE_ADJUST[input.coverClass];
+  const distanceAdjustment = input.distance > 12 ? -4 : input.distance < 5 ? 4 : 0;
+  return calculateDirectDamageRangeFromFactors({
+    rawMinimum,
+    rawMaximum,
+    coverAdjustment,
+    distanceAdjustment,
+    bulletsPerClick: input.weapon.bulletsPerClick,
+  });
 };
 
 const rollDirectDamage = (

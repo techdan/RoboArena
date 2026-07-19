@@ -122,7 +122,7 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Test runner  | Vitest 4.1                                                                                           | Already configured. Fast, ESM-native, plays well with pure-TS engine.                                                                                       |
 | Linter       | ESLint (flat config)                                                                                 | Standard for Next.js; large plugin ecosystem; widely understood by AI coding agents.                                                                        |
 | Formatter    | Prettier                                                                                             | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later.                                                                       |
-| E2E test     | Retained Playwright specs (automation paused)                                                       | Specs/baselines remain available, but package scripts and CI execution are disabled; current UI validation is manual browser/iPad testing with screenshots. |
+| E2E test     | Retained Playwright specs (automation paused)                                                        | Specs/baselines remain available, but package scripts and CI execution are disabled; current UI validation is manual browser/iPad testing with screenshots. |
 | CI           | GitHub Actions                                                                                       | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands.                                     |
 | Deploy       | Vercel web client + long-lived WebSocket service + Supabase Postgres                                 | Vercel does not provide the sticky process ownership or persistent SQLite filesystem assumed by the room service. Validate the split deployment in Phase 8. |
 | Branching    | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed.         |
@@ -1178,6 +1178,132 @@ Physical iPad Safari and production-network validation remain Phase 12 gates.
 
 ---
 
+### Phase 11.8 — targeting analysis and strategic fire explainability [🟡 IN PROGRESS]
+
+**Goal**: turn the provisional Phase 11.7 targeting overlay into a desktop-first
+strategic analysis tool. The board should communicate the final estimated hit
+chance across terrain at a glance, while hover/focus explains why a tile is
+strong or weak in player language. Raw engine values remain available for
+verification but never stand alone as unexplained UI. The canonical presentation
+contract is `docs/spec.md` §6 "Planner targeting analysis."
+
+**Dependencies**: Phase 11.7. This is the planner UX closure before Phase 12 can
+be declared complete, but it may proceed in parallel with Phase 12's
+environment-dependent hosting and physical-device work.
+
+**Core model and correctness work**:
+
+- Introduce a typed engine-faithful targeting breakdown shared by live score
+  calculation and planner preview. It reports named signed factors, pre-clamp
+  subtotal, clamped tier, each integer-halving step, threshold, and percentage;
+  `calculateLiveFireScore` remains the outcome authority and must not diverge
+  from the explanation path.
+- Use the correct Aim/Scan weapon accuracy mapping and the correct Scan repeat
+  interval. Aim copy says "fires in" for one shot and shows a repeat interval
+  only when repeat fire is active. Scan copy says "checks immediately, then
+  every X for N seconds" and uses `scanFiringIntervalTicks`, not the Aim firing
+  interval.
+- Replace the current average of hypothetical Upright/Ducking/Crouching results
+  with an explicit posture basis. Default empty tiles to Upright, offer all 3
+  posture assumptions, and override only with an authorized visible contact's
+  current posture.
+- Keep every preview participant-authorized and conditional. Hypothetical tile
+  analysis may use public terrain and the player's projected robot state, but
+  must not infer hidden contacts, future movement/posture, opposing orders, or
+  the server RNG result.
+
+**Board-wide targeting layer**:
+
+- Dim the underlying arena enough for tactical overlays to read and suppress
+  unrelated Home-area boundaries while a firing tool is active.
+- Color each legal direct-fire tile by the final percentage after cover,
+  distance, robot accuracy, weapon/terrain mapping, current stagger, and Scan
+  sight penalty. Use the spec's Excellent/Good/Risky/Poor bands with stronger
+  contrast than the Phase 11.7 wash.
+- Give zero chance, out of range, outside angle, and sight blocked distinct
+  treatments. Pair color with boundary, hatch, or iconography so the states
+  remain distinguishable without color.
+- Keep Aim and Scan visually recognizable without inventing different cone
+  geometry: Aim emphasizes its ray and fixed tile; Scan emphasizes the
+  maximum-distance acquisition footprint and opportunity timing.
+- Remove the default per-tile blue cone-edge boxes. Surface the inclusive edge
+  and Scan `+2` adjusted acquisition distance in tile analysis; an optional
+  advanced boundary treatment may return only if testing shows it helps.
+- Direct-fire colors mean hit chance only. Explosives instead show legal
+  impact/acquisition tiles, selected impact, blast radius, and damage falloff.
+
+**Hover/focus analysis**:
+
+- Add a stable Shot Analysis area rather than covering the dense board with a
+  large cursor tooltip. Hover and keyboard focus update it; selecting or pinning
+  a tile preserves it while the player inspects controls.
+- Lead with coordinate, legal status, range, target assumption/contact, and the
+  estimated hit percentage. Follow with plain-language strategic factors:
+  **cover**, **robot accuracy at this distance**, **weapon/target terrain**,
+  **Scan clarity**, and active penalties.
+- Put the reconciled signed arithmetic behind **Show calculation**. Explain that
+  the final `0..19` value is a hit-table tier, show the threshold `/256`, and
+  never label an unexplained value merely `score 13/19`.
+- Show conditional consequences where useful: Aim chance if the observed target
+  leaves the programmed tile, Scan edge-adjusted acquisition distance, and
+  post-adjustment bullet damage range. Keep probability and damage visually
+  separate.
+- Preserve the existing right-click robot/terrain help contract. Shot Analysis
+  may link to that terrain/robot topic rather than silently changing what
+  right-click means in targeting mode.
+
+**Tests required**:
+
+- Table-driven unit tests compare every breakdown's final tier with
+  `calculateLiveFireScore` across robot accuracy tiers, Aim/Scan weapon columns,
+  distance boundaries, target terrains, cover classes, Scan-strength bands,
+  stagger, and off-aimed-tile halving.
+- Arithmetic tests require displayed factors to sum to the displayed subtotal
+  and verify clamp, halving, threshold, and rounded percentage order, including
+  the documented `17 -> 208/256 -> 81%` example.
+- Planner tests prove posture assumptions are explicit and never averaged;
+  authorized contacts override only their own tile without adding hidden state
+  to props, DOM, canvas labels, or accessibility text.
+- Overlay tests distinguish eligible percentage bands, zero chance,
+  angle-blocked, out-of-range, sight-blocked, and explosive coverage. Scan
+  cadence tests cover Burst and Missile, whose Scan intervals differ from Aim.
+- Manual desktop review at 100% and 125% zoom covers representative Open,
+  Rough, Bush, Low Wall, and Wall layouts; grayscale/color-vision review proves
+  status is not color-only. Retained screenshots are updated after review, but
+  automated Playwright execution remains paused until deliberately re-enabled.
+
+**Acceptance criteria**:
+
+- A player can identify strong and weak direct-fire areas from the board without
+  hovering, and can explain a hovered tile's percentage in terms of cover,
+  distance/accuracy, terrain/weapon, and Scan clarity without prior knowledge of
+  the engine table.
+- Every displayed percentage and advanced calculation matches the engine; no
+  signed-factor example fails to reconcile.
+- Aim, repeat Aim, Scan, and explosive targeting communicate their distinct
+  timing/targeting semantics while retaining the single confirmed half-plane.
+- The overlay is readable over all shipped terrain, no longer conflates
+  low-chance with blocked, and exposes no hidden or future information.
+
+**Effort**: M.
+
+**Implemented 2026-07-19**: live resolution and planner previews now share a
+dependency-free, typed score-arithmetic primitive. Aim and Scan overlays use
+final probability bands with distinct blocked/zero treatments, explicit target
+posture assumptions, correct per-weapon timing, and no default cone-edge tile
+boxes. A stable Shot Analysis panel leads with hit chance and plain-language
+cover/range/terrain/Scan factors, separates damage, supports pinned inspection,
+and puts the reconciled tier and `/256` lookup behind **Show Calculation**.
+Explosive weapons retain coverage/blast analysis rather than showing a false hit
+percentage.
+
+**Verification**: 286 Vitest tests, strict typecheck, ESLint, Prettier, and a
+Next.js production build pass. Phase remains in progress until the specified
+100%/125% desktop terrain, grayscale/color-vision, and retained-screenshot
+review is completed; automated Playwright execution remains paused by policy.
+
+---
+
 ### Phase 12 — v1 production, resilience, and physical-device gate [⬜ V1 SHIP GATE]
 
 **Goal**: close every environment-dependent and cross-cutting requirement needed
@@ -1186,8 +1312,9 @@ logic with four clients; this phase proves that the same product survives real
 hosting, real networks, real reconnects, and touch-only play on physical iPadOS
 Safari. Placeholder/vector art is acceptable and does not block this gate.
 
-**Dependencies**: Phase 11.6 functional gate. The locally complete Phase 8 work
-may proceed in parallel, but its production hosting gate must close here.
+**Dependencies**: Phase 11.6 functional gate and Phase 11.8 planner UX closure.
+The locally complete Phase 8 work may proceed in parallel, but its production
+hosting gate must close here.
 
 **Production and network gate**:
 
@@ -2005,13 +2132,13 @@ post-v1. iPad touch support is part of the v1 ship gate.
 
 ### Testing strategy
 
-| Layer             | Tool                      | Scope                                                                                     |
-| ----------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
-| Unit              | Vitest                    | Pure functions (engine, planner helpers) — colocated `*.test.ts`                          |
-| Integration       | Vitest                    | Full `resolveTurn` runs against canned `MatchState`s — `src/engine/__integration__/`      |
-| Replay regression | Vitest                    | Curated `ReplayLog`s verify byte-equal across engine refactors — `src/engine/__golden__/` |
-| Component         | Vitest + @testing-library | React components — colocated `*.test.tsx`                                                 |
-| Protocol          | Vitest                    | Runtime schemas, authorization, idempotency, visibility projections                       |
+| Layer             | Tool                      | Scope                                                                                      |
+| ----------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| Unit              | Vitest                    | Pure functions (engine, planner helpers) — colocated `*.test.ts`                           |
+| Integration       | Vitest                    | Full `resolveTurn` runs against canned `MatchState`s — `src/engine/__integration__/`       |
+| Replay regression | Vitest                    | Curated `ReplayLog`s verify byte-equal across engine refactors — `src/engine/__golden__/`  |
+| Component         | Vitest + @testing-library | React components — colocated `*.test.tsx`                                                  |
+| Protocol          | Vitest                    | Runtime schemas, authorization, idempotency, visibility projections                        |
 | E2E (paused)      | Retained Playwright specs | Package scripts/CI disabled; manual browser/iPad checks and screenshots are current policy |
 
 ### Documentation conventions
@@ -2188,6 +2315,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                |
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                  |
+| 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis implemented and automated gates green; desktop visual/screenshot review remains                                           |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                        |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                    |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                    |
@@ -2196,9 +2324,11 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                                                            |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
-5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 12. The concise gate-by-gate
-sequence is in `tasks/core-build-plan.md`. Phase 13 presentation polish and
-Phases 13.5–16 are post-v1 and are not on this path. The post-v1 core-battle
-sequence is Phase 13 polish → Phase 13.5 online alliances → Phase 14 Stealth;
-Phase 15 additional sports also requires Phase 13.5, and Phase 16 hot-seat is
-last. Neither Stealth nor a non-Survival sport may enter the v1 critical path.
+5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 12. Phase 11.8
+may run alongside Phase 12's environment-dependent setup, but both must close
+before the v1 gate is declared complete. The concise gate-by-gate sequence is
+in `tasks/core-build-plan.md`. Phase 13 presentation polish and Phases 13.5–16
+are post-v1 and are not on this path. The post-v1 core-battle sequence is Phase
+13 polish → Phase 13.5 online alliances → Phase 14 Stealth; Phase 15 additional
+sports also requires Phase 13.5, and Phase 16 hot-seat is last. Neither Stealth
+nor a non-Survival sport may enter the v1 critical path.

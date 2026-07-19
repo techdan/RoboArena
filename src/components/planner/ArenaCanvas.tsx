@@ -13,6 +13,7 @@ import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from ".
 import { formatGameTime } from "../../lib/formatTime";
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import type { TargetingTilePreview } from "../../planner/firingHelpers";
+import { targetingTileVisual } from "../../planner/targetingVisuals";
 import { createRobotSprite } from "../../renderer/RobotSprite";
 import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
 import { useHelp } from "../help/HelpProvider";
@@ -81,6 +82,7 @@ export interface PlannerTargetingOverlay {
   readonly target: TileCoord | null;
   readonly seconds: number | null;
   readonly opportunityTicks: number;
+  readonly assumedPosture: Posture;
   readonly resolution: "direct-hit-roll" | "blast";
   readonly tiles: readonly TargetingTilePreview[];
 }
@@ -98,6 +100,7 @@ export interface ArenaCanvasProps {
     tile: TileCoord,
     modifiers: { readonly ctrl: boolean; readonly shift: boolean },
   ) => void;
+  readonly onChooseRobot: (robotId: string) => void;
 }
 
 export function ArenaCanvas({
@@ -110,6 +113,7 @@ export function ArenaCanvas({
   targetingOverlay,
   onCursor,
   onChooseTile,
+  onChooseRobot,
 }: ArenaCanvasProps) {
   const { openTopic } = useHelp();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -122,7 +126,15 @@ export function ArenaCanvas({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [keyboardTile, setKeyboardTile] = useState<TileCoord>({ x: 0, y: 0 });
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [viewportSize, setViewportSize] = useState({
+    width: arena.width * TILE_SIZE,
+    height: arena.height * TILE_SIZE,
+  });
   const [grabbing, setGrabbing] = useState(false);
+  const fitScale = Math.min(
+    viewportSize.width / (arena.width * TILE_SIZE),
+    viewportSize.height / (arena.height * TILE_SIZE),
+  );
   const transformRef = useRef(transform);
   transformRef.current = transform;
   const pointersRef = useRef(new Map<number, Point>());
@@ -168,6 +180,22 @@ export function ArenaCanvas({
     },
     [zoomAbout],
   );
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) return;
+    const updateViewportSize = () => {
+      const bounds = viewport.getBoundingClientRect();
+      const next = { width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) };
+      setViewportSize((current) =>
+        current.width === next.width && current.height === next.height ? current : next,
+      );
+    };
+    updateViewportSize();
+    const observer = new ResizeObserver(updateViewportSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [arena.height, arena.width]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -254,11 +282,11 @@ export function ArenaCanvas({
   useEffect(() => {
     const app = appRef.current;
     if (status !== "ready" || app === null) return;
-    const density = Math.min(window.devicePixelRatio, 2) * transform.scale;
+    const density = Math.min(window.devicePixelRatio, 2) * fitScale * transform.scale;
     const resolution = Math.min(4, Math.max(1, Math.ceil(density * 2) / 2));
     if (app.renderer.resolution === resolution) return;
     app.renderer.resize(arena.width * TILE_SIZE, arena.height * TILE_SIZE, resolution);
-  }, [arena.height, arena.width, status, transform.scale]);
+  }, [arena.height, arena.width, fitScale, status, transform.scale]);
 
   useEffect(() => {
     const app = appRef.current;
@@ -277,7 +305,7 @@ export function ArenaCanvas({
       )
         return;
       overlay.removeChildren().forEach((child) => child.destroy());
-      for (const homeArea of homeAreas) {
+      for (const homeArea of targetingOverlay === null ? homeAreas : []) {
         if (homeArea.tiles.length === 0) continue;
         const color = HOME_OVERLAY_COLORS[homeArea.color] ?? 0xffffff;
         // Barely-there fill: a quiet hint of ownership, not a wash over terrain.
@@ -343,7 +371,6 @@ export function ArenaCanvas({
           for (const { tile } of footprintTiles) {
             const x = tile.x * TILE_SIZE;
             const y = tile.y * TILE_SIZE;
-            footprint.rect(x, y, TILE_SIZE, TILE_SIZE).fill({ color: 0x22d3ee, alpha: 0.1 });
             if (!footprintKeys.has(`${tile.x},${tile.y - 1}`))
               footprint.moveTo(x, y).lineTo(x + TILE_SIZE, y);
             if (!footprintKeys.has(`${tile.x + 1},${tile.y}`))
@@ -358,35 +385,17 @@ export function ArenaCanvas({
         }
         const heat = new Graphics();
         for (const tile of targetingOverlay.tiles) {
-          if (tile.status === "angle-blocked" || tile.status === "out-of-range") continue;
-          const color =
-            tile.status === "sight-blocked"
-              ? 0x64748b
-              : tile.resolution === "blast"
-                ? 0x60a5fa
-                : (tile.chancePercent ?? 0) >= 70
-                  ? 0x4ade80
-                  : (tile.chancePercent ?? 0) >= 40
-                    ? 0xfacc15
-                    : 0xfb7185;
-          const alpha =
-            tile.status === "sight-blocked"
-              ? 0.13
-              : targetingOverlay.mode === "scan"
-                ? 0.08 + (tile.scanStrength / 16) * 0.12
-                : 0.09;
-          heat
-            .rect(tile.tile.x * TILE_SIZE, tile.tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-            .fill({ color, alpha });
-          if (tile.onConeBoundary && tile.status === "eligible") {
+          const visual = targetingTileVisual(tile);
+          const x = tile.tile.x * TILE_SIZE;
+          const y = tile.tile.y * TILE_SIZE;
+          heat.rect(x, y, TILE_SIZE, TILE_SIZE).fill({ color: visual.color, alpha: visual.alpha });
+          if (visual.pattern === "hatch") {
             heat
-              .rect(
-                tile.tile.x * TILE_SIZE + 1,
-                tile.tile.y * TILE_SIZE + 1,
-                TILE_SIZE - 2,
-                TILE_SIZE - 2,
-              )
-              .stroke({ width: 1, color: 0x93c5fd, alpha: 0.5 });
+              .moveTo(x + 2, y + TILE_SIZE - 2)
+              .lineTo(x + TILE_SIZE - 2, y + 2)
+              .moveTo(x - 4, y + TILE_SIZE - 2)
+              .lineTo(x + TILE_SIZE - 2, y - 4)
+              .stroke({ width: 1, color: 0xf8fafc, alpha: 0.34 });
           }
         }
         overlay.addChild(heat);
@@ -530,11 +539,17 @@ export function ArenaCanvas({
     return {
       x: Math.min(
         arena.width - 1,
-        Math.max(0, Math.floor((clientX - bounds.left - current.x) / current.scale / TILE_SIZE)),
+        Math.max(
+          0,
+          Math.floor((clientX - bounds.left - current.x) / current.scale / fitScale / TILE_SIZE),
+        ),
       ),
       y: Math.min(
         arena.height - 1,
-        Math.max(0, Math.floor((clientY - bounds.top - current.y) / current.scale / TILE_SIZE)),
+        Math.max(
+          0,
+          Math.floor((clientY - bounds.top - current.y) / current.scale / fitScale / TILE_SIZE),
+        ),
       ),
     };
   };
@@ -546,6 +561,17 @@ export function ArenaCanvas({
       (robot) =>
         robot.position !== "dock" && robot.position.x === tile.x && robot.position.y === tile.y,
     );
+  const chooseAt = (
+    tile: TileCoord,
+    modifiers: { readonly ctrl: boolean; readonly shift: boolean },
+  ) => {
+    const robot = robotAt(tile);
+    if (robot !== undefined) {
+      onChooseRobot(robot.id);
+      return;
+    }
+    onChooseTile(tile, modifiers);
+  };
   const inspect = (tile: TileCoord, anchor: Point) => {
     const robot = robotAt(tile);
     if (robot !== undefined && robot.robotClass !== "stealth") {
@@ -562,7 +588,7 @@ export function ArenaCanvas({
   };
 
   return (
-    <div className="planner-canvas-shell" style={{ width: arena.width * TILE_SIZE }}>
+    <div className="planner-canvas-shell">
       <div
         ref={viewportRef}
         className="planner-canvas"
@@ -570,8 +596,9 @@ export function ArenaCanvas({
         aria-label={`${arena.sizeName} planning board. Use arrow keys and Enter to choose a tile.`}
         tabIndex={0}
         style={{
-          width: arena.width * TILE_SIZE,
-          height: arena.height * TILE_SIZE,
+          width: "100%",
+          height: "auto",
+          aspectRatio: `${arena.width} / ${arena.height}`,
           touchAction: "none",
           cursor: grabbing ? "grabbing" : undefined,
         }}
@@ -708,7 +735,7 @@ export function ArenaCanvas({
             active.pointerId === event.pointerId &&
             gestureRef.current.end(event.pointerId)
           ) {
-            onChooseTile(active.tile, { ctrl: false, shift: false });
+            chooseAt(active.tile, { ctrl: false, shift: false });
           }
           window.setTimeout(() => gestureRef.current.clearSyntheticClickSuppression(), 0);
           pointersRef.current.delete(event.pointerId);
@@ -734,7 +761,7 @@ export function ArenaCanvas({
             return;
           }
           if (gestureRef.current.consumeSyntheticClick()) return;
-          onChooseTile(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
+          chooseAt(tileFromPointer(event), { ctrl: event.ctrlKey, shift: event.shiftKey });
         }}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -763,12 +790,15 @@ export function ArenaCanvas({
             event.preventDefault();
             const bounds = event.currentTarget.getBoundingClientRect();
             inspect(keyboardTile, {
-              x: bounds.left + transform.x + (keyboardTile.x + 1) * TILE_SIZE * transform.scale,
-              y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * transform.scale,
+              x:
+                bounds.left +
+                transform.x +
+                (keyboardTile.x + 1) * TILE_SIZE * fitScale * transform.scale,
+              y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * fitScale * transform.scale,
             });
           } else if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onChooseTile(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
+            chooseAt(keyboardTile, { ctrl: event.ctrlKey, shift: event.shiftKey });
           }
         }}
         data-cursor-state={cursorState}
@@ -777,7 +807,7 @@ export function ArenaCanvas({
         <div
           className="planner-canvas-content"
           style={{
-            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+            transform: `translate(${transform.x}px, ${transform.y}px) scale(${fitScale * transform.scale})`,
           }}
         >
           <div ref={hostRef} className="absolute inset-0" />
@@ -786,15 +816,14 @@ export function ArenaCanvas({
           <div className="scan-gate-legend" aria-label="Targeting overlay legend">
             <span>
               <i data-kind="eligible" />
-              {targetingOverlay.mode === "aim" ? "Fixed tile" : "Auto-acquire"}
-            </span>
-            <span>
-              <i data-kind="blocked" /> Blocked / low chance
+              {targetingOverlay.mode === "aim" ? "Fixed tile shot" : "Auto-acquire area"}
             </span>
             <small>
-              {targetingOverlay.maxDistance} tiles
+              Hit chance vs {targetingOverlay.assumedPosture} · {targetingOverlay.maxDistance} tiles
               {targetingOverlay.seconds === null ? "" : ` · ${targetingOverlay.seconds}s`}
-              {` · opportunity every ${formatGameTime(targetingOverlay.opportunityTicks)}`}
+              {targetingOverlay.mode === "scan"
+                ? ` · checks now, then every ${formatGameTime(targetingOverlay.opportunityTicks)}`
+                : ` · fires in ${formatGameTime(targetingOverlay.opportunityTicks)}`}
             </small>
           </div>
         )}

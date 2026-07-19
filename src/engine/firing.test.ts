@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { WEAPONS } from "./catalog.js";
-import { calculateLiveFireScore, distanceScoreAdjustment, resolveFire } from "./firing.js";
+import { LIVE_FIRE_HIT_THRESHOLDS } from "./constants.js";
+import {
+  calculateDirectDamageRange,
+  calculateLiveFireScore,
+  calculateLiveFireScoreBreakdown,
+  distanceScoreAdjustment,
+  resolveFire,
+} from "./firing.js";
 import type { Rng } from "./rng.js";
 import type { ArenaTile, TileCoord } from "./types.js";
 
@@ -114,6 +121,131 @@ describe("live-fire score", () => {
     expect(calculateLiveFireScore({ ...common, scanStrength: 16 })).toBe(9);
     expect(calculateLiveFireScore({ ...common, scanStrength: 8 })).toBe(7);
     expect(calculateLiveFireScore({ ...common, scanStrength: 4 })).toBe(5);
+  });
+
+  it("reconciles the documented Burst Scan explanation", () => {
+    const breakdown = calculateLiveFireScoreBreakdown({
+      accuracy: 1,
+      distance: 9,
+      coverClass: 3,
+      targetTerrain: "open",
+      weapon: WEAPONS["burst-gun"],
+      targetOnAimedTile: true,
+      fireMode: "scan",
+      scanStrength: 7,
+    });
+    expect(breakdown).toMatchObject({
+      coverAdjustment: 12,
+      distanceAccuracyAdjustment: 3,
+      weaponTerrainAdjustment: 4,
+      scanPenalty: 2,
+      preClampSubtotal: 17,
+      clampedScore: 17,
+      finalScore: 17,
+      threshold: 208,
+      chancePercent: 81,
+    });
+    expect(
+      breakdown.coverAdjustment +
+        breakdown.distanceAccuracyAdjustment +
+        breakdown.weaponTerrainAdjustment -
+        breakdown.scanPenalty,
+    ).toBe(breakdown.preClampSubtotal);
+  });
+
+  it("keeps every explanation path identical to the authoritative score", () => {
+    const accuracies = [0, 1, 2] as const;
+    const distances = [2, 3, 6, 7, 12, 13] as const;
+    const coverClasses = [1, 2, 3, 4] as const;
+    const terrains = ["open", "rough", "bush", "low-wall"] as const;
+    const weapons = [WEAPONS.rifle, WEAPONS["burst-gun"], WEAPONS["auto-rifle"]] as const;
+    const modes = ["aim", "scan"] as const;
+    const scanStrengths = [4, 8, 9, 16] as const;
+
+    for (const accuracy of accuracies)
+      for (const distance of distances)
+        for (const coverClass of coverClasses)
+          for (const targetTerrain of terrains)
+            for (const weapon of weapons)
+              for (const fireMode of modes)
+                for (const scanStrength of scanStrengths)
+                  for (const damageStaggered of [false, true])
+                    for (const targetOnAimedTile of [false, true]) {
+                      const input = {
+                        accuracy,
+                        distance,
+                        coverClass,
+                        targetTerrain,
+                        weapon,
+                        fireMode,
+                        scanStrength,
+                        damageStaggered,
+                        targetOnAimedTile,
+                      } as const;
+                      const breakdown = calculateLiveFireScoreBreakdown(input);
+                      expect(breakdown.finalScore).toBe(calculateLiveFireScore(input));
+                      expect(
+                        breakdown.coverAdjustment +
+                          breakdown.distanceAccuracyAdjustment +
+                          breakdown.weaponTerrainAdjustment -
+                          breakdown.scanPenalty,
+                      ).toBe(breakdown.preClampSubtotal);
+                      expect(breakdown.threshold).toBe(
+                        LIVE_FIRE_HIT_THRESHOLDS[breakdown.finalScore],
+                      );
+                    }
+  }, 15_000);
+
+  it("shows clamp and integer-halving stages in resolver order", () => {
+    const breakdown = calculateLiveFireScoreBreakdown({
+      accuracy: 2,
+      distance: 2,
+      coverClass: 4,
+      targetTerrain: "open",
+      weapon: WEAPONS.rifle,
+      targetOnAimedTile: false,
+      damageStaggered: true,
+    });
+    expect(breakdown.preClampSubtotal).toBeGreaterThan(19);
+    expect(breakdown).toMatchObject({
+      clampedScore: 19,
+      scoreAfterDamageStagger: 9,
+      finalScore: 4,
+      threshold: 24,
+      chancePercent: 9,
+    });
+    expect(
+      calculateLiveFireScore({
+        accuracy: 2,
+        distance: 2,
+        coverClass: 4,
+        targetTerrain: "open",
+        weapon: WEAPONS.rifle,
+        targetOnAimedTile: false,
+        damageStaggered: true,
+      }),
+    ).toBe(breakdown.finalScore);
+  });
+
+  it("reports post-adjustment direct damage ranges without rolling", () => {
+    expect(
+      calculateDirectDamageRange({ weapon: WEAPONS.rifle, coverClass: 1, distance: 13 }),
+    ).toMatchObject({
+      rawMinimum: 10,
+      rawMaximum: 17,
+      coverAdjustment: -4,
+      distanceAdjustment: -4,
+      minimum: 2,
+      maximum: 9,
+      bulletsPerClick: 1,
+    });
+    expect(
+      calculateDirectDamageRange({
+        weapon: WEAPONS["missile-launcher"],
+        coverClass: 4,
+        distance: 2,
+      }),
+    ).toBeNull();
   });
 });
 

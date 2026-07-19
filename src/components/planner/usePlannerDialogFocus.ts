@@ -11,10 +11,14 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-/** Owns focus containment, Escape, and opener restoration for planner dialogs. */
-export const usePlannerDialogFocus = <T extends HTMLElement>(onCancel: () => void) => {
+/** Owns Escape, opener restoration, and optional modal containment for planner dialogs. */
+export const usePlannerDialogFocus = <T extends HTMLElement>(
+  onCancel: () => void,
+  options: { readonly modal?: boolean } = {},
+) => {
   const dialogRef = useRef<T>(null);
   const onCancelRef = useRef(onCancel);
+  const modal = options.modal ?? true;
   useEffect(() => {
     onCancelRef.current = onCancel;
   }, [onCancel]);
@@ -34,7 +38,7 @@ export const usePlannerDialogFocus = <T extends HTMLElement>(onCancel: () => voi
         onCancelRef.current();
         return;
       }
-      if (event.key !== "Tab") return;
+      if (!modal || event.key !== "Tab") return;
       const controls = focusable();
       if (controls.length === 0) {
         event.preventDefault();
@@ -57,23 +61,25 @@ export const usePlannerDialogFocus = <T extends HTMLElement>(onCancel: () => voi
     // the same point (now over the backdrop); that ghost fires before the frame
     // and must not immediately re-close the dialog. Genuine later presses do.
     let armed = false;
-    const raf = requestAnimationFrame(() => {
-      armed = true;
-    });
+    const raf = modal
+      ? requestAnimationFrame(() => {
+          armed = true;
+        })
+      : null;
     const onPointerDownOutside = (event: PointerEvent) => {
       if (!armed) return;
       if (!dialog.contains(event.target as Node)) onCancelRef.current();
     };
 
     dialog.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDownOutside, true);
+    if (modal) document.addEventListener("pointerdown", onPointerDownOutside, true);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf !== null) cancelAnimationFrame(raf);
       dialog.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDownOutside, true);
+      if (modal) document.removeEventListener("pointerdown", onPointerDownOutside, true);
       opener?.focus();
     };
-  }, []);
+  }, [modal]);
 
   return dialogRef;
 };
