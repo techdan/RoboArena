@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { makeOpenArena, makeRobot } from "../engine/__fixtures__/match";
 import type { Heading } from "../engine/types";
 import { previewTargetingTiles } from "./firingHelpers";
-import { coneWedge, damageRings, ringRadiusPx, tileCenterPx } from "./overlayGeometry";
+import {
+  coneWedge,
+  damageRings,
+  longestConeBoundaryAngle,
+  ringLabelPosition,
+  ringRadiusPx,
+  tileCenterPx,
+} from "./overlayGeometry";
 
 const HEADINGS: readonly Heading[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
@@ -67,6 +74,25 @@ describe("coneWedge", () => {
       const dot = headingX * (mid.x - wedge.center.x) + headingY * (mid.y - wedge.center.y);
       expect(dot).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("ring label placement", () => {
+  it("uses the longer south boundary when an east-facing shooter is near the north edge", () => {
+    const wedge = coneWedge({ x: 1, y: 1 }, "E", 600, 24);
+    const boundaryAngle = longestConeBoundaryAngle(wedge, 768, 768);
+    expect(boundaryAngle).toBe(wedge.endAngle);
+
+    const near = ringLabelPosition(wedge, ringRadiusPx(4, 24), 768, 768);
+    const far = ringLabelPosition(wedge, ringRadiusPx(12, 24), 768, 768);
+    expect(near.x).toBeCloseTo(wedge.center.x + 8);
+    expect(far.x).toBeCloseTo(near.x);
+    expect(far.y).toBeGreaterThan(near.y);
+  });
+
+  it("uses the longer north boundary when the same shooter is near the south edge", () => {
+    const wedge = coneWedge({ x: 1, y: 28 }, "E", 600, 24);
+    expect(longestConeBoundaryAngle(wedge, 768, 768)).toBe(wedge.startAngle);
   });
 });
 

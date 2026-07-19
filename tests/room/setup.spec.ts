@@ -153,23 +153,27 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Fixed tile");
+    await expect
+      .poll(async () => (await board.boundingBox())?.width ?? 0)
+      .toBeCloseTo(boardBox?.width ?? 0, 0);
     await expect(planner.locator(".planner-board-card")).toHaveScreenshot(
       "planner-aim-overlay.png",
       { animations: "disabled" },
     );
     await board.tap({ position: { x: 36, y: 132 } });
-    await expect(planner.getByText(/Angle blocked/)).toBeVisible();
+    await expect(planner.getByRole("button", { name: "Review Shot" })).toBeDisabled();
     await planner.getByRole("button", { name: "Cancel", exact: true }).tap();
 
     await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 564, y: 12 } });
-    await expect(planner.getByText(/Out of range/)).toBeVisible();
+    await expect(planner.getByRole("button", { name: "Review Shot" })).toBeDisabled();
     await planner.getByRole("button", { name: "Cancel", exact: true }).tap();
 
     await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 204, y: 12 } });
+    await planner.getByRole("button", { name: "Review Shot" }).tap();
     await expect(planner.getByText(/Hypothetical target posture estimates/)).toBeVisible();
     await planner.getByRole("button", { name: "Add Aim & Fire" }).tap();
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toBeVisible();
@@ -178,7 +182,10 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await robotCommands.tap();
     await scanButton.tap();
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Auto-acquire");
-    const maximumDistance = planner.getByLabel("Maximum Distance");
+    await board.tap({ position: { x: 204, y: 12 } });
+    await expect(planner.locator(".planner-tile-tooltip")).toBeVisible();
+    await expect(timelines.getByText("Move route", { exact: true })).toHaveCount(1);
+    const maximumDistance = planner.getByLabel("Distance");
     await maximumDistance.fill("12");
     await expect(maximumDistance).toHaveValue("12");
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("12 tiles");
@@ -186,22 +193,21 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
       "planner-scan-range-dialog.png",
       { animations: "disabled" },
     );
-    await planner.getByRole("button", { name: "Close Scan and Fire dialog" }).tap();
+    await planner.getByRole("button", { name: "Cancel", exact: true }).tap();
 
     await robotCommands.tap();
     await scanButton.tap();
-    await expect(planner.getByLabel("Maximum Distance")).toHaveValue("18");
+    await expect(planner.getByLabel("Distance")).toHaveValue("18");
     await expect(planner.getByLabel("Seconds")).toHaveValue("10");
     await planner.getByRole("button", { name: "Add Scan & Fire" }).tap();
     await expect(timelines.getByText("Scan & Fire", { exact: true })).toBeVisible();
-    await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Auto-acquire");
-    await expect(planner.getByLabel("Targeting overlay legend")).toContainText("18 tiles");
+    await expect(planner.getByLabel("Targeting overlay legend")).not.toBeVisible();
 
     await robotCommands.tap();
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await board.tap({ position: { x: 204, y: 12 } });
-    await planner.locator(".repeat-choice").tap();
-    await expect(planner.getByRole("checkbox")).toBeChecked();
+    await planner.getByLabel("Repeat").check();
+    await planner.getByRole("button", { name: "Review Shot" }).tap();
     await planner.getByRole("button", { name: "Add Aim & Fire" }).tap();
     await expect(timelines.getByText("Aim & Fire", { exact: true })).toHaveCount(2);
 

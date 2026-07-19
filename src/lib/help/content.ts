@@ -53,7 +53,9 @@ const titleCase = (value: string): string =>
 const weaponSummary = (weaponId: WeaponId): string => {
   const weapon = WEAPON_CATALOG_DATA[weaponId];
   const ammo =
-    weapon.startingAmmo === "unlimited" ? "unlimited ammo" : `${weapon.startingAmmo} ammo`;
+    weapon.startingAmmo === "unlimited"
+      ? "unlimited ammo"
+      : `${weapon.startingAmmo} match ammo; no turn refill`;
   return `${weapon.displayName}, range ${WEAPON_MAX_RANGE}, ${ammo}`;
 };
 

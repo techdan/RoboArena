@@ -71,6 +71,67 @@ export interface ConeWedge {
   readonly endAngle: number;
 }
 
+const rayLengthInsideRect = (
+  origin: PixelPoint,
+  angle: number,
+  width: number,
+  height: number,
+): number => {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const xLength =
+    Math.abs(dx) < Number.EPSILON
+      ? Number.POSITIVE_INFINITY
+      : dx > 0
+        ? (width - origin.x) / dx
+        : -origin.x / dx;
+  const yLength =
+    Math.abs(dy) < Number.EPSILON
+      ? Number.POSITIVE_INFINITY
+      : dy > 0
+        ? (height - origin.y) / dy
+        : -origin.y / dy;
+  return Math.min(xLength, yLength);
+};
+
+/** The cone boundary ray with the longest visible run before leaving the arena. */
+export const longestConeBoundaryAngle = (
+  wedge: ConeWedge,
+  arenaWidthPx: number,
+  arenaHeightPx: number,
+): number => {
+  const rayALength = rayLengthInsideRect(
+    wedge.center,
+    wedge.startAngle,
+    arenaWidthPx,
+    arenaHeightPx,
+  );
+  const rayBLength = rayLengthInsideRect(wedge.center, wedge.endAngle, arenaWidthPx, arenaHeightPx);
+  return rayBLength > rayALength ? wedge.endAngle : wedge.startAngle;
+};
+
+/**
+ * Places a ring label beside the longest visible cone boundary. The small
+ * inward offset keeps the text on the eligible side instead of straddling the
+ * guide line.
+ */
+export const ringLabelPosition = (
+  wedge: ConeWedge,
+  radiusPx: number,
+  arenaWidthPx: number,
+  arenaHeightPx: number,
+  inwardOffsetPx = 8,
+): PixelPoint => {
+  const boundaryAngle = longestConeBoundaryAngle(wedge, arenaWidthPx, arenaHeightPx);
+  const headingAngle = (wedge.startAngle + wedge.endAngle) / 2;
+  return {
+    x:
+      wedge.center.x + radiusPx * Math.cos(boundaryAngle) + inwardOffsetPx * Math.cos(headingAngle),
+    y:
+      wedge.center.y + radiusPx * Math.sin(boundaryAngle) + inwardOffsetPx * Math.sin(headingAngle),
+  };
+};
+
 /**
  * The firing gate is the closed forward half-plane `dot(heading, delta) ≥ 0`.
  * Its boundary is the line through the shooter center perpendicular to the

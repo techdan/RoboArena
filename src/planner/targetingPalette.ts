@@ -1,7 +1,7 @@
 /**
  * Single source of truth for targeting-overlay colors (spec §6 "Planner
  * targeting analysis"). The PIXI board layer consumes `hex`/`alpha`, while the
- * React legend and Shot Analysis panel consume `css`, so the board, legend,
+ * React map legend consumes `css`, so the board and legend
  * and panel can never drift apart.
  *
  * Probability bands use a viridis-family ramp: perceptually ordered by

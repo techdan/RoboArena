@@ -1028,6 +1028,7 @@ a.planner-menu-item:focus-visible {
   align-items: stretch;
 }
 .planner-board-card {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -1035,63 +1036,6 @@ a.planner-menu-item:focus-visible {
   flex-direction: column;
   border-radius: 1rem;
   padding: 0.7rem;
-}
-/* Contextual targeting rail: docked column while a firing tool is active on
-   wide viewports; a collapsible bottom drawer below the breakpoint. */
-.planner-targeting-rail {
-  display: flex;
-  flex: none;
-  width: clamp(19rem, 24vw, 22rem);
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-.targeting-rail-toggle {
-  display: none;
-}
-.targeting-rail-body {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.55rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-@media (max-width: 1023px) {
-  .planner-targeting-rail {
-    position: fixed;
-    z-index: 90;
-    inset-inline: max(0.75rem, env(safe-area-inset-left));
-    bottom: max(0.5rem, env(safe-area-inset-bottom));
-    width: auto;
-    border: 1px solid rgb(103 232 249 / 25%);
-    border-radius: 0.8rem;
-    padding: 0.45rem;
-    background: rgb(8 14 12 / 96%);
-    box-shadow: 0 18px 50px rgb(0 0 0 / 55%);
-  }
-  .targeting-rail-toggle {
-    display: inline-flex;
-    min-height: 2.4rem;
-    cursor: pointer;
-    align-items: center;
-    gap: 0.4rem;
-    border: 0;
-    border-radius: 0.5rem;
-    padding: 0 0.5rem;
-    color: #a5f3fc;
-    background: transparent;
-    font-size: 0.62rem;
-    font-weight: 850;
-    font-variant-numeric: tabular-nums;
-  }
-  .targeting-rail-body {
-    max-height: 42dvh;
-    margin-top: 0.35rem;
-  }
-  .planner-targeting-rail[data-collapsed="true"] .targeting-rail-body {
-    display: none;
-  }
 }
 .planner-editing {
   display: flex;
@@ -1120,14 +1064,21 @@ a.planner-menu-item:focus-visible {
   outline: 1px solid currentColor;
 }
 .planner-board-heading {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 1fr) minmax(0, auto) minmax(12rem, 1fr);
+  gap: 0.65rem;
+  justify-content: stretch;
   margin-bottom: 0.7rem;
+}
+.planner-board-identity {
+  min-width: 0;
 }
 .planner-board-heading h2 {
   font-size: 1.05rem;
 }
 .planner-board-actions {
   display: flex;
+  grid-column: 3;
   align-items: center;
   justify-content: flex-end;
   gap: 0.45rem;
@@ -1149,6 +1100,141 @@ a.planner-menu-item:focus-visible {
 .planner-cursor-status[data-state="out-of-home"] {
   color: #fcd34d;
   background: rgb(251 191 36 / 10%);
+}
+.fire-control-strip {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  max-width: 48rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgb(103 232 249 / 18%);
+  border-radius: 0.7rem;
+  padding: 0.3rem;
+  background: rgb(8 18 18 / 76%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 22%);
+}
+.fire-strip-mode,
+.fire-strip-target,
+.fire-strip-number,
+.fire-strip-check,
+.fire-strip-actions {
+  display: flex;
+  align-items: center;
+}
+.fire-strip-mode {
+  flex: none;
+  gap: 0.35rem;
+  color: #a5f3fc;
+}
+.fire-strip-mode span,
+.fire-strip-target span,
+.fire-strip-target strong,
+.fire-strip-number span {
+  display: block;
+}
+.fire-strip-mode strong,
+.fire-strip-mode small {
+  display: block;
+  white-space: nowrap;
+}
+.fire-strip-mode strong {
+  color: white;
+  font-size: 0.64rem;
+}
+.fire-strip-mode small,
+.fire-strip-target span,
+.fire-strip-number span {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.5rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fire-strip-target {
+  min-width: 4.2rem;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fire-strip-target strong {
+  color: #d9f99d;
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+.fire-strip-number {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fire-strip-number input {
+  width: 3.65rem;
+  height: 2rem;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 0.4rem;
+  padding: 0 0.3rem;
+  color: white;
+  background: rgb(0 0 0 / 28%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.fire-strip-number small {
+  color: #a5f3fc;
+  font-size: 0.52rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.fire-strip-check {
+  min-height: 2rem;
+  gap: 0.3rem;
+  cursor: pointer;
+  color: rgb(255 255 255 / 68%);
+  font-size: 0.58rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.fire-strip-check input {
+  cursor: pointer;
+  accent-color: #bef264;
+}
+.fire-strip-actions {
+  gap: 0.2rem;
+}
+.fire-strip-actions button {
+  min-height: 2rem;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 0.4rem;
+  padding: 0 0.45rem;
+  color: rgb(255 255 255 / 65%);
+  background: rgb(255 255 255 / 4%);
+  font-size: 0.54rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.fire-strip-actions .fire-strip-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.fire-strip-actions .fire-strip-primary {
+  border-color: rgb(190 242 100 / 42%);
+  color: #d9f99d;
+  background: rgb(190 242 100 / 10%);
+}
+.fire-strip-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.fire-strip-actions button:hover,
+.fire-strip-actions button:focus-visible,
+.fire-strip-number input:focus-visible,
+.fire-strip-check input:focus-visible {
+  border-color: rgb(103 232 249 / 62%);
+  outline: 2px solid rgb(103 232 249 / 28%);
+  outline-offset: 2px;
 }
 .planner-canvas {
   position: relative;
@@ -1200,9 +1286,12 @@ a.planner-menu-item:focus-visible {
 .planner-canvas[data-cursor-state="out-of-home"] {
   cursor: not-allowed;
 }
+.planner-canvas[data-targeting-active="true"] {
+  cursor: crosshair;
+}
 .planner-tile-tooltip {
   position: absolute;
-  z-index: 5;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
@@ -1225,6 +1314,105 @@ a.planner-menu-item:focus-visible {
 .planner-tile-tooltip span:first-child {
   color: #d9f99d;
   font-size: 0.68rem;
+}
+.targeting-map-tools {
+  position: absolute;
+  z-index: 6;
+  bottom: 0.6rem;
+  left: 50%;
+  display: flex;
+  cursor: default;
+  max-width: calc(100% - 1rem);
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.65rem;
+  color: rgb(255 255 255 / 72%);
+  background: rgb(5 10 8 / 90%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 42%);
+  backdrop-filter: blur(7px);
+  transform: translateX(-50%);
+}
+.targeting-map-posture {
+  flex: none;
+  border: 0;
+  border-right: 1px solid rgb(255 255 255 / 12%);
+  margin: 0;
+  padding: 0 0.7rem 0 0;
+}
+.targeting-map-posture legend {
+  padding: 0;
+  color: rgb(255 255 255 / 48%);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.targeting-map-posture > div {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+.targeting-map-posture button {
+  min-height: 2.75rem;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 0.4rem;
+  padding: 0 0.7rem;
+  color: rgb(255 255 255 / 68%);
+  background: rgb(255 255 255 / 5%);
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: capitalize;
+}
+.targeting-map-posture button[aria-pressed="true"] {
+  border-color: rgb(190 242 100 / 58%);
+  color: #d9f99d;
+  background: rgb(190 242 100 / 11%);
+}
+.targeting-map-posture button:hover,
+.targeting-map-posture button:focus-visible {
+  border-color: rgb(103 232 249 / 62%);
+  outline: 2px solid rgb(103 232 249 / 28%);
+  outline-offset: 2px;
+}
+.targeting-map-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+.targeting-map-legend strong {
+  color: #a5f3fc;
+}
+.targeting-map-legend i {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 0.14rem;
+  vertical-align: -0.1rem;
+}
+@media (max-width: 1199px) {
+  .planner-board-heading {
+    grid-template-columns: minmax(8.5rem, 1fr) minmax(12rem, 1fr);
+  }
+  .planner-board-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .fire-control-strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+  }
 }
 .planner-canvas-loading {
   position: absolute;
@@ -1684,6 +1872,21 @@ a.planner-menu-item:focus-visible {
   background: rgb(4 7 5 / 76%);
   backdrop-filter: blur(8px);
 }
+.aim-review-backdrop {
+  position: absolute;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgb(4 7 5 / 68%);
+  backdrop-filter: blur(5px);
+}
+.aim-review-dialog {
+  width: min(32rem, 100%);
+  max-height: calc(100% - 1rem);
+}
 .planner-dialog {
   width: min(34rem, 100%);
   max-height: calc(100vh - 4rem);
@@ -1698,26 +1901,6 @@ a.planner-menu-item:focus-visible {
 }
 .robot-command-dialog {
   width: min(28rem, 100%);
-}
-/* Firing-tool forms docked inside the targeting rail keep the dialog's inner
-   styling but drop the modal sizing and shadow. */
-.planner-dialog--docked {
-  width: 100%;
-  max-height: none;
-  overflow: visible;
-  border-radius: 0.75rem;
-  padding: 0.7rem;
-  box-shadow: none;
-}
-.planner-dialog--docked h2 {
-  font-size: 0.95rem;
-}
-.planner-dialog--docked > header {
-  margin-bottom: 0.6rem;
-}
-.planner-dialog--docked > footer {
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
 }
 .robot-command-sections {
   display: grid;
@@ -1745,10 +1928,8 @@ a.planner-menu-item:focus-visible {
 .planner-dialog > header,
 .planner-dialog > footer,
 .fire-target-summary,
-.repeat-choice,
 .fire-preview-heading,
-.fire-blocked,
-.scan-explanation {
+.fire-blocked {
   display: flex;
   align-items: center;
 }
@@ -1800,31 +1981,6 @@ a.planner-menu-item:focus-visible {
   color: white;
   font-family: ui-monospace, monospace;
 }
-.repeat-choice {
-  gap: 0.55rem;
-  margin-top: 0.8rem;
-  border: 1px solid rgb(255 255 255 / 7%);
-  border-radius: 0.65rem;
-  padding: 0.65rem;
-  cursor: pointer;
-  background: rgb(0 0 0 / 12%);
-}
-.repeat-choice input {
-  cursor: pointer;
-  accent-color: #bef264;
-}
-.repeat-choice strong,
-.repeat-choice small {
-  display: block;
-}
-.repeat-choice strong {
-  font-size: 0.68rem;
-}
-.repeat-choice small {
-  margin-top: 0.15rem;
-  color: rgb(255 255 255 / 35%);
-  font-size: 0.58rem;
-}
 .fire-preview {
   margin-top: 0.8rem;
   border: 1px solid rgb(134 239 172 / 15%);
@@ -1849,6 +2005,10 @@ a.planner-menu-item:focus-visible {
   border-radius: 0.5rem;
   padding: 0.5rem;
   background: rgb(0 0 0 / 15%);
+}
+.fire-estimates > div[data-assumed="true"] {
+  border-color: rgb(190 242 100 / 42%);
+  background: rgb(190 242 100 / 7%);
 }
 .fire-estimates span,
 .fire-estimates strong,
@@ -1886,23 +2046,6 @@ a.planner-menu-item:focus-visible {
   color: #fda4af;
   background: rgb(251 113 133 / 7%);
   font-size: 0.68rem;
-}
-.scan-explanation {
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 0.8rem;
-  color: rgb(255 255 255 / 48%);
-}
-.scan-explanation p {
-  margin: 0;
-  font-size: 0.65rem;
-  line-height: 1.55;
-}
-.scan-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
-  margin-top: 0.75rem;
 }
 .planner-help {
   display: flex;
@@ -2054,6 +2197,9 @@ a.planner-menu-item:focus-visible {
     -webkit-tap-highlight-color: rgb(190 242 100 / 18%);
   }
   input[type="range"] {
+    min-height: 44px;
+  }
+  .fire-strip-number input {
     min-height: 44px;
   }
   .help-button,

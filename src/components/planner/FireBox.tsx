@@ -40,7 +40,9 @@ export function FireBox({
       ) : aimActive ? (
         <small>Choose a target tile, or press this button again to cancel.</small>
       ) : (
-        <small>Use Repeat in the firing dialog; Ctrl+Shift+click remains a desktop shortcut.</small>
+        <small>
+          Set Fire time in the board controls; Ctrl+Shift+click starts with two firing intervals.
+        </small>
       )}
     </div>
   );

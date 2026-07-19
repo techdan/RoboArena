@@ -125,6 +125,12 @@ const projectedAmmo = (
   return ammo;
 };
 
+export const projectedWeaponAmmo = (
+  robot: RobotState,
+  segments: readonly RobotCommandSegment[],
+  weapon: WeaponId,
+): number | "unlimited" => projectedAmmo(robot, segments)[weapon];
+
 /**
  * Scan & Fire and repeat fire conservatively reserve all remaining finite ammo.
  * This keeps later commands legal regardless of hidden runtime acquisitions.

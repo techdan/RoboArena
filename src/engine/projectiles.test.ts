@@ -82,6 +82,25 @@ describe("Phase 3 projectile and blast semantics", () => {
     expect(first.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(2);
   });
 
+  it("carries finite missile ammo into the next turn without regeneration", () => {
+    const shooter = makeRobot("m1", "team-1", "missile", { x: 1, y: 1 });
+    const target = makeRobot("r2", "team-2", "rifle", { x: 3, y: 1 });
+    const state = makeMatch({ teamOneRobots: [shooter], teamTwoRobots: [target] });
+    const first = requireResolved(
+      resolveTurn({ state, orders: missileOrders(state, shooter.id), seed: "ammo-turn-1" }),
+    );
+    const second = requireResolved(
+      resolveTurn({
+        state: first.nextState,
+        orders: missileOrders(first.nextState, shooter.id),
+        seed: "ammo-turn-2",
+      }),
+    );
+
+    expect(first.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(2);
+    expect(second.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(1);
+  });
+
   it("keeps a fire-time result after the target moves during later presentation", () => {
     const shooter = makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 });
     const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 });
