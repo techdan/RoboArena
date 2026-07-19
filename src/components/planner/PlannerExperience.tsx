@@ -186,6 +186,7 @@ export function PlannerExperience({
   const [scanOverlaySeconds, setScanOverlaySeconds] = useState(1);
   const [targetingPosture, setTargetingPosture] = useState<Posture>("upright");
   const [pinnedAnalysisTile, setPinnedAnalysisTile] = useState<TileCoord | null>(null);
+  const [lastAnalysisTile, setLastAnalysisTile] = useState<TileCoord | null>(null);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
@@ -318,6 +319,8 @@ export function PlannerExperience({
     setAimDialog(null);
     setScanDialog(null);
     setScanOverlayPinned(false);
+    setPinnedAnalysisTile(null);
+    setLastAnalysisTile(null);
     setNotice(message);
     setPreviewTick(
       parkTick ??
@@ -376,6 +379,8 @@ export function PlannerExperience({
     setAimDialog(null);
     setScanDialog(null);
     setScanOverlayPinned(false);
+    setPinnedAnalysisTile(null);
+    setLastAnalysisTile(null);
     if (robot !== undefined)
       setPreviewTick(
         previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
@@ -424,6 +429,8 @@ export function PlannerExperience({
     setAimDialog(null);
     setScanDialog(null);
     setScanOverlayPinned(false);
+    setPinnedAnalysisTile(null);
+    setLastAnalysisTile(null);
     setAimTool(false);
     setCommandDialogOpen(false);
     setPreviewTick(
@@ -585,7 +592,9 @@ export function PlannerExperience({
           },
     [aimDialog?.target, cursor, targetingBase],
   );
-  const analysisTile = pinnedAnalysisTile ?? aimDialog?.target ?? cursor;
+  // The hovered tile stays analyzable after the pointer leaves the board so the
+  // analysis panel's own controls (pin, posture, calculation) remain reachable.
+  const analysisTile = pinnedAnalysisTile ?? aimDialog?.target ?? cursor ?? lastAnalysisTile;
   const analysisX = analysisTile?.x ?? -1;
   const analysisY = analysisTile?.y ?? -1;
   const targetingAnalysisPreview = useMemo(() => {
@@ -593,6 +602,14 @@ export function PlannerExperience({
     const preview = targetingBase.tiles[analysisY * match.arena.width + analysisX];
     return preview?.tile.x === analysisX && preview.tile.y === analysisY ? preview : null;
   }, [analysisX, analysisY, match.arena.width, targetingBase]);
+  // Latest-value refs so the global keydown handler can read them without
+  // re-subscribing on every hover change.
+  const analysisTileRef = useRef<TileCoord | null>(null);
+  const targetingActiveRef = useRef(false);
+  useEffect(() => {
+    analysisTileRef.current = analysisTile;
+    targetingActiveRef.current = targetingBase !== null;
+  });
 
   const keepOrRecoverConflict = () => {
     const conflictOrders = state.conflictOrders;
@@ -637,17 +654,28 @@ export function PlannerExperience({
         setAimDialog(null);
         setScanDialog(null);
         setScanOverlayPinned(false);
+        setPinnedAnalysisTile(null);
+        setLastAnalysisTile(null);
         setEditing(null);
         setNotice("Firing action canceled.");
         return;
       }
       const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        target.closest("input, select, textarea, [contenteditable='true']") !== null;
       if (
-        aimDialog !== null ||
-        scanDialog !== null ||
-        (target instanceof HTMLElement &&
-          target.closest("input, select, textarea, [contenteditable='true']") !== null)
+        event.key.toLowerCase() === "p" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !typing &&
+        targetingActiveRef.current
       ) {
+        event.preventDefault();
+        setPinnedAnalysisTile((current) => (current === null ? analysisTileRef.current : null));
+        return;
+      }
+      if (aimDialog !== null || scanDialog !== null || typing) {
         return;
       }
       if (!(event.ctrlKey || event.metaKey)) {
@@ -807,7 +835,7 @@ export function PlannerExperience({
             targetingOverlay={targetingOverlay}
             onCursor={(tile) => {
               setCursor(tile);
-              if (tile === null) setNotice("Out of bounds — move back inside the tactical grid.");
+              if (tile !== null) setLastAnalysisTile(tile);
             }}
             onChooseTile={chooseTile}
             onChooseRobot={openRobotCommands}
@@ -824,7 +852,7 @@ export function PlannerExperience({
               pinned={pinnedAnalysisTile !== null}
               onAssumedPosture={setTargetingPosture}
               onTogglePinned={() =>
-                setPinnedAnalysisTile((current) => (current === null ? cursor : null))
+                setPinnedAnalysisTile((current) => (current === null ? analysisTile : null))
               }
             />
           )}
