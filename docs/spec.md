@@ -400,12 +400,30 @@ same inputs and operation order as the live resolver:
 - the exact 20-entry threshold table after clamping and any score halving.
 
 The heatmap uses final probability bands: **Excellent 75-94%**, **Good
-50-74%**, **Risky 25-49%**, and **Poor 1-24%**. A zero-probability tile is not
-merged with an illegal tile. Outside-range, outside-angle, and wall-blocked
-states use distinct non-color-only treatments. Unrelated Home-area outlines
-are hidden while a firing tool is active. Exact percentage text may appear on
-the hovered/focused tile, on an authorized visible contact, or in an optional
-detailed-numbers view; it is not required on every tile at normal zoom.
+50-74%**, **Risky 25-49%**, and **Poor 1-24%**. Band, blocked-state, and
+legend colors come from one shared palette module consumed by both the board
+renderer and the DOM legend/panel; the bands are strictly luminance-ordered so
+their ranking survives grayscale and common color-vision deficiencies. A
+zero-probability tile is not merged with an illegal tile. Outside-range,
+outside-angle, and wall-blocked states use distinct non-color-only treatments
+(heavy dim, tight hatch, and sparse reverse-diagonal hatch respectively).
+Unrelated Home-area outlines are hidden while a firing tool is active. Exact
+percentage text is shown by default on every eligible direct-fire tile
+(including 0%) and fades out below roughly 17-23 effective on-screen pixels
+per tile; below that threshold the cursor tooltip and the Shot Analysis panel
+carry the exact numbers.
+
+The board also draws shooter-centered structural guides. The confirmed firing
+half-plane appears as two boundary rays plus an arc on the allowed side; the
+arc doubles as the maximum-distance limit. Inner arcs mark the real
+damage-ladder breakpoints — distance `<5` adds 4 damage and distance `>12`
+subtracts 4 — with short labels, suppressed when they fall at or beyond the
+selected maximum distance. Every guide radius is drawn at `(r + 1)` tile units
+from the shooter center, the exact floored-Euclidean threshold, so the guides
+always agree with the per-tile fills. Explosive tools draw only the range
+limit. A hover tooltip beside the cursor repeats the tile's percentage,
+distance, and adjusted on-hit damage range so precision survives when tile
+labels fade.
 
 Cover depends on target posture. An empty tile therefore has no single
 posture-independent chance. The planner defaults hypothetical tiles to an
@@ -414,6 +432,16 @@ preview controls. It must never average the three postures into a synthetic
 percentage. A currently authorized visible contact uses its observed posture
 and is labeled as an observed-current-state estimate. Future movement, future
 posture, hidden orders, and the server RNG remain unknown.
+
+Shot Analysis lives in a contextual rail docked beside the board while a
+firing tool is active (merged with that tool's settings form); on viewports
+narrower than 1024px it becomes a collapsible bottom drawer whose header
+live-updates with the analyzed tile and chance. Hover and keyboard focus
+update it, the analyzed tile stays sticky when the pointer leaves the board so
+the panel's own controls remain reachable, and pinning (panel button or the
+`P` key) freezes it. Board left-click keeps its movement/targeting meaning and
+right-click keeps the terrain/robot help contract. While the Aim & Fire
+confirm is open, clicking the board retargets the aimed tile in place.
 
 Hover or keyboard focus presents the percentage first and explains the
 strategic causes in plain language. The internal `0..19` score is a lookup-table
@@ -450,8 +478,9 @@ tile at an opportunity**; it uses the selected maximum distance, the Scan
 accuracy mapping, and terrain-derived sight strength. Scan timing copy says
 that acquisition checks immediately and then at the weapon's
 `scanFiringIntervalTicks` for the chosen duration. The exact perpendicular cone
-boundary's `+2` adjusted-distance acquisition rule is explained on hover/focus
-rather than represented by an unexplained field of blue tile outlines.
+boundary's `+2` adjusted-distance acquisition rule is explained in the cursor
+tooltip and Shot Analysis on hover/focus; the drawn wedge replaces both
+per-tile boundary boxes and any footprint perimeter outline.
 
 Heat color always represents hit chance, not damage. The detail panel separately
 shows adjusted on-hit bullet damage ranges and names the near/far and cover

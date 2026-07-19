@@ -1225,17 +1225,32 @@ environment-dependent hosting and physical-device work.
 - Keep Aim and Scan visually recognizable without inventing different cone
   geometry: Aim emphasizes its ray and fixed tile; Scan emphasizes the
   maximum-distance acquisition footprint and opportunity timing.
-- Remove the default per-tile blue cone-edge boxes. Surface the inclusive edge
-  and Scan `+2` adjusted acquisition distance in tile analysis; an optional
-  advanced boundary treatment may return only if testing shows it helps.
+- Remove the default per-tile blue cone-edge boxes and the footprint perimeter
+  outline. Draw the confirmed half-plane as two boundary rays plus an arc (the
+  arc doubles as the max-range limit) and mark the `<5`/`>12` damage
+  breakpoints with labeled inner arcs at exact `(r + 1)`-tile radii. Surface
+  the inclusive edge and Scan `+2` adjusted acquisition distance in the cursor
+  tooltip and tile analysis.
+- Show the final percentage as text on every eligible direct-fire tile by
+  default, fading below a ~17-23px effective tile size, with a
+  pointer-events-none cursor tooltip (chance, distance, adjusted damage) as
+  the precision fallback.
 - Direct-fire colors mean hit chance only. Explosives instead show legal
   impact/acquisition tiles, selected impact, blast radius, and damage falloff.
 
 **Hover/focus analysis**:
 
 - Add a stable Shot Analysis area rather than covering the dense board with a
-  large cursor tooltip. Hover and keyboard focus update it; selecting or pinning
-  a tile preserves it while the player inspects controls.
+  large cursor tooltip: a contextual rail docked beside the board (stacking the
+  active firing tool's settings above the analysis) on ≥1024px viewports, and a
+  collapsible bottom drawer below that. Hover and keyboard focus update it; the
+  analyzed tile stays sticky when the pointer leaves the board, and pinning
+  (panel button or the `P` shortcut) preserves it while the player inspects
+  controls. While the Aim & Fire confirm is open, board clicks retarget in
+  place.
+- Maximize the board itself: a fixed-height app shell (slim hamburger header,
+  collapsed-by-default timeline strip) lets the letterboxed canvas absorb all
+  remaining viewport space with camera pan/zoom for detail.
 - Lead with coordinate, legal status, range, target assumption/contact, and the
   estimated hit percentage. Follow with plain-language strategic factors:
   **cover**, **robot accuracy at this distance**, **weapon/target terrain**,
@@ -1286,20 +1301,26 @@ environment-dependent hosting and physical-device work.
 
 **Effort**: M.
 
-**Implemented 2026-07-19**: live resolution and planner previews now share a
-dependency-free, typed score-arithmetic primitive. Aim and Scan overlays use
-final probability bands with distinct blocked/zero treatments, explicit target
-posture assumptions, correct per-weapon timing, and no default cone-edge tile
-boxes. A stable Shot Analysis panel leads with hit chance and plain-language
-cover/range/terrain/Scan factors, separates damage, supports pinned inspection,
-and puts the reconciled tier and `/256` lookup behind **Show Calculation**.
-Explosive weapons retain coverage/blast analysis rather than showing a false hit
-percentage.
+**Implemented 2026-07-19 (revised same day)**: live resolution and planner
+previews share a dependency-free, typed score-arithmetic primitive. The board
+shows per-tile final percentages (pooled BitmapText, zoom-faded), a
+single-source luminance-ordered palette with dim/hatch/reverse-hatch blocked
+treatments, the half-plane wedge plus `(r + 1)`-tile damage/range arcs
+replacing the cone-edge outlines, and a cursor tooltip with chance/distance/
+damage and the Scan cone-edge `+2` note. Shot Analysis and the active firing
+tool's settings dock in a contextual right rail (bottom drawer under 1024px);
+the analyzed tile is sticky across pointer-leave, pinnable via button or `P`,
+and Aim & Fire retargets on board click. The planner shell is board-first: a
+slim hamburger header, a collapsed-by-default timeline, and a full-height
+letterboxed canvas replace the fixed width cap. Explosive weapons retain
+coverage/blast analysis rather than showing a false hit percentage.
 
-**Verification**: 286 Vitest tests, strict typecheck, ESLint, Prettier, and a
-Next.js production build pass. Phase remains in progress until the specified
-100%/125% desktop terrain, grayscale/color-vision, and retained-screenshot
-review is completed; automated Playwright execution remains paused by policy.
+**Verification**: 315 Vitest tests (fit transform, palette ordering, label and
+tooltip rules, wedge/ring geometry vs preview-truth property test), strict
+typecheck, ESLint, Prettier, and a Next.js production build pass. Phase
+remains in progress until the specified 100%/125% desktop terrain,
+grayscale/color-vision, and retained-screenshot review is completed; automated
+Playwright execution remains paused by policy.
 
 ---
 
@@ -2314,7 +2335,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                |
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12) |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                  |
-| 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis implemented and automated gates green; desktop visual/screenshot review remains                                           |
+| 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, tile %s, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                        |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                    |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                    |
