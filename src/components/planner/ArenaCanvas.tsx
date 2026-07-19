@@ -18,6 +18,7 @@ import { createRobotSprite } from "../../renderer/RobotSprite";
 import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
 import { useHelp } from "../help/HelpProvider";
 import { CameraControls } from "../CameraControls";
+import { fitTransform } from "../../lib/fitTransform";
 import {
   LONG_PRESS_MS,
   TouchGestureArbitrator,
@@ -131,12 +132,19 @@ export function ArenaCanvas({
     height: arena.height * TILE_SIZE,
   });
   const [grabbing, setGrabbing] = useState(false);
-  const fitScale = Math.min(
-    viewportSize.width / (arena.width * TILE_SIZE),
-    viewportSize.height / (arena.height * TILE_SIZE),
+  // Letterbox base transform: the viewport fills whatever space the layout
+  // grants, and the fixed-resolution stage is fit-scaled and centered inside.
+  const fit = fitTransform(
+    viewportSize.width,
+    viewportSize.height,
+    arena.width * TILE_SIZE,
+    arena.height * TILE_SIZE,
   );
+  const fitScale = fit.scale;
   const transformRef = useRef(transform);
   transformRef.current = transform;
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
   const pointersRef = useRef(new Map<number, Point>());
   const touchRef = useRef<{
     readonly pointerId: number;
@@ -161,12 +169,17 @@ export function ArenaCanvas({
   const suppressMouseClickRef = useRef(false);
 
   const zoomAbout = useCallback((focal: Point, nextScale: number) => {
+    // Focal points arrive in viewport coordinates; the user transform lives in
+    // the letterboxed frame, so shift by the fit offset before zooming about.
+    const { offsetX, offsetY } = fitRef.current;
     setTransform((current) => {
       const scale = clampZoom(nextScale);
       if (scale === current.scale) return current;
-      const contentX = (focal.x - current.x) / current.scale;
-      const contentY = (focal.y - current.y) / current.scale;
-      return { scale, x: focal.x - contentX * scale, y: focal.y - contentY * scale };
+      const focalX = focal.x - offsetX;
+      const focalY = focal.y - offsetY;
+      const contentX = (focalX - current.x) / current.scale;
+      const contentY = (focalY - current.y) / current.scale;
+      return { scale, x: focalX - contentX * scale, y: focalY - contentY * scale };
     });
   }, []);
 
@@ -543,19 +556,24 @@ export function ArenaCanvas({
   const tileFromClient = (clientX: number, clientY: number, element: HTMLDivElement): TileCoord => {
     const bounds = element.getBoundingClientRect();
     const current = transformRef.current;
+    const { scale: baseScale, offsetX, offsetY } = fitRef.current;
     return {
       x: Math.min(
         arena.width - 1,
         Math.max(
           0,
-          Math.floor((clientX - bounds.left - current.x) / current.scale / fitScale / TILE_SIZE),
+          Math.floor(
+            (clientX - bounds.left - offsetX - current.x) / current.scale / baseScale / TILE_SIZE,
+          ),
         ),
       ),
       y: Math.min(
         arena.height - 1,
         Math.max(
           0,
-          Math.floor((clientY - bounds.top - current.y) / current.scale / fitScale / TILE_SIZE),
+          Math.floor(
+            (clientY - bounds.top - offsetY - current.y) / current.scale / baseScale / TILE_SIZE,
+          ),
         ),
       ),
     };
@@ -604,8 +622,7 @@ export function ArenaCanvas({
         tabIndex={0}
         style={{
           width: "100%",
-          height: "auto",
-          aspectRatio: `${arena.width} / ${arena.height}`,
+          height: "100%",
           touchAction: "none",
           cursor: grabbing ? "grabbing" : undefined,
         }}
@@ -637,8 +654,8 @@ export function ArenaCanvas({
             if (first === undefined || second === undefined) return;
             const bounds = event.currentTarget.getBoundingClientRect();
             const midpoint = {
-              x: (first.x + second.x) / 2 - bounds.left,
-              y: (first.y + second.y) / 2 - bounds.top,
+              x: (first.x + second.x) / 2 - bounds.left - fitRef.current.offsetX,
+              y: (first.y + second.y) / 2 - bounds.top - fitRef.current.offsetY,
             };
             const pinch = pinchRef.current;
             if (pinch === null) return;
@@ -721,8 +738,8 @@ export function ArenaCanvas({
             pinchRef.current = {
               distance: pointDistance(first, second),
               midpoint: {
-                x: (first.x + second.x) / 2 - bounds.left,
-                y: (first.y + second.y) / 2 - bounds.top,
+                x: (first.x + second.x) / 2 - bounds.left - fitRef.current.offsetX,
+                y: (first.y + second.y) / 2 - bounds.top - fitRef.current.offsetY,
               },
               startTransform: transformRef.current,
             };
@@ -799,9 +816,14 @@ export function ArenaCanvas({
             inspect(keyboardTile, {
               x:
                 bounds.left +
+                fit.offsetX +
                 transform.x +
                 (keyboardTile.x + 1) * TILE_SIZE * fitScale * transform.scale,
-              y: bounds.top + transform.y + keyboardTile.y * TILE_SIZE * fitScale * transform.scale,
+              y:
+                bounds.top +
+                fit.offsetY +
+                transform.y +
+                keyboardTile.y * TILE_SIZE * fitScale * transform.scale,
             });
           } else if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
@@ -814,7 +836,7 @@ export function ArenaCanvas({
         <div
           className="planner-canvas-content"
           style={{
-            transform: `translate(${transform.x}px, ${transform.y}px) scale(${fitScale * transform.scale})`,
+            transform: `translate(${fit.offsetX + transform.x}px, ${fit.offsetY + transform.y}px) scale(${fitScale * transform.scale})`,
           }}
         >
           <div ref={hostRef} className="absolute inset-0" />
