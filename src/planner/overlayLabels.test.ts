@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { TargetingTilePreview } from "./firingHelpers.js";
-import { labelAlpha, tileLabel, tooltipLines } from "./overlayLabels.js";
+import type { TargetingTilePreview } from "./firingHelpers";
+import { labelAlpha, tileLabel, tooltipLines } from "./overlayLabels";
 
 const ORIGIN = { x: 2, y: 2 };
 

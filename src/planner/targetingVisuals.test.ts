@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { TargetingTilePreview } from "./firingHelpers.js";
+import type { TargetingTilePreview } from "./firingHelpers";
 import {
   hexToCss,
   relativeLuminance,
   TARGETING_BAND_ORDER,
   TARGETING_PALETTE,
-} from "./targetingPalette.js";
-import { targetingTileVisual } from "./targetingVisuals.js";
+} from "./targetingPalette";
+import { targetingTileVisual } from "./targetingVisuals";
 
 const preview = (overrides: Partial<TargetingTilePreview>): TargetingTilePreview => ({
   status: "eligible",

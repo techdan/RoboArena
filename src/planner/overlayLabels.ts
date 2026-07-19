@@ -5,8 +5,8 @@
  * Analysis panel carry the exact numbers instead.
  */
 
-import type { TileCoord } from "../engine/types.js";
-import type { AimPreviewStatus, TargetingTilePreview } from "./firingHelpers.js";
+import type { TileCoord } from "../engine/types";
+import type { AimPreviewStatus, TargetingTilePreview } from "./firingHelpers";
 
 /**
  * Label text for one previewed tile, or null when a number would mislead or

@@ -1,11 +1,11 @@
 /** Presentation tokens for the Phase 11.8 targeting heatmap. */
 
-import type { TargetingTilePreview } from "./firingHelpers.js";
+import type { TargetingTilePreview } from "./firingHelpers";
 import {
   TARGETING_PALETTE,
   type TargetingCategory,
   type TargetingPattern,
-} from "./targetingPalette.js";
+} from "./targetingPalette";
 
 export type { TargetingCategory, TargetingPattern };
 

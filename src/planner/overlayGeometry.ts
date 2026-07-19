@@ -9,7 +9,7 @@
  * threshold between the last included and first excluded tile centers.
  */
 
-import type { Heading, TileCoord } from "../engine/types.js";
+import type { Heading, TileCoord } from "../engine/types";
 
 const HEADING_VECTORS: Readonly<Record<Heading, readonly [number, number]>> = {
   N: [0, -1],

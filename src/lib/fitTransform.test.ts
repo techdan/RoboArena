@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitTransform } from "./fitTransform.js";
+import { fitTransform } from "./fitTransform";
 
 describe("fitTransform", () => {
   it("fits on the binding axis and centers the other (wide viewport)", () => {
