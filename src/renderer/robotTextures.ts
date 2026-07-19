@@ -12,10 +12,16 @@ import { Assets, Texture } from "pixi.js";
 import type { Posture, RobotClass } from "../engine/types";
 import {
   EFFECT_ASSETS,
+  highResSvg,
   ROBOT_BODY_ASSETS,
   ROBOT_SPRITE_GEOMETRY,
   ROBOT_TURRET_ASSETS,
 } from "./assets";
+
+/** Extra raster density over the 128-unit rig boxes so bodies/turrets stay
+ *  crisp at the movie's 3× max zoom on a 2× display (sprites set explicit
+ *  width/height, so only texture density changes — not layout size). */
+const RASTER_OVERSAMPLE = 2;
 
 /** Paint-hook hexes baked into the generated SVGs, in replacement order:
  *  paint-light, paint-mid, paint-dark (fp-paint gradient stops), accent, edge. */
@@ -49,7 +55,8 @@ const recolor = (svg: string, teamColor: string): string => {
 
 /** Rasterizes SVG text at an explicit pixel size (width/height injected so
  *  viewBox-only files draw at full size in every browser). */
-const rasterize = async (svg: string, px: number): Promise<Texture> => {
+const rasterize = async (svg: string, box: number): Promise<Texture> => {
+  const px = box * RASTER_OVERSAMPLE;
   const sized = svg.replace("<svg ", `<svg width="${px}" height="${px}" `);
   const blobUrl = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
   try {
@@ -94,7 +101,7 @@ const loadTeamTexture = async (url: string, teamColor: string, px: number): Prom
 export const loadRobotTextures = async (
   robots: readonly { readonly robotClass: RobotClass; readonly teamColor: string }[],
 ): Promise<Map<string, RobotTextureSet>> => {
-  const wreck = await Assets.load<Texture>(EFFECT_ASSETS.wreck);
+  const wreck = await Assets.load<Texture>(highResSvg(EFFECT_ASSETS.wreck));
   const sets = new Map<string, RobotTextureSet>();
   const distinctRobots = [
     ...new Map(

@@ -7,6 +7,7 @@ import type { MatchState, Terrain, TileCoord } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import {
   EFFECT_ASSET_URLS,
+  highResSvg,
   MOVIE_MARKER_ASSET_URLS,
   TERRAIN_ASSETS,
   TERRAIN_ASSET_URLS,
@@ -52,6 +53,7 @@ export function MoviePlayer({
 }: MoviePlayerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<Application | null>(null);
   const renderSnapshotRef = useRef<(index: number, animate: boolean) => void>(() => undefined);
   const timeline = useMemo(() => buildMovieTimeline(initialState, events), [initialState, events]);
   const initialIndex = useMemo(() => {
@@ -190,6 +192,7 @@ export function MoviePlayer({
         resolution: Math.min(window.devicePixelRatio, 2),
       });
       if (disposed) return;
+      appRef.current = app;
       const canvas = app.canvas as HTMLCanvasElement;
       canvas.dataset.movieCanvas = "true";
       canvas.setAttribute("aria-label", "RoboArena turn movie");
@@ -198,13 +201,17 @@ export function MoviePlayer({
 
       const textures = new Map(
         await Promise.all(
-          TERRAIN_ASSET_URLS.map(async (url) => [url, await Assets.load<Texture>(url)] as const),
+          TERRAIN_ASSET_URLS.map(
+            async (url) => [url, await Assets.load<Texture>(highResSvg(url))] as const,
+          ),
         ),
       );
       // Effect/marker textures are read synchronously via Assets.get during
       // per-tick effect rendering, so they must be cached before playback.
       await Promise.all(
-        [...EFFECT_ASSET_URLS, ...MOVIE_MARKER_ASSET_URLS].map((url) => Assets.load<Texture>(url)),
+        [...EFFECT_ASSET_URLS, ...MOVIE_MARKER_ASSET_URLS].map((url) =>
+          Assets.load<Texture>(highResSvg(url)),
+        ),
       );
       for (let y = 0; y < initialState.arena.height; y += 1) {
         for (let x = 0; x < initialState.arena.width; x += 1) {
@@ -280,9 +287,28 @@ export function MoviePlayer({
     return () => {
       disposed = true;
       renderSnapshotRef.current = () => undefined;
+      appRef.current = null;
       app?.destroy(true);
     };
   }, [initialIndex, initialState, timeline]);
+
+  // The CSS zoom transform stretches the finished canvas bitmap, so the
+  // backing store must grow with zoom or the movie goes blocky. Follow the
+  // zoom with the renderer resolution (one canvas pixel ≈ one screen pixel),
+  // quantized to half steps so wheel/pinch zooming doesn't reallocate the
+  // drawing buffer on every event.
+  useEffect(() => {
+    const app = appRef.current;
+    if (rendererStatus !== "ready" || app === null) return;
+    const density = Math.min(window.devicePixelRatio, 2) * viewTransform.scale;
+    const resolution = Math.min(4, Math.max(1, Math.ceil(density * 2) / 2));
+    if (app.renderer.resolution === resolution) return;
+    app.renderer.resize(
+      initialState.arena.width * MOVIE_TILE_SIZE,
+      initialState.arena.height * MOVIE_TILE_SIZE,
+      resolution,
+    );
+  }, [rendererStatus, viewTransform.scale, initialState.arena.width, initialState.arena.height]);
 
   const tick = timeline.ticks[currentIndex] ?? 0;
   useEffect(() => onTickChange?.(tick), [onTickChange, tick]);

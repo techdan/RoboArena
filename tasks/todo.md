@@ -88,6 +88,16 @@ Files touched (9): `src/lib/setup/validate.ts`, `src/lib/net/protocol.ts`,
 Follow-ups (Phase 12): resignation + abandoned-room handling; the real
 four-separate-session / two-network functional gate.
 
+## ⚠ Pending: Playwright visual baselines stale (2026-07-18)
+
+The movie-zoom sharpness pass (zoom-following renderer resolution, 4× SVG
+texture density, 2× robot rasterization) changes rendered output at every zoom
+level — even 1× minifies more smoothly. `test:e2e` was deliberately skipped at
+commit time (user call). **Before trusting the visual suite again: run
+`npm run test:e2e`, eyeball the movie/preview diffs, and re-approve the
+`movie.spec.ts` / `preview.spec.ts` baselines.** A failure there is expected
+staleness, not a rendering regression — but look at the diff images first.
+
 ## Phase 11 turn-loop review pass (2026-07-18)
 
 High-effort review of 36af312 (authoritative turn loop). Five fixes landed:

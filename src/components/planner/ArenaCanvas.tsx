@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import type { Application, Container } from "pixi.js";
+import type { Application, Container, Graphics as PixiGraphics } from "pixi.js";
 import type { Arena, Heading, Posture, RobotClass, TileCoord } from "../../engine/types";
-import { ARENA_ASSET_URLS, TERRAIN_ASSETS } from "../../renderer/assets";
+import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import { isTileInScanGate } from "../../planner/firingHelpers";
 import { useHelp } from "../help/HelpProvider";
 import {
@@ -21,6 +21,19 @@ const TEAM_COLORS: Readonly<Record<string, number>> = {
   green: 0x42c77a,
   yellow: 0xf2c94c,
 };
+// Brighter than the robot-body hues so a thin outline reads over both dark grass
+// and red brick. The home overlay leans on these plus a dark halo, not opacity.
+const HOME_OVERLAY_COLORS: Readonly<Record<string, number>> = {
+  red: 0xff6b6b,
+  blue: 0x6aa8ff,
+  green: 0x5ddb8f,
+  yellow: 0xffd45e,
+};
+// The arena container is `border-radius: 0.7rem` with a 1px border, so its inner
+// corner curves at ~10px. The home outline is inset a touch and its outer corner
+// rounded to match, nesting cleanly inside that same curve.
+const ARENA_CORNER_RADIUS = 10;
+const HOME_OUTLINE_INSET = 2;
 const HEADING_VECTOR: Readonly<Record<Heading, TileCoord>> = {
   N: { x: 0, y: -1 },
   NE: { x: 1, y: -1 },
@@ -43,9 +56,16 @@ export interface PlannerRobotView {
   readonly selected: boolean;
 }
 
+export interface HomeAreaOverlay {
+  readonly tiles: readonly TileCoord[];
+  readonly color: string;
+  readonly corner: "NW" | "NE" | "SE" | "SW";
+}
+
 export interface ArenaCanvasProps {
   readonly arena: Arena;
   readonly robots: readonly PlannerRobotView[];
+  readonly homeAreas: readonly HomeAreaOverlay[];
   readonly route: readonly TileCoord[];
   readonly cursor: TileCoord | null;
   readonly cursorState: "valid" | "blocked" | "out-of-home" | "out-of-bounds";
@@ -64,6 +84,7 @@ export interface ArenaCanvasProps {
 export function ArenaCanvas({
   arena,
   robots,
+  homeAreas,
   route,
   cursor,
   cursorState,
@@ -124,7 +145,7 @@ export function ArenaCanvas({
       canvas.dataset.plannerCanvas = arena.sizeName;
       hostRef.current?.appendChild(canvas);
       const textureEntries = await Promise.all(
-        ARENA_ASSET_URLS.map(async (url) => [url, await Assets.load(url)] as const),
+        ARENA_ASSET_URLS.map(async (url) => [url, await Assets.load(highResSvg(url))] as const),
       );
       if (disposed) return;
       const textures = new Map(textureEntries);
@@ -164,6 +185,60 @@ export function ArenaCanvas({
     void (async () => {
       const { Graphics, Text } = await import("pixi.js");
       overlay.removeChildren().forEach((child) => child.destroy());
+      for (const homeArea of homeAreas) {
+        if (homeArea.tiles.length === 0) continue;
+        const color = HOME_OVERLAY_COLORS[homeArea.color] ?? 0xffffff;
+        // Barely-there fill: a quiet hint of ownership, not a wash over terrain.
+        // Drawn per tile to the wall edge; the arena's rounded clip curves it.
+        const fill = new Graphics();
+        for (const tile of homeArea.tiles) {
+          fill.rect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+        fill.fill({ color, alpha: 0.08 });
+        overlay.addChild(fill);
+        // Home areas are rectangles hugging one arena corner. Inset the outline
+        // and round only the corner that meets the arena corner, so it follows
+        // the same curve; the three interior corners stay square.
+        const xs = homeArea.tiles.map((tile) => tile.x);
+        const ys = homeArea.tiles.map((tile) => tile.y);
+        const x0 = Math.min(...xs) * TILE_SIZE + HOME_OUTLINE_INSET;
+        const y0 = Math.min(...ys) * TILE_SIZE + HOME_OUTLINE_INSET;
+        const x1 = (Math.max(...xs) + 1) * TILE_SIZE - HOME_OUTLINE_INSET;
+        const y1 = (Math.max(...ys) + 1) * TILE_SIZE - HOME_OUTLINE_INSET;
+        const r = ARENA_CORNER_RADIUS - HOME_OUTLINE_INSET;
+        // Per-corner radius [top-left, top-right, bottom-right, bottom-left].
+        const radiiByCorner: Readonly<
+          Record<HomeAreaOverlay["corner"], readonly [number, number, number, number]>
+        > = {
+          NW: [r, 0, 0, 0],
+          NE: [0, r, 0, 0],
+          SE: [0, 0, r, 0],
+          SW: [0, 0, 0, r],
+        };
+        const [rTL, rTR, rBR, rBL] = radiiByCorner[homeArea.corner];
+        const traceOutline = (graphics: PixiGraphics) => {
+          graphics.moveTo(x0 + rTL, y0);
+          graphics.lineTo(x1 - rTR, y0);
+          graphics.arcTo(x1, y0, x1, y0 + rTR, rTR);
+          graphics.lineTo(x1, y1 - rBR);
+          graphics.arcTo(x1, y1, x1 - rBR, y1, rBR);
+          graphics.lineTo(x0 + rBL, y1);
+          graphics.arcTo(x0, y1, x0, y1 - rBL, rBL);
+          graphics.lineTo(x0, y0 + rTL);
+          graphics.arcTo(x0, y0, x0 + rTL, y0, rTL);
+          graphics.closePath();
+        };
+        // Dark halo underneath carries the contrast so the colored line can stay
+        // thin and recede; the bright team line sits on top.
+        const halo = new Graphics();
+        traceOutline(halo);
+        halo.stroke({ width: 3, color: 0x000000, alpha: 0.32 });
+        overlay.addChild(halo);
+        const outline = new Graphics();
+        traceOutline(outline);
+        outline.stroke({ width: 1.5, color, alpha: 0.7 });
+        overlay.addChild(outline);
+      }
       if (scanOverlay !== null) {
         const gate = new Graphics();
         for (let y = 0; y < arena.height; y += 1) {
@@ -238,6 +313,7 @@ export function ArenaCanvas({
     arena.height,
     arena.width,
     cursor,
+    homeAreas,
     cursorState,
     keyboardTile,
     robots,

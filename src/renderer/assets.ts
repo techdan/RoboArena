@@ -8,6 +8,21 @@
 
 import type { Posture, RobotClass, Terrain } from "../engine/types";
 
+/**
+ * Raster density for SVG-sourced textures. The tile SVGs are 24-unit
+ * viewBoxes; at 1× Pixi would bake 24px bitmaps that turn to mush once the
+ * movie's CSS zoom (up to 3×) stretches them. 4× covers max zoom on a 2×
+ * display while sprites keep their layout size (the texture only gets denser).
+ */
+export const SVG_TEXTURE_RESOLUTION = 4;
+
+/** Assets.load descriptor that rasterizes an SVG at SVG_TEXTURE_RESOLUTION.
+ *  The cache key stays the bare URL, so `Assets.get(url)` still resolves. */
+export const highResSvg = (url: string) => ({
+  src: url,
+  data: { resolution: SVG_TEXTURE_RESOLUTION },
+});
+
 export const TERRAIN_ASSETS: Readonly<Record<Terrain, string>> = {
   open: "/assets/terrain/open-ground.svg",
   rough: "/assets/terrain/rough-ground.svg",

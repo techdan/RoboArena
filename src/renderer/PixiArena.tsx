@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Texture } from "pixi.js";
 import type { Arena, Terrain } from "../engine/types";
-import { ARENA_ASSET_URLS, TERRAIN_ASSETS } from "./assets";
+import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "./assets";
 
 const TILE_SIZE = 20;
 
@@ -51,7 +51,7 @@ export function PixiArena({ arena }: PixiArenaProps) {
       let loaded = 0;
       const textureEntries = await Promise.all(
         ARENA_ASSET_URLS.map(async (url) => {
-          const texture = await Assets.load<Texture>(url);
+          const texture = await Assets.load<Texture>(highResSvg(url));
           loaded += 1;
           if (!disposed) setProgress(Math.round((loaded / ARENA_ASSET_URLS.length) * 100));
           return [url, texture] as const;
