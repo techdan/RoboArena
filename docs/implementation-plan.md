@@ -104,7 +104,6 @@ RoboArena/
 │   └── components/         React UI components
 ├── server/                 v1 authoritative room + resolver service
 ├── docs/                   specs and plans
-├── screenshots/            DOS reference captures
 ├── references/             source matrix
 ├── tests/                  empirical-test plan
 └── public/                 static assets

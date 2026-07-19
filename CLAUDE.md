@@ -143,8 +143,8 @@ docs/
 src/engine/                pure-TS simulation (Phase 1 draft; realign before resolver)
 tasks/core-build-plan.md    canonical near-term execution order and phase gates
 references/                source matrix mapping mechanics → evidence
-screenshots/               gitignored local original-game research captures
-RoboSport (1991)/          gitignored — original DOS distribution; local research only
+RoboSport (1991)/          gitignored — original DOS distribution; local research
+                           only (screenshots/ research captures live inside it)
 ```
 
 When working on an engine numerical value: **`src/engine/constants.ts` and `src/engine/catalog.ts` are the literal source of truth.** `docs/spec.md` documents what's there. If they disagree, the code wins and the spec gets updated to match.
