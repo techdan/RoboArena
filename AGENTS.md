@@ -75,6 +75,10 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   targeting overlays, and planner pan/zoom are also draft complete. Automated
   Playwright execution is temporarily disabled; retain its specs/baselines and
   use manual browser/iPad testing plus screenshots for current UI validation.
+  Phases 11.8 and 11.8.1 are implemented with manual visual review open: the
+  planner is board-first, with compact targeting controls, a class-named robot
+  selector, circular scan control, conditional Missile/Rifle ammo presentation,
+  icon timeline, tail-only removal, shared scrubber, and full-history undo/redo.
   Physical iPad Safari validation, production hosting,
   and resilience closure form the Phase 12 v1 ship gate; Phase 11.6 multiplayer
   hardening is next.

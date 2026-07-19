@@ -10,7 +10,10 @@ event-driven movie playback, local authoritative room/setup/turn flow, and the
 movement/posture/scan/firing planner are built. The external WSS/restart hosting gate
 remains open alongside continued local phases. Phase 11.5 Field Guide,
 contextual explanations, observed-turn inspection, and browser-emulated iPad
-touch controls are draft-complete. Automated Playwright runs are temporarily
+touch controls are draft-complete. The Phase 11.8/11.8.1 board-first planner,
+targeting overlays, compact icon timeline, circular scan control, and plan-aware
+Missile/Rifle presentation are implemented with manual visual review open.
+Automated Playwright runs are temporarily
 disabled; UI validation currently uses manual browser/iPad testing and user
 screenshots. v1 targets online
 free-for-all Survival. See

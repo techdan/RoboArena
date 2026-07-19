@@ -9,6 +9,7 @@ export interface CameraControlsProps {
   readonly canZoomOut: boolean;
   readonly disabled?: boolean;
   readonly className?: string;
+  readonly compact?: boolean;
   readonly dataAttribute?: "movie" | "planner";
   readonly onZoomIn: () => void;
   readonly onZoomOut: () => void;
@@ -23,6 +24,7 @@ export function CameraControls({
   canZoomOut,
   disabled = false,
   className = "",
+  compact = false,
   dataAttribute,
   onZoomIn,
   onZoomOut,
@@ -42,8 +44,13 @@ export function CameraControls({
       >
         <ZoomOut aria-hidden="true" className="size-4" />
       </button>
-      <span
-        className="w-12 text-center font-mono text-[11px] font-bold tracking-[0.08em] text-white/70"
+      <button
+        type="button"
+        className="camera-zoom-value"
+        onClick={onZoomReset}
+        aria-label="Reset zoom and pan"
+        title="Reset zoom and pan"
+        disabled={disabled}
         aria-live="polite"
         {...(dataAttribute === "movie"
           ? { "data-movie-zoom": true }
@@ -52,7 +59,7 @@ export function CameraControls({
             : {})}
       >
         {Math.round(zoom * 100)}%
-      </span>
+      </button>
       <button
         className="transport-button"
         type="button"
@@ -62,15 +69,17 @@ export function CameraControls({
       >
         <ZoomIn aria-hidden="true" className="size-4" />
       </button>
-      <button
-        className="transport-button"
-        type="button"
-        onClick={onZoomReset}
-        aria-label="Reset zoom and pan"
-        disabled={disabled}
-      >
-        <Maximize2 aria-hidden="true" className="size-4" />
-      </button>
+      {compact ? null : (
+        <button
+          className="transport-button"
+          type="button"
+          onClick={onZoomReset}
+          aria-label="Reset zoom and pan"
+          disabled={disabled}
+        >
+          <Maximize2 aria-hidden="true" className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

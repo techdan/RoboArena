@@ -45,11 +45,13 @@ import {
   targetingOpportunityTicks,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
+import { robotDisplayNames } from "../../planner/presentation";
 import { AimAndFireDialog } from "./AimAndFireDialog";
 import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
-import { CommandPanel } from "./CommandPanel";
 import { AimFireControls, ScanFireControls } from "./FireControlStrip";
+import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
+import { RobotSelector } from "./RobotSelector";
 import { Timeline } from "./Timeline";
 import { FieldGuideButton, HelpButton } from "../help/HelpProvider";
 import { FirstTimeHint } from "../help/FirstTimeHint";
@@ -65,11 +67,6 @@ const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoor
   }
   return route;
 };
-
-interface EditingCommand {
-  readonly robotId: string;
-  readonly index: number;
-}
 
 interface AimDialogState {
   readonly target: TileCoord;
@@ -172,14 +169,16 @@ export function PlannerExperience({
       : created;
   });
   const [selectedRobotId, setSelectedRobotId] = useState(team.robots[0]?.id ?? "");
-  const [editing, setEditing] = useState<EditingCommand | null>(null);
   const [aimTool, setAimTool] = useState(false);
   const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
   const [aimShots, setAimShots] = useState(1);
   const [aimReviewOpen, setAimReviewOpen] = useState(false);
   const [scanDialog, setScanDialog] = useState<ScanDialogState | null>(null);
-  const [commandDialogOpen, setCommandDialogOpen] = useState(false);
   const [targetingPosture, setTargetingPosture] = useState<Posture>("upright");
+  const [headingPreview, setHeadingPreview] = useState<Heading | null>(null);
+  const [weaponChoiceByRobot, setWeaponChoiceByRobot] = useState<
+    Readonly<Record<string, WeaponId>>
+  >({});
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
@@ -199,15 +198,12 @@ export function PlannerExperience({
   const orders = state.history.present;
   const selectedRobot = team.robots.find((robot) => robot.id === selectedRobotId) ?? team.robots[0];
   if (selectedRobot === undefined) throw new Error("This team has no programmable robots.");
+  const robotNames = useMemo(() => robotDisplayNames(team.robots), [team.robots]);
   const selectedTimeline = timelineForRobot(orders, selectedRobot.id);
   const [previewTick, setPreviewTick] = useState(() =>
     previewParkingTick(selectedRobot, selectedTimeline.segments, budgetTicks),
   );
-  const editingIndex = editing?.robotId === selectedRobot.id ? editing.index : null;
-  const commandPrefix =
-    editingIndex === null
-      ? selectedTimeline.segments
-      : selectedTimeline.segments.slice(0, editingIndex);
+  const commandPrefix = selectedTimeline.segments;
   const projected = projectRobotAtTick(selectedRobot, commandPrefix);
   const previewProjected = projectRobotAtTick(
     selectedRobot,
@@ -229,7 +225,17 @@ export function PlannerExperience({
     [selectedTimeline.segments],
   );
   const weapons = availableWeapons(selectedRobot, commandPrefix);
-  const aimWeapon = aimDialog?.weapon ?? weapons[0] ?? selectedRobot.definition.primaryWeapon;
+  const selectedWeapon = weapons.includes(
+    weaponChoiceByRobot[selectedRobot.id] ?? selectedRobot.definition.primaryWeapon,
+  )
+    ? (weaponChoiceByRobot[selectedRobot.id] ?? selectedRobot.definition.primaryWeapon)
+    : (weapons[0] ?? selectedRobot.definition.primaryWeapon);
+  const missileAmmoValue = projectedWeaponAmmo(selectedRobot, commandPrefix, "missile-launcher");
+  const missileAmmo =
+    selectedRobot.definition.class === "missile" && missileAmmoValue !== "unlimited"
+      ? missileAmmoValue
+      : null;
+  const aimWeapon = aimDialog?.weapon ?? selectedWeapon;
   const aimAmmo = projectedWeaponAmmo(selectedRobot, commandPrefix, aimWeapon);
   const aimMaxShots = Math.max(
     1,
@@ -284,7 +290,6 @@ export function PlannerExperience({
 
   const edit = (next: TurnOrders, message: string, parkTick?: number) => {
     dispatch({ type: "edit", orders: next });
-    setEditing(null);
     setAimTool(false);
     setAimDialog(null);
     setAimShots(1);
@@ -302,10 +307,7 @@ export function PlannerExperience({
   };
   const commitSegments = (segments: readonly RobotCommandSegment[], message: string) => {
     const current = timelineForRobot(orders, selectedRobot.id).segments;
-    const candidateSegments =
-      editingIndex === null
-        ? [...current, ...segments]
-        : [...current.slice(0, editingIndex), ...segments, ...current.slice(editingIndex + 1)];
+    const candidateSegments = [...current, ...segments];
     const candidate = replaceTimeline(orders, selectedRobot.id, candidateSegments);
     const validated = validatedTimelinePrefix(
       match.arena,
@@ -319,7 +321,7 @@ export function PlannerExperience({
       validated.droppedCount === 0
         ? message
         : `${message} ${validated.droppedCount} dependent command${validated.droppedCount === 1 ? " was" : "s were"} removed because the edit made them invalid.`,
-      previewParkingTick(selectedRobot, validated.segments, budgetTicks, editingIndex ?? undefined),
+      previewParkingTick(selectedRobot, validated.segments, budgetTicks),
     );
   };
   const commitSegment = (segment: RobotCommandSegment, message: string) =>
@@ -327,6 +329,11 @@ export function PlannerExperience({
   const removeCommand = (robotId: string, index: number) => {
     const robot = team.robots.find((candidate) => candidate.id === robotId);
     if (robot === undefined) return;
+    const currentSegments = timelineForRobot(orders, robotId).segments;
+    if (index !== currentSegments.length - 1) {
+      setNotice("Remove later actions first; only the final action can be removed.");
+      return;
+    }
     const candidate = deleteSegment(orders, robotId, index);
     const validated = validatedTimelinePrefix(
       match.arena,
@@ -337,73 +344,37 @@ export function PlannerExperience({
     setSelectedRobotId(robotId);
     edit(
       replaceTimeline(orders, robotId, validated.segments),
-      validated.droppedCount === 0
-        ? "Command removed. Undo remains available."
-        : `Command and ${validated.droppedCount} invalid dependent command${validated.droppedCount === 1 ? "" : "s"} removed. Undo remains available.`,
+      "Last action removed. Undo remains available.",
       previewParkingTick(robot, validated.segments, budgetTicks),
     );
   };
   const selectRobot = (robotId: string) => {
     const robot = team.robots.find((candidate) => candidate.id === robotId);
     setSelectedRobotId(robotId);
-    setEditing(null);
     setAimTool(false);
     setAimDialog(null);
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
+    setHeadingPreview(null);
     if (robot !== undefined)
       setPreviewTick(
         previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
       );
   };
-  const openRobotCommands = (robotId: string) => {
-    selectRobot(robotId);
-    setCommandDialogOpen(true);
-  };
-  const beginEdit = (robotId: string, index: number) => {
-    setSelectedRobotId(robotId);
-    setEditing({ robotId, index });
-    setAimTool(false);
-    setAimDialog(null);
-    setAimShots(1);
-    setScanDialog(null);
-    const robot = team.robots.find((candidate) => candidate.id === robotId);
-    if (robot !== undefined)
-      setPreviewTick(
-        previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks, index),
-      );
-    const segment = timelineForRobot(orders, robotId).segments[index];
-    setAimReviewOpen(false);
-    if (segment?.kind === "aim-and-fire") {
-      setAimDialog({ target: segment.target, weapon: segment.weapon });
-      setAimShots(1);
-      setNotice(`Editing Aim & Fire command ${index + 1}.`);
-      return;
-    }
-    if (segment?.kind === "scan-and-fire") {
-      setScanDialog({
-        weapon: segment.weapon,
-        maxDistance: segment.maxDistance,
-        seconds: segment.seconds,
-      });
-      setNotice(`Editing Scan & Fire command ${index + 1}.`);
-      return;
-    }
-    setCommandDialogOpen(true);
-    setNotice(`Editing command ${index + 1}. Choose a tile, posture, or heading to replace it.`);
+  const selectCommand = (robotId: string, _index: number, endTick: number) => {
+    if (robotId !== selectedRobot.id) setSelectedRobotId(robotId);
+    setPreviewTick(endTick);
   };
   const changeHistory = (type: "undo" | "redo") => {
     const nextOrders =
       type === "undo" ? (state.history.past.at(-1) ?? orders) : (state.history.future[0] ?? orders);
     dispatch({ type });
-    setEditing(null);
     setAimDialog(null);
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
     setAimTool(false);
-    setCommandDialogOpen(false);
     setPreviewTick(
       previewParkingTick(
         selectedRobot,
@@ -442,7 +413,7 @@ export function PlannerExperience({
     if ((modifiers.ctrl && modifiers.shift) || aimTool) {
       setAimDialog({
         target: tile,
-        weapon: weapons[0]!,
+        weapon: selectedWeapon,
       });
       setAimShots(modifiers.ctrl && modifiers.shift ? 2 : 1);
       setNotice(
@@ -486,9 +457,51 @@ export function PlannerExperience({
       `Scan heading ${heading} added · 0.08s.`,
     );
   };
+  const cancelFire = (message: string) => {
+    setAimTool(false);
+    setAimDialog(null);
+    setAimShots(1);
+    setAimReviewOpen(false);
+    setScanDialog(null);
+    setNotice(message);
+  };
+  const startAim = () => {
+    if (aimTool || aimDialog !== null) {
+      cancelFire("Aim & Fire canceled.");
+      return;
+    }
+    setAimTool(true);
+    setScanDialog(null);
+    setAimShots(1);
+    setAimReviewOpen(false);
+    setNotice("Aim & Fire active — choose a target tile.");
+  };
+  const startScan = () => {
+    if (scanDialog !== null) {
+      cancelFire("Scan & Fire canceled.");
+      return;
+    }
+    const defaults = defaultScanSettings(selectedWeapon, budgetTicks - selectedEndTick);
+    setAimTool(false);
+    setAimDialog(null);
+    setAimShots(1);
+    setAimReviewOpen(false);
+    setScanDialog({
+      weapon: selectedWeapon,
+      maxDistance: defaults.maxDistance,
+      seconds: defaults.seconds,
+    });
+    setNotice("Configure Scan & Fire distance and duration.");
+  };
+
+  useEffect(() => {
+    if (notice.length === 0) return;
+    const timer = window.setTimeout(() => setNotice(""), 3600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const robotViews = useMemo<readonly PlannerRobotView[]>(
     () =>
-      team.robots.map((robot, index) => {
+      team.robots.map((robot) => {
         const view = projectRobotAtTick(
           robot,
           timelineForRobot(orders, robot.id).segments,
@@ -496,33 +509,42 @@ export function PlannerExperience({
         );
         return {
           id: robot.id,
-          label: `R${index + 1}`,
+          label: robotNames.get(robot.id) ?? robot.definition.class,
           robotClass: robot.definition.class,
           color: team.color,
           position: view.position,
           posture: view.posture,
-          scanHeading: view.scanHeading,
+          scanHeading:
+            robot.id === selectedRobot.id && headingPreview !== null
+              ? headingPreview
+              : view.scanHeading,
           selected: robot.id === selectedRobot.id,
         };
       }),
-    [orders, previewTick, selectedRobot.id, team.color, team.robots],
+    [headingPreview, orders, previewTick, robotNames, selectedRobot.id, team.color, team.robots],
   );
   const targetingBase = useMemo<PlannerTargetingBase | null>(() => {
-    if (projected.position === "dock" || (!aimTool && aimDialog === null && scanDialog === null))
+    const previewOnly =
+      headingPreview !== null && !aimTool && aimDialog === null && scanDialog === null;
+    if (
+      projected.position === "dock" ||
+      (!previewOnly && !aimTool && aimDialog === null && scanDialog === null)
+    )
       return null;
-    const mode = scanDialog === null ? "aim" : "scan";
-    const weapon = scanDialog?.weapon ?? aimDialog?.weapon ?? weapons[0]!;
+    const mode = previewOnly || scanDialog !== null ? "scan" : "aim";
+    const weapon = scanDialog?.weapon ?? aimDialog?.weapon ?? selectedWeapon;
     const maxDistance = scanDialog?.maxDistance ?? PLANNER_WEAPON_RANGE[weapon];
     const overlayShooter = {
       ...selectedRobot,
       position: projected.position,
       posture: projected.posture,
-      scanHeading: projected.scanHeading,
+      scanHeading: headingPreview ?? projected.scanHeading,
     };
     return {
+      previewOnly,
       mode,
       origin: projected.position,
-      heading: projected.scanHeading,
+      heading: headingPreview ?? projected.scanHeading,
       maxDistance,
       weapon,
       seconds: scanDialog?.seconds ?? null,
@@ -550,13 +572,14 @@ export function PlannerExperience({
     projected.position,
     projected.posture,
     projected.scanHeading,
+    headingPreview,
     scanDialog,
     selectedRobot,
     targetingPosture,
-    weapons,
+    selectedWeapon,
   ]);
   const cursorTargetingPreview =
-    targetingBase === null || cursor === null
+    targetingBase === null || targetingBase.previewOnly || cursor === null
       ? null
       : (targetingBase.tiles[cursor.y * match.arena.width + cursor.x] ?? null);
   const cursorState =
@@ -634,7 +657,6 @@ export function PlannerExperience({
         setAimShots(1);
         setAimReviewOpen(false);
         setScanDialog(null);
-        setEditing(null);
         setNotice("Firing action canceled.");
         return;
       }
@@ -696,6 +718,24 @@ export function PlannerExperience({
               <ResignControl onResign={onResign} disabled={syncing} />
             )}
           </PlannerMenu>
+          <div className="history-buttons planner-header-history" aria-label="Draft history">
+            <button
+              type="button"
+              onClick={() => changeHistory("undo")}
+              disabled={state.history.past.length === 0}
+              aria-label="Undo"
+            >
+              <Undo2 size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => changeHistory("redo")}
+              disabled={state.history.future.length === 0}
+              aria-label="Redo"
+            >
+              <Redo2 size={16} aria-hidden="true" />
+            </button>
+          </div>
           <div className="planner-header-title">
             <p className="eyebrow">Turn {match.turnNumber} · Private draft</p>
             <h1>{team.name} command board</h1>
@@ -747,111 +787,119 @@ export function PlannerExperience({
           </button>
         </div>
       ) : null}
+      <RobotSelector
+        robots={team.robots}
+        names={robotNames}
+        selectedRobotId={selectedRobot.id}
+        onSelect={selectRobot}
+      />
       <Timeline
         robots={team.robots}
+        names={robotNames}
         orders={orders}
         selectedRobotId={selectedRobot.id}
         budgetTicks={budgetTicks}
         previewTick={previewTick}
         onPreviewTick={setPreviewTick}
-        editing={editing}
         remainingTicks={budgetTicks - selectedEndTick}
-        onReset={() =>
+        onClear={() =>
           edit(
             replaceTimeline(orders, selectedRobot.id, []),
-            "Selected robot timeline reset. Undo remains available.",
+            `${robotNames.get(selectedRobot.id) ?? "Selected robot"} plan cleared. Undo remains available.`,
           )
         }
-        onSelectRobot={openRobotCommands}
-        onEdit={beginEdit}
-        onDelete={removeCommand}
+        onSelectRobot={selectRobot}
+        onSelectCommand={selectCommand}
+        onRemoveLast={removeCommand}
       />
       <div className="planner-workspace">
         <section className="planner-board-card">
           <div className="planner-board-heading">
             <div className="planner-board-identity">
-              <p className="eyebrow">{selectedRobot.definition.class} robot</p>
+              <p className="eyebrow">{robotNames.get(selectedRobot.id) ?? "Selected robot"}</p>
               <h2>
                 {previewProjected.position === "dock"
                   ? "Awaiting deployment"
                   : `At tile ${previewProjected.position.x},${previewProjected.position.y}`}
               </h2>
             </div>
-            {scanDialog !== null ? (
-              <ScanFireControls
-                weapon={scanDialog.weapon}
-                maxDistance={scanDialog.maxDistance}
-                seconds={scanDialog.seconds}
-                onDistanceChange={(maxDistance) =>
-                  setScanDialog((current) =>
-                    current === null ? null : { ...current, maxDistance },
-                  )
-                }
-                onSecondsChange={(seconds) =>
-                  setScanDialog((current) => (current === null ? null : { ...current, seconds }))
-                }
-                onCancel={() => {
-                  setScanDialog(null);
-                  setEditing(null);
-                  setNotice("Scan & Fire canceled.");
-                }}
-                onConfirm={() =>
-                  commitSegment(
-                    {
-                      kind: "scan-and-fire",
-                      weapon: scanDialog.weapon,
-                      maxDistance: scanDialog.maxDistance,
-                      seconds: scanDialog.seconds,
-                    },
-                    `Scan & Fire added · ${scanDialog.maxDistance} tiles for ${scanDialog.seconds} seconds.`,
-                  )
-                }
-              />
-            ) : aimTool || aimDialog !== null ? (
-              <AimFireControls
-                weapon={aimDialog?.weapon ?? weapons[0]!}
-                target={aimDialog?.target ?? null}
-                shots={aimShots}
-                maxShots={aimMaxShots}
-                firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
-                canReview={aimedPreview?.status === "eligible"}
-                onShotsChange={setAimShots}
-                onCancel={() => {
-                  setAimTool(false);
-                  setAimDialog(null);
-                  setAimShots(1);
-                  setAimReviewOpen(false);
-                  setEditing(null);
-                  setNotice("Aim & Fire canceled.");
-                }}
-                onReview={() => setAimReviewOpen(true)}
-              />
-            ) : null}
-            <div className="planner-board-actions">
-              <span className="planner-cursor-status" data-state={cursorState}>
-                {cursor === null ? "Outside grid" : `${cursor.x},${cursor.y} · `}
-                {cursorState.replaceAll("-", " ")}
-              </span>
-              <div className="history-buttons" aria-label="Draft history">
-                <button
-                  type="button"
-                  onClick={() => changeHistory("undo")}
-                  disabled={state.history.past.length === 0}
-                  aria-label="Undo"
-                >
-                  <Undo2 size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeHistory("redo")}
-                  disabled={state.history.future.length === 0}
-                  aria-label="Redo"
-                >
-                  <Redo2 size={16} aria-hidden="true" />
-                </button>
-              </div>
+            <div className="fire-control-slot">
+              {scanDialog !== null ? (
+                <ScanFireControls
+                  weapon={scanDialog.weapon}
+                  maxDistance={scanDialog.maxDistance}
+                  seconds={scanDialog.seconds}
+                  onDistanceChange={(maxDistance) =>
+                    setScanDialog((current) =>
+                      current === null ? null : { ...current, maxDistance },
+                    )
+                  }
+                  onSecondsChange={(seconds) =>
+                    setScanDialog((current) => (current === null ? null : { ...current, seconds }))
+                  }
+                  onCancel={() => {
+                    setScanDialog(null);
+                    setNotice("Scan & Fire canceled.");
+                  }}
+                  onConfirm={() =>
+                    commitSegment(
+                      {
+                        kind: "scan-and-fire",
+                        weapon: scanDialog.weapon,
+                        maxDistance: scanDialog.maxDistance,
+                        seconds: scanDialog.seconds,
+                      },
+                      `Scan & Fire added · ${scanDialog.maxDistance} tiles for ${scanDialog.seconds} seconds.`,
+                    )
+                  }
+                />
+              ) : aimTool || aimDialog !== null ? (
+                <AimFireControls
+                  weapon={aimDialog?.weapon ?? selectedWeapon}
+                  target={aimDialog?.target ?? null}
+                  shots={aimShots}
+                  maxShots={aimMaxShots}
+                  firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
+                  canReview={aimedPreview?.status === "eligible"}
+                  onShotsChange={setAimShots}
+                  onCancel={() => {
+                    cancelFire("Aim & Fire canceled.");
+                  }}
+                  onReview={() => setAimReviewOpen(true)}
+                />
+              ) : (
+                <span className="fire-control-idle">Select Aim or Scan to configure fire.</span>
+              )}
             </div>
           </div>
+          <PlannerActionStrip
+            posture={projected.posture}
+            heading={projected.scanHeading}
+            weapons={weapons}
+            selectedWeapon={selectedWeapon}
+            missileAmmo={missileAmmo}
+            disabled={projected.position === "dock"}
+            aimActive={aimTool || aimDialog !== null}
+            scanActive={scanDialog !== null}
+            onPosture={addPosture}
+            onHeadingPreview={setHeadingPreview}
+            onHeading={addHeading}
+            onWeapon={(weapon) => {
+              setWeaponChoiceByRobot((current) => ({ ...current, [selectedRobot.id]: weapon }));
+              setAimDialog((current) => (current === null ? null : { ...current, weapon }));
+              setScanDialog((current) =>
+                current === null
+                  ? null
+                  : {
+                      ...current,
+                      weapon,
+                      maxDistance: Math.min(current.maxDistance, PLANNER_WEAPON_RANGE[weapon]),
+                    },
+              );
+            }}
+            onAim={startAim}
+            onScan={startScan}
+          />
           <ArenaCanvas
             arena={match.arena}
             robots={robotViews}
@@ -864,7 +912,7 @@ export function PlannerExperience({
             onAssumedPosture={setTargetingPosture}
             onCursor={setCursor}
             onChooseTile={chooseTile}
-            onChooseRobot={openRobotCommands}
+            onChooseRobot={selectRobot}
           />
           {aimReviewOpen && aimDialog !== null ? (
             <AimAndFireDialog
@@ -897,62 +945,20 @@ export function PlannerExperience({
               }}
             />
           ) : null}
-          <div className="planner-notice" role="status" aria-live="polite">
-            <CloudOff size={15} aria-hidden="true" />
-            <span>{notice}</span>
-            <small>Draft is private and has not been locked.</small>
-          </div>
+          {notice.length === 0 ? null : (
+            <div
+              className="planner-notice"
+              data-severity={
+                /blocked|out of|unavailable|invalid/i.test(notice) ? "warning" : "info"
+              }
+              role="status"
+              aria-live="polite"
+            >
+              <span>{notice}</span>
+            </div>
+          )}
         </section>
       </div>
-      {commandDialogOpen ? (
-        <CommandPanel
-          robotLabel={`R${team.robots.findIndex((robot) => robot.id === selectedRobot.id) + 1} · ${selectedRobot.definition.class} robot`}
-          posture={projected.posture}
-          heading={projected.scanHeading}
-          editingCommandNumber={editingIndex === null ? null : editingIndex + 1}
-          onPosture={addPosture}
-          onHeading={addHeading}
-          onClose={() => setCommandDialogOpen(false)}
-          onCancelEdit={() => {
-            setEditing(null);
-            setAimDialog(null);
-            setAimShots(1);
-            setAimReviewOpen(false);
-            setScanDialog(null);
-          }}
-          fireDisabled={projected.position === "dock"}
-          aimActive={aimTool}
-          onAim={() => {
-            if (aimTool) {
-              setAimTool(false);
-              setAimDialog(null);
-              setAimShots(1);
-              setAimReviewOpen(false);
-              setNotice("Aim & Fire canceled.");
-              return;
-            }
-            setAimTool(true);
-            setScanDialog(null);
-            setAimShots(1);
-            setAimReviewOpen(false);
-            setNotice("Aim & Fire active — choose a target tile. Ctrl+Shift starts with 2 shots.");
-          }}
-          onScanFire={() => {
-            const weapon = weapons[0]!;
-            const defaults = defaultScanSettings(weapon, budgetTicks - selectedEndTick);
-            setAimTool(false);
-            setAimDialog(null);
-            setAimShots(1);
-            setAimReviewOpen(false);
-            setScanDialog({
-              weapon,
-              maxDistance: defaults.maxDistance,
-              seconds: defaults.seconds,
-            });
-            setNotice("Configure how long and how far this robot should scan for a target.");
-          }}
-        />
-      ) : null}
     </main>
   );
 }

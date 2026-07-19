@@ -1275,6 +1275,612 @@ a.planner-menu-item:focus-visible {
   background: rgb(8 12 9 / 88%);
   backdrop-filter: blur(6px);
 }
+.camera-zoom-value {
+  width: 3.2rem;
+  min-height: 2rem;
+  cursor: pointer;
+  border: 0;
+  border-radius: 0.45rem;
+  color: rgb(255 255 255 / 72%);
+  background: transparent;
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.camera-zoom-value:hover,
+.camera-zoom-value:focus-visible {
+  color: #d9f99d;
+  outline: 1px solid rgb(190 242 100 / 45%);
+}
+
+/* Phase 11.8.1 board-first planner stack. */
+.planner-header-history button {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  background: rgb(255 255 255 / 4%);
+}
+.planner-header-history button:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+.planner-robot-selector {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+.planner-robot-selector button {
+  display: grid;
+  min-width: 7.5rem;
+  min-height: 2.65rem;
+  cursor: pointer;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 0.65rem;
+  padding: 0.35rem 0.55rem;
+  color: rgb(255 255 255 / 62%);
+  background: rgb(255 255 255 / 3%);
+  text-align: left;
+}
+.planner-robot-selector button:hover,
+.planner-robot-selector button:focus-visible,
+.planner-robot-selector button[data-selected="true"] {
+  border-color: rgb(190 242 100 / 48%);
+  color: white;
+  outline: 2px solid rgb(190 242 100 / 16%);
+}
+.planner-robot-shortcut {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border-radius: 0.4rem;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 10%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.65rem;
+  font-weight: 900;
+}
+.planner-robot-selector strong {
+  font-size: 0.7rem;
+}
+.planner-robot-selector small {
+  color: rgb(255 255 255 / 35%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.56rem;
+}
+.planner-timeline {
+  flex: none;
+  padding: 0.35rem 0.55rem 0.45rem;
+}
+.timeline-topline {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+.timeline-topline > strong {
+  color: #d9f99d;
+  font-size: 0.68rem;
+}
+.timeline-topline > span {
+  color: rgb(255 255 255 / 42%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.58rem;
+}
+.timeline-topline > span[data-over="true"] {
+  color: #fda4af;
+}
+.timeline-topline .timeline-expand-button {
+  margin-left: auto;
+}
+.timeline-topline .timeline-reset-button,
+.timeline-topline .timeline-expand-button {
+  min-height: 2rem;
+}
+.timeline-ruler {
+  position: relative;
+  height: 0.8rem;
+  margin: 0 0.35rem;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+.timeline-ruler span {
+  position: absolute;
+  bottom: 0.05rem;
+  color: rgb(255 255 255 / 28%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.48rem;
+  transform: translateX(-50%);
+}
+.timeline-ruler span:first-child {
+  transform: none;
+}
+.timeline-ruler span:last-child {
+  transform: translateX(-100%);
+}
+.timeline-rows {
+  margin-top: 0.18rem;
+}
+.timeline-rows[data-expanded="true"] {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+.timeline-row {
+  position: relative;
+  display: flex;
+  min-height: 2.55rem;
+  gap: 0.35rem;
+}
+.timeline-robot {
+  display: inline-flex;
+  width: 7rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.timeline-segments {
+  position: relative;
+  flex: 1;
+  overflow: visible;
+}
+.timeline-segment {
+  position: relative;
+  min-width: 4.5rem;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.timeline-command {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 2.45rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: inherit;
+  padding: 0.25rem 0.4rem;
+  color: rgb(255 255 255 / 72%);
+  background: transparent;
+  text-align: left;
+  touch-action: pan-x;
+}
+.timeline-command:hover,
+.timeline-command:focus-visible {
+  color: white;
+  outline: 2px solid rgb(103 232 249 / 35%);
+  outline-offset: -2px;
+}
+.timeline-command > span:last-child {
+  min-width: 0;
+}
+.timeline-command strong,
+.timeline-command small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeline-command strong {
+  font-size: 0.56rem;
+}
+.timeline-command small {
+  color: rgb(255 255 255 / 38%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.5rem;
+}
+.timeline-move-glyph {
+  color: #a5f3fc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.timeline-scan-glyph {
+  position: relative;
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  border: 1px solid #67e8f9;
+  border-radius: 50%;
+}
+.timeline-scan-glyph i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.48rem;
+  height: 1px;
+  background: #67e8f9;
+  transform-origin: left center;
+}
+.timeline-scan-glyph[data-heading="N"] i {
+  transform: rotate(-90deg);
+}
+.timeline-scan-glyph[data-heading="NE"] i {
+  transform: rotate(-45deg);
+}
+.timeline-scan-glyph[data-heading="E"] i {
+  transform: rotate(0deg);
+}
+.timeline-scan-glyph[data-heading="SE"] i {
+  transform: rotate(45deg);
+}
+.timeline-scan-glyph[data-heading="S"] i {
+  transform: rotate(90deg);
+}
+.timeline-scan-glyph[data-heading="SW"] i {
+  transform: rotate(135deg);
+}
+.timeline-scan-glyph[data-heading="W"] i {
+  transform: rotate(180deg);
+}
+.timeline-scan-glyph[data-heading="NW"] i {
+  transform: rotate(225deg);
+}
+.timeline-command-detail {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  display: grid;
+  width: 15rem;
+  gap: 0.25rem;
+  border: 1px solid rgb(103 232 249 / 30%);
+  border-radius: 0.65rem;
+  padding: 0.6rem;
+  color: rgb(255 255 255 / 72%);
+  background: rgb(8 14 11 / 97%);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 55%);
+  font-size: 0.62rem;
+}
+.timeline-command-detail small {
+  color: rgb(255 255 255 / 40%);
+  font-family: ui-monospace, monospace;
+}
+.timeline-command-detail button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid rgb(251 113 133 / 36%);
+  border-radius: 0.45rem;
+  color: #fda4af;
+  background: rgb(251 113 133 / 8%);
+  font-size: 0.58rem;
+  font-weight: 850;
+}
+.timeline-playhead {
+  position: relative;
+  display: block;
+  height: 2.75rem;
+  margin: -0.25rem 0.35rem 0;
+}
+.timeline-playhead input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 2.75rem;
+  cursor: ew-resize;
+  margin: 0;
+  touch-action: none;
+  background: transparent;
+}
+.timeline-playhead output {
+  position: absolute;
+  bottom: 0;
+  color: #a5f3fc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.52rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.planner-board-heading {
+  min-height: 3.25rem;
+  grid-template-columns: minmax(9rem, 0.3fr) minmax(0, 1fr);
+  margin-bottom: 0.35rem;
+}
+.fire-control-slot {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+}
+.fire-control-idle {
+  color: rgb(255 255 255 / 24%);
+  font-size: 0.58rem;
+}
+.planner-action-strip {
+  display: flex;
+  min-height: 4.25rem;
+  flex: none;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.55rem;
+  background: rgb(3 8 5 / 46%);
+}
+.planner-action-strip fieldset {
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.planner-action-strip legend,
+.action-weapon-group > span {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.52rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.action-posture-group > div,
+.action-fire-group {
+  display: flex;
+  gap: 0.25rem;
+}
+.action-posture-group button,
+.action-fire-group button {
+  display: inline-flex;
+  min-height: 2.65rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 0.5rem;
+  padding: 0 0.55rem;
+  color: rgb(255 255 255 / 58%);
+  background: rgb(255 255 255 / 4%);
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+.action-posture-group button:hover,
+.action-posture-group button:focus-visible,
+.action-posture-group button[data-active="true"],
+.action-fire-group button:hover,
+.action-fire-group button:focus-visible,
+.action-fire-group button[data-active="true"] {
+  border-color: rgb(190 242 100 / 48%);
+  color: #d9f99d;
+  outline: 2px solid rgb(190 242 100 / 16%);
+}
+.posture-silhouette {
+  position: relative;
+  display: inline-block;
+  width: 0.95rem;
+  height: 1.25rem;
+  flex: none;
+}
+.posture-silhouette::before,
+.posture-silhouette::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+.posture-silhouette::before {
+  top: 0;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+}
+.posture-silhouette::after {
+  bottom: 0;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 0.22rem 0.22rem 0.12rem 0.12rem;
+}
+.posture-silhouette[data-posture="ducking"] {
+  height: 1rem;
+  margin-top: 0.25rem;
+}
+.posture-silhouette[data-posture="crouching"] {
+  height: 0.75rem;
+  margin-top: 0.5rem;
+}
+.action-heading-group {
+  width: 5.3rem;
+}
+.scan-direction-control {
+  position: relative;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -0.15rem auto 0;
+  border: 1px solid rgb(103 232 249 / 40%);
+  border-radius: 50%;
+  outline: none;
+}
+.scan-direction-control:focus-visible {
+  outline: 2px solid rgb(103 232 249 / 45%);
+  outline-offset: 2px;
+}
+.scan-direction-forward,
+.scan-direction-rear {
+  position: absolute;
+  inset: 0.28rem;
+  border-radius: 50%;
+  clip-path: inset(0 0 50% 0);
+}
+.scan-direction-forward {
+  background: rgb(103 232 249 / 18%);
+}
+.scan-direction-rear {
+  background: rgb(255 255 255 / 5%);
+  transform: rotate(180deg);
+}
+.scan-direction-arrow {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 1.25rem;
+  height: 2px;
+  background: #67e8f9;
+  transform-origin: left center;
+}
+.scan-direction-arrow::after {
+  content: "";
+  position: absolute;
+  top: -0.2rem;
+  right: -0.05rem;
+  border-top: 0.25rem solid transparent;
+  border-bottom: 0.25rem solid transparent;
+  border-left: 0.35rem solid #67e8f9;
+}
+.scan-direction-control > button {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: pointer;
+  border: 0;
+  border-radius: 50%;
+  color: transparent;
+  background: transparent;
+}
+.scan-direction-control > button:hover,
+.scan-direction-control > button:focus-visible {
+  background: rgb(190 242 100 / 22%);
+  outline: 1px solid #bef264;
+}
+.scan-direction-control > strong {
+  position: absolute;
+  z-index: 4;
+  bottom: -0.2rem;
+  left: 50%;
+  color: white;
+  background: #0c120e;
+  font-family: ui-monospace, monospace;
+  font-size: 0.5rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.action-weapon-group {
+  display: grid;
+  min-width: 9rem;
+  gap: 0.15rem;
+}
+.action-weapon-group select,
+.action-weapon-group > strong {
+  min-height: 2rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.45rem;
+  padding: 0 0.45rem;
+  color: white;
+  background: rgb(0 0 0 / 24%);
+  font-size: 0.62rem;
+  line-height: 2rem;
+}
+.action-weapon-group select {
+  cursor: pointer;
+}
+.action-weapon-group small {
+  color: #fcd34d;
+  font-family: ui-monospace, monospace;
+  font-size: 0.52rem;
+}
+.action-fire-group {
+  margin-left: auto;
+}
+.planner-canvas-shell {
+  position: relative;
+  border: 4px solid #252c27;
+  border-radius: 0.95rem;
+  padding: 0.2rem;
+  background: linear-gradient(145deg, #394139, #151a16);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 8%),
+    0 14px 36px rgb(0 0 0 / 30%);
+}
+.planner-camera-controls {
+  position: absolute;
+  z-index: 12;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  margin: 0;
+}
+.planner-notice {
+  position: absolute;
+  z-index: 20;
+  top: 7.8rem;
+  left: 50%;
+  max-width: min(34rem, calc(100% - 2rem));
+  border: 1px solid rgb(103 232 249 / 26%);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  color: #cffafe;
+  background: rgb(5 14 14 / 91%);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 35%);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.planner-notice[data-severity="warning"] {
+  border-color: rgb(251 191 36 / 38%);
+  color: #fde68a;
+  background: rgb(28 18 4 / 94%);
+}
+
+@media (max-width: 1100px) {
+  .planner-page {
+    padding: 0.5rem;
+  }
+  .planner-header {
+    margin-bottom: 0.35rem;
+  }
+  .planner-header-title .eyebrow {
+    display: none;
+  }
+  .planner-robot-selector button {
+    min-width: 0;
+    flex: 1;
+  }
+  .planner-robot-selector small {
+    display: none;
+  }
+  .timeline-topline > span:nth-of-type(2) {
+    display: none;
+  }
+  .planner-board-card {
+    padding: 0.45rem;
+  }
+  .planner-board-heading {
+    min-height: 3rem;
+  }
+  .planner-action-strip {
+    gap: 0.35rem;
+    padding-inline: 0.35rem;
+  }
+  .action-posture-group button span:last-child {
+    display: none;
+  }
+  .action-posture-group button {
+    width: 2.65rem;
+    padding: 0;
+  }
+  .action-weapon-group {
+    min-width: 7.5rem;
+  }
+  .action-fire-group button {
+    padding-inline: 0.4rem;
+  }
+  .fire-control-strip {
+    max-width: none;
+  }
+}
 .planner-canvas:focus-visible {
   outline: 3px solid rgb(190 242 100 / 55%);
   outline-offset: 3px;

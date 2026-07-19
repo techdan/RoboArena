@@ -1330,7 +1330,7 @@ Playwright execution remains paused by policy.
 
 ---
 
-### Phase 11.8.1 — board-first planner commands, timeline, and full-width targeting board [🟡 IN PROGRESS]
+### Phase 11.8.1 — board-first planner commands, timeline, and full-width targeting board [🟡 IMPLEMENTED / VISUAL REVIEW]
 
 **Goal**: augment Phase 11.8 without changing its combat math or targeting
 overlay. The planner should be one stable, board-first workspace: selecting a
@@ -1627,17 +1627,33 @@ draft/replay compatibility. Scan desktop clicks are inert, touch taps retain
 the ordinary cursor tooltip, and damage/range labels follow the longest visible
 cone boundary. Confirm/cancel restores ordinary board interaction.
 
-The expanded robot-command, posture/scan-circle, conditional Missile
-weapon/ammo, icon timeline, history, map-chrome, and arena-bezel work above
-remains open; the phase therefore remains in progress.
+**Planner-workspace slice implemented 2026-07-19**: robot selection is now a
+class-named, duplicate-aware selector and never opens a command dialog. The
+modal is removed from the active planner path. A stable action strip provides
+shared posture silhouettes, a keyboard/pointer eight-way circular scan control
+with live uniform-wedge preview, plan-aware Missile Launcher/Rifle selection,
+finite missile status, and Aim/Scan entry. Exhausted missiles collapse to the
+read-only Rifle fallback and undo restores the prior choice and count.
 
-**Verification**: focused server-rendered component tests cover the compact Scan
-surface, Aim review gating, fire-time controls, and posture/legend panel; the retained
-four-client browser spec covers full-width mode entry, Aim review/confirm, Scan
-configuration/touch-tooltip/confirm, and restored overlay state. Vitest, strict typecheck,
-ESLint, Prettier, and the production build pass. Manual desktop/iPad screenshot
-review remains open because the in-app browser bridge was unavailable in this
-environment; automated Playwright execution remains paused by policy.
+The selected robot receives one compact icon timeline by default. Commands use
+glyphs plus essential parameters, hybrid duration sizing, exact accessible
+details, and a directly attached shared scrubber/playhead. All Programs expands
+temporarily on the same time axis. Command selection previews its completion;
+only the final action exposes Remove Last Action, while Clear names the robot.
+All mutations continue through the existing full turn-scoped reducer history,
+with Undo/Redo moved beside the global menu. The arena now has a presentation-
+only bezel, overlaid compact camera controls, and transient severity-correct
+notices. The active-mode slot stays height-stable, so Aim/Scan changes do not
+reflow the board.
+
+**Verification**: 317 Vitest tests pass, including focused presentation tests
+for duplicate-aware robot identity, conditional finite-ammo weapon controls,
+command glyph parameters, heading rotation, tail-only removal, the selected
+timeline lane, compact Scan, Aim review/fire time, and posture/legend behavior.
+Strict typecheck, ESLint, Prettier, and the production build pass. The retained
+browser spec has been updated to the modal-free append/remove-last vocabulary
+but was not run because automated Playwright execution remains paused. Manual
+desktop/iPad screenshot review remains the final phase closure item.
 
 ---
 
@@ -2653,7 +2669,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12)                         |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
-| 11.8.1  | 🟡 IN PROGRESS                     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, full undo/redo history, and full-width arena                                      |
+| 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, full undo/redo history, and full-width arena                                      |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |

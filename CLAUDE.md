@@ -21,7 +21,7 @@ production-grade.
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
 draft-complete; Phases 11.8 and 11.8.1 are implemented with visual review open.
 Phase 8 is locally implemented with its external WSS/two-network hosting gate
-still open. The repository has 312 passing tests. Phase 1.5 lint/format/CI is
+still open. The repository has 317 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -38,7 +38,7 @@ are now consolidated in the Phase 12 v1 ship gate. See
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 236 tests)
+npm test               # Run all unit tests (currently 317 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans

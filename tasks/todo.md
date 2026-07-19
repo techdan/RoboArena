@@ -103,6 +103,18 @@ by user direction because of their runtime and low feedback value. Keep the
 specs and baselines for a possible later re-enable. Current UI validation is
 manual browser/iPad testing with screenshots and direct feedback.
 
+## Phase 11.8.1 manual visual closure (2026-07-19)
+
+Implementation and automated non-browser gates are complete. Manually review
+the planner at desktop 1280×720 (100% and 125%) and iPad landscape 1024×768:
+
+- [ ] idle board-first stack and presentation-only arena bezel
+- [ ] posture silhouettes and eight-way circular scan preview/commit
+- [ ] Missile Launcher/Rifle choice, finite count, exhausted fallback, and undo restoration
+- [ ] icon timeline, tail detail/removal, shared scrubber, and All Programs expansion
+- [ ] Aim target/review/confirm and Scan range/duration/confirm without arena resizing
+- [ ] tooltip/legend/camera overlays do not block required board interaction
+
 ## Phase 11 turn-loop review pass (2026-07-18)
 
 High-effort review of 36af312 (authoritative turn loop). Five fixes landed:

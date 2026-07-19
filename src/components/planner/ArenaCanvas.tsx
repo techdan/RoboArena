@@ -82,6 +82,7 @@ export interface HomeAreaOverlay {
 }
 
 export interface PlannerTargetingOverlay {
+  readonly previewOnly?: boolean;
   readonly mode: "aim" | "scan";
   readonly origin: TileCoord;
   readonly heading: Heading;
@@ -384,29 +385,31 @@ export function ArenaCanvas({
         overlay.addChild(outline);
       }
       if (targetingOverlay !== null) {
-        const heat = new Graphics();
-        for (const tile of targetingOverlay.tiles) {
-          const visual = targetingTileVisual(tile);
-          const x = tile.tile.x * TILE_SIZE;
-          const y = tile.tile.y * TILE_SIZE;
-          heat.rect(x, y, TILE_SIZE, TILE_SIZE).fill({ color: visual.color, alpha: visual.alpha });
-          if (visual.pattern === "hatch") {
+        if (!targetingOverlay.previewOnly) {
+          const heat = new Graphics();
+          for (const tile of targetingOverlay.tiles) {
+            const visual = targetingTileVisual(tile);
+            const x = tile.tile.x * TILE_SIZE;
+            const y = tile.tile.y * TILE_SIZE;
             heat
-              .moveTo(x + 2, y + TILE_SIZE - 2)
-              .lineTo(x + TILE_SIZE - 2, y + 2)
-              .moveTo(x - 4, y + TILE_SIZE - 2)
-              .lineTo(x + TILE_SIZE - 2, y - 4)
-              .stroke({ width: 1, color: 0xf8fafc, alpha: 0.34 });
-          } else if (visual.pattern === "reverse-hatch") {
-            // Opposite diagonal, sparser and quieter: angle-blocked covers half
-            // the board, so its texture must recede rather than shout.
-            heat
-              .moveTo(x + 2, y + 2)
-              .lineTo(x + TILE_SIZE - 2, y + TILE_SIZE - 2)
-              .stroke({ width: 1, color: 0xf8fafc, alpha: 0.16 });
+              .rect(x, y, TILE_SIZE, TILE_SIZE)
+              .fill({ color: visual.color, alpha: visual.alpha });
+            if (visual.pattern === "hatch") {
+              heat
+                .moveTo(x + 2, y + TILE_SIZE - 2)
+                .lineTo(x + TILE_SIZE - 2, y + 2)
+                .moveTo(x - 4, y + TILE_SIZE - 2)
+                .lineTo(x + TILE_SIZE - 2, y - 4)
+                .stroke({ width: 1, color: 0xf8fafc, alpha: 0.34 });
+            } else if (visual.pattern === "reverse-hatch") {
+              heat
+                .moveTo(x + 2, y + 2)
+                .lineTo(x + TILE_SIZE - 2, y + TILE_SIZE - 2)
+                .stroke({ width: 1, color: 0xf8fafc, alpha: 0.16 });
+            }
           }
+          overlay.addChild(heat);
         }
-        overlay.addChild(heat);
         // Structural guides above the heat fill: the two boundary rays + arc
         // mark the exact ±90° firing half-plane (the arc doubles as the
         // max-range limit on the allowed side), and inner arcs mark the real
@@ -427,7 +430,11 @@ export function ArenaCanvas({
           .lineTo(wedge.rayB.x, wedge.rayB.y)
           .arc(wedge.center.x, wedge.center.y, maxRadiusPx, wedge.startAngle, wedge.endAngle)
           .stroke({ width: 1.5, color: 0x67e8f9, alpha: 0.75 });
-        const rings = damageRings(targetingOverlay.maxDistance, targetingOverlay.resolution);
+        const rings = targetingOverlay.previewOnly
+          ? damageRings(targetingOverlay.maxDistance, targetingOverlay.resolution).filter(
+              (ring) => ring.kind === "max-range",
+            )
+          : damageRings(targetingOverlay.maxDistance, targetingOverlay.resolution);
         for (const ring of rings) {
           if (ring.kind === "max-range") continue;
           guides
@@ -949,7 +956,7 @@ export function ArenaCanvas({
             ))}
           </div>
         )}
-        {targetingOverlay === null ? null : (
+        {targetingOverlay === null || targetingOverlay.previewOnly ? null : (
           <TargetingLegend
             overlay={targetingOverlay}
             onAssumedPosture={onAssumedPosture}
@@ -963,13 +970,13 @@ export function ArenaCanvas({
         ) : null}
       </div>
       <div className="planner-camera-controls">
-        <span>Drag to pan · wheel or pinch to zoom</span>
         <CameraControls
           label="Planning board zoom"
           zoom={transform.scale}
           canZoomIn={transform.scale < MAX_ZOOM}
           canZoomOut={transform.scale > MIN_ZOOM}
           disabled={status !== "ready"}
+          compact
           dataAttribute="planner"
           onZoomIn={() => zoomByStep(ZOOM_STEP)}
           onZoomOut={() => zoomByStep(1 / ZOOM_STEP)}
