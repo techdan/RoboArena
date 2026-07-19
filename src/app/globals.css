@@ -1036,6 +1036,63 @@ a.planner-menu-item:focus-visible {
   border-radius: 1rem;
   padding: 0.7rem;
 }
+/* Contextual targeting rail: docked column while a firing tool is active on
+   wide viewports; a collapsible bottom drawer below the breakpoint. */
+.planner-targeting-rail {
+  display: flex;
+  flex: none;
+  width: clamp(19rem, 24vw, 22rem);
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.targeting-rail-toggle {
+  display: none;
+}
+.targeting-rail-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 1023px) {
+  .planner-targeting-rail {
+    position: fixed;
+    z-index: 90;
+    inset-inline: max(0.75rem, env(safe-area-inset-left));
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    width: auto;
+    border: 1px solid rgb(103 232 249 / 25%);
+    border-radius: 0.8rem;
+    padding: 0.45rem;
+    background: rgb(8 14 12 / 96%);
+    box-shadow: 0 18px 50px rgb(0 0 0 / 55%);
+  }
+  .targeting-rail-toggle {
+    display: inline-flex;
+    min-height: 2.4rem;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.4rem;
+    border: 0;
+    border-radius: 0.5rem;
+    padding: 0 0.5rem;
+    color: #a5f3fc;
+    background: transparent;
+    font-size: 0.62rem;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+  }
+  .targeting-rail-body {
+    max-height: 42dvh;
+    margin-top: 0.35rem;
+  }
+  .planner-targeting-rail[data-collapsed="true"] .targeting-rail-body {
+    display: none;
+  }
+}
 .planner-editing {
   display: flex;
   align-items: center;
@@ -1590,43 +1647,6 @@ a.planner-menu-item:focus-visible {
   color: rgb(255 255 255 / 30%);
   font-size: 0.55rem;
   line-height: 1.4;
-}
-.scan-gate-legend {
-  position: absolute;
-  z-index: 3;
-  right: 0.4rem;
-  bottom: 0.4rem;
-  display: flex;
-  gap: 0.55rem;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 0.45rem;
-  padding: 0.3rem 0.45rem;
-  color: rgb(255 255 255 / 70%);
-  background: rgb(8 12 9 / 82%);
-  font-size: 0.52rem;
-  font-weight: 750;
-  pointer-events: none;
-  flex-wrap: wrap;
-  max-width: calc(100% - 0.8rem);
-}
-.scan-gate-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-.scan-gate-legend small {
-  flex-basis: 100%;
-  color: rgb(255 255 255 / 45%);
-  font-family: ui-monospace, monospace;
-}
-.scan-gate-legend i {
-  display: block;
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 0.15rem;
-}
-.scan-gate-legend i[data-kind="eligible"] {
-  background: rgb(134 239 172 / 55%);
 }
 .planner-dialog-backdrop {
   position: fixed;

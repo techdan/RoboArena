@@ -1,32 +1,30 @@
+/* Docked inside the targeting rail (or the narrow-viewport drawer); the rail
+   owns positioning and scrolling, the panel is just a card. */
 .panel {
-  position: fixed;
-  z-index: 70;
-  top: max(6.5rem, calc(env(safe-area-inset-top) + 1rem));
-  left: max(1rem, env(safe-area-inset-left));
   display: grid;
-  width: min(44rem, calc(58vw - 2rem));
-  max-height: calc(100dvh - 12rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  gap: 0.75rem;
+  gap: 0.7rem;
   border: 1px solid rgb(103 232 249 / 22%);
   border-radius: 0.75rem;
   margin: 0;
-  padding: 0.75rem;
+  padding: 0.7rem;
   color: rgb(255 255 255 / 78%);
   background: linear-gradient(135deg, rgb(8 18 18 / 94%), rgb(12 16 13 / 94%));
-  box-shadow: 0 24px 70px rgb(0 0 0 / 56%);
-  backdrop-filter: blur(10px);
 }
 
 .header,
 .headlineRow,
-.controlsAndLegend,
 .blockedState {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+/* Rail width fits one column: posture controls stack above the legend. */
+.controlsAndLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .eyebrow {
@@ -107,7 +105,7 @@
 }
 
 .postureFieldset {
-  min-width: 18rem;
+  min-width: 0;
   border: 0;
   margin: 0;
   padding: 0;
@@ -251,7 +249,7 @@
 .factorSummary,
 .calculation dl {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem;
   margin: 0;
 }
@@ -332,43 +330,8 @@
   margin-bottom: 0.5rem;
 }
 
-.calculation dl {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .calculation p {
   margin: 0.45rem 0 0;
   color: rgb(255 255 255 / 36%);
   font-size: 0.56rem;
-}
-
-@media (max-width: 900px) {
-  .panel {
-    top: auto;
-    right: max(0.75rem, env(safe-area-inset-right));
-    bottom: calc(4.8rem + env(safe-area-inset-bottom));
-    left: max(0.75rem, env(safe-area-inset-left));
-    width: auto;
-    max-height: min(30rem, calc(100dvh - 7rem));
-  }
-
-  .header,
-  .controlsAndLegend,
-  .headlineRow {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .basis {
-    text-align: left;
-  }
-
-  .postureFieldset {
-    min-width: 0;
-  }
-
-  .factorSummary,
-  .calculation dl {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }

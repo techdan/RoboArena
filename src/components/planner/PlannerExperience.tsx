@@ -2,6 +2,8 @@
 
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   CloudOff,
   LockKeyhole,
   Redo2,
@@ -188,6 +190,9 @@ export function PlannerExperience({
   const [targetingPosture, setTargetingPosture] = useState<Posture>("upright");
   const [pinnedAnalysisTile, setPinnedAnalysisTile] = useState<TileCoord | null>(null);
   const [lastAnalysisTile, setLastAnalysisTile] = useState<TileCoord | null>(null);
+  // Narrow viewports render the targeting rail as a bottom drawer; this
+  // collapse state only has visual effect below the drawer breakpoint.
+  const [railCollapsed, setRailCollapsed] = useState(true);
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
@@ -851,28 +856,56 @@ export function PlannerExperience({
             onChooseTile={chooseTile}
             onChooseRobot={openRobotCommands}
           />
-          {targetingBase === null ? null : (
-            <TargetingAnalysis
-              mode={targetingBase.mode}
-              weapon={targetingBase.weapon}
-              maxDistance={targetingBase.maxDistance}
-              seconds={targetingBase.seconds}
-              opportunityTicks={targetingBase.opportunityTicks}
-              assumedPosture={targetingPosture}
-              preview={targetingAnalysisPreview}
-              pinned={pinnedAnalysisTile !== null}
-              onAssumedPosture={setTargetingPosture}
-              onTogglePinned={() =>
-                setPinnedAnalysisTile((current) => (current === null ? analysisTile : null))
-              }
-            />
-          )}
           <div className="planner-notice" role="status" aria-live="polite">
             <CloudOff size={15} aria-hidden="true" />
             <span>{notice}</span>
             <small>Draft is private and has not been locked.</small>
           </div>
         </section>
+        {targetingBase === null ? null : (
+          <aside
+            className="planner-targeting-rail"
+            data-collapsed={railCollapsed}
+            aria-label="Targeting tools and shot analysis"
+          >
+            <button
+              type="button"
+              className="targeting-rail-toggle"
+              aria-expanded={!railCollapsed}
+              onClick={() => setRailCollapsed((current) => !current)}
+            >
+              {railCollapsed ? (
+                <ChevronUp size={15} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={15} aria-hidden="true" />
+              )}
+              Shot Analysis
+              {targetingAnalysisPreview === null
+                ? ""
+                : ` · ${targetingAnalysisPreview.tile.x},${targetingAnalysisPreview.tile.y}${
+                    targetingAnalysisPreview.chancePercent === null
+                      ? ""
+                      : ` · ${targetingAnalysisPreview.chancePercent}%`
+                  }`}
+            </button>
+            <div className="targeting-rail-body">
+              <TargetingAnalysis
+                mode={targetingBase.mode}
+                weapon={targetingBase.weapon}
+                maxDistance={targetingBase.maxDistance}
+                seconds={targetingBase.seconds}
+                opportunityTicks={targetingBase.opportunityTicks}
+                assumedPosture={targetingPosture}
+                preview={targetingAnalysisPreview}
+                pinned={pinnedAnalysisTile !== null}
+                onAssumedPosture={setTargetingPosture}
+                onTogglePinned={() =>
+                  setPinnedAnalysisTile((current) => (current === null ? analysisTile : null))
+                }
+              />
+            </div>
+          </aside>
+        )}
       </div>
       {commandDialogOpen ? (
         <CommandPanel

@@ -10,7 +10,6 @@ import {
 } from "react";
 import type { Application, Container, Graphics as PixiGraphics } from "pixi.js";
 import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from "../../engine/types";
-import { formatGameTime } from "../../lib/formatTime";
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import type { TargetingTilePreview } from "../../planner/firingHelpers";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
@@ -841,21 +840,6 @@ export function ArenaCanvas({
         >
           <div ref={hostRef} className="absolute inset-0" />
         </div>
-        {targetingOverlay === null ? null : (
-          <div className="scan-gate-legend" aria-label="Targeting overlay legend">
-            <span>
-              <i data-kind="eligible" />
-              {targetingOverlay.mode === "aim" ? "Fixed tile shot" : "Auto-acquire area"}
-            </span>
-            <small>
-              Hit chance vs {targetingOverlay.assumedPosture} · {targetingOverlay.maxDistance} tiles
-              {targetingOverlay.seconds === null ? "" : ` · ${targetingOverlay.seconds}s`}
-              {targetingOverlay.mode === "scan"
-                ? ` · checks now, then every ${formatGameTime(targetingOverlay.opportunityTicks)}`
-                : ` · fires in ${formatGameTime(targetingOverlay.opportunityTicks)}`}
-            </small>
-          </div>
-        )}
         {status !== "ready" ? (
           <div className="planner-canvas-loading" role="status">
             {status === "error" ? "Renderer unavailable" : "Loading tactical grid…"}
