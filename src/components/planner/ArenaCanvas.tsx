@@ -17,6 +17,7 @@ import type {
 import type { Arena, Heading, Posture, RobotClass, TileCoord, WeaponId } from "../../engine/types";
 import { ARENA_ASSET_URLS, highResSvg, TERRAIN_ASSETS } from "../../renderer/assets";
 import type { TargetingTilePreview } from "../../planner/firingHelpers";
+import { coneWedge, damageRings, ringRadiusPx } from "../../planner/overlayGeometry";
 import { labelAlpha, tileLabel } from "../../planner/overlayLabels";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
 import { createRobotSprite } from "../../renderer/RobotSprite";
@@ -385,29 +386,6 @@ export function ArenaCanvas({
         overlay.addChild(outline);
       }
       if (targetingOverlay !== null) {
-        if (targetingOverlay.mode === "scan") {
-          const footprintTiles = targetingOverlay.tiles.filter(
-            (tile) => tile.status !== "angle-blocked" && tile.status !== "out-of-range",
-          );
-          const footprintKeys = new Set(
-            footprintTiles.map((tile) => `${tile.tile.x},${tile.tile.y}`),
-          );
-          const footprint = new Graphics();
-          for (const { tile } of footprintTiles) {
-            const x = tile.x * TILE_SIZE;
-            const y = tile.y * TILE_SIZE;
-            if (!footprintKeys.has(`${tile.x},${tile.y - 1}`))
-              footprint.moveTo(x, y).lineTo(x + TILE_SIZE, y);
-            if (!footprintKeys.has(`${tile.x + 1},${tile.y}`))
-              footprint.moveTo(x + TILE_SIZE, y).lineTo(x + TILE_SIZE, y + TILE_SIZE);
-            if (!footprintKeys.has(`${tile.x},${tile.y + 1}`))
-              footprint.moveTo(x + TILE_SIZE, y + TILE_SIZE).lineTo(x, y + TILE_SIZE);
-            if (!footprintKeys.has(`${tile.x - 1},${tile.y}`))
-              footprint.moveTo(x, y + TILE_SIZE).lineTo(x, y);
-          }
-          footprint.stroke({ width: 2, color: 0x67e8f9, alpha: 0.9 });
-          overlay.addChild(footprint);
-        }
         const heat = new Graphics();
         for (const tile of targetingOverlay.tiles) {
           const visual = targetingTileVisual(tile);
@@ -431,6 +409,75 @@ export function ArenaCanvas({
           }
         }
         overlay.addChild(heat);
+        // Structural guides above the heat fill: the two boundary rays + arc
+        // mark the exact ±90° firing half-plane (the arc doubles as the
+        // max-range limit on the allowed side), and inner arcs mark the real
+        // damage breakpoints. All radii are (r + 1) tile units — the exact
+        // floored-Euclidean threshold the per-tile fills obey.
+        const guides = new Graphics();
+        const maxRadiusPx = ringRadiusPx(targetingOverlay.maxDistance, TILE_SIZE);
+        const wedge = coneWedge(
+          targetingOverlay.origin,
+          targetingOverlay.heading,
+          maxRadiusPx,
+          TILE_SIZE,
+        );
+        guides
+          .moveTo(wedge.center.x, wedge.center.y)
+          .lineTo(wedge.rayA.x, wedge.rayA.y)
+          .moveTo(wedge.center.x, wedge.center.y)
+          .lineTo(wedge.rayB.x, wedge.rayB.y)
+          .arc(wedge.center.x, wedge.center.y, maxRadiusPx, wedge.startAngle, wedge.endAngle)
+          .stroke({ width: 1.5, color: 0x67e8f9, alpha: 0.75 });
+        const headingAngle = (wedge.startAngle + wedge.endAngle) / 2;
+        const rings = damageRings(targetingOverlay.maxDistance, targetingOverlay.resolution);
+        for (const ring of rings) {
+          if (ring.kind === "max-range") continue;
+          guides
+            .arc(
+              wedge.center.x,
+              wedge.center.y,
+              ringRadiusPx(ring.radius, TILE_SIZE),
+              wedge.startAngle,
+              wedge.endAngle,
+            )
+            .stroke({
+              width: 1,
+              color: ring.kind === "near-bonus" ? 0xfacc15 : 0x94a3b8,
+              alpha: 0.6,
+            });
+        }
+        overlay.addChild(guides);
+        for (const ring of rings) {
+          const color =
+            ring.kind === "near-bonus"
+              ? 0xfacc15
+              : ring.kind === "far-penalty"
+                ? 0xcbd5e1
+                : 0x67e8f9;
+          const tag = new Text({
+            text: ring.label,
+            style: {
+              fill: color,
+              fontSize: 8,
+              fontWeight: "700",
+              stroke: { color: 0x000000, width: 3 },
+            },
+          });
+          const radiusPx = ringRadiusPx(ring.radius, TILE_SIZE);
+          tag.anchor.set(0.5);
+          tag.position.set(
+            Math.min(
+              arena.width * TILE_SIZE - 8,
+              Math.max(8, wedge.center.x + radiusPx * Math.cos(headingAngle)),
+            ),
+            Math.min(
+              arena.height * TILE_SIZE - 8,
+              Math.max(8, wedge.center.y + radiusPx * Math.sin(headingAngle)),
+            ),
+          );
+          overlay.addChild(tag);
+        }
       }
       // Per-tile hit-% labels: pooled BitmapText instances share one dynamic
       // glyph atlas (digits + %), so a 32×32 board stays cheap. Instances are
