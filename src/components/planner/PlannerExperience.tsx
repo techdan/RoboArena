@@ -47,6 +47,7 @@ import {
 } from "../../planner/firingHelpers";
 import { robotDisplayNames } from "../../planner/presentation";
 import { AimAndFireDialog } from "./AimAndFireDialog";
+import { AllProgramsOverlay } from "./AllProgramsOverlay";
 import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
 import { AimFireControls, ScanFireControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
@@ -180,6 +181,7 @@ export function PlannerExperience({
     Readonly<Record<string, WeaponId>>
   >({});
   const [cursor, setCursor] = useState<TileCoord | null>(null);
+  const [showAllPrograms, setShowAllPrograms] = useState(false);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
     initialDraft.current.kind === "unavailable" ? "error" : "saved",
@@ -205,11 +207,6 @@ export function PlannerExperience({
   );
   const commandPrefix = selectedTimeline.segments;
   const projected = projectRobotAtTick(selectedRobot, commandPrefix);
-  const previewProjected = projectRobotAtTick(
-    selectedRobot,
-    selectedTimeline.segments,
-    previewTick,
-  );
   const projectedShooter = useMemo(
     () => ({
       ...selectedRobot,
@@ -620,6 +617,52 @@ export function PlannerExperience({
       : (targetingBase.tiles[tile.y * match.arena.width + tile.x] ?? null);
   const aimedPreview = previewAt(aimDialog?.target ?? null);
 
+  // Active-fire controls that take over the strip's Aim/Scan entry-button slot
+  // in place (constant strip height); null shows the two entry buttons.
+  const fireControls =
+    scanDialog !== null ? (
+      <ScanFireControls
+        weapon={scanDialog.weapon}
+        maxDistance={scanDialog.maxDistance}
+        seconds={scanDialog.seconds}
+        onDistanceChange={(maxDistance) =>
+          setScanDialog((current) => (current === null ? null : { ...current, maxDistance }))
+        }
+        onSecondsChange={(seconds) =>
+          setScanDialog((current) => (current === null ? null : { ...current, seconds }))
+        }
+        onCancel={() => {
+          setScanDialog(null);
+          setNotice("Scan & Fire canceled.");
+        }}
+        onConfirm={() =>
+          commitSegment(
+            {
+              kind: "scan-and-fire",
+              weapon: scanDialog.weapon,
+              maxDistance: scanDialog.maxDistance,
+              seconds: scanDialog.seconds,
+            },
+            `Scan & Fire added · ${scanDialog.maxDistance} tiles for ${scanDialog.seconds} seconds.`,
+          )
+        }
+      />
+    ) : aimTool || aimDialog !== null ? (
+      <AimFireControls
+        weapon={aimDialog?.weapon ?? selectedWeapon}
+        target={aimDialog?.target ?? null}
+        shots={aimShots}
+        maxShots={aimMaxShots}
+        firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
+        canReview={aimedPreview?.status === "eligible"}
+        onShotsChange={setAimShots}
+        onCancel={() => {
+          cancelFire("Aim & Fire canceled.");
+        }}
+        onReview={() => setAimReviewOpen(true)}
+      />
+    ) : null;
+
   const keepOrRecoverConflict = () => {
     const conflictOrders = state.conflictOrders;
     if (conflictOrders === null) return;
@@ -797,115 +840,61 @@ export function PlannerExperience({
         robots={team.robots}
         names={robotNames}
         selectedRobotId={selectedRobot.id}
-        onSelect={selectRobot}
-      />
-      <Timeline
-        robots={team.robots}
-        names={robotNames}
-        orders={orders}
-        selectedRobotId={selectedRobot.id}
+        selectedName={robotNames.get(selectedRobot.id) ?? "Selected robot"}
+        usedTicks={selectedEndTick}
         budgetTicks={budgetTicks}
-        previewTick={previewTick}
-        onPreviewTick={setPreviewTick}
-        remainingTicks={budgetTicks - selectedEndTick}
+        showAllPrograms={showAllPrograms}
+        onSelect={selectRobot}
+        onToggleAllPrograms={() => setShowAllPrograms((current) => !current)}
         onClear={() =>
           edit(
             replaceTimeline(orders, selectedRobot.id, []),
             `${robotNames.get(selectedRobot.id) ?? "Selected robot"} plan cleared. Undo remains available.`,
           )
         }
-        onSelectRobot={selectRobot}
+      />
+      <Timeline
+        robots={team.robots}
+        orders={orders}
+        selectedRobotId={selectedRobot.id}
+        budgetTicks={budgetTicks}
+        previewTick={previewTick}
+        onPreviewTick={setPreviewTick}
+        remainingTicks={budgetTicks - selectedEndTick}
         onSelectCommand={selectCommand}
         onRemoveLast={removeCommand}
       />
-      <div className="planner-workspace">
-        <section className="planner-board-card">
-          <div className="planner-board-heading">
-            <div className="planner-board-identity">
-              <p className="eyebrow">{robotNames.get(selectedRobot.id) ?? "Selected robot"}</p>
-              <h2>
-                {previewProjected.position === "dock"
-                  ? "Awaiting deployment"
-                  : `At tile ${previewProjected.position.x},${previewProjected.position.y}`}
-              </h2>
-            </div>
-            <div className="fire-control-slot">
-              {scanDialog !== null ? (
-                <ScanFireControls
-                  weapon={scanDialog.weapon}
-                  maxDistance={scanDialog.maxDistance}
-                  seconds={scanDialog.seconds}
-                  onDistanceChange={(maxDistance) =>
-                    setScanDialog((current) =>
-                      current === null ? null : { ...current, maxDistance },
-                    )
-                  }
-                  onSecondsChange={(seconds) =>
-                    setScanDialog((current) => (current === null ? null : { ...current, seconds }))
-                  }
-                  onCancel={() => {
-                    setScanDialog(null);
-                    setNotice("Scan & Fire canceled.");
-                  }}
-                  onConfirm={() =>
-                    commitSegment(
-                      {
-                        kind: "scan-and-fire",
-                        weapon: scanDialog.weapon,
-                        maxDistance: scanDialog.maxDistance,
-                        seconds: scanDialog.seconds,
-                      },
-                      `Scan & Fire added · ${scanDialog.maxDistance} tiles for ${scanDialog.seconds} seconds.`,
-                    )
-                  }
-                />
-              ) : aimTool || aimDialog !== null ? (
-                <AimFireControls
-                  weapon={aimDialog?.weapon ?? selectedWeapon}
-                  target={aimDialog?.target ?? null}
-                  shots={aimShots}
-                  maxShots={aimMaxShots}
-                  firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
-                  canReview={aimedPreview?.status === "eligible"}
-                  onShotsChange={setAimShots}
-                  onCancel={() => {
-                    cancelFire("Aim & Fire canceled.");
-                  }}
-                  onReview={() => setAimReviewOpen(true)}
-                />
-              ) : (
-                <span className="fire-control-idle">Select Aim or Scan to configure fire.</span>
-              )}
-            </div>
-          </div>
-          <PlannerActionStrip
-            posture={projected.posture}
-            heading={projected.scanHeading}
-            weapons={weapons}
-            selectedWeapon={selectedWeapon}
-            missileAmmo={missileAmmo}
-            disabled={projected.position === "dock"}
-            aimActive={aimTool || aimDialog !== null}
-            scanActive={scanDialog !== null}
-            onPosture={addPosture}
-            onHeadingPreview={setHeadingPreview}
-            onHeading={addHeading}
-            onWeapon={(weapon) => {
-              setWeaponChoiceByRobot((current) => ({ ...current, [selectedRobot.id]: weapon }));
-              setAimDialog((current) => (current === null ? null : { ...current, weapon }));
-              setScanDialog((current) =>
-                current === null
-                  ? null
-                  : {
-                      ...current,
-                      weapon,
-                      maxDistance: Math.min(current.maxDistance, PLANNER_WEAPON_RANGE[weapon]),
-                    },
-              );
-            }}
-            onAim={startAim}
-            onScan={startScan}
-          />
+      <div className="planner-lower">
+        <PlannerActionStrip
+          posture={projected.posture}
+          heading={projected.scanHeading}
+          weapons={weapons}
+          selectedWeapon={selectedWeapon}
+          missileAmmo={missileAmmo}
+          disabled={projected.position === "dock"}
+          aimActive={aimTool || aimDialog !== null}
+          scanActive={scanDialog !== null}
+          fireControls={fireControls}
+          onPosture={addPosture}
+          onHeadingPreview={setHeadingPreview}
+          onHeading={addHeading}
+          onWeapon={(weapon) => {
+            setWeaponChoiceByRobot((current) => ({ ...current, [selectedRobot.id]: weapon }));
+            setAimDialog((current) => (current === null ? null : { ...current, weapon }));
+            setScanDialog((current) =>
+              current === null
+                ? null
+                : {
+                    ...current,
+                    weapon,
+                    maxDistance: Math.min(current.maxDistance, PLANNER_WEAPON_RANGE[weapon]),
+                  },
+            );
+          }}
+          onAim={startAim}
+          onScan={startScan}
+        />
+        <div className="planner-arena-region">
           <ArenaCanvas
             arena={match.arena}
             robots={robotViews}
@@ -963,7 +952,22 @@ export function PlannerExperience({
               <span>{notice}</span>
             </div>
           )}
-        </section>
+        </div>
+        {showAllPrograms ? (
+          <AllProgramsOverlay
+            robots={team.robots}
+            names={robotNames}
+            orders={orders}
+            selectedRobotId={selectedRobot.id}
+            budgetTicks={budgetTicks}
+            previewTick={previewTick}
+            onPreviewTick={setPreviewTick}
+            onSelectRobot={selectRobot}
+            onSelectCommand={selectCommand}
+            onRemoveLast={removeCommand}
+            onClose={() => setShowAllPrograms(false)}
+          />
+        ) : null}
       </div>
     </main>
   );

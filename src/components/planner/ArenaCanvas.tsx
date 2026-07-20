@@ -15,7 +15,7 @@ import type { TargetingTilePreview } from "../../planner/firingHelpers";
 import {
   coneWedge,
   damageRings,
-  ringLabelPosition,
+  placeRingLabels,
   ringRadiusPx,
 } from "../../planner/overlayGeometry";
 import { tooltipLines } from "../../planner/overlayLabels";
@@ -25,7 +25,7 @@ import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures
 import { useHelp } from "../help/HelpProvider";
 import { CameraControls } from "../CameraControls";
 import { TargetingLegend } from "./TargetingLegend";
-import { fitTransform } from "../../lib/fitTransform";
+import { fitTransform, fitWidthZoomFloor } from "../../lib/fitTransform";
 import {
   LONG_PRESS_MS,
   TouchGestureArbitrator,
@@ -36,10 +36,8 @@ import {
 } from "../../lib/input/pointerGestures";
 
 const TILE_SIZE = 24;
-const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25;
-const clampZoom = (scale: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 // Brighter than the robot-body hues so a thin outline reads over both dark grass
 // and red brick. The home overlay leans on these plus a dark halo, not opacity.
 const HOME_OVERLAY_COLORS: Readonly<Record<string, number>> = {
@@ -144,19 +142,34 @@ export function ArenaCanvas({
     height: arena.height * TILE_SIZE,
   });
   const [grabbing, setGrabbing] = useState(false);
-  // Letterbox base transform: the viewport fills whatever space the layout
-  // grants, and the fixed-resolution stage is fit-scaled and centered inside.
+  // Fit-width base transform: the arena fills the full viewport width and is
+  // centered vertically, cropping top/bottom rows when the viewport is shorter
+  // than the arena. User pan/zoom composes on top; zooming out to `minZoom`
+  // re-reveals the whole arena (contain fit).
   const fit = fitTransform(
     viewportSize.width,
     viewportSize.height,
     arena.width * TILE_SIZE,
     arena.height * TILE_SIZE,
+    "width",
   );
   const fitScale = fit.scale;
+  const minZoom = fitWidthZoomFloor(
+    viewportSize.width,
+    viewportSize.height,
+    arena.width * TILE_SIZE,
+    arena.height * TILE_SIZE,
+  );
   const transformRef = useRef(transform);
   transformRef.current = transform;
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  const minZoomRef = useRef(minZoom);
+  minZoomRef.current = minZoom;
+  const clampZoom = useCallback(
+    (scale: number): number => Math.min(MAX_ZOOM, Math.max(minZoomRef.current, scale)),
+    [],
+  );
   const pointersRef = useRef(new Map<number, Point>());
   const touchRef = useRef<{
     readonly pointerId: number;
@@ -180,20 +193,46 @@ export function ArenaCanvas({
   } | null>(null);
   const suppressMouseClickRef = useRef(false);
 
-  const zoomAbout = useCallback((focal: Point, nextScale: number) => {
-    // Focal points arrive in viewport coordinates; the user transform lives in
-    // the letterboxed frame, so shift by the fit offset before zooming about.
-    const { offsetX, offsetY } = fitRef.current;
-    setTransform((current) => {
-      const scale = clampZoom(nextScale);
-      if (scale === current.scale) return current;
-      const focalX = focal.x - offsetX;
-      const focalY = focal.y - offsetY;
-      const contentX = (focalX - current.x) / current.scale;
-      const contentY = (focalY - current.y) / current.scale;
-      return { scale, x: focalX - contentX * scale, y: focalY - contentY * scale };
-    });
-  }, []);
+  const zoomAbout = useCallback(
+    (focal: Point, nextScale: number) => {
+      // Focal points arrive in viewport coordinates; the user transform lives in
+      // the letterboxed frame, so shift by the fit offset before zooming about.
+      const { offsetX, offsetY } = fitRef.current;
+      setTransform((current) => {
+        const scale = clampZoom(nextScale);
+        if (scale === current.scale) return current;
+        const focalX = focal.x - offsetX;
+        const focalY = focal.y - offsetY;
+        const contentX = (focalX - current.x) / current.scale;
+        const contentY = (focalY - current.y) / current.scale;
+        return { scale, x: focalX - contentX * scale, y: focalY - contentY * scale };
+      });
+    },
+    [clampZoom],
+  );
+
+  // Keyboard tile navigation auto-pans so the inspected cell stays on screen,
+  // reaching the vertically cropped rows the fit-width default hides.
+  const ensureTileVisible = useCallback(
+    (tile: TileCoord) => {
+      setTransform((current) => {
+        const scale = fitScale * current.scale;
+        const cellLeft = fitRef.current.offsetX + current.x + tile.x * TILE_SIZE * scale;
+        const cellRight = cellLeft + TILE_SIZE * scale;
+        const cellTop = fitRef.current.offsetY + current.y + tile.y * TILE_SIZE * scale;
+        const cellBottom = cellTop + TILE_SIZE * scale;
+        let dx = 0;
+        let dy = 0;
+        if (cellLeft < -0.5) dx = -cellLeft;
+        else if (cellRight > viewportSize.width + 0.5) dx = viewportSize.width - cellRight;
+        if (cellTop < -0.5) dy = -cellTop;
+        else if (cellBottom > viewportSize.height + 0.5) dy = viewportSize.height - cellBottom;
+        if (dx === 0 && dy === 0) return current;
+        return { ...current, x: current.x + dx, y: current.y + dy };
+      });
+    },
+    [fitScale, viewportSize.height, viewportSize.width],
+  );
 
   const zoomByStep = useCallback(
     (factor: number) => {
@@ -452,7 +491,10 @@ export function ArenaCanvas({
             });
         }
         overlay.addChild(guides);
-        for (const ring of rings) {
+        // Build and measure every label first, then let the pure placer pick a
+        // shared ray and de-overlap by the rendered bounds; hidden labels are
+        // destroyed rather than drawn.
+        const labelTags = rings.map((ring) => {
           const color =
             ring.kind === "near-bonus"
               ? 0xfacc15
@@ -468,26 +510,29 @@ export function ArenaCanvas({
               stroke: { color: 0x000000, width: 3 },
             },
           });
-          const radiusPx = ringRadiusPx(ring.radius, TILE_SIZE);
-          const labelPosition = ringLabelPosition(
-            wedge,
-            radiusPx,
-            arena.width * TILE_SIZE,
-            arena.height * TILE_SIZE,
-          );
           tag.anchor.set(0.5);
-          tag.position.set(
-            Math.min(
-              arena.width * TILE_SIZE - tag.width / 2 - 4,
-              Math.max(tag.width / 2 + 4, labelPosition.x),
-            ),
-            Math.min(
-              arena.height * TILE_SIZE - tag.height / 2 - 4,
-              Math.max(tag.height / 2 + 4, labelPosition.y),
-            ),
-          );
+          return { tag, ring };
+        });
+        const placements = placeRingLabels(
+          wedge,
+          labelTags.map(({ tag, ring }) => ({
+            radiusPx: ringRadiusPx(ring.radius, TILE_SIZE),
+            kind: ring.kind,
+            width: tag.width,
+            height: tag.height,
+          })),
+          arena.width * TILE_SIZE,
+          arena.height * TILE_SIZE,
+        );
+        labelTags.forEach(({ tag }, labelIndex) => {
+          const placement = placements[labelIndex];
+          if (placement === undefined || !placement.visible) {
+            tag.destroy();
+            return;
+          }
+          tag.position.set(placement.x, placement.y);
           overlay.addChild(tag);
-        }
+        });
       }
       if (route.length > 0) {
         const line = new Graphics();
@@ -912,6 +957,7 @@ export function ArenaCanvas({
             };
             setKeyboardTile(next);
             onCursor(next);
+            ensureTileVisible(next);
           } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
             event.preventDefault();
             const bounds = event.currentTarget.getBoundingClientRect();
@@ -944,6 +990,22 @@ export function ArenaCanvas({
         >
           <div ref={hostRef} className="absolute inset-0" />
         </div>
+        {cursor === null ? null : (
+          <div className="planner-coord-chip" data-state={cursorState} aria-hidden="true">
+            <strong>
+              {cursor.x},{cursor.y}
+            </strong>
+            <span>
+              {cursorState === "valid"
+                ? "OK"
+                : cursorState === "blocked"
+                  ? "Blocked"
+                  : cursorState === "out-of-home"
+                    ? "Out of home"
+                    : "Off board"}
+            </span>
+          </div>
+        )}
         {tooltip === null ? null : (
           <div
             className="planner-tile-tooltip"
@@ -973,8 +1035,8 @@ export function ArenaCanvas({
         <CameraControls
           label="Planning board zoom"
           zoom={transform.scale}
-          canZoomIn={transform.scale < MAX_ZOOM}
-          canZoomOut={transform.scale > MIN_ZOOM}
+          canZoomIn={transform.scale < MAX_ZOOM - 1e-3}
+          canZoomOut={transform.scale > minZoom + 1e-3}
           disabled={status !== "ready"}
           compact
           dataAttribute="planner"

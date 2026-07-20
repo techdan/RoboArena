@@ -20,6 +20,11 @@ export interface AimFireControlsProps extends SharedControlsProps {
   readonly onReview: () => void;
 }
 
+/**
+ * Compact Aim & Fire controls that take over the two entry buttons' slot in the
+ * action strip: `⌖ target · fire time · shots · Review · ✕`. Cancel restores
+ * the entry buttons; the strip height and every other group stay fixed.
+ */
 export function AimFireControls({
   weapon,
   target,
@@ -34,20 +39,15 @@ export function AimFireControls({
   const intervalSeconds = firingIntervalTicks / TICKS_PER_SECOND;
   const fireSeconds = shots * intervalSeconds;
   return (
-    <section className="fire-control-strip" aria-label="Aim and Fire controls">
-      <div className="fire-strip-mode">
-        <Crosshair size={16} aria-hidden="true" />
-        <span>
-          <strong>Aim &amp; Fire</strong>
-          <small>{WEAPON_LABELS[weapon]}</small>
-        </span>
-      </div>
-      <div className="fire-strip-target" aria-live="polite">
-        <span>Target</span>
-        <strong>{target === null ? "Choose tile" : `${target.x},${target.y}`}</strong>
-      </div>
-      <label className="fire-strip-number">
-        <span>Fire time</span>
+    <div className="fire-inline" aria-label="Aim and Fire controls">
+      <span className="fire-inline-mode" title={`Aim & Fire · ${WEAPON_LABELS[weapon]}`}>
+        <Crosshair size={15} aria-hidden="true" />
+      </span>
+      <span className="fire-inline-target" aria-live="polite">
+        {target === null ? "Choose tile" : `${target.x},${target.y}`}
+      </span>
+      <label className="fire-inline-number">
+        <span>Fire</span>
         <input
           type="number"
           inputMode="decimal"
@@ -71,24 +71,27 @@ export function AimFireControls({
             )
           }
         />
-        <small>
-          {shots} shot{shots === 1 ? "" : "s"}
-        </small>
       </label>
-      <div className="fire-strip-actions">
-        <button type="button" className="fire-strip-cancel" onClick={onCancel}>
-          <X size={15} aria-hidden="true" /> Cancel
-        </button>
-        <button
-          type="button"
-          className="fire-strip-primary"
-          disabled={!canReview}
-          onClick={onReview}
-        >
-          Review Shot
-        </button>
-      </div>
-    </section>
+      <small className="fire-inline-shots">
+        {shots} shot{shots === 1 ? "" : "s"}
+      </small>
+      <button
+        type="button"
+        className="fire-inline-primary"
+        disabled={!canReview}
+        onClick={onReview}
+      >
+        Review
+      </button>
+      <button
+        type="button"
+        className="fire-inline-cancel"
+        aria-label="Cancel Aim & Fire"
+        onClick={onCancel}
+      >
+        <X size={15} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -100,6 +103,10 @@ export interface ScanFireControlsProps extends SharedControlsProps {
   readonly onConfirm: () => void;
 }
 
+/**
+ * Compact Scan & Fire controls that take over the entry buttons' slot:
+ * `⌖ distance · seconds · Add · ✕`.
+ */
 export function ScanFireControls({
   weapon,
   maxDistance,
@@ -110,16 +117,12 @@ export function ScanFireControls({
   onConfirm,
 }: ScanFireControlsProps) {
   return (
-    <section className="fire-control-strip" aria-label="Scan and Fire controls">
-      <div className="fire-strip-mode">
-        <Radar size={16} aria-hidden="true" />
-        <span>
-          <strong>Scan &amp; Fire</strong>
-          <small>{WEAPON_LABELS[weapon]}</small>
-        </span>
-      </div>
-      <label className="fire-strip-number">
-        <span>Distance</span>
+    <div className="fire-inline" aria-label="Scan and Fire controls">
+      <span className="fire-inline-mode" title={`Scan & Fire · ${WEAPON_LABELS[weapon]}`}>
+        <Radar size={15} aria-hidden="true" />
+      </span>
+      <label className="fire-inline-number">
+        <span>Dist</span>
         <input
           type="number"
           inputMode="numeric"
@@ -138,8 +141,8 @@ export function ScanFireControls({
           }
         />
       </label>
-      <label className="fire-strip-number">
-        <span>Seconds</span>
+      <label className="fire-inline-number">
+        <span>Secs</span>
         <input
           type="number"
           inputMode="numeric"
@@ -153,14 +156,17 @@ export function ScanFireControls({
           }
         />
       </label>
-      <div className="fire-strip-actions">
-        <button type="button" className="fire-strip-cancel" onClick={onCancel}>
-          <X size={15} aria-hidden="true" /> Cancel
-        </button>
-        <button type="button" className="fire-strip-primary" onClick={onConfirm}>
-          Add Scan &amp; Fire
-        </button>
-      </div>
-    </section>
+      <button type="button" className="fire-inline-primary" onClick={onConfirm}>
+        Add
+      </button>
+      <button
+        type="button"
+        className="fire-inline-cancel"
+        aria-label="Cancel Scan & Fire"
+        onClick={onCancel}
+      >
+        <X size={15} aria-hidden="true" />
+      </button>
+    </div>
   );
 }

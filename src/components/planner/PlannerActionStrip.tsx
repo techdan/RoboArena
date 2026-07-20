@@ -1,7 +1,7 @@
 "use client";
 
 import { Crosshair, Radar } from "lucide-react";
-import { useEffect, useState, type PointerEvent } from "react";
+import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import type { Heading, Posture, WeaponId } from "../../engine/types";
 import { HEADINGS, headingFromVector, rotateHeading } from "../../planner/presentation";
 import { WEAPON_LABELS } from "../../planner/firingHelpers";
@@ -29,6 +29,11 @@ export interface PlannerActionStripProps {
   readonly disabled: boolean;
   readonly aimActive: boolean;
   readonly scanActive: boolean;
+  /**
+   * When a fire mode is active this replaces the Aim & Fire / Scan & Fire entry
+   * buttons in place, keeping the strip height and every other group fixed.
+   */
+  readonly fireControls?: ReactNode;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeadingPreview: (heading: Heading | null) => void;
   readonly onHeading: (heading: Heading) => void;
@@ -46,6 +51,7 @@ export function PlannerActionStrip({
   disabled,
   aimActive,
   scanActive,
+  fireControls,
   onPosture,
   onHeadingPreview,
   onHeading,
@@ -75,13 +81,16 @@ export function PlannerActionStrip({
     <section className="planner-action-strip" aria-label="Robot actions">
       <fieldset className="action-posture-group">
         <legend>
-          Posture <HelpButton topic="action:posture" label="Posture" />
+          <span className="action-caption">Posture</span>
+          <b>{posture}</b>
+          <HelpButton topic="action:posture" label="Posture" />
         </legend>
         <div>
           {POSTURES.map((choice) => (
             <button
               type="button"
               key={choice}
+              title={`${choice} posture`}
               aria-label={`${choice} posture`}
               aria-pressed={choice === posture}
               data-active={choice === posture}
@@ -89,7 +98,6 @@ export function PlannerActionStrip({
               onClick={() => onPosture(choice)}
             >
               <PostureIcon posture={choice} />
-              <span>{choice}</span>
             </button>
           ))}
         </div>
@@ -97,7 +105,8 @@ export function PlannerActionStrip({
 
       <fieldset className="action-heading-group">
         <legend>
-          Scan direction <HelpButton topic="action:scan-direction" label="Scan direction" />
+          <span className="action-caption">Scan</span>
+          <HelpButton topic="action:scan-direction" label="Scan direction" />
         </legend>
         <div
           className="scan-direction-control"
@@ -127,9 +136,21 @@ export function PlannerActionStrip({
           }}
           onPointerUp={(event) => {
             if (disabled) return;
-            const next = headingAtPointer(event);
             if (event.currentTarget.hasPointerCapture(event.pointerId))
               event.currentTarget.releasePointerCapture(event.pointerId);
+            // Releasing with the pointer dragged outside the dial cancels the
+            // gesture instead of committing the previewed heading.
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const inside =
+              event.clientX >= bounds.left &&
+              event.clientX <= bounds.right &&
+              event.clientY >= bounds.top &&
+              event.clientY <= bounds.bottom;
+            if (!inside) {
+              resetPreview();
+              return;
+            }
+            const next = headingAtPointer(event);
             setKeyboardHeading(next);
             onHeading(next);
             onHeadingPreview(null);
@@ -193,9 +214,11 @@ export function PlannerActionStrip({
         </div>
       </fieldset>
 
-      <div className="action-weapon-group">
-        <span>Weapon</span>
-        {weapons.length > 1 ? (
+      {/* Single-weapon robots show no weapon control at all; the Missile robot
+          keeps the plan-aware Missile Launcher · N / Rifle choice. */}
+      {weapons.length > 1 ? (
+        <div className="action-weapon-group">
+          <span className="action-caption">Weapon</span>
           <select
             aria-label="Weapon"
             value={selectedWeapon}
@@ -209,31 +232,32 @@ export function PlannerActionStrip({
               </option>
             ))}
           </select>
-        ) : (
-          <strong>{WEAPON_LABELS[selectedWeapon]}</strong>
-        )}
-        {missileAmmo === null ? null : <small>Missiles {missileAmmo}</small>}
-      </div>
+        </div>
+      ) : null}
 
       <div className="action-fire-group">
-        <button
-          type="button"
-          aria-pressed={aimActive}
-          data-active={aimActive}
-          disabled={disabled}
-          onClick={onAim}
-        >
-          <Crosshair size={17} aria-hidden="true" /> Aim &amp; Fire
-        </button>
-        <button
-          type="button"
-          aria-pressed={scanActive}
-          data-active={scanActive}
-          disabled={disabled}
-          onClick={onScan}
-        >
-          <Radar size={17} aria-hidden="true" /> Scan &amp; Fire
-        </button>
+        {fireControls ?? (
+          <>
+            <button
+              type="button"
+              aria-pressed={aimActive}
+              data-active={aimActive}
+              disabled={disabled}
+              onClick={onAim}
+            >
+              <Crosshair size={17} aria-hidden="true" /> Aim &amp; Fire
+            </button>
+            <button
+              type="button"
+              aria-pressed={scanActive}
+              data-active={scanActive}
+              disabled={disabled}
+              onClick={onScan}
+            >
+              <Radar size={17} aria-hidden="true" /> Scan &amp; Fire
+            </button>
+          </>
+        )}
       </div>
     </section>
   );

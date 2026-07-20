@@ -672,14 +672,17 @@ canvas {
 
 .planner-page {
   /* Board-first app shell: fixed-height flex column, no page scroll. The
-     header/timeline rows size to content and the workspace absorbs the rest
-     through a min-height: 0 chain down to the canvas. */
+     header/selector/timeline bands size to content and the arena region absorbs
+     the rest through a min-height: 0 chain down to the canvas. The control bands
+     keep the page inline padding; the arena region breaks out of it full-bleed
+     via --planner-pad-x so the board reaches the viewport edges. */
+  --planner-pad-x: 1rem;
   position: relative;
   display: flex;
   height: 100dvh;
   flex-direction: column;
   overflow: hidden;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem var(--planner-pad-x);
   color: white;
   background: #0d100e;
 }
@@ -1842,6 +1845,7 @@ a.planner-menu-item:focus-visible {
 
 @media (max-width: 1100px) {
   .planner-page {
+    --planner-pad-x: 0.5rem;
     padding: 0.5rem;
   }
   .planner-header {
@@ -2779,6 +2783,7 @@ a.planner-menu-item:focus-visible {
 @media (pointer: coarse) and (orientation: landscape) {
   .planner-page,
   .match-flow-page {
+    --planner-pad-x: max(0.75rem, env(safe-area-inset-left));
     padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
       max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
   }
@@ -2833,5 +2838,643 @@ a.planner-menu-item:focus-visible {
   .movie-viewport {
     max-width: 100%;
     overflow: hidden;
+  }
+}
+
+/* ============================================================
+   Phase 11.8.2 — planner space efficiency, glyph timeline,
+   overlay placement. Rules below intentionally follow the
+   earlier planner block so shared class names (.planner-timeline,
+   .planner-robot-selector, .timeline-command) resolve to the
+   condensed treatment.
+   ============================================================ */
+
+/* Full-bleed arena region: the control bands keep page padding; the arena
+   breaks out to the viewport edges. Its bezel is the only frame. */
+.planner-lower {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+.planner-arena-region {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-inline: calc(-1 * var(--planner-pad-x));
+}
+.planner-arena-region .planner-canvas-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Coordinate + validity readout: a small non-interactive chip on the map. */
+.planner-coord-chip {
+  position: absolute;
+  z-index: 8;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  color: rgb(255 255 255 / 78%);
+  background: rgb(6 10 8 / 82%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.planner-coord-chip strong {
+  color: #d9f99d;
+}
+.planner-coord-chip[data-state="blocked"] strong,
+.planner-coord-chip[data-state="out-of-bounds"] strong {
+  color: #fda4af;
+}
+.planner-coord-chip[data-state="out-of-home"] strong {
+  color: #fcd34d;
+}
+.planner-coord-chip span {
+  color: rgb(255 255 255 / 42%);
+  font-size: 0.52rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Combined selector + program-summary band. */
+.planner-selector-band {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.8rem;
+  padding: 0.35rem 0.5rem;
+  background: linear-gradient(145deg, rgb(255 255 255 / 5%), rgb(255 255 255 / 2%));
+}
+.planner-selector-band .planner-robot-selector {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+.planner-selector-band .planner-robot-selector button {
+  min-width: 5.4rem;
+  min-height: 2.4rem;
+  flex: 0 1 auto;
+}
+.planner-robot-hp {
+  display: block;
+  width: 2.4rem;
+  height: 0.34rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 14%);
+}
+.planner-robot-hp > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #7dd3a8;
+}
+.planner-robot-hp > span[data-low="true"] {
+  background: #fb7185;
+}
+.planner-program-summary {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+  color: rgb(255 255 255 / 58%);
+  font-family: ui-monospace, monospace;
+}
+.planner-program-summary > span {
+  font-size: 0.64rem;
+}
+.planner-program-summary small {
+  color: rgb(255 255 255 / 32%);
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.planner-band-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+}
+.planner-band-overflow {
+  position: relative;
+}
+.planner-band-overflow-button {
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.55rem;
+  color: rgb(255 255 255 / 68%);
+  background: rgb(255 255 255 / 5%);
+}
+.planner-band-overflow-button:hover,
+.planner-band-overflow-button:focus-visible,
+.planner-band-overflow-button[aria-expanded="true"] {
+  border-color: rgb(190 242 100 / 45%);
+  color: white;
+  outline: 2px solid rgb(190 242 100 / 22%);
+  outline-offset: 2px;
+}
+.planner-band-overflow-menu {
+  position: absolute;
+  z-index: 120;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  min-width: 12rem;
+  flex-direction: column;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.7rem;
+  padding: 0.5rem;
+  background: #141814;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 55%);
+}
+.planner-band-overflow-menu button {
+  display: inline-flex;
+  min-height: 2.4rem;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  border: 1px solid rgb(190 242 100 / 28%);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  color: #d9f99d;
+  background: rgb(190 242 100 / 7%);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+.planner-band-overflow-menu button:hover,
+.planner-band-overflow-menu button:focus-visible {
+  border-color: rgb(190 242 100 / 60%);
+  outline: none;
+}
+
+/* Glyph timeline: one band with ruler ticks behind, glyph-only cells, and a
+   playhead riding on the lane. */
+.planner-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.timeline-band {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 3.5rem;
+}
+.timeline-ticks {
+  position: absolute;
+  inset: 0 0 0.05rem;
+  z-index: 0;
+  pointer-events: none;
+}
+.timeline-ticks span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding-left: 0.15rem;
+  border-left: 1px solid rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 26%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.46rem;
+}
+.timeline-ticks span:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.timeline-lane-scroll {
+  position: absolute;
+  z-index: 2;
+  inset: 0.05rem 0 1.05rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.timeline-lane {
+  display: flex;
+  height: 100%;
+  min-width: 100%;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+.timeline-cell {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid rgb(190 242 100 / 20%);
+  border-radius: 0.5rem;
+  background: rgb(190 242 100 / 7%);
+}
+.timeline-cell[data-over-budget="true"] {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+.timeline-cell .timeline-command {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.1rem;
+  gap: 0;
+  place-items: center;
+}
+.timeline-scrub {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1.1rem;
+  margin: 0;
+  cursor: ew-resize;
+  background: transparent;
+  touch-action: none;
+}
+.timeline-marker {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid #a5f3fc;
+  pointer-events: none;
+}
+.timeline-marker output {
+  position: absolute;
+  bottom: -0.05rem;
+  left: 0.15rem;
+  color: #a5f3fc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.5rem;
+}
+.timeline-band:focus-within .timeline-marker {
+  border-left-color: #d9f99d;
+}
+.timeline-remaining {
+  flex: none;
+  color: rgb(255 255 255 / 42%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+.timeline-remaining[data-over="true"] {
+  color: #fda4af;
+}
+
+/* All Programs review overlay: above the strip/upper arena, no reflow. */
+.planner-all-programs {
+  position: absolute;
+  z-index: 40;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  max-height: 82%;
+  flex-direction: column;
+  gap: 0.45rem;
+  border: 1px solid rgb(103 232 249 / 32%);
+  border-radius: 0.85rem;
+  padding: 0.6rem 0.7rem;
+  background: rgb(8 12 10 / 97%);
+  box-shadow: 0 22px 60px rgb(0 0 0 / 62%);
+  backdrop-filter: blur(5px);
+}
+.all-programs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.all-programs-head strong {
+  color: #a5f3fc;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.all-programs-head button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.5rem;
+  padding: 0 0.55rem;
+  color: rgb(255 255 255 / 72%);
+  background: rgb(255 255 255 / 5%);
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+.all-programs-body {
+  --ap-name: 6rem;
+  position: relative;
+  overflow-y: auto;
+}
+.all-programs-axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--ap-name);
+  right: 0;
+  pointer-events: none;
+}
+.all-programs-axis span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding-left: 0.15rem;
+  border-left: 1px solid rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 26%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.46rem;
+}
+.all-programs-rows {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+}
+.all-programs-row {
+  display: grid;
+  grid-template-columns: var(--ap-name) 1fr;
+  min-height: 2.6rem;
+  gap: 0.4rem;
+  align-items: center;
+}
+.all-programs-name {
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.4rem;
+  color: rgb(255 255 255 / 65%);
+  background: rgb(0 0 0 / 22%);
+  font-size: 0.58rem;
+  font-weight: 850;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.all-programs-name[data-selected="true"] {
+  border-color: rgb(190 242 100 / 45%);
+  color: #d9f99d;
+}
+.all-programs-lane-scroll {
+  min-width: 0;
+  height: 2.4rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.all-programs-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--ap-name);
+  right: 0;
+  pointer-events: none;
+}
+.all-programs-scrub {
+  position: absolute;
+  right: 0;
+  bottom: -0.3rem;
+  left: 0;
+  width: 100%;
+  height: 1.1rem;
+  margin: 0;
+  cursor: ew-resize;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+}
+.all-programs-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid #a5f3fc;
+}
+.all-programs-marker output {
+  position: absolute;
+  top: -0.1rem;
+  left: 0.15rem;
+  color: #a5f3fc;
+  font-family: ui-monospace, monospace;
+  font-size: 0.5rem;
+}
+
+/* Action-strip captions + in-place fire takeover. */
+.planner-action-strip legend {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.action-caption {
+  color: rgb(255 255 255 / 38%);
+  font-size: 0.52rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.action-posture-group legend b {
+  color: #d9f99d;
+  font-size: 0.56rem;
+  font-weight: 850;
+  text-transform: capitalize;
+}
+.action-posture-group button {
+  width: 2.5rem;
+  padding: 0;
+}
+.fire-inline {
+  display: flex;
+  min-height: 2.65rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(103 232 249 / 32%);
+  border-radius: 0.55rem;
+  padding: 0 0.5rem;
+  background: rgb(8 20 20 / 55%);
+}
+.fire-inline-mode {
+  display: grid;
+  place-items: center;
+  color: #67e8f9;
+}
+.fire-inline-target {
+  min-width: 3.2rem;
+  color: #fef08a;
+  font-family: ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+.fire-inline-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: rgb(255 255 255 / 55%);
+  font-size: 0.52rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.fire-inline-number input {
+  width: 3.2rem;
+  min-height: 2rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.4rem;
+  padding: 0 0.35rem;
+  color: white;
+  background: rgb(0 0 0 / 28%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+}
+.fire-inline-shots {
+  color: #fcd34d;
+  font-family: ui-monospace, monospace;
+  font-size: 0.52rem;
+}
+.fire-inline-primary,
+.fire-inline-cancel {
+  display: inline-flex;
+  min-height: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  border-radius: 0.45rem;
+  padding: 0 0.5rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+.fire-inline-primary {
+  border: 1px solid rgb(103 232 249 / 45%);
+  color: #cffafe;
+  background: rgb(103 232 249 / 12%);
+}
+.fire-inline-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.fire-inline-cancel {
+  width: 2.2rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 60%);
+  background: rgb(255 255 255 / 4%);
+}
+.fire-inline-primary:hover,
+.fire-inline-primary:focus-visible,
+.fire-inline-cancel:hover,
+.fire-inline-cancel:focus-visible {
+  outline: 2px solid rgb(103 232 249 / 28%);
+  outline-offset: 2px;
+}
+
+/* Compact bottom overlay: one-row legend + icon posture trio, collapsible,
+   anchored bottom-left opposite the zoom overlay. */
+.targeting-map-tools {
+  left: 0.6rem;
+  right: auto;
+  bottom: 0.6rem;
+  max-width: min(38rem, calc(100% - 6rem));
+  gap: 0.55rem;
+  padding: 0.4rem 0.55rem;
+  transform: none;
+}
+.targeting-map-posture {
+  padding-right: 0.55rem;
+}
+.targeting-map-posture legend {
+  font-size: 0.5rem;
+}
+.targeting-map-posture > div {
+  margin-top: 0.15rem;
+}
+.targeting-map-posture button {
+  display: grid;
+  width: 2.4rem;
+  min-height: 2.4rem;
+  place-items: center;
+  padding: 0;
+}
+.targeting-map-posture button .posture-silhouette {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.targeting-map-legend {
+  gap: 0.25rem 0.55rem;
+  font-size: 0.58rem;
+}
+.targeting-map-legend i {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.targeting-map-collapse {
+  display: grid;
+  width: 1.9rem;
+  min-height: 1.9rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.4rem;
+  color: rgb(255 255 255 / 60%);
+  background: rgb(255 255 255 / 5%);
+}
+.targeting-map-pill {
+  position: absolute;
+  z-index: 6;
+  bottom: 0.6rem;
+  left: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  padding: 0.3rem 0.6rem;
+  color: rgb(255 255 255 / 72%);
+  background: rgb(5 10 8 / 90%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 42%);
+  font-size: 0.58rem;
+  font-weight: 800;
+  backdrop-filter: blur(7px);
+}
+.targeting-map-collapse:hover,
+.targeting-map-collapse:focus-visible,
+.targeting-map-pill:hover,
+.targeting-map-pill:focus-visible {
+  border-color: rgb(190 242 100 / 45%);
+  color: #d9f99d;
+  outline: none;
+}
+
+@media (max-width: 1100px) {
+  .planner-selector-band .planner-robot-selector button {
+    min-width: 4.6rem;
+  }
+  .planner-program-summary {
+    display: none;
+  }
+  .timeline-band {
+    height: 3.2rem;
   }
 }

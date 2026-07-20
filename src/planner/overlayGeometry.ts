@@ -94,42 +94,152 @@ const rayLengthInsideRect = (
   return Math.min(xLength, yLength);
 };
 
-/** The cone boundary ray with the longest visible run before leaving the arena. */
-export const longestConeBoundaryAngle = (
+/**
+ * The ray the ring labels ride along. Three candidates radiate from the wedge
+ * center: the heading centerline and the two perpendicular boundary rays. The
+ * one with the longest run before it leaves the arena wins, so a top-center
+ * shooter facing S labels down the board's middle while an east-edge shooter
+ * facing E labels down the boundary. Near-ties prefer the centerline, keeping
+ * open-field poses centered rather than snapping to a boundary.
+ */
+export const labelRayAngle = (
   wedge: ConeWedge,
   arenaWidthPx: number,
   arenaHeightPx: number,
 ): number => {
-  const rayALength = rayLengthInsideRect(
-    wedge.center,
-    wedge.startAngle,
-    arenaWidthPx,
-    arenaHeightPx,
-  );
-  const rayBLength = rayLengthInsideRect(wedge.center, wedge.endAngle, arenaWidthPx, arenaHeightPx);
-  return rayBLength > rayALength ? wedge.endAngle : wedge.startAngle;
+  const headingAngle = (wedge.startAngle + wedge.endAngle) / 2;
+  const candidates: readonly { readonly angle: number; readonly priority: number }[] = [
+    { angle: headingAngle, priority: 2 },
+    { angle: wedge.startAngle, priority: 1 },
+    { angle: wedge.endAngle, priority: 1 },
+  ];
+  let bestAngle = headingAngle;
+  let bestLength = Number.NEGATIVE_INFINITY;
+  let bestPriority = Number.NEGATIVE_INFINITY;
+  for (const candidate of candidates) {
+    const length = rayLengthInsideRect(wedge.center, candidate.angle, arenaWidthPx, arenaHeightPx);
+    if (
+      length > bestLength + 1e-6 ||
+      (Math.abs(length - bestLength) <= 1e-6 && candidate.priority > bestPriority)
+    ) {
+      bestLength = length;
+      bestAngle = candidate.angle;
+      bestPriority = candidate.priority;
+    }
+  }
+  return bestAngle;
 };
 
+/** A ring label's radius, kind, and rendered size, supplied by the renderer. */
+export interface RingLabelBox {
+  readonly radiusPx: number;
+  readonly kind: RingSpec["kind"];
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Resolved label placement; `visible: false` means it was dropped to avoid overlap. */
+export interface PlacedRingLabel {
+  readonly x: number;
+  readonly y: number;
+  readonly visible: boolean;
+}
+
+// The firing envelope (max-range) is the most informative guide, then the
+// near bonus, then the far penalty; when two labels cannot be separated the
+// lower-ranked one is dropped rather than overlapped.
+const LABEL_RANK: Readonly<Record<RingSpec["kind"], number>> = {
+  "max-range": 3,
+  "near-bonus": 2,
+  "far-penalty": 1,
+};
+const LABEL_EDGE_MARGIN = 4;
+const LABEL_GAP = 2;
+const LABEL_NUDGE_STEP = 6;
+const LABEL_MAX_NUDGES = 48;
+
+interface PlacedBox {
+  x: number;
+  y: number;
+  readonly halfWidth: number;
+  readonly halfHeight: number;
+  readonly rank: number;
+  readonly index: number;
+  visible: boolean;
+}
+
+const boxesOverlap = (a: PlacedBox, b: PlacedBox): boolean =>
+  Math.abs(a.x - b.x) < a.halfWidth + b.halfWidth + LABEL_GAP &&
+  Math.abs(a.y - b.y) < a.halfHeight + b.halfHeight + LABEL_GAP;
+
 /**
- * Places a ring label beside the longest visible cone boundary. The small
- * inward offset keeps the text on the eligible side instead of straddling the
- * guide line.
+ * Places every ring label along the chosen ray, each at its own radius so the
+ * text stays visually attached to its arc. Labels are clamped inside the arena
+ * so they never crop at the edge, then de-overlapped by their rendered bounds:
+ * a collided label is nudged outward along the ray, and if that cannot clear it
+ * (short runs, small arenas) the least informative of the pair is dropped.
+ * Returns placements in the input order.
  */
-export const ringLabelPosition = (
+export const placeRingLabels = (
   wedge: ConeWedge,
-  radiusPx: number,
+  rings: readonly RingLabelBox[],
   arenaWidthPx: number,
   arenaHeightPx: number,
   inwardOffsetPx = 8,
-): PixelPoint => {
-  const boundaryAngle = longestConeBoundaryAngle(wedge, arenaWidthPx, arenaHeightPx);
-  const headingAngle = (wedge.startAngle + wedge.endAngle) / 2;
-  return {
-    x:
-      wedge.center.x + radiusPx * Math.cos(boundaryAngle) + inwardOffsetPx * Math.cos(headingAngle),
-    y:
-      wedge.center.y + radiusPx * Math.sin(boundaryAngle) + inwardOffsetPx * Math.sin(headingAngle),
-  };
+): readonly PlacedRingLabel[] => {
+  const angle = labelRayAngle(wedge, arenaWidthPx, arenaHeightPx);
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const clampX = (x: number, halfWidth: number): number =>
+    Math.min(
+      arenaWidthPx - halfWidth - LABEL_EDGE_MARGIN,
+      Math.max(halfWidth + LABEL_EDGE_MARGIN, x),
+    );
+  const clampY = (y: number, halfHeight: number): number =>
+    Math.min(
+      arenaHeightPx - halfHeight - LABEL_EDGE_MARGIN,
+      Math.max(halfHeight + LABEL_EDGE_MARGIN, y),
+    );
+  const placed: PlacedBox[] = [];
+  const byRadius = rings
+    .map((ring, index) => ({ ring, index }))
+    .sort((a, b) => a.ring.radiusPx - b.ring.radiusPx);
+  for (const { ring, index } of byRadius) {
+    const halfWidth = ring.width / 2;
+    const halfHeight = ring.height / 2;
+    const at = (radius: number): { x: number; y: number } => ({
+      x: clampX(wedge.center.x + radius * ux, halfWidth),
+      y: clampY(wedge.center.y + radius * uy, halfHeight),
+    });
+    let radius = ring.radiusPx - inwardOffsetPx;
+    const start = at(radius);
+    const box: PlacedBox = {
+      x: start.x,
+      y: start.y,
+      halfWidth,
+      halfHeight,
+      rank: LABEL_RANK[ring.kind],
+      index,
+      visible: true,
+    };
+    for (let nudges = 0; nudges < LABEL_MAX_NUDGES; nudges += 1) {
+      if (!placed.some((other) => other.visible && boxesOverlap(box, other))) break;
+      radius += LABEL_NUDGE_STEP;
+      const next = at(radius);
+      if (Math.abs(next.x - box.x) < 0.01 && Math.abs(next.y - box.y) < 0.01) break;
+      box.x = next.x;
+      box.y = next.y;
+    }
+    const collider = placed.find((other) => other.visible && boxesOverlap(box, other));
+    if (collider !== undefined) {
+      if (box.rank <= collider.rank) box.visible = false;
+      else collider.visible = false;
+    }
+    placed.push(box);
+  }
+  const result: PlacedRingLabel[] = rings.map(() => ({ x: 0, y: 0, visible: false }));
+  for (const box of placed) result[box.index] = { x: box.x, y: box.y, visible: box.visible };
+  return result;
 };
 
 /**

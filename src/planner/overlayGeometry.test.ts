@@ -5,10 +5,11 @@ import { previewTargetingTiles } from "./firingHelpers";
 import {
   coneWedge,
   damageRings,
-  longestConeBoundaryAngle,
-  ringLabelPosition,
+  labelRayAngle,
+  placeRingLabels,
   ringRadiusPx,
   tileCenterPx,
+  type RingLabelBox,
 } from "./overlayGeometry";
 
 const HEADINGS: readonly Heading[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -77,22 +78,78 @@ describe("coneWedge", () => {
   });
 });
 
-describe("ring label placement", () => {
-  it("uses the longer south boundary when an east-facing shooter is near the north edge", () => {
-    const wedge = coneWedge({ x: 1, y: 1 }, "E", 600, 24);
-    const boundaryAngle = longestConeBoundaryAngle(wedge, 768, 768);
-    expect(boundaryAngle).toBe(wedge.endAngle);
+describe("labelRayAngle", () => {
+  // 32×32 arena → 768px; positions chosen to exercise the four review poses.
+  const ARENA = 768;
 
-    const near = ringLabelPosition(wedge, ringRadiusPx(4, 24), 768, 768);
-    const far = ringLabelPosition(wedge, ringRadiusPx(12, 24), 768, 768);
-    expect(near.x).toBeCloseTo(wedge.center.x + 8);
-    expect(far.x).toBeCloseTo(near.x);
-    expect(far.y).toBeGreaterThan(near.y);
+  it("runs a top-center shooter facing S down the heading centerline", () => {
+    const wedge = coneWedge({ x: 16, y: 0 }, "S", 480, 24);
+    const centerline = (wedge.startAngle + wedge.endAngle) / 2;
+    const angle = labelRayAngle(wedge, ARENA, ARENA);
+    expect(angle).toBeCloseTo(centerline);
+    expect(angle).not.toBeCloseTo(wedge.startAngle);
+    expect(angle).not.toBeCloseTo(wedge.endAngle);
   });
 
-  it("uses the longer north boundary when the same shooter is near the south edge", () => {
-    const wedge = coneWedge({ x: 1, y: 28 }, "E", 600, 24);
-    expect(longestConeBoundaryAngle(wedge, 768, 768)).toBe(wedge.startAngle);
+  it("runs an east-edge shooter facing E down the longer boundary, not the centerline", () => {
+    const wedge = coneWedge({ x: 31, y: 15 }, "E", 480, 24);
+    const centerline = (wedge.startAngle + wedge.endAngle) / 2;
+    const angle = labelRayAngle(wedge, ARENA, ARENA);
+    // South boundary has the longest run from a slightly-south-of-center east edge.
+    expect(angle).toBeCloseTo(wedge.endAngle);
+    expect(angle).not.toBeCloseTo(centerline);
+  });
+
+  it("picks the diagonal centerline for a corner shooter facing into the board", () => {
+    const wedge = coneWedge({ x: 0, y: 0 }, "SE", 480, 24);
+    const centerline = (wedge.startAngle + wedge.endAngle) / 2;
+    // Both boundaries (NE/SW) exit almost immediately; the SE diagonal is longest.
+    expect(labelRayAngle(wedge, ARENA, ARENA)).toBeCloseTo(centerline);
+  });
+});
+
+describe("placeRingLabels", () => {
+  const ARENA = 768;
+  const overlap = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    w: number,
+    h: number,
+  ) => Math.abs(a.x - b.x) < w && Math.abs(a.y - b.y) < h;
+
+  it("places each label at its own radius along the shared ray when they fit", () => {
+    const wedge = coneWedge({ x: 16, y: 0 }, "S", 480, 24);
+    const rings: readonly RingLabelBox[] = [
+      { radiusPx: ringRadiusPx(4, 24), kind: "near-bonus", width: 44, height: 12 },
+      { radiusPx: ringRadiusPx(12, 24), kind: "far-penalty", width: 52, height: 12 },
+      { radiusPx: ringRadiusPx(18, 24), kind: "max-range", width: 48, height: 12 },
+    ];
+    const placed = placeRingLabels(wedge, rings, ARENA, ARENA);
+    expect(placed.every((label) => label.visible)).toBe(true);
+    // All share the vertical centerline x and increase in y with radius.
+    expect(placed[1]!.x).toBeCloseTo(placed[0]!.x);
+    expect(placed[1]!.y).toBeGreaterThan(placed[0]!.y);
+    expect(placed[2]!.y).toBeGreaterThan(placed[1]!.y);
+  });
+
+  it("drops the least informative label when boxes cannot be separated", () => {
+    const wedge = coneWedge({ x: 31, y: 15 }, "E", 480, 24);
+    // Tall boxes on a boundary run that clamps near the arena edge: the outer
+    // max-range collides with the far-penalty and cannot nudge past the clamp.
+    const rings: readonly RingLabelBox[] = [
+      { radiusPx: ringRadiusPx(4, 24), kind: "near-bonus", width: 60, height: 120 },
+      { radiusPx: ringRadiusPx(12, 24), kind: "far-penalty", width: 60, height: 120 },
+      { radiusPx: ringRadiusPx(18, 24), kind: "max-range", width: 60, height: 120 },
+    ];
+    const placed = placeRingLabels(wedge, rings, ARENA, ARENA);
+    // The far-penalty (lowest rank) is sacrificed; the envelope + bonus survive.
+    expect(placed[1]!.visible).toBe(false);
+    expect(placed[0]!.visible).toBe(true);
+    expect(placed[2]!.visible).toBe(true);
+    const visible = placed.filter((label) => label.visible);
+    for (let i = 0; i < visible.length; i += 1)
+      for (let j = i + 1; j < visible.length; j += 1)
+        expect(overlap(visible[i]!, visible[j]!, 30 + 30 + 2, 60 + 60 + 2)).toBe(false);
   });
 });
 

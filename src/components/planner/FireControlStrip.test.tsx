@@ -44,7 +44,7 @@ describe("compact fire controls", () => {
     expect(html).toContain('name="aim-fire-seconds"');
     expect(html).toContain('value="1.5"');
     expect(html).toContain("3 shots");
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Review Shot<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Review<\/button>/);
   });
 });
 
@@ -74,7 +74,9 @@ describe("targeting map legend", () => {
     expect(html).toContain("12 tiles");
     expect(html).toContain("Excellent 75–94%");
     expect(html).toContain("Behind cone");
-    expect(html).toContain("Preview target posture");
-    expect(html).toContain("upright");
+    // Posture trio is icon-only now: caption reads "Posture"; names live on the buttons.
+    expect(html).toContain("<legend>Posture</legend>");
+    expect(html).toContain('aria-label="Preview upright target"');
+    expect(html).toContain("posture-silhouette");
   });
 });

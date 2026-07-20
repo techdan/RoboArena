@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  Bot,
-  ChevronDown,
-  ChevronUp,
-  Crosshair,
-  MapPin,
-  Radar,
-  RotateCcw,
-  Trash2,
-} from "lucide-react";
+import { Crosshair, MapPin, Radar, Trash2 } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
@@ -18,6 +9,9 @@ import { projectRobotAtTick, timelineForRobot, timelineTiming } from "../../plan
 import { PostureIcon } from "./PostureIcon";
 
 const LONG_PRESS_MS = 500;
+// Glyph cells stay recognizable even for the shortest actions; longer commands
+// grow proportionally on the shared axis (hybrid-proportional duration).
+const MIN_CELL_REM = 1.85;
 
 const weaponInitial = (
   segment: Extract<RobotCommandSegment, { readonly kind: "aim-and-fire" | "scan-and-fire" }>,
@@ -63,85 +57,40 @@ const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) =>
   }
 };
 
-export interface TimelineProps {
-  readonly robots: readonly RobotState[];
-  readonly names: ReadonlyMap<string, string>;
+interface TimelineLaneProps {
+  readonly robot: RobotState;
   readonly orders: TurnOrders;
-  readonly selectedRobotId: string;
+  readonly longestTick: number;
+  readonly selected: boolean;
   readonly budgetTicks: number;
-  readonly previewTick: number;
-  readonly remainingTicks: number;
-  readonly onPreviewTick: (tick: number) => void;
-  readonly onSelectRobot: (robotId: string) => void;
   readonly onSelectCommand: (robotId: string, segmentIndex: number, endTick: number) => void;
   readonly onRemoveLast: (robotId: string, segmentIndex: number) => void;
-  readonly onClear: () => void;
 }
 
-export function Timeline({
-  robots,
-  names,
+/**
+ * One robot's command lane: glyph-only cells whose widths are proportional to
+ * duration on the shared 0..longestTick axis. Command name, parameters, exact
+ * start/end/duration and Remove Last Action live in the hover/focus/long-press
+ * detail popover and each cell's accessible label — never as text inside the
+ * block. Shared by the main timeline band and the All Programs overlay.
+ */
+export function TimelineLane({
+  robot,
   orders,
-  selectedRobotId,
+  longestTick,
+  selected,
   budgetTicks,
-  previewTick,
-  remainingTicks,
-  onPreviewTick,
-  onSelectRobot,
   onSelectCommand,
   onRemoveLast,
-  onClear,
-}: TimelineProps) {
-  const [showAllRobots, setShowAllRobots] = useState(false);
+}: TimelineLaneProps) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [detailPosition, setDetailPosition] = useState({ left: 0, top: 0 });
-  const segmentRowsRef = useRef(new Map<string, HTMLDivElement>());
-  const previousSegmentCountsRef = useRef(new Map<string, number>());
   const longPressRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
-  const segmentCountKey = robots
-    .map((robot) => `${robot.id}:${timelineForRobot(orders, robot.id).segments.length}`)
-    .join("|");
-
-  useLayoutEffect(() => {
-    for (const robot of robots) {
-      const count = timelineForRobot(orders, robot.id).segments.length;
-      const previousCount = previousSegmentCountsRef.current.get(robot.id);
-      const row = segmentRowsRef.current.get(robot.id);
-      if (row !== undefined && previousCount !== undefined && count > previousCount)
-        row.scrollLeft = row.scrollWidth;
-      previousSegmentCountsRef.current.set(robot.id, count);
-    }
-    if (showAllRobots) {
-      const selectedScroll = segmentRowsRef.current.get(selectedRobotId)?.scrollLeft ?? 0;
-      for (const [robotId, row] of segmentRowsRef.current)
-        if (robotId !== selectedRobotId) row.scrollLeft = selectedScroll;
-    }
-  }, [robots, orders, segmentCountKey, selectedRobotId, showAllRobots]);
-
-  const timings = useMemo(
-    () =>
-      new Map(
-        robots.map((robot) => [
-          robot.id,
-          timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks),
-        ]),
-      ),
-    [budgetTicks, orders, robots],
+  const timing = useMemo(
+    () => timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks),
+    [budgetTicks, orders, robot],
   );
-  const longestTick = Math.max(
-    budgetTicks,
-    ...robots.map((robot) => timings.get(robot.id)?.at(-1)?.endTick ?? 0),
-  );
-  const visibleRobots = showAllRobots
-    ? robots
-    : robots.filter((robot) => robot.id === selectedRobotId);
-  const selectedName = names.get(selectedRobotId) ?? "selected robot";
-  const rulerSeconds = Math.ceil(longestTick / 60);
-  const rulerMarks = Array.from({ length: Math.floor(rulerSeconds / 5) + 1 }, (_, index) =>
-    Math.min(rulerSeconds, index * 5),
-  );
-  if (rulerMarks.at(-1) !== rulerSeconds) rulerMarks.push(rulerSeconds);
 
   const clearLongPress = () => {
     if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
@@ -157,192 +106,199 @@ export function Timeline({
   };
 
   return (
-    <section className="planner-timeline" aria-label="Command timelines">
-      <div className="timeline-topline">
-        <strong>{selectedName} program</strong>
-        <span>
-          {formatGameTime(previewTick)} / {formatGameTime(budgetTicks)}
-        </span>
-        <span data-over={remainingTicks < 0}>
-          {formatGameTime(Math.max(0, remainingTicks))} remaining
-        </span>
-        <button
-          type="button"
-          className="timeline-expand-button"
-          aria-expanded={showAllRobots}
-          onClick={() => setShowAllRobots((current) => !current)}
-        >
-          {showAllRobots ? (
-            <ChevronUp size={15} aria-hidden="true" />
-          ) : (
-            <ChevronDown size={15} aria-hidden="true" />
-          )}
-          {showAllRobots ? "Selected only" : "All Programs"}
-        </button>
-        <button type="button" className="timeline-reset-button" onClick={onClear}>
-          <RotateCcw size={14} aria-hidden="true" /> Clear {selectedName}
-        </button>
-      </div>
-
-      <div className="timeline-ruler" aria-hidden="true">
-        {rulerMarks.map((second) => (
-          <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
-            {second}s
-          </span>
-        ))}
-      </div>
-
-      <div className="timeline-rows" data-expanded={showAllRobots}>
-        {visibleRobots.map((robot, visibleIndex) => {
-          const timing = timings.get(robot.id) ?? [];
-          const robotName = names.get(robot.id) ?? robot.definition.class;
+    <div className="timeline-lane" data-selected={selected}>
+      {timing.length === 0 ? (
+        <span className="timeline-empty">No actions yet</span>
+      ) : (
+        timing.map((entry) => {
+          const priorSegments = timelineForRobot(orders, robot.id).segments.slice(0, entry.index);
+          const presentation = commandPresentation(
+            entry.segment,
+            projectRobotAtTick(robot, priorSegments).position,
+          );
+          const key = `${robot.id}:${entry.index}`;
+          const isLast = entry.index === removableSegmentIndex(timing.length);
+          const widthPercent = (entry.durationTicks / Math.max(1, longestTick)) * 100;
           return (
             <div
-              className="timeline-row"
-              data-selected={robot.id === selectedRobotId}
-              key={robot.id}
+              className="timeline-cell"
+              data-over-budget={entry.overBudget}
+              data-detail-open={detailKey === key}
+              key={key}
+              style={{ flexBasis: `${widthPercent}%`, minWidth: `${MIN_CELL_REM}rem` }}
+              onPointerEnter={(event) => {
+                if (event.pointerType !== "touch") showDetail(key, event.currentTarget);
+              }}
+              onPointerLeave={() => {
+                clearLongPress();
+                if (detailKey === key) setDetailKey(null);
+              }}
             >
-              {showAllRobots ? (
-                <button
-                  type="button"
-                  className="timeline-robot"
-                  onClick={() => onSelectRobot(robot.id)}
-                >
-                  <Bot size={14} aria-hidden="true" /> {robotName}
-                </button>
-              ) : null}
-              <div
-                className="timeline-segments"
-                ref={(node) => {
-                  if (node === null) segmentRowsRef.current.delete(robot.id);
-                  else segmentRowsRef.current.set(robot.id, node);
+              <button
+                type="button"
+                className="timeline-command"
+                aria-label={`${presentation.label}. ${presentation.detail}. ${formatGameTime(entry.startTick)} to ${formatGameTime(entry.endTick)}.`}
+                onFocus={(event) => showDetail(key, event.currentTarget)}
+                onBlur={(event) => {
+                  const related = event.relatedTarget;
+                  if (
+                    !(related instanceof Node) ||
+                    !event.currentTarget.parentElement?.contains(related)
+                  )
+                    setDetailKey(null);
                 }}
-                onScroll={(event) => {
-                  setDetailKey(null);
-                  const scrollLeft = event.currentTarget.scrollLeft;
-                  for (const row of segmentRowsRef.current.values())
-                    if (row !== event.currentTarget && row.scrollLeft !== scrollLeft)
-                      row.scrollLeft = scrollLeft;
+                onPointerDown={(event) => {
+                  if (event.pointerType !== "touch") return;
+                  clearLongPress();
+                  const anchor = event.currentTarget;
+                  longPressRef.current = window.setTimeout(() => {
+                    suppressClickRef.current = true;
+                    showDetail(key, anchor);
+                  }, LONG_PRESS_MS);
+                }}
+                onPointerUp={clearLongPress}
+                onPointerCancel={clearLongPress}
+                onClick={(event) => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
+                  onSelectCommand(robot.id, entry.index, entry.endTick);
+                  showDetail(key, event.currentTarget);
                 }}
               >
-                {timing.length === 0 ? (
-                  <span className="timeline-empty">No actions yet</span>
-                ) : (
-                  timing.map((entry) => {
-                    const priorSegments = timelineForRobot(orders, robot.id).segments.slice(
-                      0,
-                      entry.index,
-                    );
-                    const presentation = commandPresentation(
-                      entry.segment,
-                      projectRobotAtTick(robot, priorSegments).position,
-                    );
-                    const key = `${robot.id}:${entry.index}`;
-                    const isLast = entry.index === removableSegmentIndex(timing.length);
-                    const widthPercent = Math.max(
-                      7,
-                      (entry.durationTicks / Math.max(1, longestTick)) * 100,
-                    );
-                    return (
-                      <div
-                        className="timeline-segment"
-                        data-over-budget={entry.overBudget}
-                        data-detail-open={detailKey === key}
-                        key={key}
-                        style={{ width: `${widthPercent}%` }}
-                        onPointerEnter={(event) => {
-                          if (event.pointerType !== "touch") showDetail(key, event.currentTarget);
-                        }}
-                        onPointerLeave={() => {
-                          clearLongPress();
-                          if (detailKey === key) setDetailKey(null);
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="timeline-command"
-                          aria-label={`${presentation.label}. ${presentation.detail}. ${formatGameTime(entry.startTick)} to ${formatGameTime(entry.endTick)}.`}
-                          onFocus={(event) => showDetail(key, event.currentTarget)}
-                          onBlur={(event) => {
-                            const related = event.relatedTarget;
-                            if (
-                              !(related instanceof Node) ||
-                              !event.currentTarget.parentElement?.contains(related)
-                            )
-                              setDetailKey(null);
-                          }}
-                          onPointerDown={(event) => {
-                            if (event.pointerType !== "touch") return;
-                            clearLongPress();
-                            const anchor = event.currentTarget;
-                            longPressRef.current = window.setTimeout(() => {
-                              suppressClickRef.current = true;
-                              showDetail(key, anchor);
-                            }, LONG_PRESS_MS);
-                          }}
-                          onPointerUp={clearLongPress}
-                          onPointerCancel={clearLongPress}
-                          onClick={(event) => {
-                            if (suppressClickRef.current) {
-                              suppressClickRef.current = false;
-                              return;
-                            }
-                            onSelectCommand(robot.id, entry.index, entry.endTick);
-                            showDetail(key, event.currentTarget);
-                          }}
-                        >
-                          <CommandGlyph segment={entry.segment} />
-                          <span>
-                            <strong>{presentation.label}</strong>
-                            <small>{presentation.compact}</small>
-                          </span>
-                        </button>
-                        {detailKey === key ? (
-                          <div
-                            className="timeline-command-detail"
-                            role="tooltip"
-                            data-row={visibleIndex}
-                            style={detailPosition}
-                          >
-                            <strong>{presentation.label}</strong>
-                            <span>{presentation.detail}</span>
-                            <small>
-                              {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
-                              {formatGameTime(entry.durationTicks)}
-                            </small>
-                            {isLast ? (
-                              <button
-                                type="button"
-                                onClick={() => onRemoveLast(robot.id, entry.index)}
-                              >
-                                <Trash2 size={14} aria-hidden="true" /> Remove Last Action
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                <CommandGlyph segment={entry.segment} />
+              </button>
+              {detailKey === key ? (
+                <div className="timeline-command-detail" role="tooltip" style={detailPosition}>
+                  <strong>{presentation.label}</strong>
+                  <span>{presentation.detail}</span>
+                  <small>
+                    {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
+                    {formatGameTime(entry.durationTicks)}
+                  </small>
+                  {isLast ? (
+                    <button type="button" onClick={() => onRemoveLast(robot.id, entry.index)}>
+                      <Trash2 size={14} aria-hidden="true" /> Remove Last Action
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           );
-        })}
-      </div>
+        })
+      )}
+    </div>
+  );
+}
 
-      <label className="timeline-playhead">
-        <span className="sr-only">Preview time {formatGameTime(previewTick)}</span>
+export interface TimelineProps {
+  readonly robots: readonly RobotState[];
+  readonly orders: TurnOrders;
+  readonly selectedRobotId: string;
+  readonly budgetTicks: number;
+  readonly previewTick: number;
+  readonly remainingTicks: number;
+  readonly onPreviewTick: (tick: number) => void;
+  readonly onSelectCommand: (robotId: string, segmentIndex: number, endTick: number) => void;
+  readonly onRemoveLast: (robotId: string, segmentIndex: number) => void;
+}
+
+/**
+ * Single-band command timeline for the selected robot. The ruler ticks render
+ * inside the lane background, the playhead rides directly on the lane (a
+ * transparent range input for scrubbing plus a marker line), the current time
+ * shows only at the playhead, and the right edge shows remaining time. No
+ * separate ruler row, no detached scrubber, no duplicated time text.
+ */
+export function Timeline({
+  robots,
+  orders,
+  selectedRobotId,
+  budgetTicks,
+  previewTick,
+  remainingTicks,
+  onPreviewTick,
+  onSelectCommand,
+  onRemoveLast,
+}: TimelineProps) {
+  const laneRef = useRef<HTMLDivElement>(null);
+  const previousSegmentCountRef = useRef(0);
+  const selectedRobot = robots.find((robot) => robot.id === selectedRobotId) ?? robots[0];
+  const timings = useMemo(
+    () =>
+      new Map(
+        robots.map((robot) => [
+          robot.id,
+          timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks),
+        ]),
+      ),
+    [budgetTicks, orders, robots],
+  );
+  const longestTick = Math.max(
+    budgetTicks,
+    ...robots.map((robot) => timings.get(robot.id)?.at(-1)?.endTick ?? 0),
+  );
+  const rulerSeconds = Math.ceil(longestTick / 60);
+  const rulerMarks = Array.from({ length: Math.floor(rulerSeconds / 5) + 1 }, (_, index) =>
+    Math.min(rulerSeconds, index * 5),
+  );
+  if (rulerMarks.at(-1) !== rulerSeconds) rulerMarks.push(rulerSeconds);
+
+  // Keep the newest command in view when the selected lane overflows (over budget).
+  const selectedCount = selectedRobot
+    ? timelineForRobot(orders, selectedRobot.id).segments.length
+    : 0;
+  useLayoutEffect(() => {
+    const lane = laneRef.current;
+    if (lane !== null && selectedCount > previousSegmentCountRef.current)
+      lane.scrollLeft = lane.scrollWidth;
+    previousSegmentCountRef.current = selectedCount;
+  }, [selectedCount]);
+
+  if (selectedRobot === undefined) return null;
+
+  return (
+    <section className="planner-timeline" aria-label="Command timeline">
+      <div className="timeline-band">
+        <div className="timeline-ticks" aria-hidden="true">
+          {rulerMarks.map((second) => (
+            <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
+              {second}s
+            </span>
+          ))}
+        </div>
+        <div className="timeline-lane-scroll" ref={laneRef}>
+          <TimelineLane
+            robot={selectedRobot}
+            orders={orders}
+            longestTick={longestTick}
+            selected
+            budgetTicks={budgetTicks}
+            onSelectCommand={onSelectCommand}
+            onRemoveLast={onRemoveLast}
+          />
+        </div>
         <input
           type="range"
+          className="timeline-scrub"
+          aria-label={`Preview time ${formatGameTime(previewTick)}`}
           min={0}
           max={longestTick}
           value={previewTick}
           onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
         />
-        <output style={{ left: `${(previewTick / Math.max(1, longestTick)) * 100}%` }}>
-          {formatGameTime(previewTick)}
-        </output>
-      </label>
+        <div
+          className="timeline-marker"
+          style={{ left: `${(previewTick / Math.max(1, longestTick)) * 100}%` }}
+          aria-hidden="true"
+        >
+          <output>{formatGameTime(previewTick)}</output>
+        </div>
+      </div>
+      <span className="timeline-remaining" data-over={remainingTicks < 0}>
+        {formatGameTime(Math.max(0, remainingTicks))} left
+      </span>
     </section>
   );
 }

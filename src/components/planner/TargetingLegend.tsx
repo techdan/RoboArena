@@ -1,10 +1,19 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { ChevronDown, PanelBottomOpen } from "lucide-react";
+import {
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
 import type { Posture } from "../../engine/types";
 import type { PlannerTargetingOverlay } from "./ArenaCanvas";
 import type { HitChanceBand } from "../../planner/firingHelpers";
 import { TARGETING_PALETTE, type TargetingCategory } from "../../planner/targetingPalette";
+import { PostureIcon } from "./PostureIcon";
 
 const targetingSwatchStyle = (category: TargetingCategory): CSSProperties => {
   const { css, pattern } = TARGETING_PALETTE[category];
@@ -40,37 +49,59 @@ export function TargetingLegend({
   readonly onAssumedPosture: (posture: Posture) => void;
   readonly onBlockBoardHover: () => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  // The whole tool set stops board hover/clicks only under its own (now
+  // smaller) bounds; every board gesture is swallowed here so a tap on the
+  // legend never drops a command on the tile beneath it.
+  const swallow = {
+    onPointerEnter: (event: PointerEvent) => {
+      event.stopPropagation();
+      onBlockBoardHover();
+    },
+    onPointerMove: (event: PointerEvent) => event.stopPropagation(),
+    onPointerDown: (event: PointerEvent) => event.stopPropagation(),
+    onPointerUp: (event: PointerEvent) => event.stopPropagation(),
+    onPointerCancel: (event: PointerEvent) => event.stopPropagation(),
+    onClick: (event: MouseEvent) => event.stopPropagation(),
+    onContextMenu: (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    onWheel: (event: WheelEvent) => event.stopPropagation(),
+    onKeyDown: (event: KeyboardEvent) => event.stopPropagation(),
+  };
+
+  if (collapsed)
+    return (
+      <button
+        type="button"
+        className="targeting-map-pill"
+        aria-label="Show targeting legend"
+        {...swallow}
+        onClick={(event) => {
+          event.stopPropagation();
+          setCollapsed(false);
+        }}
+      >
+        <PanelBottomOpen size={14} aria-hidden="true" /> Legend
+      </button>
+    );
+
   return (
-    <section
-      className="targeting-map-tools"
-      aria-label="Targeting overlay legend"
-      onPointerEnter={(event) => {
-        event.stopPropagation();
-        onBlockBoardHover();
-      }}
-      onPointerMove={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => event.stopPropagation()}
-      onPointerCancel={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onWheel={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
+    <section className="targeting-map-tools" aria-label="Targeting overlay legend" {...swallow}>
       <fieldset className="targeting-map-posture">
-        <legend>Preview target posture</legend>
+        <legend>Posture</legend>
         <div>
           {POSTURES.map((posture) => (
             <button
               type="button"
               key={posture}
+              title={`Preview ${posture} target`}
+              aria-label={`Preview ${posture} target`}
               aria-pressed={posture === overlay.assumedPosture}
               onClick={() => onAssumedPosture(posture)}
             >
-              {posture}
+              <PostureIcon posture={posture} />
             </button>
           ))}
         </div>
@@ -95,6 +126,17 @@ export function TargetingLegend({
           </>
         )}
       </div>
+      <button
+        type="button"
+        className="targeting-map-collapse"
+        aria-label="Collapse targeting legend"
+        onClick={(event) => {
+          event.stopPropagation();
+          setCollapsed(true);
+        }}
+      >
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
     </section>
   );
 }

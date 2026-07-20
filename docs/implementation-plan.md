@@ -1662,7 +1662,7 @@ desktop/iPad screenshot review remains the final phase closure item.
 
 ---
 
-### Phase 11.8.2 — planner space efficiency, glyph timeline, and overlay placement [⬜ NOT STARTED]
+### Phase 11.8.2 — planner space efficiency, glyph timeline, and overlay placement [🟡 IMPLEMENTED / VISUAL REVIEW]
 
 **Goal**: close the space and clarity gaps found in the 2026-07-19 desktop
 review of the Phase 11.8.1 build. The arena should genuinely reach the
@@ -1831,6 +1831,58 @@ window, Rubble Three, Rifle robot top-center facing S):
   collapsible, and never collides with the zoom controls.
 
 **Effort**: S–M.
+
+**Implemented** (presentation/interaction only; no engine, command-shape,
+timing, legality, targeting-math, or visibility change):
+
+- Ring-label geometry reworked in `src/planner/overlayGeometry.ts`:
+  `labelRayAngle` chooses among the heading centerline + both boundary rays by
+  longest in-arena run (centerline-preferring on ties), and `placeRingLabels`
+  positions each label at its own radius along that ray, clamps inside the
+  arena, de-overlaps by measured bounds, and drops the least informative label
+  (far-penalty < near-bonus < max-range) rather than overlapping. `ArenaCanvas`
+  measures the PixiJS `Text` bounds and consumes the placements.
+- Fit-width camera in `src/lib/fitTransform.ts`: `fitTransform(…, "width")` fills
+  the viewport width and crops vertically; `fitWidthZoomFloor` gives the dynamic
+  zoom-out floor (contain ÷ width, ≤ 1). `ArenaCanvas` threads the fit-width base
+  through all five call sites, uses a dynamic `clampZoom`, resets to fit-width,
+  and auto-pans keyboard tile navigation to keep the cursor visible.
+- Full-bleed arena: the board card/heading chrome is gone; the arena region
+  breaks out of the page inline padding (`--planner-pad-x`) so it reaches the
+  viewport edges while the control bands keep padding. The cursor coordinate +
+  validity readout is now a non-interactive upper-right chip on the map.
+- Merged selector + program-summary band (`RobotSelector`): ordinal badge,
+  class name, thin HP bar; used/budget summary; All Programs toggle and a
+  band-local `⋯` overflow holding Clear {robot} (shares `useDisclosure` with the
+  header `PlannerMenu`).
+- Glyph-only single-band timeline (`Timeline` + reusable `TimelineLane`): ruler
+  ticks behind the lane, playhead riding on the lane, remaining at the right
+  edge; names/params/times and Remove Last Action live in the hover/focus/
+  long-press detail popover and accessible labels. `AllProgramsOverlay` reuses
+  the lane on a shared axis/playhead as an absolutely-positioned panel that does
+  not reflow the layout below; Escape or the toggle collapses it.
+- Action strip: aligned small-caps captions, icon-only posture (caption names
+  the current posture), weapon group hidden for single-weapon robots, and
+  in-place Aim/Scan takeover of the entry-button slot at constant height; the
+  floating config card and idle placeholder are removed. The scan dial cancels
+  when released outside its bounds.
+- Compact bottom overlay (`TargetingLegend`): one-row swatch legend + icon-only
+  posture trio, collapsible to a pill, anchored bottom-left opposite the zoom
+  overlay.
+
+**Verification**: `npm test` (333 passing, +16), `npm run typecheck`,
+`npm run lint`, `npm run format:check`, and `npm run build` all pass. New pure
+tests cover candidate-ray selection (top-center/S → centerline, east-edge/E →
+boundary, corner/diagonal → longest run) and measured-bounds de-overlap/drop,
+plus fit-width math and the zoom-out floor. Component tests cover the fire-mode
+takeover replacing the entry buttons, weapon group absent for single-weapon
+robots, icon-only posture with the caption naming it, glyph-only cells retaining
+full accessible labels, the merged band rendering 4- and 8-robot rosters, and
+the All Programs overlay. Automated Playwright stays paused; the manual review
+checklist below is open: desktop 1280×720 + 1440×900 and iPad landscape
+1024×768 — arena touches side edges, the top stack fits three bands + strip,
+label placement for the four review poses, legend/zoom overlays never collide,
+and touch scan-drag + long-press details.
 
 ---
 
@@ -2847,7 +2899,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
-| 11.8.2  | ⬜ NOT STARTED                     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
+| 11.8.2  | 🟡 IMPLEMENTED / VISUAL REVIEW     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
