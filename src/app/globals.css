@@ -1687,39 +1687,12 @@ a.planner-menu-item:focus-visible {
   outline: 2px solid rgb(190 242 100 / 16%);
 }
 .posture-silhouette {
-  position: relative;
+  /* SVG silhouettes carry the posture-height difference in their artwork;
+     the box stays constant so icon rows align. */
   display: inline-block;
-  width: 0.95rem;
-  height: 1.25rem;
+  width: 1.2rem;
+  height: 1.2rem;
   flex: none;
-}
-.posture-silhouette::before,
-.posture-silhouette::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  background: currentColor;
-  transform: translateX(-50%);
-}
-.posture-silhouette::before {
-  top: 0;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 50%;
-}
-.posture-silhouette::after {
-  bottom: 0;
-  width: 0.72rem;
-  height: 0.72rem;
-  border-radius: 0.22rem 0.22rem 0.12rem 0.12rem;
-}
-.posture-silhouette[data-posture="ducking"] {
-  height: 1rem;
-  margin-top: 0.25rem;
-}
-.posture-silhouette[data-posture="crouching"] {
-  height: 0.75rem;
-  margin-top: 0.5rem;
 }
 .action-heading-group {
   width: 5.3rem;
