@@ -1079,7 +1079,11 @@ replay byte-identically. A `ResignMatch` protocol message and
 `RoomService.resignMatch` finish the match if the resignation decides it, else
 resolve immediately if the remaining active players were only waiting on the
 resigner. Abandoned rooms are reclaimed by an idle-cutoff sweep
-(`sweepAbandonedRooms`, wired to an unref'd hourly server interval). A two-step
+(`sweepAbandonedRooms`, wired to an unref'd hourly server interval, cutoff
+raised from an initial 24h to 30 days on 2026-07-20 after the tighter cutoff
+silently deleted a still-wanted room — `updated_at` only bumps on a mutating
+save, never on a reconnect or idle view, so 24h was well inside the spec's own
+"leave and return hours or days later" promise). A two-step
 `ResignControl` (irreversible, so it confirms) is wired into the planner header
 and the waiting/turn-ready flow views, making resignation user-facing; its
 browser validation is part of the manual Phase 12 pass.

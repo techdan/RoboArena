@@ -27,8 +27,13 @@ interface ConnectionState {
 export const MAX_CLIENT_MESSAGE_BYTES = 256 * 1024;
 export const MESSAGE_RATE_WINDOW_MS = 10_000;
 export const MESSAGE_RATE_LIMIT = 60;
-export const ROOM_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // Reclaim abandoned rooms hourly.
-export const ROOM_MAX_IDLE_MS = 24 * 60 * 60 * 1000; // 24 h without activity is abandoned.
+export const ROOM_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // Check for abandoned rooms hourly.
+// `updated_at` only bumps on a mutating save (create/join/lock/resolve/...),
+// never on a mere reconnect or idle view. docs/spec.md promises a player "may
+// leave and return hours or days later" — 24h was far inside that window and
+// silently deleted a still-wanted room. 30 days gives genuine day-scale
+// absences headroom while still reclaiming rooms nobody ever returns to.
+export const ROOM_MAX_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
   if (error instanceof RoomError || error instanceof MatchLifecycleError) {
