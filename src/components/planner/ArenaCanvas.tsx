@@ -350,6 +350,10 @@ export function ArenaCanvas({
     const resolution = Math.min(4, Math.max(1, Math.ceil(density * 2) / 2));
     if (app.renderer.resolution === resolution) return;
     app.renderer.resize(arena.width * TILE_SIZE, arena.height * TILE_SIZE, resolution);
+    // On-demand renderer: resize reallocates the backing store but paints
+    // nothing. Without an immediate repaint the previous (lower-resolution)
+    // frame stays on screen and the fit-width upscale makes it look muddy.
+    app.render();
   }, [arena.height, arena.width, fitScale, status, transform.scale]);
 
   useEffect(() => {

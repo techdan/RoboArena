@@ -11,7 +11,7 @@ import { PostureIcon } from "./PostureIcon";
 const LONG_PRESS_MS = 500;
 // Glyph cells stay recognizable even for the shortest actions; longer commands
 // grow proportionally on the shared axis (hybrid-proportional duration).
-const MIN_CELL_REM = 1.85;
+const MIN_CELL_REM = 1.5;
 
 const weaponInitial = (
   segment: Extract<RobotCommandSegment, { readonly kind: "aim-and-fire" | "scan-and-fire" }>,
