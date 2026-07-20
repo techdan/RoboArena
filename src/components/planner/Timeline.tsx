@@ -19,6 +19,19 @@ import { PostureIcon } from "./PostureIcon";
 
 const LONG_PRESS_MS = 500;
 
+const weaponInitial = (
+  segment: Extract<RobotCommandSegment, { readonly kind: "aim-and-fire" | "scan-and-fire" }>,
+): string =>
+  segment.weapon === "missile-launcher"
+    ? "M"
+    : segment.weapon === "grenade-launcher"
+      ? "G"
+      : segment.weapon === "burst-gun"
+        ? "B"
+        : segment.weapon === "auto-rifle"
+          ? "A"
+          : "R";
+
 const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) => {
   switch (segment.kind) {
     case "deploy":
@@ -34,9 +47,19 @@ const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) =>
         </span>
       );
     case "aim-and-fire":
-      return <Crosshair size={15} aria-hidden="true" />;
+      return (
+        <span className="timeline-fire-glyph" aria-hidden="true">
+          <Crosshair size={15} />
+          <i>{weaponInitial(segment)}</i>
+        </span>
+      );
     case "scan-and-fire":
-      return <Radar size={15} aria-hidden="true" />;
+      return (
+        <span className="timeline-fire-glyph" aria-hidden="true">
+          <Radar size={15} />
+          <i>{weaponInitial(segment)}</i>
+        </span>
+      );
   }
 };
 
@@ -71,6 +94,7 @@ export function Timeline({
 }: TimelineProps) {
   const [showAllRobots, setShowAllRobots] = useState(false);
   const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [detailPosition, setDetailPosition] = useState({ left: 0, top: 0 });
   const segmentRowsRef = useRef(new Map<string, HTMLDivElement>());
   const previousSegmentCountsRef = useRef(new Map<string, number>());
   const longPressRef = useRef<number | null>(null);
@@ -88,7 +112,12 @@ export function Timeline({
         row.scrollLeft = row.scrollWidth;
       previousSegmentCountsRef.current.set(robot.id, count);
     }
-  }, [robots, orders, segmentCountKey]);
+    if (showAllRobots) {
+      const selectedScroll = segmentRowsRef.current.get(selectedRobotId)?.scrollLeft ?? 0;
+      for (const [robotId, row] of segmentRowsRef.current)
+        if (robotId !== selectedRobotId) row.scrollLeft = selectedScroll;
+    }
+  }, [robots, orders, segmentCountKey, selectedRobotId, showAllRobots]);
 
   const timings = useMemo(
     () =>
@@ -117,6 +146,14 @@ export function Timeline({
   const clearLongPress = () => {
     if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
     longPressRef.current = null;
+  };
+  const showDetail = (key: string, anchor: HTMLElement) => {
+    const bounds = anchor.getBoundingClientRect();
+    setDetailPosition({
+      left: Math.max(8, Math.min(bounds.left, window.innerWidth - 248)),
+      top: Math.min(bounds.bottom + 5, window.innerHeight - 150),
+    });
+    setDetailKey(key);
   };
 
   return (
@@ -180,6 +217,13 @@ export function Timeline({
                   if (node === null) segmentRowsRef.current.delete(robot.id);
                   else segmentRowsRef.current.set(robot.id, node);
                 }}
+                onScroll={(event) => {
+                  setDetailKey(null);
+                  const scrollLeft = event.currentTarget.scrollLeft;
+                  for (const row of segmentRowsRef.current.values())
+                    if (row !== event.currentTarget && row.scrollLeft !== scrollLeft)
+                      row.scrollLeft = scrollLeft;
+                }}
               >
                 {timing.length === 0 ? (
                   <span className="timeline-empty">No actions yet</span>
@@ -207,7 +251,7 @@ export function Timeline({
                         key={key}
                         style={{ width: `${widthPercent}%` }}
                         onPointerEnter={(event) => {
-                          if (event.pointerType !== "touch") setDetailKey(key);
+                          if (event.pointerType !== "touch") showDetail(key, event.currentTarget);
                         }}
                         onPointerLeave={() => {
                           clearLongPress();
@@ -218,24 +262,33 @@ export function Timeline({
                           type="button"
                           className="timeline-command"
                           aria-label={`${presentation.label}. ${presentation.detail}. ${formatGameTime(entry.startTick)} to ${formatGameTime(entry.endTick)}.`}
-                          onFocus={() => setDetailKey(key)}
+                          onFocus={(event) => showDetail(key, event.currentTarget)}
+                          onBlur={(event) => {
+                            const related = event.relatedTarget;
+                            if (
+                              !(related instanceof Node) ||
+                              !event.currentTarget.parentElement?.contains(related)
+                            )
+                              setDetailKey(null);
+                          }}
                           onPointerDown={(event) => {
                             if (event.pointerType !== "touch") return;
                             clearLongPress();
+                            const anchor = event.currentTarget;
                             longPressRef.current = window.setTimeout(() => {
                               suppressClickRef.current = true;
-                              setDetailKey(key);
+                              showDetail(key, anchor);
                             }, LONG_PRESS_MS);
                           }}
                           onPointerUp={clearLongPress}
                           onPointerCancel={clearLongPress}
-                          onClick={() => {
+                          onClick={(event) => {
                             if (suppressClickRef.current) {
                               suppressClickRef.current = false;
                               return;
                             }
                             onSelectCommand(robot.id, entry.index, entry.endTick);
-                            setDetailKey(key);
+                            showDetail(key, event.currentTarget);
                           }}
                         >
                           <CommandGlyph segment={entry.segment} />
@@ -249,6 +302,7 @@ export function Timeline({
                             className="timeline-command-detail"
                             role="tooltip"
                             data-row={visibleIndex}
+                            style={detailPosition}
                           >
                             <strong>{presentation.label}</strong>
                             <span>{presentation.detail}</span>

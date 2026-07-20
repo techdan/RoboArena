@@ -11,6 +11,21 @@ import { WEAPON_LABELS } from "./firingHelpers";
 
 export const HEADINGS: readonly Heading[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
+export const headingFromVector = (x: number, y: number): Heading => {
+  if (x === 0 && y === 0) return "N";
+  const clockwiseDegrees = (Math.atan2(y, x) * 180) / Math.PI + 90;
+  const index = Math.round(clockwiseDegrees / 45 + HEADINGS.length) % HEADINGS.length;
+  return HEADINGS[index] ?? "N";
+};
+
+const COMPACT_WEAPON_LABELS: Readonly<Record<WeaponId, string>> = {
+  rifle: "Rifle",
+  "burst-gun": "Burst",
+  "auto-rifle": "Auto",
+  "missile-launcher": "Missile",
+  "grenade-launcher": "Grenade",
+};
+
 const titleCase = (value: string): string =>
   value
     .split("-")
@@ -103,14 +118,14 @@ export const commandPresentation = (
     case "aim-and-fire":
       return {
         label: "Aim & Fire",
-        compact: `${segment.target.x},${segment.target.y}`,
+        compact: `${COMPACT_WEAPON_LABELS[segment.weapon]} · ${segment.target.x},${segment.target.y}`,
         detail: `${WEAPON_LABELS[segment.weapon]} at tile ${segment.target.x},${segment.target.y}`,
         weapon: segment.weapon,
       };
     case "scan-and-fire":
       return {
         label: "Scan & Fire",
-        compact: `${segment.maxDistance}t · ${segment.seconds}s`,
+        compact: `${COMPACT_WEAPON_LABELS[segment.weapon]} · ${segment.maxDistance}t · ${segment.seconds}s`,
         detail: `${WEAPON_LABELS[segment.weapon]}, ${segment.maxDistance} tiles for ${segment.seconds} seconds`,
         weapon: segment.weapon,
       };

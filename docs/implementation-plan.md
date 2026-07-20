@@ -702,7 +702,7 @@ real WSS/two-network restart check is not yet claimed.
 - `src/planner/state.ts` — immutable reducer for current `TurnOrders` and conflict recovery
 - `src/planner/pathfind.ts` — A* on the arena tile grid for movement paths
 - `src/planner/segments.ts` — helpers to append/edit/delete `RobotCommandSegment`s
-- `src/planner/history.ts` — full turn-scoped undo/redo history for the local draft
+- `src/planner/history.ts` — shared, turn-scoped 50-edit undo/redo history for the local draft
 
 **Tests required**:
 
@@ -716,7 +716,7 @@ real WSS/two-network restart check is not yet claimed.
   one 40-tick double, while entering Rough/Bush/Low-wall retains a 30-tick
   single; include straight, mixed, and diagonal route tests
 - undo/redo restores byte-equivalent orders and projected positions across the
-  complete current-turn edit history, including changes on different robots;
+  newest 50 current-turn edits, including changes on different robots;
   movement previews apply each selector at its own completion boundary
 - server snapshots never overwrite a newer unsent local draft without an
   explicit conflict/recovery path
@@ -1511,11 +1511,12 @@ visibility, or resolution.
   `R1`–`R4` identities. The expanded view aligns all lanes to the same 0–15
   second ruler and playhead, then collapses without changing the preview time.
 - **Clear plan** names the selected robot explicitly and remains undoable.
-- Undo and Redo operate on one full, turn-scoped history across all robot
+- Undo and Redo operate on one shared, turn-scoped history across all robot
   timelines, not only the immediately preceding state. Every append,
   remove-last, clear, route, posture, heading, Aim, and Scan mutation
-  participates; a new action after undo clears the redo branch. History remains
-  available until lock, authoritative rebase, or explicit draft replacement.
+  participates; a new action after undo clears the redo branch. The newest 50
+  mutations remain available until lock, authoritative rebase, or explicit
+  draft replacement; the oldest entry drops first when the bound is exceeded.
 
 **Scan & Fire flow**:
 
@@ -1601,7 +1602,7 @@ visibility, or resolution.
   actions. Its 0–15 second scrubber sits directly beneath the command lane,
   previews the board without editing orders, auto-parks at the program end after
   mutations, and shares one time across the temporary all-programs view.
-- Undo/redo can traverse the complete current-turn mutation history across
+- Undo/redo can traverse the retained 50-edit current-turn history across
   multiple robots, and the controls remain in the global header's upper left.
 - The fitted arena and its presentation-only bezel consume the complete lower
   workspace beneath the compact header/selector/timeline/action stack. The
@@ -1640,11 +1641,11 @@ glyphs plus essential parameters, hybrid duration sizing, exact accessible
 details, and a directly attached shared scrubber/playhead. All Programs expands
 temporarily on the same time axis. Command selection previews its completion;
 only the final action exposes Remove Last Action, while Clear names the robot.
-All mutations continue through the existing full turn-scoped reducer history,
-with Undo/Redo moved beside the global menu. The arena now has a presentation-
-only bezel, overlaid compact camera controls, and transient severity-correct
-notices. The active-mode slot stays height-stable, so Aim/Scan changes do not
-reflow the board.
+All mutations continue through the existing shared, bounded turn-scoped reducer
+history, with Undo/Redo moved beside the global menu. The arena now has a
+presentation-only bezel, overlaid compact camera controls, and transient
+severity-correct notices. The active-mode slot stays height-stable, so Aim/Scan
+changes do not reflow the board.
 
 **Verification**: 317 Vitest tests pass, including focused presentation tests
 for duplicate-aware robot identity, conditional finite-ammo weapon controls,
@@ -2669,7 +2670,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12)                         |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
-| 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, full undo/redo history, and full-width arena                                      |
+| 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |

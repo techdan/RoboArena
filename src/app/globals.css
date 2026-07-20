@@ -995,7 +995,6 @@ a.planner-menu-item:focus-visible {
   font-family: ui-monospace, monospace;
   font-size: 0.52rem;
 }
-.timeline-segment > button,
 .history-buttons button {
   display: grid;
   cursor: pointer;
@@ -1005,8 +1004,6 @@ a.planner-menu-item:focus-visible {
   color: rgb(255 255 255 / 45%);
   background: transparent;
 }
-.timeline-segment > button:hover,
-.timeline-segment > button:focus-visible,
 .history-buttons button:hover,
 .history-buttons button:focus-visible {
   color: #fb7185;
@@ -1404,6 +1401,8 @@ a.planner-menu-item:focus-visible {
   transform: translateX(-100%);
 }
 .timeline-rows {
+  width: 100%;
+  min-width: 0;
   margin-top: 0.18rem;
 }
 .timeline-rows[data-expanded="true"] {
@@ -1413,6 +1412,8 @@ a.planner-menu-item:focus-visible {
 .timeline-row {
   position: relative;
   display: flex;
+  width: 100%;
+  min-width: 0;
   min-height: 2.55rem;
   gap: 0.35rem;
 }
@@ -1426,8 +1427,13 @@ a.planner-menu-item:focus-visible {
 }
 .timeline-segments {
   position: relative;
-  flex: 1;
-  overflow: visible;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 .timeline-segment {
   position: relative;
@@ -1523,8 +1529,33 @@ a.planner-menu-item:focus-visible {
 .timeline-scan-glyph[data-heading="NW"] i {
   transform: rotate(225deg);
 }
-.timeline-command-detail {
+.timeline-fire-glyph {
+  position: relative;
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  place-items: center;
+}
+.timeline-fire-glyph i {
   position: absolute;
+  right: -0.18rem;
+  bottom: -0.12rem;
+  display: grid;
+  width: 0.72rem;
+  height: 0.72rem;
+  place-items: center;
+  border: 1px solid rgb(103 232 249 / 60%);
+  border-radius: 50%;
+  color: #cffafe;
+  background: #101612;
+  font-family: ui-monospace, monospace;
+  font-size: 0.42rem;
+  font-style: normal;
+  font-weight: 900;
+}
+.timeline-command-detail {
+  position: fixed;
   z-index: 80;
   top: calc(100% + 0.3rem);
   left: 0;
@@ -1700,6 +1731,8 @@ a.planner-menu-item:focus-visible {
   margin: -0.15rem auto 0;
   border: 1px solid rgb(103 232 249 / 40%);
   border-radius: 50%;
+  cursor: pointer;
+  touch-action: none;
   outline: none;
 }
 .scan-direction-control:focus-visible {
@@ -1739,7 +1772,7 @@ a.planner-menu-item:focus-visible {
   border-bottom: 0.25rem solid transparent;
   border-left: 0.35rem solid #67e8f9;
 }
-.scan-direction-control > button {
+.scan-direction-choice {
   position: absolute;
   z-index: 3;
   top: 50%;
@@ -1751,9 +1784,9 @@ a.planner-menu-item:focus-visible {
   border-radius: 50%;
   color: transparent;
   background: transparent;
+  pointer-events: none;
 }
-.scan-direction-control > button:hover,
-.scan-direction-control > button:focus-visible {
+.scan-direction-choice[data-active="true"] {
   background: rgb(190 242 100 / 22%);
   outline: 1px solid #bef264;
 }
@@ -2809,8 +2842,7 @@ a.planner-menu-item:focus-visible {
     min-height: 44px;
   }
   .help-button,
-  .history-buttons button,
-  .timeline-segment > button {
+  .history-buttons button {
     width: 44px;
     min-width: 44px;
     height: 44px;

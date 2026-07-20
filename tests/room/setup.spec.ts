@@ -129,7 +129,10 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await board.tap({ position: { x: 108, y: 12 } });
     await expect(timelines.getByText("Move", { exact: true })).toBeVisible();
     await planner.getByRole("button", { name: "ducking posture" }).tap();
-    await planner.getByRole("button", { name: "Face S" }).tap();
+    const scanDirection = planner.getByRole("slider", { name: "Scan direction" });
+    await scanDirection.press("ArrowRight");
+    await scanDirection.press("ArrowRight");
+    await scanDirection.press("Enter");
     await expect(timelines.getByText("Posture", { exact: true })).toBeVisible();
     await expect(timelines.getByText("Scan direction", { exact: true })).toBeVisible();
     await planner.getByRole("button", { name: "Undo" }).tap();
@@ -144,7 +147,9 @@ test("four touch browsers complete an authoritative planned turn and reconnect",
     await planner.getByRole("button", { name: "Undo" }).tap();
     await expect(timelines.getByText("Scan direction", { exact: true })).toBeVisible();
 
-    await planner.getByRole("button", { name: "Face E" }).tap();
+    await scanDirection.press("ArrowLeft");
+    await scanDirection.press("ArrowLeft");
+    await scanDirection.press("Enter");
     await planner.getByRole("button", { name: "Aim & Fire", exact: true }).tap();
     await expect(planner.getByLabel("Targeting overlay legend")).toContainText("Fixed tile");
     await expect

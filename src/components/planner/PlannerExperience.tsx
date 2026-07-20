@@ -363,7 +363,7 @@ export function PlannerExperience({
       );
   };
   const selectCommand = (robotId: string, _index: number, endTick: number) => {
-    if (robotId !== selectedRobot.id) setSelectedRobotId(robotId);
+    if (robotId !== selectedRobot.id) selectRobot(robotId);
     setPreviewTick(endTick);
   };
   const changeHistory = (type: "undo" | "redo") => {
@@ -383,6 +383,10 @@ export function PlannerExperience({
       ),
     );
   };
+  const selectRobotRef = useRef(selectRobot);
+  selectRobotRef.current = selectRobot;
+  const changeHistoryRef = useRef(changeHistory);
+  changeHistoryRef.current = changeHistory;
   const chooseTile = (
     tile: TileCoord,
     modifiers: { readonly ctrl: boolean; readonly shift: boolean },
@@ -670,21 +674,23 @@ export function PlannerExperience({
       if (!(event.ctrlKey || event.metaKey)) {
         const index = Number(event.key) - 1;
         if (Number.isInteger(index) && team.robots[index] !== undefined)
-          selectRobot(team.robots[index].id);
+          selectRobotRef.current(team.robots[index].id);
         return;
       }
       if (event.key.toLowerCase() === "z") {
         event.preventDefault();
-        changeHistory(event.shiftKey ? "redo" : "undo");
+        changeHistoryRef.current(event.shiftKey ? "redo" : "undo");
       }
       if (event.key.toLowerCase() === "y") {
         event.preventDefault();
-        changeHistory("redo");
+        changeHistoryRef.current("redo");
       }
       if (event.key.toLowerCase() === "a") {
         event.preventDefault();
         const index = team.robots.findIndex((robot) => robot.id === selectedRobot.id);
-        selectRobot(team.robots[(index + 1) % team.robots.length]?.id ?? selectedRobot.id);
+        selectRobotRef.current(
+          team.robots[(index + 1) % team.robots.length]?.id ?? selectedRobot.id,
+        );
       }
     };
     window.addEventListener("keydown", onKey);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeRobot } from "../engine/__fixtures__/match";
 import type { TurnOrders } from "../engine/types";
+import { DEFAULT_HISTORY_LIMIT } from "./history";
 import { projectRobotAtTick, timelineForRobot } from "./segments";
 import { createPlannerState, plannerReducer } from "./state";
 
@@ -33,6 +34,22 @@ describe("planner draft state", () => {
     expect(
       plannerReducer(undone, { type: "edit", orders: orders(1, "r2") }).history.future,
     ).toEqual([]);
+  });
+
+  it("retains the newest bounded undo states and drops the oldest first", () => {
+    let state = createPlannerState(orders(1, "r0"), "rev-1");
+    for (let index = 1; index <= DEFAULT_HISTORY_LIMIT + 1; index += 1)
+      state = plannerReducer(state, { type: "edit", orders: orders(1, `r${index}`) });
+
+    expect(state.history.past).toHaveLength(DEFAULT_HISTORY_LIMIT);
+    for (let index = 0; index < DEFAULT_HISTORY_LIMIT; index += 1)
+      state = plannerReducer(state, { type: "undo" });
+    expect(state.history.present).toEqual(orders(1, "r1"));
+    expect(plannerReducer(state, { type: "undo" })).toEqual(state);
+
+    for (let index = 0; index < DEFAULT_HISTORY_LIMIT; index += 1)
+      state = plannerReducer(state, { type: "redo" });
+    expect(state.history.present).toEqual(orders(1, `r${DEFAULT_HISTORY_LIMIT + 1}`));
   });
 
   it("preserves a newer unsent draft when an authoritative snapshot changes", () => {

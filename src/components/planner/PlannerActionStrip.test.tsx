@@ -36,6 +36,10 @@ describe("Phase 11.8.1 planner controls", () => {
       </HelpProvider>,
     );
     expect(multiple).toContain('<select aria-label="Weapon"');
+    expect(multiple).toContain('role="slider"');
+    expect(multiple).toContain('aria-label="Scan direction"');
+    expect(multiple).toContain('aria-valuetext="E"');
+    expect(multiple).not.toContain("Face E");
     expect(multiple).toContain("Missile Launcher · 2");
     expect(multiple).toContain("Missiles 2");
 

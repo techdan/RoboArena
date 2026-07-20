@@ -7,7 +7,9 @@ export interface History<T> {
   readonly limit: number;
 }
 
-export const createHistory = <T>(present: T, limit = 50): History<T> => ({
+export const DEFAULT_HISTORY_LIMIT = 50;
+
+export const createHistory = <T>(present: T, limit = DEFAULT_HISTORY_LIMIT): History<T> => ({
   past: [],
   present,
   future: [],

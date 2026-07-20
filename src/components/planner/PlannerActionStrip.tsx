@@ -1,9 +1,9 @@
 "use client";
 
 import { Crosshair, Radar } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type PointerEvent } from "react";
 import type { Heading, Posture, WeaponId } from "../../engine/types";
-import { HEADINGS, rotateHeading } from "../../planner/presentation";
+import { HEADINGS, headingFromVector, rotateHeading } from "../../planner/presentation";
 import { WEAPON_LABELS } from "../../planner/firingHelpers";
 import { HelpButton } from "../help/HelpProvider";
 import { PostureIcon } from "./PostureIcon";
@@ -59,6 +59,17 @@ export function PlannerActionStrip({
     setKeyboardHeading(next);
     onHeadingPreview(next);
   };
+  const headingAtPointer = (event: PointerEvent<HTMLDivElement>): Heading => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return headingFromVector(
+      event.clientX - (bounds.left + bounds.width / 2),
+      event.clientY - (bounds.top + bounds.height / 2),
+    );
+  };
+  const resetPreview = () => {
+    setKeyboardHeading(heading);
+    onHeadingPreview(null);
+  };
 
   return (
     <section className="planner-action-strip" aria-label="Robot actions">
@@ -90,13 +101,42 @@ export function PlannerActionStrip({
         </legend>
         <div
           className="scan-direction-control"
-          role="group"
-          aria-label={`Scan direction ${keyboardHeading}`}
+          role="slider"
+          aria-label="Scan direction"
+          aria-valuemin={0}
+          aria-valuemax={HEADINGS.length - 1}
+          aria-valuenow={HEADINGS.indexOf(keyboardHeading)}
+          aria-valuetext={keyboardHeading}
+          aria-disabled={disabled}
           tabIndex={disabled ? -1 : 0}
-          onBlur={() => onHeadingPreview(null)}
-          onPointerLeave={() => {
-            setKeyboardHeading(heading);
+          onBlur={resetPreview}
+          onPointerDown={(event) => {
+            if (disabled) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            preview(headingAtPointer(event));
+          }}
+          onPointerMove={(event) => {
+            if (
+              disabled ||
+              (event.pointerType !== "mouse" &&
+                !event.currentTarget.hasPointerCapture(event.pointerId))
+            )
+              return;
+            preview(headingAtPointer(event));
+          }}
+          onPointerUp={(event) => {
+            if (disabled) return;
+            const next = headingAtPointer(event);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            setKeyboardHeading(next);
+            onHeading(next);
             onHeadingPreview(null);
+          }}
+          onPointerCancel={resetPreview}
+          onPointerLeave={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) resetPreview();
           }}
           onKeyDown={(event) => {
             if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
@@ -109,6 +149,12 @@ export function PlannerActionStrip({
               event.preventDefault();
               onHeading(keyboardHeading);
               onHeadingPreview(null);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              preview("N");
+            } else if (event.key === "End") {
+              event.preventDefault();
+              preview("NW");
             }
           }}
         >
@@ -130,26 +176,17 @@ export function PlannerActionStrip({
           {HEADINGS.map((choice, index) => {
             const angle = index * 45 - 90;
             return (
-              <button
-                type="button"
+              <span
+                className="scan-direction-choice"
                 key={choice}
-                aria-label={`Face ${choice}`}
-                aria-pressed={choice === heading}
                 data-active={choice === heading}
-                disabled={disabled}
+                aria-hidden="true"
                 style={{
                   transform: `rotate(${angle}deg) translateX(1.55rem) rotate(${-angle}deg) translate(-50%, -50%)`,
                 }}
-                onPointerEnter={() => preview(choice)}
-                onFocus={() => preview(choice)}
-                onClick={() => {
-                  setKeyboardHeading(choice);
-                  onHeading(choice);
-                  onHeadingPreview(null);
-                }}
               >
                 {choice}
-              </button>
+              </span>
             );
           })}
           <strong>{keyboardHeading}</strong>
