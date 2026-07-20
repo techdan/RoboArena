@@ -34,7 +34,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState<PlayerColor>("red");
   const [error, setError] = useState<string>();
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [connected, setConnected] = useState(false);
 
   const handleMessage = useCallback(
@@ -140,6 +140,35 @@ export function RoomSetup({ code }: { readonly code: string }) {
     setEditColor(selfPlayer.color);
   }, [selfPlayer?.color, selfPlayer?.id, selfPlayer?.name]);
 
+  useEffect(() => {
+    if (copyStatus === "idle") return;
+    const timer = setTimeout(() => setCopyStatus("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [copyStatus]);
+
+  const copyInvite = async (url: string) => {
+    try {
+      if (navigator.clipboard?.writeText !== undefined) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Clipboard API is unavailable outside a secure context (e.g. a plain
+        // http:// LAN address during device testing). Fall back to the
+        // legacy select-and-copy technique so the invite link still copies.
+        const textarea = document.createElement("textarea");
+        textarea.value = url;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
   const send = (message: Parameters<RoomSocket["send"]>[0]) => {
     setError(undefined);
     void socketRef.current
@@ -244,11 +273,23 @@ export function RoomSetup({ code }: { readonly code: string }) {
     <main className="min-h-screen bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
       <div className="relative mx-auto max-w-[1080px] px-8 py-10">
-        <header className="flex items-end justify-between border-b border-white/8 pb-6">
+        <header className="flex items-end border-b border-white/8 pb-6">
           <div>
             <p className="eyebrow mb-3">Private room</p>
             <div className="flex items-center gap-4">
               <h1 className="font-mono text-4xl font-black tracking-[0.16em]">{code}</h1>
+              <button
+                type="button"
+                className="secondary-link"
+                onClick={() => void copyInvite(inviteUrl)}
+              >
+                <Clipboard className="size-4" aria-hidden="true" />
+                {copyStatus === "copied"
+                  ? "Copied"
+                  : copyStatus === "failed"
+                    ? "Couldn't copy"
+                    : "Copy invite"}
+              </button>
               <span
                 className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-3 py-1 text-xs font-bold text-emerald-200"
                 role="status"
@@ -257,17 +298,6 @@ export function RoomSetup({ code }: { readonly code: string }) {
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            className="secondary-link"
-            onClick={() => {
-              void navigator.clipboard.writeText(inviteUrl);
-              setCopied(true);
-            }}
-          >
-            <Clipboard className="size-4" aria-hidden="true" />
-            {copied ? "Copied" : "Copy invite"}
-          </button>
         </header>
         <div className="mt-7 grid grid-cols-[1fr_360px] gap-6">
           <section className="rounded-3xl border border-white/8 bg-white/[0.035] p-6">
