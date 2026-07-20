@@ -152,12 +152,6 @@ export class RoomStorage {
     return rows.map((row) => decode<unknown>(row.orders_json));
   }
 
-  /** Delete rooms untouched since the cutoff. Locked orders cascade via FK. */
-  sweepRoomsUpdatedBefore(cutoffIso: string): number {
-    const result = this.#database.prepare("DELETE FROM rooms WHERE updated_at < ?").run(cutoffIso);
-    return Number(result.changes);
-  }
-
   close(): void {
     this.#database.close();
   }

@@ -127,9 +127,11 @@ boundaries are explicit product/data choices:
   `your turn`, `waiting for N players`, `turn ready to watch`, or `finished`.
   Browser/push notifications are optional later work; v1 must work by returning
   to the room URL and checking status.
-- Rooms and canonical turn/replay data survive ordinary service restarts. A
-  player may resign and the room may be ended as abandoned; v1 never invents AI
-  orders for an absent player.
+- Rooms and canonical turn/replay data survive ordinary service restarts and
+  are never automatically deleted; a player may return hours, days, or weeks
+  later and find the room exactly as they left it. A player may explicitly
+  resign a match; v1 never invents AI orders for an absent player and never
+  silently auto-forfeits a stalled one.
 
 ### Game lengths
 

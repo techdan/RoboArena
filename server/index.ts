@@ -27,13 +27,6 @@ interface ConnectionState {
 export const MAX_CLIENT_MESSAGE_BYTES = 256 * 1024;
 export const MESSAGE_RATE_WINDOW_MS = 10_000;
 export const MESSAGE_RATE_LIMIT = 60;
-export const ROOM_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // Check for abandoned rooms hourly.
-// `updated_at` only bumps on a mutating save (create/join/lock/resolve/...),
-// never on a mere reconnect or idle view. docs/spec.md promises a player "may
-// leave and return hours or days later" — 24h was far inside that window and
-// silently deleted a still-wanted room. 30 days gives genuine day-scale
-// absences headroom while still reclaiming rooms nobody ever returns to.
-export const ROOM_MAX_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
   if (error instanceof RoomError || error instanceof MatchLifecycleError) {
@@ -76,14 +69,6 @@ export interface RoomServer {
 export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")): RoomServer {
   const storage = new RoomStorage(databasePath);
   const service = new RoomService(storage);
-  const sweepTimer = setInterval(() => {
-    try {
-      service.sweepAbandonedRooms(ROOM_MAX_IDLE_MS);
-    } catch {
-      // Best-effort background cleanup; a failed sweep retries next interval.
-    }
-  }, ROOM_SWEEP_INTERVAL_MS);
-  sweepTimer.unref(); // Never keep the process (or a test run) alive for cleanup.
   const http: HttpServer = createServer((request, response) => {
     if (request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
@@ -366,7 +351,6 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
       }),
     close: () =>
       new Promise((resolveClose, reject) => {
-        clearInterval(sweepTimer);
         for (const socket of connections.keys()) socket.terminate();
         sockets.close(() => {
           http.close((error) => {

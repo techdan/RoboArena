@@ -477,16 +477,6 @@ export class RoomService {
     });
   }
 
-  /**
-   * Delete rooms idle longer than `maxIdleMs` (no create/join/config/turn
-   * activity, which each touch the row). Abandoned rooms are reclaimed without
-   * a live connection; returns how many were removed.
-   */
-  sweepAbandonedRooms(maxIdleMs: number): number {
-    const cutoff = new Date(Date.now() - maxIdleMs).toISOString();
-    return this.storage.sweepRoomsUpdatedBefore(cutoff);
-  }
-
   markConnected(playerId: string): void {
     this.#connected.set(playerId, (this.#connected.get(playerId) ?? 0) + 1);
   }

@@ -381,19 +381,6 @@ describe("authoritative rooms", () => {
     storage.close();
   });
 
-  it("sweeps abandoned rooms past the idle cutoff and keeps fresh ones", () => {
-    const storage = new RoomStorage(":memory:");
-    const service = new RoomService(storage);
-    const room = service.createRoom("Solo", "red");
-    // A just-created room is fresh: a 24h idle cutoff reclaims nothing.
-    expect(service.sweepAbandonedRooms(24 * 60 * 60 * 1000)).toBe(0);
-    expect(storage.loadRoom(room.room.code)).toBeDefined();
-    // A cutoff in the future treats every room as abandoned and removes it.
-    expect(storage.sweepRoomsUpdatedBefore(new Date(Date.now() + 60_000).toISOString())).toBe(1);
-    expect(storage.loadRoom(room.room.code)).toBeUndefined();
-    storage.close();
-  });
-
   it("never stores a participant token in the idempotency response cache", () => {
     const storage = new RoomStorage(":memory:");
     const response: RoomSnapshotMessage = {

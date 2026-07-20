@@ -1030,8 +1030,8 @@ alliance rules below are preserved for v2 but do not create v1 UI/protocol paths
   crossfire, simultaneous elimination, draw, last-Side-standing, replay, and
   ceremony flows end to end.
 - test staggered asynchronous submission, leave/return, per-player unseen-turn
-  acknowledgement, resignation, and abandoned-room handling with three and four
-  clients, including nonadjacent Home slots.
+  acknowledgement, and resignation with three and four clients, including
+  nonadjacent Home slots.
 
 **Acceptance tests**: two-player regression, three-player free-for-all,
 four-player free-for-all, alliance configuration rejection, private orders and
@@ -1070,20 +1070,14 @@ single resolution, independent acknowledgement, and byte-identical
 aggregation and simultaneous-wipeout draw; and a four-client staggered turn
 recovered across a restart with a mid-turn disconnect and durable rejoin.
 
-**Resignation + abandoned-room (added 2026-07-17, service-complete)**:
-resignation is a replay-safe match-lifecycle concern, never a simulation-state
-mutation — a resigned player is tracked in `resignedPlayerIds`, projected as
-wiped-out through an `effectiveTeams` view for outcome/ceremony, and dropped
-from `activePlayerIds` so it never gates another turn; recorded turns still
-replay byte-identically. A `ResignMatch` protocol message and
-`RoomService.resignMatch` finish the match if the resignation decides it, else
-resolve immediately if the remaining active players were only waiting on the
-resigner. Abandoned rooms are reclaimed by an idle-cutoff sweep
-(`sweepAbandonedRooms`, wired to an unref'd hourly server interval, cutoff
-raised from an initial 24h to 30 days on 2026-07-20 after the tighter cutoff
-silently deleted a still-wanted room — `updated_at` only bumps on a mutating
-save, never on a reconnect or idle view, so 24h was well inside the spec's own
-"leave and return hours or days later" promise). A two-step
+**Resignation (added 2026-07-17, service-complete)**: resignation is a
+replay-safe match-lifecycle concern, never a simulation-state mutation — a
+resigned player is tracked in `resignedPlayerIds`, projected as wiped-out
+through an `effectiveTeams` view for outcome/ceremony, and dropped from
+`activePlayerIds` so it never gates another turn; recorded turns still replay
+byte-identically. A `ResignMatch` protocol message and `RoomService.resignMatch`
+finish the match if the resignation decides it, else resolve immediately if the
+remaining active players were only waiting on the resigner. A two-step
 `ResignControl` (irreversible, so it confirms) is wired into the planner header
 and the waiting/turn-ready flow views, making resignation user-facing; its
 browser validation is part of the manual Phase 12 pass.
@@ -2383,7 +2377,7 @@ the selected storage adapter.
 
 | Kind                                        | Where                                                                        | Lifetime                                            |
 | ------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
-| Active rooms/matches                        | Supabase Postgres + room-service memory cache (SQLite in local/test profile) | Until finished/abandoned and retention cleanup runs |
+| Active rooms/matches                        | Supabase Postgres + room-service memory cache (SQLite in local/test profile) | Indefinite; no automatic deletion. A player may resign a match explicitly |
 | Own room rejoin token                       | Client localStorage                                                          | Until room expires or storage is cleared            |
 | Canonical turn/replay data                  | Supabase Postgres; completed export JSON                                     | Room lifetime; export is player-owned               |
 | Saved teams                                 | v1 built-in presets; post-v1 local/shared library                            | Presets only in v1                                  |

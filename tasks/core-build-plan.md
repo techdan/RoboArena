@@ -227,11 +227,14 @@ playable end to end.
    Home-corner selection (unique NW/NE/SE/SW per player, `SetHomeSlot`,
    non-compacting slot carry-through) and automated three-/four-player
    private/staggered/restart/disconnect coverage with byte-identical replay
-   landed 2026-07-17, as did replay-safe resignation (`ResignMatch`) and an
-   idle-cutoff abandoned-room sweep. Remaining: a resign UI control and the real
-   four-separate-session/two-network functional gate (consolidated into Phase 12).
+   landed 2026-07-17, as did replay-safe resignation (`ResignMatch`) and a
+   resign UI control (2026-07-18). Rooms are never automatically deleted; an
+   earlier idle-cutoff sweep was removed on 2026-07-20 after it silently
+   deleted a still-wanted room (`updated_at` only bumps on a mutating save, not
+   on a reconnect or idle view, so any fixed cutoff can delete a room a player
+   fully intends to return to). Remaining: the real four-separate-session/
+   two-network functional gate (consolidated into Phase 12).
 3. Close the consolidated Phase 12 v1 ship gate: deployed production storage/WSS
    and two-real-network validation, the real four-browser FFA match, then the
-   physical-iPad Safari room-to-results smoke match. Resignation and
-   abandoned-room resilience logic already landed in 11.6. Browser emulation
-   already covers the 1024×768 Field Guide/touch contract.
+   physical-iPad Safari room-to-results smoke match. Browser emulation already
+   covers the 1024×768 Field Guide/touch contract.
