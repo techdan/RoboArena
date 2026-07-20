@@ -1658,6 +1658,178 @@ desktop/iPad screenshot review remains the final phase closure item.
 
 ---
 
+### Phase 11.8.2 — planner space efficiency, glyph timeline, and overlay placement [⬜ NOT STARTED]
+
+**Goal**: close the space and clarity gaps found in the 2026-07-19 desktop
+review of the Phase 11.8.1 build. The arena should genuinely reach the
+viewport edges with a minimal, aligned control stack above it; the timeline
+should read like the original's glyph strip — identifiable commands with
+honest relative duration and no words inside blocks; the firing controls
+should reuse the space of the buttons they replace; and board overlays (zone
+labels, legend) should place themselves intelligently instead of colliding or
+covering play area. Presentation and interaction only: no change to command
+shape, timing, legality, targeting math, or resolution.
+
+**Dependencies**: Phase 11.8.1. Reuses its glyph vocabulary, scan circle,
+fire-control strips, bounded undo history, and overlay geometry modules.
+
+**Review findings this phase resolves** (screenshot 2026-07-19, 1165px-wide
+window, Rubble Three, Rifle robot top-center facing S):
+
+1. Side gutters remain: page padding plus board-card border/padding plus the
+   min-axis letterbox keep the arena off the viewport edges even in a narrow
+   window.
+2. The pre-arena stack (header, selector row, timeline, heading row, action
+   strip) consumes ~460px; the selector row is mostly empty to the right, the
+   timeline blocks are word-heavy with generous padding, and the board-heading
+   row ("RIFLE · At tile 11,0") duplicates information of low value.
+3. The Scan config card floats at the heading row's right, misaligned with the
+   action strip below; the strip mixes top-edge captions, floating help marks,
+   a read-only Weapon group on single-weapon robots, and text-labeled posture
+   buttons.
+4. Damage/range labels anchored to the longest *boundary* ray cluster and
+   collide near the top edge ("−4 dmg" over "≤18 tiles") even when the
+   heading centerline has the longest clear run; the "+4 dmg inside" tag
+   detaches visually from its arc.
+5. The bottom-center legend + posture overlay is large, blocks central board
+   input, and competes with the zoom overlay.
+
+**Full-bleed arena and camera default**:
+
+- Remove the board card chrome around the arena band. The arena area runs
+  full-bleed to the left/right viewport edges; the Phase 11.8.1
+  presentation-only bezel is the sole frame, and page padding applies only to
+  the control bands above.
+- Default and reset camera is **fit-width**: the arena fills 100% of the
+  workspace width, cropping vertically when the remaining height is shorter
+  than the arena. Panning and zoom-out (down to whole-arena fit) reach the
+  cropped portion; keyboard tile navigation auto-pans to keep the cursor
+  visible. With the condensed top stack, the cropped fraction at 1280×720 and
+  1024×768 must stay small enough that the Home rows remain reachable with one
+  short pan.
+- Move the cursor coordinate + validity readout onto the map as a small
+  upper-right overlay chip (hover/keyboard updates it; it never captures
+  pointer input). Delete the board-heading row entirely — the robot's class
+  lives in the selector chip and its tile is visible on the board.
+
+**Combined selector and program-summary band**:
+
+- Merge the robot selector row and the timeline topline into one band: robot
+  chips on the left; the selected robot's compact time summary (used /
+  budget · remaining) on the right; **All Programs** and an overflow menu at
+  the far edge. **Clear {robot}** moves into that overflow (it stays undoable
+  and named); it no longer spends a permanent labeled button.
+- Compact the chips: keyboard-ordinal badge, class name, and a thin HP bar
+  rather than `140 HP` text. Chips must fit one row for 8 robots at 1024px
+  landscape (future Battle/Campaign rosters); wrapping is the fallback, never
+  horizontal scroll.
+
+**Glyph timeline (original-inspired)**:
+
+- Timeline blocks show the Phase 11.8.1 glyph only — no command name or
+  parameter text inside the block. Duration stays hybrid-proportional on the
+  0–15s axis with a small readable minimum; identical repeated Aim selectors
+  read as a run of identical glyph cells. All names, parameters, exact
+  start/end/duration, and **Remove Last Action** remain on hover/focus and
+  touch long-press, and in each block's accessible label.
+- Collapse ruler, lane, and scrubber into one two-row band: tick marks render
+  inside the lane background, the playhead rides directly on the lane, and the
+  current time appears at the playhead only (the band's right edge shows
+  remaining time). No separate ruler row, no detached scrubber row, no
+  duplicated time text.
+- The lane never scrolls horizontally within budget; only an over-budget tail
+  (greyed, as today) may extend past the 15s mark.
+- **All Programs** expands as a temporary overlay panel *over* the action
+  strip and upper arena (absolutely positioned; the layout below does not
+  reflow), aligning every robot lane to the shared axis and playhead for turn
+  review, with the same scrubber. Escape or the toggle collapses it; the
+  preview time is preserved.
+
+**Action-strip alignment and in-place fire takeover**:
+
+- One baseline-aligned strip: posture trio · scan circle · conditional weapon
+  · Aim & Fire · Scan & Fire. Group captions use one consistent small-caps
+  treatment with a single aligned help affordance per group (or help folded
+  into control tooltips); no floating question marks or text touching the band
+  edge.
+- Activating a fire mode **replaces the Aim & Fire / Scan & Fire buttons in
+  place** with that mode's compact controls, keeping the strip's height and
+  the other groups' positions fixed: Scan swaps in `⌖ distance · seconds ·
+  Add · ✕`; Aim swaps in `target readout · fire time · shots · Review · ✕`.
+  Cancel/confirm restores the two entry buttons. The floating config card and
+  the idle "Select Aim or Scan to configure fire." placeholder are removed.
+- Hide the Weapon group entirely for single-weapon robots — no read-only
+  label. The Missile robot keeps the compact plan-aware
+  `Missile Launcher · N / Rifle` choice and exhausted-fallback behavior.
+- Replace the current posture icons with modern redraws of the original's
+  standing/ducking/crouching silhouettes (crisp currentColor SVGs), used
+  identically in the strip, timeline glyphs, and bottom legend. Buttons are
+  icon-only with accessible names and hover/focus tooltips; the visible
+  `upright/ducking/crouching` text labels are removed and the group caption
+  names the current posture.
+- Specify the scan circle's touch contract explicitly: press-drag previews the
+  wedge on the board through pointer capture, release commits the quantized
+  heading, and releasing with the pointer moved outside the control cancels
+  instead of committing. Keyboard behavior is unchanged.
+
+**Board overlay placement and collision handling**:
+
+- Zone/range label anchoring considers three candidate rays from the wedge
+  center — the heading centerline and both perpendicular boundary rays — and
+  chooses the ray with the longest in-arena visible run. Each ring's label
+  sits at its own radius along that ray, so the top-center robot facing S
+  places labels down the board's middle while an east-edge robot facing E
+  places them down the boundary line.
+- Clamp and de-overlap by rendered bounds: labels never crop at the arena
+  edge and never intersect each other; when two would collide (short runs,
+  small arenas), nudge along the chosen ray while keeping each label visually
+  attached to its arc, or drop the least informative label rather than
+  overlapping.
+- Compact the bottom overlay: a one-row swatch legend plus the icon-only
+  posture trio, collapsible to a small pill, anchored bottom-left opposite the
+  zoom overlay so the two never collide. It continues to block input only
+  under its own (now smaller) bounds and must not cover Home rows at
+  1024×768.
+
+**Tests required**:
+
+- Pure-geometry tests for candidate-ray selection (top-center/S → centerline;
+  east-edge/E → boundary; corner cases pick the longest run) and for
+  measured-bounds de-overlap/clamping.
+- Component tests: fire-mode takeover preserves strip height and sibling
+  positions; weapon group absent for single-weapon robots; glyph-only blocks
+  keep full accessible labels and hover/long-press details; merged
+  selector/summary band renders 4- and 8-robot rosters without scroll; All
+  Programs overlays without reflowing the strip; Clear reachable and undoable
+  from the overflow.
+- Camera tests: fit-width default/reset math, zoom-out floor at whole-arena
+  fit, keyboard-cursor auto-pan.
+- Manual desktop 1280×720 + 1440×900 and iPad landscape 1024×768 review:
+  arena touches side edges, top stack height budget, label placement for the
+  four review poses (top/S, east/E, center/any, corner/diagonal), legend and
+  zoom overlays non-colliding, touch scan-drag and long-press details.
+
+**Acceptance criteria**:
+
+- The arena spans the full viewport width at default zoom with no side
+  gutters; everything above it fits in three compact aligned bands (header;
+  selector+summary; timeline) plus the single action strip.
+- Timeline blocks are glyph-only and duration-proportional; a player can
+  identify command type and relative length at a glance, and full detail is
+  one hover/long-press away. The original-style single-band ruler/lane/
+  playhead replaces today's three stacked rows.
+- Configuring Aim or Scan changes nothing outside the strip slot the entry
+  buttons occupied; alignment, height, and the arena are stable.
+- Zone/range labels sit on the longest clear run, never overlap, never crop,
+  and stay attached to their arcs across headings and arena positions.
+- Posture is icon-only with recognizable original-inspired silhouettes;
+  single-weapon robots show no weapon control; the bottom overlay is compact,
+  collapsible, and never collides with the zoom controls.
+
+**Effort**: S–M.
+
+---
+
 ### Phase 12 — v1 production, resilience, and physical-device gate [⬜ V1 SHIP GATE]
 
 **Goal**: close every environment-dependent and cross-cutting requirement needed
@@ -2671,6 +2843,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
+| 11.8.2  | ⬜ NOT STARTED                     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
 | 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
@@ -2679,8 +2852,8 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 16      | ⏸ POST-v1 LAST                     | L      | Hot-seat/local-device adapter and privacy handoff                                                                                                                    |
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
-5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 11.8.1 → 12.
-Phases 11.8 and 11.8.1 may run alongside Phase 12's environment-dependent
+5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 11.8.1 → 11.8.2 →
+12. Phases 11.8–11.8.2 may run alongside Phase 12's environment-dependent
 setup, but both must close before the v1 gate is declared complete. The concise
 gate-by-gate sequence is in `tasks/core-build-plan.md`. Phase 13 presentation
 polish and Phases 13.5–16
