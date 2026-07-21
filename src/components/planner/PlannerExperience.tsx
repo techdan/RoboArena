@@ -19,6 +19,7 @@ import type {
   MatchState,
   Posture,
   RobotCommandSegment,
+  RobotState,
   TileCoord,
   TurnOrders,
   WeaponId,
@@ -67,6 +68,10 @@ const routeTiles = (segments: readonly RobotCommandSegment[]): readonly TileCoor
   }
   return route;
 };
+
+/** The first surviving robot, or the roster's first entry if the whole team is destroyed. */
+const defaultSelectableRobot = (robots: readonly RobotState[]): RobotState | undefined =>
+  robots.find((robot) => robot.hp > 0) ?? robots[0];
 
 interface AimDialogState {
   readonly target: TileCoord;
@@ -168,7 +173,9 @@ export function PlannerExperience({
       ? { ...created, dirty: true }
       : created;
   });
-  const [selectedRobotId, setSelectedRobotId] = useState(team.robots[0]?.id ?? "");
+  const [selectedRobotId, setSelectedRobotId] = useState(
+    defaultSelectableRobot(team.robots)?.id ?? "",
+  );
   const [aimTool, setAimTool] = useState(false);
   const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
   const [aimShots, setAimShots] = useState(1);
@@ -197,7 +204,9 @@ export function PlannerExperience({
           : "Choose a Home Area tile to deploy your first robot.",
   );
   const orders = state.history.present;
-  const selectedRobot = team.robots.find((robot) => robot.id === selectedRobotId) ?? team.robots[0];
+  const selectedRobot =
+    team.robots.find((robot) => robot.id === selectedRobotId) ??
+    defaultSelectableRobot(team.robots);
   if (selectedRobot === undefined) throw new Error("This team has no programmable robots.");
   const robotNames = useMemo(() => robotDisplayNames(team.robots), [team.robots]);
   const selectedTimeline = timelineForRobot(orders, selectedRobot.id);
@@ -710,9 +719,9 @@ export function PlannerExperience({
         return;
       }
       if (!(event.ctrlKey || event.metaKey)) {
-        const index = Number(event.key) - 1;
-        if (Number.isInteger(index) && team.robots[index] !== undefined)
-          selectRobotRef.current(team.robots[index].id);
+        const shortcutRobot = team.robots[Number(event.key) - 1];
+        if (shortcutRobot !== undefined && shortcutRobot.hp > 0)
+          selectRobotRef.current(shortcutRobot.id);
         return;
       }
       if (event.key.toLowerCase() === "z") {

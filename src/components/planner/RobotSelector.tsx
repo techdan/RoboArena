@@ -76,31 +76,42 @@ export function RobotSelector({
     <div className="planner-selector-band">
       <nav className="planner-robot-selector" aria-label="Choose robot">
         {robots.map((robot, index) => {
+          const destroyed = robot.hp <= 0;
           const ratio = Math.max(0, Math.min(1, robot.hp / robot.definition.armor));
+          const robotName = names.get(robot.id) ?? robot.definition.class;
           return (
             <button
               type="button"
               key={robot.id}
               aria-pressed={robot.id === selectedRobotId}
               data-selected={robot.id === selectedRobotId}
+              data-destroyed={destroyed}
+              disabled={destroyed}
+              aria-label={destroyed ? `${robotName}, destroyed` : undefined}
               onClick={() => onSelect(robot.id)}
             >
               <span className="planner-robot-shortcut" aria-hidden="true">
                 {index + 1}
               </span>
               <span className="planner-robot-meta">
-                <strong>{names.get(robot.id) ?? robot.definition.class}</strong>
+                <strong>{robotName}</strong>
                 <span className="planner-robot-health">
-                  <span
-                    className="planner-robot-hp"
-                    role="img"
-                    aria-label={`${robot.hp} of ${robot.definition.armor} HP`}
-                  >
-                    <span style={{ width: `${ratio * 100}%` }} data-low={ratio <= 0.34} />
-                  </span>
-                  <small>
-                    {robot.hp} / {robot.definition.armor}
-                  </small>
+                  {destroyed ? (
+                    <small className="planner-robot-destroyed-label">Destroyed</small>
+                  ) : (
+                    <>
+                      <span
+                        className="planner-robot-hp"
+                        role="img"
+                        aria-label={`${robot.hp} of ${robot.definition.armor} HP`}
+                      >
+                        <span style={{ width: `${ratio * 100}%` }} data-low={ratio <= 0.34} />
+                      </span>
+                      <small>
+                        {robot.hp} / {robot.definition.armor}
+                      </small>
+                    </>
+                  )}
                 </span>
               </span>
             </button>

@@ -1327,12 +1327,23 @@ a.planner-menu-item:focus-visible {
   background: rgb(255 255 255 / 3%);
   text-align: left;
 }
-.planner-robot-selector button:hover,
-.planner-robot-selector button:focus-visible,
-.planner-robot-selector button[data-selected="true"] {
+.planner-robot-selector button:not([data-destroyed="true"]):hover,
+.planner-robot-selector button:not([data-destroyed="true"]):focus-visible,
+.planner-robot-selector button[data-selected="true"]:not([data-destroyed="true"]) {
   border-color: rgb(190 242 100 / 48%);
   color: white;
   outline: 2px solid rgb(190 242 100 / 16%);
+}
+.planner-robot-selector button[data-destroyed="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  border-color: rgb(251 113 133 / 25%);
+  color: rgb(255 255 255 / 38%);
+  background: rgb(255 255 255 / 2%);
+}
+.planner-robot-selector button[data-destroyed="true"] .planner-robot-shortcut {
+  color: rgb(255 255 255 / 35%);
+  background: rgb(255 255 255 / 6%);
 }
 .planner-robot-shortcut {
   display: grid;
@@ -2975,6 +2986,14 @@ a.planner-menu-item:focus-visible {
   font-family: ui-monospace, monospace;
   font-size: 0.52rem;
   font-variant-numeric: tabular-nums;
+}
+.planner-robot-destroyed-label {
+  color: #fb7185;
+  font-family: ui-monospace, monospace;
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .planner-program-summary {
   display: flex;
