@@ -279,6 +279,13 @@ export function ArenaCanvas({
   useEffect(() => {
     let disposed = false;
     let destroy: (() => void) | undefined;
+    // Force a genuine "loading" -> "ready" transition. Every server round trip
+    // deserializes a brand-new (but content-identical) MatchState, and without
+    // this reset a rebuild here would set the already-"ready" status to the
+    // same value, which React treats as a no-op — silently starving the
+    // density-matching effect below of the status change it depends on and
+    // leaving the rebuilt canvas stuck at its low starting resolution.
+    setStatus("loading");
     void (async () => {
       const {
         Application: PixiApplication,
@@ -341,7 +348,13 @@ export function ArenaCanvas({
       cursorOverlayRef.current = null;
       destroy?.();
     };
-  }, [arena]);
+    // Deliberately keyed on the arena identity (its size/name), not the arena
+    // object reference: every server round trip deserializes a brand-new but
+    // content-identical MatchState, and rebuilding the whole PixiJS canvas
+    // (destroying it and reloading every terrain texture) on each one is both
+    // wasteful and — see the setStatus("loading") note above — was the direct
+    // cause of the canvas getting stuck at low resolution after a save/lock.
+  }, [arena.sizeName]);
 
   useEffect(() => {
     const app = appRef.current;
