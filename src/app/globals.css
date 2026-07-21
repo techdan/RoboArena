@@ -1654,39 +1654,48 @@ a.planner-menu-item:focus-visible {
 }
 .planner-action-strip {
   display: flex;
-  min-height: 4.25rem;
+  min-height: 3.4rem;
   flex: none;
-  align-items: center;
-  gap: 0.65rem;
+  align-items: stretch;
+  gap: 0.5rem;
   margin-bottom: 0.45rem;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 0.75rem;
-  padding: 0.35rem 0.55rem;
+  padding: 0.3rem 0.5rem;
   background: rgb(3 8 5 / 46%);
 }
-.planner-action-strip fieldset {
+/* Each control is its own bordered box with an inline caption on the same row,
+   echoing the Aim/Scan fire buttons instead of a tall stacked caption. */
+.action-group {
+  display: flex;
   min-width: 0;
-  border: 0;
-  margin: 0;
-  padding: 0;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 0.55rem;
+  padding: 0.2rem 0.45rem;
+  background: rgb(255 255 255 / 3%);
 }
-.planner-action-strip legend,
-.action-weapon-group > span {
-  color: rgb(255 255 255 / 38%);
+.action-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: rgb(255 255 255 / 42%);
   font-size: 0.52rem;
   font-weight: 850;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.action-posture-group > div,
+.action-posture-buttons,
 .action-fire-group {
   display: flex;
+  align-items: center;
   gap: 0.25rem;
 }
 .action-posture-group button,
 .action-fire-group button {
   display: inline-flex;
-  min-height: 2.65rem;
+  min-height: 2.4rem;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -1718,14 +1727,11 @@ a.planner-menu-item:focus-visible {
   height: 1.2rem;
   flex: none;
 }
-.action-heading-group {
-  width: 5.3rem;
-}
 .scan-direction-control {
   position: relative;
-  width: 3.4rem;
-  height: 3.4rem;
-  margin: -0.15rem auto 0;
+  width: 2.9rem;
+  height: 2.9rem;
+  margin: 0;
   border: 1px solid rgb(103 232 249 / 40%);
   border-radius: 50%;
   cursor: pointer;
@@ -1799,10 +1805,9 @@ a.planner-menu-item:focus-visible {
   transform: translateX(-50%);
   pointer-events: none;
 }
-.action-weapon-group {
-  display: grid;
-  min-width: 9rem;
-  gap: 0.15rem;
+.action-weapon-group select {
+  flex: 1;
+  min-width: 8rem;
 }
 .action-weapon-group select,
 .action-weapon-group > strong {
@@ -1825,6 +1830,14 @@ a.planner-menu-item:focus-visible {
 }
 .action-fire-group {
   margin-left: auto;
+}
+/* Undo/redo relocated from the page header; a leading border separates the
+   history utility cluster from the fire actions to its left. */
+.action-history-group {
+  display: flex;
+  align-items: center;
+  padding-left: 0.5rem;
+  border-left: 1px solid rgb(255 255 255 / 8%);
 }
 .planner-canvas-shell {
   position: relative;
@@ -3393,24 +3406,6 @@ a.planner-menu-item:focus-visible {
 }
 
 /* Action-strip captions + in-place fire takeover. */
-.planner-action-strip legend {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.3rem;
-}
-.action-caption {
-  color: rgb(255 255 255 / 38%);
-  font-size: 0.52rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.action-posture-group legend b {
-  color: #d9f99d;
-  font-size: 0.56rem;
-  font-weight: 850;
-  text-transform: capitalize;
-}
 .action-posture-group button {
   width: 2.5rem;
   padding: 0;

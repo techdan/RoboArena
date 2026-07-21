@@ -59,17 +59,21 @@ describe("Phase 11.8.2 action strip", () => {
     expect(single).not.toContain("Missiles");
   });
 
-  it("names the current posture in the caption and keeps posture buttons icon-only", () => {
+  it("keeps posture buttons icon-only with the posture in each accessible name", () => {
     const strip = renderToStaticMarkup(
       <HelpProvider>
         <PlannerActionStrip {...stripShared} weapons={["rifle"]} selectedWeapon="rifle" />
       </HelpProvider>,
     );
-    // Caption names the posture; buttons carry accessible names/tooltips but no visible text.
-    expect(strip).toContain("<b>upright</b>");
+    // No fixed posture text: each button carries an accessible name/tooltip
+    // (hover or long-press) instead, so the strip stays short.
+    expect(strip).not.toContain("<b>upright</b>");
     expect(strip).toContain('title="crouching posture"');
     expect(strip).toContain('aria-label="ducking posture"');
     expect(strip).toContain("posture-silhouette");
+    // The active posture is still conveyed to assistive tech via aria-pressed.
+    expect(strip).toContain('aria-pressed="true"');
+    expect(strip).toContain('data-active="true"');
   });
 
   it("takes the fire slot over in place, replacing the entry buttons", () => {

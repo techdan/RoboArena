@@ -34,6 +34,11 @@ export interface PlannerActionStripProps {
    * buttons in place, keeping the strip height and every other group fixed.
    */
   readonly fireControls?: ReactNode;
+  /**
+   * Draft undo/redo, injected as a node so the strip stays presentational while
+   * the owner keeps the history logic and disabled states (mirrors fireControls).
+   */
+  readonly historyControls?: ReactNode;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeadingPreview: (heading: Heading | null) => void;
   readonly onHeading: (heading: Heading) => void;
@@ -52,6 +57,7 @@ export function PlannerActionStrip({
   aimActive,
   scanActive,
   fireControls,
+  historyControls,
   onPosture,
   onHeadingPreview,
   onHeading,
@@ -79,13 +85,12 @@ export function PlannerActionStrip({
 
   return (
     <section className="planner-action-strip" aria-label="Robot actions">
-      <fieldset className="action-posture-group">
-        <legend>
-          <span className="action-caption">Posture</span>
-          <b>{posture}</b>
+      <div className="action-group action-posture-group" role="group" aria-label="Posture">
+        <span className="action-caption">
+          Posture
           <HelpButton topic="action:posture" label="Posture" />
-        </legend>
-        <div>
+        </span>
+        <div className="action-posture-buttons">
           {POSTURES.map((choice) => (
             <button
               type="button"
@@ -101,13 +106,13 @@ export function PlannerActionStrip({
             </button>
           ))}
         </div>
-      </fieldset>
+      </div>
 
-      <fieldset className="action-heading-group">
-        <legend>
-          <span className="action-caption">Scan</span>
+      <div className="action-group action-heading-group" role="group" aria-label="Scan direction">
+        <span className="action-caption">
+          Scan
           <HelpButton topic="action:scan-direction" label="Scan direction" />
-        </legend>
+        </span>
         <div
           className="scan-direction-control"
           role="slider"
@@ -203,7 +208,7 @@ export function PlannerActionStrip({
                 data-active={choice === heading}
                 aria-hidden="true"
                 style={{
-                  transform: `rotate(${angle}deg) translateX(1.55rem) rotate(${-angle}deg) translate(-50%, -50%)`,
+                  transform: `rotate(${angle}deg) translateX(1.3rem) rotate(${-angle}deg) translate(-50%, -50%)`,
                 }}
               >
                 {choice}
@@ -212,12 +217,12 @@ export function PlannerActionStrip({
           })}
           <strong>{keyboardHeading}</strong>
         </div>
-      </fieldset>
+      </div>
 
       {/* Single-weapon robots show no weapon control at all; the Missile robot
           keeps the plan-aware Missile Launcher · N / Rifle choice. */}
       {weapons.length > 1 ? (
-        <div className="action-weapon-group">
+        <div className="action-group action-weapon-group">
           <span className="action-caption">Weapon</span>
           <select
             aria-label="Weapon"
@@ -259,6 +264,8 @@ export function PlannerActionStrip({
           </>
         )}
       </div>
+
+      {historyControls ? <div className="action-history-group">{historyControls}</div> : null}
     </section>
   );
 }

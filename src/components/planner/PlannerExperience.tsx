@@ -812,26 +812,6 @@ export function PlannerExperience({
               <ResignControl onResign={onResign} disabled={syncing} />
             )}
           </PlannerMenu>
-          <div className="history-buttons planner-header-history" aria-label="Draft history">
-            <button
-              type="button"
-              onClick={() => changeHistory("undo")}
-              disabled={state.history.past.length === 0}
-              aria-label={`Undo (${state.history.past.length} step${state.history.past.length === 1 ? "" : "s"} available)`}
-              title="Undo — Ctrl+Z"
-            >
-              <Undo2 size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => changeHistory("redo")}
-              disabled={state.history.future.length === 0}
-              aria-label={`Redo (${state.history.future.length} step${state.history.future.length === 1 ? "" : "s"} available)`}
-              title="Redo — Ctrl+Shift+Z"
-            >
-              <Redo2 size={16} aria-hidden="true" />
-            </button>
-          </div>
           <div className="planner-header-title">
             <p className="eyebrow">Turn {match.turnNumber} · Private draft</p>
             <h1>{team.name} command board</h1>
@@ -922,6 +902,28 @@ export function PlannerExperience({
           aimActive={aimTool || aimDialog !== null}
           scanActive={scanDialog !== null}
           fireControls={fireControls}
+          historyControls={
+            <div className="history-buttons planner-header-history" aria-label="Draft history">
+              <button
+                type="button"
+                onClick={() => changeHistory("undo")}
+                disabled={state.history.past.length === 0}
+                aria-label={`Undo (${state.history.past.length} step${state.history.past.length === 1 ? "" : "s"} available)`}
+                title="Undo — Ctrl+Z"
+              >
+                <Undo2 size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => changeHistory("redo")}
+                disabled={state.history.future.length === 0}
+                aria-label={`Redo (${state.history.future.length} step${state.history.future.length === 1 ? "" : "s"} available)`}
+                title="Redo — Ctrl+Shift+Z"
+              >
+                <Redo2 size={16} aria-hidden="true" />
+              </button>
+            </div>
+          }
           onPosture={addPosture}
           onHeadingPreview={setHeadingPreview}
           onHeading={addHeading}
@@ -947,6 +949,7 @@ export function PlannerExperience({
             robots={robotViews}
             contacts={contactViews}
             ghosts={ghostViews}
+            previewProgress={Math.min(1, previewTick / Math.max(1, budgetTicks))}
             homeAreas={homeAreaOverlays}
             route={selectedRoute}
             cursor={cursor}

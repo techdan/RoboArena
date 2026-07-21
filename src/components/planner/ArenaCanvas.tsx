@@ -116,6 +116,10 @@ export interface ArenaCanvasProps {
   readonly robots: readonly PlannerRobotView[];
   readonly contacts: readonly PlannerContactView[];
   readonly ghosts: readonly PlannerGhostView[];
+  /** Preview scrub position as a 0..1 fraction of the turn; fades live enemy
+   *  contacts as the previewed time advances (their real position is only known
+   *  at the turn boundary, tick 0). */
+  readonly previewProgress: number;
   readonly homeAreas: readonly HomeAreaOverlay[];
   readonly route: readonly TileCoord[];
   readonly cursor: TileCoord | null;
@@ -136,6 +140,7 @@ export function ArenaCanvas({
   robots,
   contacts,
   ghosts,
+  previewProgress,
   homeAreas,
   route,
   cursor,
@@ -634,8 +639,11 @@ export function ArenaCanvas({
         label.position.set(centerX, centerY + 10);
         overlay.addChild(label);
       }
-      // Currently-visible enemies: solid sprite with a red enemy ring so they
-      // read as "not mine". Authorized by the server projection.
+      // Currently-visible enemies (spec §7): known exactly at the turn boundary
+      // (tick 0) but increasingly stale as the previewed time advances, since
+      // their orders are unknown. Draw the sprite with a red enemy ring and fade
+      // it toward the end of the previewed turn.
+      const contactAlpha = Math.max(0.3, 0.85 - 0.55 * Math.max(0, Math.min(1, previewProgress)));
       for (const contact of contacts) {
         const centerX = contact.position.x * TILE_SIZE + TILE_SIZE / 2;
         const centerY = contact.position.y * TILE_SIZE + TILE_SIZE / 2;
@@ -657,12 +665,13 @@ export function ArenaCanvas({
             textureSet,
             TILE_SIZE,
           );
+          visual.container.alpha = contactAlpha;
           overlay.addChild(visual.container);
         }
         overlay.addChild(
           new Graphics()
             .circle(centerX, centerY, 13)
-            .stroke({ width: 2, color: 0xfb7185, alpha: 0.9 }),
+            .stroke({ width: 2, color: 0xfb7185, alpha: contactAlpha }),
         );
         const label = new Text({
           text: contact.label,
@@ -675,37 +684,25 @@ export function ArenaCanvas({
         });
         label.anchor.set(0.5, 0);
         label.position.set(centerX, centerY + 10);
+        label.alpha = Math.min(1, contactAlpha + 0.15);
         overlay.addChild(label);
       }
-      // Last-known ghosts: a faded, dashed enemy-tinted ring at the tile where
-      // the enemy was last seen, so planning accounts for stale intel.
+      // Last-known-X markers (spec §7): a faded red X on the tile where an enemy
+      // was last seen and is no longer visible — the original's Edit-phase glyph.
       for (const ghost of ghosts) {
         const centerX = ghost.at.x * TILE_SIZE + TILE_SIZE / 2;
         const centerY = ghost.at.y * TILE_SIZE + TILE_SIZE / 2;
-        const marker = new Graphics();
-        marker.circle(centerX, centerY, 10).fill({ color: 0xfb7185, alpha: 0.08 });
-        const segments = 16;
-        for (let i = 0; i < segments; i += 2) {
-          const a0 = (i / segments) * Math.PI * 2;
-          const a1 = ((i + 1) / segments) * Math.PI * 2;
-          marker.moveTo(centerX + 10 * Math.cos(a0), centerY + 10 * Math.sin(a0));
-          marker.arc(centerX, centerY, 10, a0, a1);
-        }
-        marker.stroke({ width: 1.5, color: 0xfb7185, alpha: 0.55 });
-        overlay.addChild(marker);
-        const glyph = new Text({
-          text: "?",
-          style: {
-            fill: 0xfecdd3,
-            fontSize: 10,
-            fontWeight: "900",
-            stroke: { color: 0x000000, width: 2 },
-          },
-        });
-        glyph.anchor.set(0.5);
-        glyph.position.set(centerX, centerY);
-        glyph.alpha = 0.75;
-        overlay.addChild(glyph);
+        const arm = 6;
+        overlay.addChild(
+          new Graphics()
+            .moveTo(centerX - arm, centerY - arm)
+            .lineTo(centerX + arm, centerY + arm)
+            .moveTo(centerX + arm, centerY - arm)
+            .lineTo(centerX - arm, centerY + arm)
+            .stroke({ width: 2.5, color: 0xfb7185, alpha: 0.6 })
+            .circle(centerX, centerY, 10)
+            .stroke({ width: 1, color: 0xfb7185, alpha: 0.25 }),
+        );
         const label = new Text({
           text: ghost.label,
           style: {
@@ -717,7 +714,7 @@ export function ArenaCanvas({
         });
         label.anchor.set(0.5, 0);
         label.position.set(centerX, centerY + 9);
-        label.alpha = 0.8;
+        label.alpha = 0.7;
         overlay.addChild(label);
       }
       app.render();
@@ -732,6 +729,7 @@ export function ArenaCanvas({
     arena.width,
     contacts,
     ghosts,
+    previewProgress,
     homeAreas,
     robots,
     route,
