@@ -181,7 +181,7 @@ describe("Phase 11.8.2 glyph timeline", () => {
         remainingTicks={885}
         onPreviewTick={noop}
         onSelectCommand={noop}
-        onRemoveLast={noop}
+        onRemoveFrom={noop}
       />,
     );
     // Full detail stays in the accessible label...
@@ -209,7 +209,7 @@ describe("Phase 11.8.2 glyph timeline", () => {
         onPreviewTick={noop}
         onSelectRobot={noop}
         onSelectCommand={noop}
-        onRemoveLast={noop}
+        onRemoveFrom={noop}
         onClose={noop}
       />,
     );

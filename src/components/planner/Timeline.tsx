@@ -1,10 +1,10 @@
 "use client";
 
 import { Crosshair, MapPin, Radar, Trash2 } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
-import { commandPresentation, removableSegmentIndex } from "../../planner/presentation";
+import { commandPresentation } from "../../planner/presentation";
 import { projectRobotAtTick, timelineForRobot, timelineTiming } from "../../planner/segments";
 import { PostureIcon } from "./PostureIcon";
 
@@ -86,15 +86,20 @@ interface TimelineLaneProps {
   readonly selected: boolean;
   readonly budgetTicks: number;
   readonly onSelectCommand: (robotId: string, segmentIndex: number, endTick: number) => void;
-  readonly onRemoveLast: (robotId: string, segmentIndex: number) => void;
+  readonly onRemoveFrom: (robotId: string, segmentIndex: number) => void;
 }
+
+const CLOSE_DELAY_MS = 260;
 
 /**
  * One robot's command lane: glyph-only cells whose widths are proportional to
  * duration on the shared 0..longestTick axis. Command name, parameters, exact
- * start/end/duration and Remove Last Action live in the hover/focus/long-press
- * detail popover and each cell's accessible label — never as text inside the
- * block. Shared by the main timeline band and the All Programs overlay.
+ * start/end/duration and a per-action Remove (this action to the end) live in
+ * the detail popover and each cell's accessible label — never as text inside
+ * the block. The popover opens on hover/focus and pins open on click/tap so it
+ * survives moving the pointer onto it (and works on touch); it dismisses on a
+ * hover-out delay, an outside press, or Escape. Shared by the main timeline
+ * band and the All Programs overlay.
  */
 export function TimelineLane({
   robot,
@@ -103,12 +108,15 @@ export function TimelineLane({
   selected,
   budgetTicks,
   onSelectCommand,
-  onRemoveLast,
+  onRemoveFrom,
 }: TimelineLaneProps) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [detailPosition, setDetailPosition] = useState({ left: 0, top: 0 });
+  const laneRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
+  const closeTimerRef = useRef<number | null>(null);
+  const pinnedRef = useRef(false);
   const timing = useMemo(
     () => timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks),
     [budgetTicks, orders, robot],
@@ -118,17 +126,62 @@ export function TimelineLane({
     if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
     longPressRef.current = null;
   };
-  const showDetail = (key: string, anchor: HTMLElement) => {
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  };
+  const closeDetail = () => {
+    cancelClose();
+    pinnedRef.current = false;
+    setDetailKey(null);
+  };
+  const scheduleClose = () => {
+    if (pinnedRef.current) return;
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => setDetailKey(null), CLOSE_DELAY_MS);
+  };
+  const openDetail = (key: string, anchor: HTMLElement, pinned: boolean) => {
+    cancelClose();
     const bounds = anchor.getBoundingClientRect();
     setDetailPosition({
-      left: Math.max(8, Math.min(bounds.left, window.innerWidth - 248)),
-      top: Math.min(bounds.bottom + 5, window.innerHeight - 150),
+      left: Math.max(8, Math.min(bounds.left, window.innerWidth - 260)),
+      top: Math.min(bounds.bottom + 5, window.innerHeight - 160),
     });
+    pinnedRef.current = pinned;
     setDetailKey(key);
   };
 
+  // A pinned popover dismisses on an outside press or Escape.
+  useEffect(() => {
+    if (detailKey === null) return;
+    const onDown = (event: Event) => {
+      if (
+        laneRef.current !== null &&
+        event.target instanceof Node &&
+        !laneRef.current.contains(event.target)
+      ) {
+        cancelClose();
+        pinnedRef.current = false;
+        setDetailKey(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        cancelClose();
+        pinnedRef.current = false;
+        setDetailKey(null);
+      }
+    };
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [detailKey]);
+
   return (
-    <div className="timeline-lane" data-selected={selected}>
+    <div className="timeline-lane" data-selected={selected} ref={laneRef}>
       {timing.length === 0 ? (
         <span className="timeline-empty">No actions yet</span>
       ) : (
@@ -139,7 +192,6 @@ export function TimelineLane({
             projectRobotAtTick(robot, priorSegments).position,
           );
           const key = `${robot.id}:${entry.index}`;
-          const isLast = entry.index === removableSegmentIndex(timing.length);
           const widthPercent = (entry.durationTicks / Math.max(1, longestTick)) * 100;
           return (
             <div
@@ -149,25 +201,26 @@ export function TimelineLane({
               key={key}
               style={{ flexBasis: `${widthPercent}%`, minWidth: `${MIN_CELL_REM}rem` }}
               onPointerEnter={(event) => {
-                if (event.pointerType !== "touch") showDetail(key, event.currentTarget);
+                if (event.pointerType !== "touch" && !pinnedRef.current)
+                  openDetail(key, event.currentTarget, false);
               }}
               onPointerLeave={() => {
                 clearLongPress();
-                if (detailKey === key) setDetailKey(null);
+                scheduleClose();
               }}
             >
               <button
                 type="button"
                 className="timeline-command"
                 aria-label={`${presentation.label}. ${presentation.detail}. ${formatGameTime(entry.startTick)} to ${formatGameTime(entry.endTick)}.`}
-                onFocus={(event) => showDetail(key, event.currentTarget)}
+                onFocus={(event) => openDetail(key, event.currentTarget, false)}
                 onBlur={(event) => {
                   const related = event.relatedTarget;
                   if (
                     !(related instanceof Node) ||
                     !event.currentTarget.parentElement?.contains(related)
                   )
-                    setDetailKey(null);
+                    closeDetail();
                 }}
                 onPointerDown={(event) => {
                   if (event.pointerType !== "touch") return;
@@ -175,7 +228,7 @@ export function TimelineLane({
                   const anchor = event.currentTarget;
                   longPressRef.current = window.setTimeout(() => {
                     suppressClickRef.current = true;
-                    showDetail(key, anchor);
+                    openDetail(key, anchor, true);
                   }, LONG_PRESS_MS);
                 }}
                 onPointerUp={clearLongPress}
@@ -186,7 +239,10 @@ export function TimelineLane({
                     return;
                   }
                   onSelectCommand(robot.id, entry.index, entry.endTick);
-                  showDetail(key, event.currentTarget);
+                  // Click/tap pins the popover open so it can be interacted with;
+                  // clicking the same pinned cell again closes it.
+                  if (detailKey === key && pinnedRef.current) closeDetail();
+                  else openDetail(key, event.currentTarget, true);
                 }}
               >
                 <CommandGlyph segment={entry.segment} />
@@ -195,18 +251,28 @@ export function TimelineLane({
                 ) : null}
               </button>
               {detailKey === key ? (
-                <div className="timeline-command-detail" role="tooltip" style={detailPosition}>
+                <div
+                  className="timeline-command-detail"
+                  role="tooltip"
+                  style={detailPosition}
+                  onPointerEnter={cancelClose}
+                  onPointerLeave={scheduleClose}
+                >
                   <strong>{presentation.label}</strong>
                   <span>{presentation.detail}</span>
                   <small>
                     {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
                     {formatGameTime(entry.durationTicks)}
                   </small>
-                  {isLast ? (
-                    <button type="button" onClick={() => onRemoveLast(robot.id, entry.index)}>
-                      <Trash2 size={14} aria-hidden="true" /> Remove Last Action
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="timeline-remove"
+                    aria-label={`Remove ${presentation.label} and every later action`}
+                    title="Remove this action and everything after it"
+                    onClick={() => onRemoveFrom(robot.id, entry.index)}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -226,7 +292,7 @@ export interface TimelineProps {
   readonly remainingTicks: number;
   readonly onPreviewTick: (tick: number) => void;
   readonly onSelectCommand: (robotId: string, segmentIndex: number, endTick: number) => void;
-  readonly onRemoveLast: (robotId: string, segmentIndex: number) => void;
+  readonly onRemoveFrom: (robotId: string, segmentIndex: number) => void;
 }
 
 /**
@@ -245,7 +311,7 @@ export function Timeline({
   remainingTicks,
   onPreviewTick,
   onSelectCommand,
-  onRemoveLast,
+  onRemoveFrom,
 }: TimelineProps) {
   const laneRef = useRef<HTMLDivElement>(null);
   const previousSegmentCountRef = useRef(0);
@@ -301,7 +367,7 @@ export function Timeline({
             selected
             budgetTicks={budgetTicks}
             onSelectCommand={onSelectCommand}
-            onRemoveLast={onRemoveLast}
+            onRemoveFrom={onRemoveFrom}
           />
         </div>
         <input

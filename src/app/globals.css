@@ -1565,9 +1565,10 @@ a.planner-menu-item:focus-visible {
   display: grid;
   width: 15rem;
   gap: 0.25rem;
+  /* Reserve the right gutter for the trash affordance. */
+  padding: 0.6rem 2.6rem 0.6rem 0.6rem;
   border: 1px solid rgb(103 232 249 / 30%);
   border-radius: 0.65rem;
-  padding: 0.6rem;
   color: rgb(255 255 255 / 72%);
   background: rgb(8 14 11 / 97%);
   box-shadow: 0 14px 36px rgb(0 0 0 / 55%);
@@ -1577,19 +1578,28 @@ a.planner-menu-item:focus-visible {
   color: rgb(255 255 255 / 40%);
   font-family: ui-monospace, monospace;
 }
-.timeline-command-detail button {
-  display: inline-flex;
-  min-height: 2.25rem;
+/* Red trash-can tucked into the popover's right gutter; removes this action
+   and every later one. */
+.timeline-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
   cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  border: 1px solid rgb(251 113 133 / 36%);
+  place-items: center;
+  border: 1px solid rgb(251 113 133 / 40%);
   border-radius: 0.45rem;
   color: #fda4af;
-  background: rgb(251 113 133 / 8%);
-  font-size: 0.58rem;
-  font-weight: 850;
+  background: rgb(251 113 133 / 10%);
+}
+.timeline-remove:hover,
+.timeline-remove:focus-visible {
+  border-color: rgb(251 113 133 / 75%);
+  color: #fecdd3;
+  background: rgb(251 113 133 / 20%);
+  outline: none;
 }
 .timeline-playhead {
   position: relative;

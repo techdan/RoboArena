@@ -17,7 +17,7 @@ export interface AllProgramsOverlayProps {
   readonly onPreviewTick: (tick: number) => void;
   readonly onSelectRobot: (robotId: string) => void;
   readonly onSelectCommand: (robotId: string, segmentIndex: number, endTick: number) => void;
-  readonly onRemoveLast: (robotId: string, segmentIndex: number) => void;
+  readonly onRemoveFrom: (robotId: string, segmentIndex: number) => void;
   readonly onClose: () => void;
 }
 
@@ -39,7 +39,7 @@ export function AllProgramsOverlay({
   onPreviewTick,
   onSelectRobot,
   onSelectCommand,
-  onRemoveLast,
+  onRemoveFrom,
   onClose,
 }: AllProgramsOverlayProps) {
   useEffect(() => {
@@ -106,7 +106,7 @@ export function AllProgramsOverlay({
                   selected={robot.id === selectedRobotId}
                   budgetTicks={budgetTicks}
                   onSelectCommand={onSelectCommand}
-                  onRemoveLast={onRemoveLast}
+                  onRemoveFrom={onRemoveFrom}
                 />
               </div>
             </div>

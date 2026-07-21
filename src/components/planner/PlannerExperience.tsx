@@ -26,7 +26,6 @@ import type {
 import { loadPlannerDraft, savePlannerDraft } from "../../planner/draft";
 import { plannerReducer, createPlannerState } from "../../planner/state";
 import {
-  deleteSegment,
   planMovement,
   previewParkingTick,
   projectRobotAtTick,
@@ -323,25 +322,21 @@ export function PlannerExperience({
   };
   const commitSegment = (segment: RobotCommandSegment, message: string) =>
     commitSegments([segment], message);
-  const removeCommand = (robotId: string, index: number) => {
+  const removeFrom = (robotId: string, index: number) => {
     const robot = team.robots.find((candidate) => candidate.id === robotId);
     if (robot === undefined) return;
     const currentSegments = timelineForRobot(orders, robotId).segments;
-    if (index !== currentSegments.length - 1) {
-      setNotice("Remove later actions first; only the final action can be removed.");
-      return;
-    }
-    const candidate = deleteSegment(orders, robotId, index);
-    const validated = validatedTimelinePrefix(
-      match.arena,
-      robot,
-      team.homeSlot,
-      timelineForRobot(candidate, robotId).segments,
-    );
+    // Drop this action and everything after it; validation keeps the prefix
+    // legal (it already was) and re-parks the preview at the new program end.
+    const kept = currentSegments.slice(0, index);
+    const validated = validatedTimelinePrefix(match.arena, robot, team.homeSlot, kept);
+    const removedCount = currentSegments.length - index;
     setSelectedRobotId(robotId);
     edit(
       replaceTimeline(orders, robotId, validated.segments),
-      "Last action removed. Undo remains available.",
+      removedCount <= 1
+        ? "Action removed. Undo remains available."
+        : `Removed ${removedCount} actions from here to the end. Undo remains available.`,
       previewParkingTick(robot, validated.segments, budgetTicks),
     );
   };
@@ -862,7 +857,7 @@ export function PlannerExperience({
         onPreviewTick={setPreviewTick}
         remainingTicks={budgetTicks - selectedEndTick}
         onSelectCommand={selectCommand}
-        onRemoveLast={removeCommand}
+        onRemoveFrom={removeFrom}
       />
       <div className="planner-lower">
         <PlannerActionStrip
@@ -964,7 +959,7 @@ export function PlannerExperience({
             onPreviewTick={setPreviewTick}
             onSelectRobot={selectRobot}
             onSelectCommand={selectCommand}
-            onRemoveLast={removeCommand}
+            onRemoveFrom={removeFrom}
             onClose={() => setShowAllPrograms(false)}
           />
         ) : null}
