@@ -19,9 +19,9 @@ not become dependencies of the playable online FFA path. Personal-scale, not
 production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
-draft-complete; Phases 11.8 and 11.8.1 are implemented with visual review open.
+draft-complete; Phases 11.8 through 11.8.2 are implemented with visual review open.
 Phase 8 is locally implemented with its external WSS/two-network hosting gate
-still open. The repository has 317 passing tests. Phase 1.5 lint/format/CI is
+still open. The repository has 336 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -38,7 +38,7 @@ are now consolidated in the Phase 12 v1 ship gate. See
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 317 tests)
+npm test               # Run all unit tests (currently 336 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -114,13 +114,14 @@ sprites, honest timeline projection, targeting overlays, and planner camera
 controls. Retained Playwright specs/baselines are not part of automated
 validation; UI review is currently manual.
 
-**Phases 11.8-11.8.1 (implemented; visual review open)** — engine-faithful
+**Phases 11.8-11.8.2 (implemented; visual review open)** — engine-faithful
 targeting heatmaps, longest-edge wedge/ring labels, exact mouse and touch
-tooltips, compact board-header Aim/Scan controls, a larger bottom-map
-posture/legend panel, and on-demand Aim posture review preserve a full-width
-planner arena. Scan desktop clicks are inert; touch taps retain its tooltip.
+tooltips, compact in-place Aim/Scan controls, a full-bleed fit-width arena,
+glyph-only proportional timelines, compact selector/history bands, authorized
+enemy contacts and last-known-X markers, and smart overlay placement. Automated
+browser validation remains paused; desktop and physical-iPad visual review is open.
 
-**Everything after Phase 11.8.1** — Phase 11.6's remaining real-session gate is
+**Everything after Phase 11.8.2** — Phase 11.6's remaining real-session gate is
 followed by the Phase 12 production, resilience, real-network, and physical-iPad
 v1 ship gate. Phase 13 polishes and enhances the core battle game; Phase 13.5
 then adds online alliances before Stealth or additional sports, while Phase 16

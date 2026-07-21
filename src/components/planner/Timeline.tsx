@@ -9,31 +9,13 @@ import { projectRobotAtTick, timelineForRobot, timelineTiming } from "../../plan
 import { PostureIcon } from "./PostureIcon";
 
 const LONG_PRESS_MS = 500;
-// Glyph cells stay recognizable even for the shortest actions; longer commands
-// grow proportionally on the shared axis (hybrid-proportional duration). Kept
-// small so sub-second commands barely inflate past their true width, keeping
-// the block run aligned with the time axis and the playhead.
-const MIN_CELL_REM = 0.9;
-// A wide (long-duration) cell shows a short label so it does not read as empty;
-// narrow cells stay glyph-only. ~7% of the 0–15s axis is room for a word.
-const LABEL_WIDTH_THRESHOLD = 7;
-
-const blockLabel = (segment: RobotCommandSegment): string => {
-  switch (segment.kind) {
-    case "deploy":
-      return "Deploy";
-    case "move":
-      return "Move";
-    case "aim-and-fire":
-      return "Aim";
-    case "scan-and-fire":
-      return "Scan";
-    case "set-posture":
-      return segment.posture;
-    case "set-scan-direction":
-      return segment.heading;
-  }
-};
+/**
+ * The legal budget occupies exactly one viewport. Only a real over-budget tail
+ * enlarges the shared track, so cells, ticks, and playhead retain one linear
+ * tick scale without introducing within-budget scrolling.
+ */
+export const timelineTrackWidthPercent = (longestTick: number, budgetTicks: number): number =>
+  Math.max(100, (longestTick / Math.max(1, budgetTicks)) * 100);
 
 const weaponInitial = (
   segment: Extract<RobotCommandSegment, { readonly kind: "aim-and-fire" | "scan-and-fire" }>,
@@ -199,7 +181,7 @@ export function TimelineLane({
               data-over-budget={entry.overBudget}
               data-detail-open={detailKey === key}
               key={key}
-              style={{ flexBasis: `${widthPercent}%`, minWidth: `${MIN_CELL_REM}rem` }}
+              style={{ flexBasis: `${widthPercent}%` }}
               onPointerEnter={(event) => {
                 if (event.pointerType !== "touch" && !pinnedRef.current)
                   openDetail(key, event.currentTarget, false);
@@ -246,9 +228,6 @@ export function TimelineLane({
                 }}
               >
                 <CommandGlyph segment={entry.segment} />
-                {widthPercent >= LABEL_WIDTH_THRESHOLD ? (
-                  <span className="timeline-cell-label">{blockLabel(entry.segment)}</span>
-                ) : null}
               </button>
               {detailKey === key ? (
                 <div
@@ -326,15 +305,17 @@ export function Timeline({
       ),
     [budgetTicks, orders, robots],
   );
-  const longestTick = Math.max(
+  const programEndTick = Math.max(
     budgetTicks,
     ...robots.map((robot) => timings.get(robot.id)?.at(-1)?.endTick ?? 0),
   );
-  const rulerSeconds = Math.ceil(longestTick / 60);
+  const axisTicks = Math.ceil(programEndTick / 60) * 60;
+  const rulerSeconds = axisTicks / 60;
   const rulerMarks = Array.from({ length: Math.floor(rulerSeconds / 5) + 1 }, (_, index) =>
     Math.min(rulerSeconds, index * 5),
   );
   if (rulerMarks.at(-1) !== rulerSeconds) rulerMarks.push(rulerSeconds);
+  const trackWidthPercent = timelineTrackWidthPercent(axisTicks, budgetTicks);
 
   // Keep the newest command in view when the selected lane overflows (over budget).
   const selectedCount = selectedRobot
@@ -352,39 +333,41 @@ export function Timeline({
   return (
     <section className="planner-timeline" aria-label="Command timeline">
       <div className="timeline-band">
-        <div className="timeline-ticks" aria-hidden="true">
-          {rulerMarks.map((second) => (
-            <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
-              {second}s
-            </span>
-          ))}
-        </div>
-        <div className="timeline-lane-scroll" ref={laneRef}>
-          <TimelineLane
-            robot={selectedRobot}
-            orders={orders}
-            longestTick={longestTick}
-            selected
-            budgetTicks={budgetTicks}
-            onSelectCommand={onSelectCommand}
-            onRemoveFrom={onRemoveFrom}
-          />
-        </div>
-        <input
-          type="range"
-          className="timeline-scrub"
-          aria-label={`Preview time ${formatGameTime(previewTick)}`}
-          min={0}
-          max={longestTick}
-          value={previewTick}
-          onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
-        />
-        <div
-          className="timeline-marker"
-          style={{ left: `${(previewTick / Math.max(1, longestTick)) * 100}%` }}
-          aria-hidden="true"
-        >
-          <output>{formatGameTime(previewTick)}</output>
+        <div className="timeline-track-scroll" ref={laneRef}>
+          <div className="timeline-track" style={{ width: `${trackWidthPercent}%` }}>
+            <div className="timeline-ticks" aria-hidden="true">
+              {rulerMarks.map((second) => (
+                <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
+                  {second}s
+                </span>
+              ))}
+            </div>
+            <TimelineLane
+              robot={selectedRobot}
+              orders={orders}
+              longestTick={axisTicks}
+              selected
+              budgetTicks={budgetTicks}
+              onSelectCommand={onSelectCommand}
+              onRemoveFrom={onRemoveFrom}
+            />
+            <input
+              type="range"
+              className="timeline-scrub"
+              aria-label={`Preview time ${formatGameTime(previewTick)}`}
+              min={0}
+              max={axisTicks}
+              value={previewTick}
+              onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
+            />
+            <div
+              className="timeline-marker"
+              style={{ left: `${(previewTick / Math.max(1, axisTicks)) * 100}%` }}
+              aria-hidden="true"
+            >
+              <output>{formatGameTime(previewTick)}</output>
+            </div>
+          </div>
         </div>
       </div>
       <span className="timeline-remaining" data-over={remainingTicks < 0}>

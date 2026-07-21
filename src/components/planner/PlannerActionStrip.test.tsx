@@ -4,7 +4,7 @@ import { makeRobot } from "../../engine/__fixtures__/match";
 import type { TurnOrders } from "../../engine/types";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { RobotSelector } from "./RobotSelector";
-import { Timeline } from "./Timeline";
+import { timelineTrackWidthPercent, Timeline } from "./Timeline";
 import { AllProgramsOverlay } from "./AllProgramsOverlay";
 import { robotDisplayNames } from "../../planner/presentation";
 import { HelpProvider } from "../help/HelpProvider";
@@ -193,18 +193,21 @@ describe("Phase 11.8.2 glyph timeline", () => {
     expect(markup).toContain("Set scan direction to NE");
     // ...but the block itself is glyph-only (no command name/param text spans).
     expect(markup).toContain("timeline-cell");
+    expect(markup).not.toContain("timeline-cell-label");
     expect(markup).not.toContain("timeline-command-detail");
     // The single band owns the playhead + remaining; All Programs moved to the selector band.
     expect(markup).toContain("timeline-scrub");
+    expect(markup).toContain("timeline-track-scroll");
     expect(markup).toContain("left</span>");
     expect(markup).not.toContain("All Programs");
     expect(markup).not.toContain("Rifle 1 program");
   });
 
   it("All Programs overlay renders every robot lane on the shared axis", () => {
+    const overlayRobots = [robots[0]!, { ...robots[1]!, hp: 0, position: "dock" as const }];
     const markup = renderToStaticMarkup(
       <AllProgramsOverlay
-        robots={robots}
+        robots={overlayRobots}
         names={names}
         orders={orders}
         selectedRobotId="r1"
@@ -221,5 +224,13 @@ describe("Phase 11.8.2 glyph timeline", () => {
     expect(markup).toContain("Rifle 1");
     expect(markup).toContain("Rifle 2");
     expect(markup).toContain("all-programs-scrub");
+    expect(markup).toContain("all-programs-track-scroll");
+    expect(markup).not.toContain("all-programs-lane-scroll");
+    expect(markup).toContain('disabled="" aria-label="Rifle 2, destroyed"');
+  });
+
+  it("expands the shared track only for an over-budget tail", () => {
+    expect(timelineTrackWidthPercent(900, 900)).toBe(100);
+    expect(timelineTrackWidthPercent(1200, 900)).toBeCloseTo(133.333);
   });
 });

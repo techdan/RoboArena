@@ -1864,7 +1864,7 @@ timing, legality, targeting-math, or visibility change):
   posture trio, collapsible to a pill, anchored bottom-left opposite the zoom
   overlay.
 
-**Verification**: `npm test` (333 passing, +16), `npm run typecheck`,
+**Verification**: `npm test` (336 passing, +19), `npm run typecheck`,
 `npm run lint`, `npm run format:check`, and `npm run build` all pass. New pure
 tests cover candidate-ray selection (top-center/S → centerline, east-edge/E →
 boundary, corner/diagonal → longest run) and measured-bounds de-overlap/drop,

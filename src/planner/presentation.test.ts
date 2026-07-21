@@ -3,6 +3,8 @@ import { makeRobot } from "../engine/__fixtures__/match";
 import {
   commandPresentation,
   headingFromVector,
+  nextSurvivingRobotId,
+  participantRobotDisplayName,
   removableSegmentIndex,
   robotDisplayNames,
   rotateHeading,
@@ -19,6 +21,27 @@ describe("planner presentation", () => {
     expect(names.get("r1")).toBe("Rifle 1");
     expect(names.get("r2")).toBe("Rifle 2");
     expect(names.get("b1")).toBe("Burst");
+  });
+
+  it("keeps participant contact labels stable after visibility filtering", () => {
+    expect(participantRobotDisplayName("Ember", "player-2-r2", "rifle")).toBe("Ember R2");
+    expect(participantRobotDisplayName("Ember", "imported-contact", "auto")).toBe("Ember Auto");
+  });
+
+  it("cycles past destroyed robots", () => {
+    const robots = [
+      makeRobot("r1", "t1", "rifle", "dock"),
+      makeRobot("r2", "t1", "burst", "dock", { hp: 0 }),
+      makeRobot("r3", "t1", "auto", "dock"),
+    ];
+    expect(nextSurvivingRobotId(robots, "r1")).toBe("r3");
+    expect(nextSurvivingRobotId(robots, "r3")).toBe("r1");
+    expect(
+      nextSurvivingRobotId(
+        robots.map((robot) => ({ ...robot, hp: 0 })),
+        "r1",
+      ),
+    ).toBeNull();
   });
 
   it("keeps essential firing and scan parameters in compact command copy", () => {

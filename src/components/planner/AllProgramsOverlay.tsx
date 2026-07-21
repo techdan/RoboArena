@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import type { RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
-import { TimelineLane } from "./Timeline";
+import { timelineTrackWidthPercent, TimelineLane } from "./Timeline";
 
 export interface AllProgramsOverlayProps {
   readonly robots: readonly RobotState[];
@@ -53,7 +53,7 @@ export function AllProgramsOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const longestTick = useMemo(
+  const programEndTick = useMemo(
     () =>
       Math.max(
         budgetTicks,
@@ -65,11 +65,13 @@ export function AllProgramsOverlay({
       ),
     [budgetTicks, orders, robots],
   );
-  const rulerSeconds = Math.ceil(longestTick / 60);
+  const axisTicks = Math.ceil(programEndTick / 60) * 60;
+  const rulerSeconds = axisTicks / 60;
   const rulerMarks = Array.from({ length: Math.floor(rulerSeconds / 5) + 1 }, (_, index) =>
     Math.min(rulerSeconds, index * 5),
   );
   if (rulerMarks.at(-1) !== rulerSeconds) rulerMarks.push(rulerSeconds);
+  const trackWidthPercent = timelineTrackWidthPercent(axisTicks, budgetTicks);
 
   return (
     <div className="planner-all-programs" role="dialog" aria-label="All robot programs">
@@ -80,54 +82,67 @@ export function AllProgramsOverlay({
         </button>
       </div>
       <div className="all-programs-body">
-        <div className="all-programs-axis" aria-hidden="true">
-          {rulerMarks.map((second) => (
-            <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
-              {second}s
-            </span>
+        <div className="all-programs-names">
+          {robots.map((robot) => (
+            <button
+              type="button"
+              className="all-programs-name"
+              data-selected={robot.id === selectedRobotId}
+              disabled={robot.hp <= 0}
+              aria-label={
+                robot.hp <= 0
+                  ? `${names.get(robot.id) ?? robot.definition.class}, destroyed`
+                  : undefined
+              }
+              onClick={() => onSelectRobot(robot.id)}
+              key={robot.id}
+            >
+              {names.get(robot.id) ?? robot.definition.class}
+            </button>
           ))}
         </div>
-        <div className="all-programs-rows">
-          {robots.map((robot) => (
-            <div className="all-programs-row" key={robot.id}>
-              <button
-                type="button"
-                className="all-programs-name"
-                data-selected={robot.id === selectedRobotId}
-                onClick={() => onSelectRobot(robot.id)}
+        <div className="all-programs-track-scroll">
+          <div className="all-programs-track" style={{ width: `${trackWidthPercent}%` }}>
+            <div className="all-programs-axis" aria-hidden="true">
+              {rulerMarks.map((second) => (
+                <span key={second} style={{ left: `${(second / rulerSeconds) * 100}%` }}>
+                  {second}s
+                </span>
+              ))}
+            </div>
+            <div className="all-programs-rows">
+              {robots.map((robot) => (
+                <div className="all-programs-row" key={robot.id}>
+                  <TimelineLane
+                    robot={robot}
+                    orders={orders}
+                    longestTick={axisTicks}
+                    selected={robot.id === selectedRobotId}
+                    budgetTicks={budgetTicks}
+                    onSelectCommand={onSelectCommand}
+                    onRemoveFrom={onRemoveFrom}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="all-programs-playhead">
+              <input
+                type="range"
+                className="all-programs-scrub"
+                aria-label={`Preview time ${formatGameTime(previewTick)}`}
+                min={0}
+                max={axisTicks}
+                value={previewTick}
+                onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
+              />
+              <div
+                className="all-programs-marker"
+                style={{ left: `${(previewTick / Math.max(1, axisTicks)) * 100}%` }}
+                aria-hidden="true"
               >
-                {names.get(robot.id) ?? robot.definition.class}
-              </button>
-              <div className="all-programs-lane-scroll">
-                <TimelineLane
-                  robot={robot}
-                  orders={orders}
-                  longestTick={longestTick}
-                  selected={robot.id === selectedRobotId}
-                  budgetTicks={budgetTicks}
-                  onSelectCommand={onSelectCommand}
-                  onRemoveFrom={onRemoveFrom}
-                />
+                <output>{formatGameTime(previewTick)}</output>
               </div>
             </div>
-          ))}
-        </div>
-        <div className="all-programs-playhead">
-          <input
-            type="range"
-            className="all-programs-scrub"
-            aria-label={`Preview time ${formatGameTime(previewTick)}`}
-            min={0}
-            max={longestTick}
-            value={previewTick}
-            onChange={(event) => onPreviewTick(Number(event.currentTarget.value))}
-          />
-          <div
-            className="all-programs-marker"
-            style={{ left: `${(previewTick / Math.max(1, longestTick)) * 100}%` }}
-            aria-hidden="true"
-          >
-            <output>{formatGameTime(previewTick)}</output>
           </div>
         </div>
       </div>

@@ -32,6 +32,35 @@ const titleCase = (value: string): string =>
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
 
+/**
+ * Labels an authorized enemy without renumbering a visibility-filtered roster.
+ * Production robot ids end in their stable server-assigned roster slot; test or
+ * imported ids fall back to the public class name rather than inventing one.
+ */
+export const participantRobotDisplayName = (
+  teamName: string,
+  robotId: string,
+  robotClass: RobotState["definition"]["class"],
+): string => {
+  const rosterSlot = /-r([1-9]\d*)$/.exec(robotId)?.[1];
+  return rosterSlot === undefined
+    ? `${teamName} ${titleCase(robotClass)}`
+    : `${teamName} R${rosterSlot}`;
+};
+
+/** Returns the next surviving robot in roster order, wrapping once. */
+export const nextSurvivingRobotId = (
+  robots: readonly RobotState[],
+  currentRobotId: string,
+): string | null => {
+  const currentIndex = robots.findIndex((robot) => robot.id === currentRobotId);
+  for (let offset = 1; offset <= robots.length; offset += 1) {
+    const candidate = robots[(currentIndex + offset + robots.length) % robots.length];
+    if (candidate !== undefined && candidate.hp > 0) return candidate.id;
+  }
+  return null;
+};
+
 export const robotDisplayNames = (robots: readonly RobotState[]): ReadonlyMap<string, string> => {
   const totals = new Map<string, number>();
   for (const robot of robots)

@@ -46,7 +46,11 @@ import {
   targetingOpportunityTicks,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
-import { robotDisplayNames } from "../../planner/presentation";
+import {
+  nextSurvivingRobotId,
+  participantRobotDisplayName,
+  robotDisplayNames,
+} from "../../planner/presentation";
 import { AimAndFireDialog } from "./AimAndFireDialog";
 import { AllProgramsOverlay } from "./AllProgramsOverlay";
 import {
@@ -134,13 +138,17 @@ export function PlannerExperience({
       match.teams.flatMap((candidate) =>
         candidate.side === team.side
           ? []
-          : candidate.robots.flatMap((robot, index) =>
+          : candidate.robots.flatMap((robot) =>
               robot.position === "dock"
                 ? []
                 : [
                     {
                       id: robot.id,
-                      label: `${candidate.name} R${index + 1}`,
+                      label: participantRobotDisplayName(
+                        candidate.name,
+                        robot.id,
+                        robot.definition.class,
+                      ),
                       tile: robot.position,
                       posture: robot.posture,
                     },
@@ -358,6 +366,7 @@ export function PlannerExperience({
   };
   const selectRobot = (robotId: string) => {
     const robot = team.robots.find((candidate) => candidate.id === robotId);
+    if (robot === undefined || robot.hp <= 0) return;
     setSelectedRobotId(robotId);
     setAimTool(false);
     setAimDialog(null);
@@ -365,10 +374,9 @@ export function PlannerExperience({
     setAimReviewOpen(false);
     setScanDialog(null);
     setHeadingPreview(null);
-    if (robot !== undefined)
-      setPreviewTick(
-        previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
-      );
+    setPreviewTick(
+      previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
+    );
   };
   const selectCommand = (robotId: string, _index: number, endTick: number) => {
     if (robotId !== selectedRobot.id) selectRobot(robotId);
@@ -541,13 +549,17 @@ export function PlannerExperience({
       match.teams.flatMap((candidate) =>
         candidate.side === team.side
           ? []
-          : candidate.robots.flatMap((robot, index) => {
+          : candidate.robots.flatMap((robot) => {
               const pos = robot.position;
               if (pos === "dock" || robot.hp <= 0) return [];
               return [
                 {
                   id: robot.id,
-                  label: `${candidate.name} R${index + 1}`,
+                  label: participantRobotDisplayName(
+                    candidate.name,
+                    robot.id,
+                    robot.definition.class,
+                  ),
                   robotClass: robot.definition.class,
                   color: candidate.color,
                   position: pos,
@@ -775,10 +787,8 @@ export function PlannerExperience({
       }
       if (event.key.toLowerCase() === "a") {
         event.preventDefault();
-        const index = team.robots.findIndex((robot) => robot.id === selectedRobot.id);
-        selectRobotRef.current(
-          team.robots[(index + 1) % team.robots.length]?.id ?? selectedRobot.id,
-        );
+        const nextRobotId = nextSurvivingRobotId(team.robots, selectedRobot.id);
+        if (nextRobotId !== null) selectRobotRef.current(nextRobotId);
       }
     };
     window.addEventListener("keydown", onKey);

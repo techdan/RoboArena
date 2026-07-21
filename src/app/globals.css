@@ -1295,8 +1295,8 @@ a.planner-menu-item:focus-visible {
 
 /* Phase 11.8.1 board-first planner stack. */
 .planner-header-history button {
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 1px solid rgb(255 255 255 / 10%);
   background: rgb(255 255 255 / 4%);
 }
@@ -1577,7 +1577,7 @@ a.planner-menu-item:focus-visible {
   width: 15rem;
   gap: 0.25rem;
   /* Reserve the right gutter for the trash affordance. */
-  padding: 0.6rem 2.6rem 0.6rem 0.6rem;
+  padding: 0.6rem 3.5rem 0.6rem 0.6rem;
   border: 1px solid rgb(103 232 249 / 30%);
   border-radius: 0.65rem;
   color: rgb(255 255 255 / 72%);
@@ -1596,8 +1596,8 @@ a.planner-menu-item:focus-visible {
   top: 0.4rem;
   right: 0.4rem;
   display: grid;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 2.75rem;
+  height: 2.75rem;
   cursor: pointer;
   place-items: center;
   border: 1px solid rgb(251 113 133 / 40%);
@@ -1695,7 +1695,7 @@ a.planner-menu-item:focus-visible {
 .action-posture-group button,
 .action-fire-group button {
   display: inline-flex;
-  min-height: 2.4rem;
+  min-height: 2.75rem;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -1811,14 +1811,14 @@ a.planner-menu-item:focus-visible {
 }
 .action-weapon-group select,
 .action-weapon-group > strong {
-  min-height: 2rem;
+  min-height: 2.75rem;
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 0.45rem;
   padding: 0 0.45rem;
   color: white;
   background: rgb(0 0 0 / 24%);
   font-size: 0.62rem;
-  line-height: 2rem;
+  line-height: 2.75rem;
 }
 .action-weapon-group select {
   cursor: pointer;
@@ -2963,7 +2963,7 @@ a.planner-menu-item:focus-visible {
 }
 .planner-selector-band .planner-robot-selector button {
   min-width: 6.2rem;
-  min-height: 2.6rem;
+  min-height: 2.75rem;
   flex: 0 1 auto;
   grid-template-columns: auto 1fr;
 }
@@ -3038,8 +3038,8 @@ a.planner-menu-item:focus-visible {
 }
 .planner-band-overflow-button {
   display: grid;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 2.75rem;
+  height: 2.75rem;
   cursor: pointer;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -3071,7 +3071,7 @@ a.planner-menu-item:focus-visible {
 }
 .planner-band-overflow-menu button {
   display: inline-flex;
-  min-height: 2.4rem;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.4rem;
   cursor: pointer;
@@ -3082,6 +3082,9 @@ a.planner-menu-item:focus-visible {
   background: rgb(190 242 100 / 7%);
   font-size: 0.62rem;
   font-weight: 800;
+}
+.timeline-expand-button {
+  min-height: 2.75rem;
 }
 .planner-band-overflow-menu button:hover,
 .planner-band-overflow-menu button:focus-visible {
@@ -3122,21 +3125,30 @@ a.planner-menu-item:focus-visible {
   border-left: 0;
   padding-left: 0;
 }
-.timeline-lane-scroll {
+.timeline-track-scroll {
   position: absolute;
   z-index: 2;
-  inset: 0.05rem 0 0.7rem;
+  inset: 0;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
 }
+.timeline-track {
+  position: relative;
+  height: 100%;
+}
 .timeline-lane {
   display: flex;
   height: 100%;
+  width: 100%;
   min-width: 100%;
-  gap: 0.2rem;
   align-items: stretch;
+}
+.timeline-track > .timeline-lane {
+  position: absolute;
+  inset: 0.05rem 0 0.7rem;
+  height: auto;
 }
 .timeline-cell {
   position: relative;
@@ -3146,6 +3158,10 @@ a.planner-menu-item:focus-visible {
   border-left: 2px solid rgb(190 242 100 / 55%);
   border-radius: 0.35rem;
   background: rgb(190 242 100 / 7%);
+}
+.timeline-cell:hover,
+.timeline-cell:focus-within {
+  z-index: 3;
 }
 .timeline-cell[data-over-budget="true"] {
   opacity: 0.4;
@@ -3158,21 +3174,11 @@ a.planner-menu-item:focus-visible {
   min-height: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  padding: 0 0.25rem;
-  overflow: hidden;
+  padding: 0;
+  overflow: visible;
 }
-.timeline-cell-label {
-  overflow: hidden;
-  color: rgb(255 255 255 / 72%);
-  font-size: 0.56rem;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-/* Sub-second commands are tiny; shrink their glyphs so the min-width cell stays
-   close to the true proportional width and the block run tracks the axis. */
+/* Sub-second commands retain compact glyphs without widening their exact tick
+   cell; the glyph may overhang a very narrow cell while the border stays true. */
 .timeline-cell .posture-silhouette {
   width: 0.95rem;
   height: 0.95rem;
@@ -3280,7 +3286,7 @@ a.planner-menu-item:focus-visible {
 }
 .all-programs-head button {
   display: inline-flex;
-  min-height: 2rem;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.3rem;
   cursor: pointer;
@@ -3295,13 +3301,34 @@ a.planner-menu-item:focus-visible {
 .all-programs-body {
   --ap-name: 6rem;
   position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: var(--ap-name) minmax(0, 1fr);
+  gap: 0.4rem;
   overflow-y: auto;
+}
+.all-programs-names,
+.all-programs-rows {
+  display: grid;
+  grid-auto-rows: 2.75rem;
+  gap: 0.3rem;
+}
+.all-programs-track-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.all-programs-track {
+  position: relative;
+  min-height: 100%;
 }
 .all-programs-axis {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--ap-name);
+  left: 0;
   right: 0;
   pointer-events: none;
 }
@@ -3317,15 +3344,10 @@ a.planner-menu-item:focus-visible {
 }
 .all-programs-rows {
   position: relative;
-  display: grid;
-  gap: 0.3rem;
 }
 .all-programs-row {
-  display: grid;
-  grid-template-columns: var(--ap-name) 1fr;
-  min-height: 2.6rem;
-  gap: 0.4rem;
-  align-items: center;
+  min-width: 0;
+  min-height: 2.75rem;
 }
 .all-programs-name {
   overflow: hidden;
@@ -3341,29 +3363,26 @@ a.planner-menu-item:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.all-programs-name:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .all-programs-name[data-selected="true"] {
   border-color: rgb(190 242 100 / 45%);
   color: #d9f99d;
-}
-.all-programs-lane-scroll {
-  min-width: 0;
-  height: 2.4rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
 }
 .all-programs-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--ap-name);
+  left: 0;
   right: 0;
   pointer-events: none;
 }
 .all-programs-scrub {
   position: absolute;
   right: 0;
-  bottom: -0.3rem;
+  bottom: 0;
   left: 0;
   width: 100%;
   height: 1.1rem;
@@ -3407,7 +3426,7 @@ a.planner-menu-item:focus-visible {
 
 /* Action-strip captions + in-place fire takeover. */
 .action-posture-group button {
-  width: 2.5rem;
+  width: 2.75rem;
   padding: 0;
 }
 .fire-inline {
@@ -3443,7 +3462,7 @@ a.planner-menu-item:focus-visible {
 }
 .fire-inline-number input {
   width: 3.2rem;
-  min-height: 2rem;
+  min-height: 2.75rem;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 0.4rem;
   padding: 0 0.35rem;
@@ -3460,7 +3479,7 @@ a.planner-menu-item:focus-visible {
 .fire-inline-primary,
 .fire-inline-cancel {
   display: inline-flex;
-  min-height: 2.2rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
@@ -3480,7 +3499,7 @@ a.planner-menu-item:focus-visible {
   opacity: 0.4;
 }
 .fire-inline-cancel {
-  width: 2.2rem;
+  width: 2.75rem;
   border: 1px solid rgb(255 255 255 / 12%);
   color: rgb(255 255 255 / 60%);
   background: rgb(255 255 255 / 4%);
@@ -3515,8 +3534,8 @@ a.planner-menu-item:focus-visible {
 }
 .targeting-map-posture button {
   display: grid;
-  width: 2.4rem;
-  min-height: 2.4rem;
+  width: 2.75rem;
+  min-height: 2.75rem;
   place-items: center;
   padding: 0;
 }
@@ -3534,8 +3553,8 @@ a.planner-menu-item:focus-visible {
 }
 .targeting-map-collapse {
   display: grid;
-  width: 1.9rem;
-  min-height: 1.9rem;
+  width: 2.75rem;
+  min-height: 2.75rem;
   cursor: pointer;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 14%);
@@ -3549,6 +3568,7 @@ a.planner-menu-item:focus-visible {
   bottom: 0.6rem;
   left: 0.6rem;
   display: inline-flex;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.3rem;
   cursor: pointer;
@@ -3579,7 +3599,7 @@ a.planner-menu-item:focus-visible {
     display: none;
   }
   .timeline-band {
-    height: 3.2rem;
+    height: 3.6rem;
   }
 }
 
