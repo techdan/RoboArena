@@ -10,8 +10,30 @@ import { PostureIcon } from "./PostureIcon";
 
 const LONG_PRESS_MS = 500;
 // Glyph cells stay recognizable even for the shortest actions; longer commands
-// grow proportionally on the shared axis (hybrid-proportional duration).
-const MIN_CELL_REM = 1.5;
+// grow proportionally on the shared axis (hybrid-proportional duration). Kept
+// small so sub-second commands barely inflate past their true width, keeping
+// the block run aligned with the time axis and the playhead.
+const MIN_CELL_REM = 0.9;
+// A wide (long-duration) cell shows a short label so it does not read as empty;
+// narrow cells stay glyph-only. ~7% of the 0–15s axis is room for a word.
+const LABEL_WIDTH_THRESHOLD = 7;
+
+const blockLabel = (segment: RobotCommandSegment): string => {
+  switch (segment.kind) {
+    case "deploy":
+      return "Deploy";
+    case "move":
+      return "Move";
+    case "aim-and-fire":
+      return "Aim";
+    case "scan-and-fire":
+      return "Scan";
+    case "set-posture":
+      return segment.posture;
+    case "set-scan-direction":
+      return segment.heading;
+  }
+};
 
 const weaponInitial = (
   segment: Extract<RobotCommandSegment, { readonly kind: "aim-and-fire" | "scan-and-fire" }>,
@@ -168,6 +190,9 @@ export function TimelineLane({
                 }}
               >
                 <CommandGlyph segment={entry.segment} />
+                {widthPercent >= LABEL_WIDTH_THRESHOLD ? (
+                  <span className="timeline-cell-label">{blockLabel(entry.segment)}</span>
+                ) : null}
               </button>
               {detailKey === key ? (
                 <div className="timeline-command-detail" role="tooltip" style={detailPosition}>

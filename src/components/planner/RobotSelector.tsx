@@ -88,14 +88,20 @@ export function RobotSelector({
               <span className="planner-robot-shortcut" aria-hidden="true">
                 {index + 1}
               </span>
-              <strong>{names.get(robot.id) ?? robot.definition.class}</strong>
-              <span
-                className="planner-robot-hp"
-                role="img"
-                aria-label={`${robot.hp} of ${robot.definition.armor} HP`}
-                title={`${robot.hp} / ${robot.definition.armor} HP`}
-              >
-                <span style={{ width: `${ratio * 100}%` }} data-low={ratio <= 0.34} />
+              <span className="planner-robot-meta">
+                <strong>{names.get(robot.id) ?? robot.definition.class}</strong>
+                <span className="planner-robot-health">
+                  <span
+                    className="planner-robot-hp"
+                    role="img"
+                    aria-label={`${robot.hp} of ${robot.definition.armor} HP`}
+                  >
+                    <span style={{ width: `${ratio * 100}%` }} data-low={ratio <= 0.34} />
+                  </span>
+                  <small>
+                    {robot.hp} / {robot.definition.armor}
+                  </small>
+                </span>
               </span>
             </button>
           );
