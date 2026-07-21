@@ -73,6 +73,23 @@ export interface PlannerRobotView {
   readonly selected: boolean;
 }
 
+/** A currently-visible enemy robot (drawn solid with an enemy ring). */
+export interface PlannerContactView {
+  readonly id: string;
+  readonly label: string;
+  readonly robotClass: RobotClass;
+  readonly color: string;
+  readonly position: TileCoord;
+  readonly posture: Posture;
+  readonly scanHeading: Heading;
+}
+
+/** A last-known enemy position carried from the previous turn (drawn as a faded ghost). */
+export interface PlannerGhostView {
+  readonly at: TileCoord;
+  readonly label: string;
+}
+
 export interface HomeAreaOverlay {
   readonly tiles: readonly TileCoord[];
   readonly color: string;
@@ -97,6 +114,8 @@ export interface PlannerTargetingOverlay {
 export interface ArenaCanvasProps {
   readonly arena: Arena;
   readonly robots: readonly PlannerRobotView[];
+  readonly contacts: readonly PlannerContactView[];
+  readonly ghosts: readonly PlannerGhostView[];
   readonly homeAreas: readonly HomeAreaOverlay[];
   readonly route: readonly TileCoord[];
   readonly cursor: TileCoord | null;
@@ -115,6 +134,8 @@ export interface ArenaCanvasProps {
 export function ArenaCanvas({
   arena,
   robots,
+  contacts,
+  ghosts,
   homeAreas,
   route,
   cursor,
@@ -377,7 +398,10 @@ export function ArenaCanvas({
     void (async () => {
       const { Graphics, Text } = await import("pixi.js");
       const robotTextures = await loadRobotTextures(
-        robots.map((robot) => ({ robotClass: robot.robotClass, teamColor: robot.color })),
+        [...robots, ...contacts].map((robot) => ({
+          robotClass: robot.robotClass,
+          teamColor: robot.color,
+        })),
       );
       if (
         generation !== overlayGenerationRef.current ||
@@ -610,6 +634,92 @@ export function ArenaCanvas({
         label.position.set(centerX, centerY + 10);
         overlay.addChild(label);
       }
+      // Currently-visible enemies: solid sprite with a red enemy ring so they
+      // read as "not mine". Authorized by the server projection.
+      for (const contact of contacts) {
+        const centerX = contact.position.x * TILE_SIZE + TILE_SIZE / 2;
+        const centerY = contact.position.y * TILE_SIZE + TILE_SIZE / 2;
+        const textureSet = robotTextures.get(robotTextureKey(contact.robotClass, contact.color));
+        if (textureSet !== undefined) {
+          const visual = createRobotSprite(
+            {
+              id: contact.id,
+              teamId: "enemy",
+              teamColor: contact.color,
+              robotClass: contact.robotClass,
+              position: contact.position,
+              hp: 1,
+              armor: 1,
+              posture: contact.posture,
+              scanHeading: contact.scanHeading,
+              destroyed: false,
+            },
+            textureSet,
+            TILE_SIZE,
+          );
+          overlay.addChild(visual.container);
+        }
+        overlay.addChild(
+          new Graphics()
+            .circle(centerX, centerY, 13)
+            .stroke({ width: 2, color: 0xfb7185, alpha: 0.9 }),
+        );
+        const label = new Text({
+          text: contact.label,
+          style: {
+            fill: 0xfecdd3,
+            fontSize: 8,
+            fontWeight: "700",
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        label.anchor.set(0.5, 0);
+        label.position.set(centerX, centerY + 10);
+        overlay.addChild(label);
+      }
+      // Last-known ghosts: a faded, dashed enemy-tinted ring at the tile where
+      // the enemy was last seen, so planning accounts for stale intel.
+      for (const ghost of ghosts) {
+        const centerX = ghost.at.x * TILE_SIZE + TILE_SIZE / 2;
+        const centerY = ghost.at.y * TILE_SIZE + TILE_SIZE / 2;
+        const marker = new Graphics();
+        marker.circle(centerX, centerY, 10).fill({ color: 0xfb7185, alpha: 0.08 });
+        const segments = 16;
+        for (let i = 0; i < segments; i += 2) {
+          const a0 = (i / segments) * Math.PI * 2;
+          const a1 = ((i + 1) / segments) * Math.PI * 2;
+          marker.moveTo(centerX + 10 * Math.cos(a0), centerY + 10 * Math.sin(a0));
+          marker.arc(centerX, centerY, 10, a0, a1);
+        }
+        marker.stroke({ width: 1.5, color: 0xfb7185, alpha: 0.55 });
+        overlay.addChild(marker);
+        const glyph = new Text({
+          text: "?",
+          style: {
+            fill: 0xfecdd3,
+            fontSize: 10,
+            fontWeight: "900",
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        glyph.anchor.set(0.5);
+        glyph.position.set(centerX, centerY);
+        glyph.alpha = 0.75;
+        overlay.addChild(glyph);
+        const label = new Text({
+          text: ghost.label,
+          style: {
+            fill: 0xfecaca,
+            fontSize: 7,
+            fontWeight: "700",
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        label.anchor.set(0.5, 0);
+        label.position.set(centerX, centerY + 9);
+        label.alpha = 0.8;
+        overlay.addChild(label);
+      }
       app.render();
     })().catch((error: unknown) => {
       console.error("Planner overlays could not render.", error);
@@ -620,6 +730,8 @@ export function ArenaCanvas({
   }, [
     arena.height,
     arena.width,
+    contacts,
+    ghosts,
     homeAreas,
     robots,
     route,

@@ -16,6 +16,7 @@ import { TICKS_PER_SECOND, WEAPON_TIMING } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
   Heading,
+  LastKnownMarker,
   MatchState,
   Posture,
   RobotCommandSegment,
@@ -48,7 +49,13 @@ import {
 import { robotDisplayNames } from "../../planner/presentation";
 import { AimAndFireDialog } from "./AimAndFireDialog";
 import { AllProgramsOverlay } from "./AllProgramsOverlay";
-import { ArenaCanvas, type PlannerRobotView, type PlannerTargetingOverlay } from "./ArenaCanvas";
+import {
+  ArenaCanvas,
+  type PlannerContactView,
+  type PlannerGhostView,
+  type PlannerRobotView,
+  type PlannerTargetingOverlay,
+} from "./ArenaCanvas";
 import { AimFireControls, ScanFireControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
@@ -528,6 +535,40 @@ export function PlannerExperience({
       }),
     [headingPreview, orders, previewTick, robotNames, selectedRobot.id, team.color, team.robots],
   );
+  // Enemy robots the server projection currently authorizes (visible this turn).
+  const contactViews = useMemo<readonly PlannerContactView[]>(
+    () =>
+      match.teams.flatMap((candidate) =>
+        candidate.side === team.side
+          ? []
+          : candidate.robots.flatMap((robot, index) => {
+              const pos = robot.position;
+              if (pos === "dock" || robot.hp <= 0) return [];
+              return [
+                {
+                  id: robot.id,
+                  label: `${candidate.name} R${index + 1}`,
+                  robotClass: robot.definition.class,
+                  color: candidate.color,
+                  position: pos,
+                  posture: robot.posture,
+                  scanHeading: robot.scanHeading,
+                },
+              ];
+            }),
+      ),
+    [match.teams, team.side],
+  );
+  // Last-known enemy positions (ghosts) carried in the snapshot, minus any enemy
+  // that is visible again this turn so a live contact isn't shadowed by a ghost.
+  const ghostViews = useMemo<readonly PlannerGhostView[]>(() => {
+    const markers: readonly LastKnownMarker[] =
+      match.lastKnownMarkers instanceof Map ? (match.lastKnownMarkers.get(selfPlayerId) ?? []) : [];
+    const visibleIds = new Set(contactViews.map((contact) => contact.id));
+    return markers
+      .filter((marker) => !visibleIds.has(marker.enemyId))
+      .map((marker) => ({ at: marker.at, label: "Last seen" }));
+  }, [contactViews, match.lastKnownMarkers, selfPlayerId]);
   const targetingBase = useMemo<PlannerTargetingBase | null>(() => {
     const previewOnly =
       headingPreview !== null && !aimTool && aimDialog === null && scanDialog === null;
@@ -776,7 +817,8 @@ export function PlannerExperience({
               type="button"
               onClick={() => changeHistory("undo")}
               disabled={state.history.past.length === 0}
-              aria-label="Undo"
+              aria-label={`Undo (${state.history.past.length} step${state.history.past.length === 1 ? "" : "s"} available)`}
+              title="Undo — Ctrl+Z"
             >
               <Undo2 size={16} aria-hidden="true" />
             </button>
@@ -784,7 +826,8 @@ export function PlannerExperience({
               type="button"
               onClick={() => changeHistory("redo")}
               disabled={state.history.future.length === 0}
-              aria-label="Redo"
+              aria-label={`Redo (${state.history.future.length} step${state.history.future.length === 1 ? "" : "s"} available)`}
+              title="Redo — Ctrl+Shift+Z"
             >
               <Redo2 size={16} aria-hidden="true" />
             </button>
@@ -902,6 +945,8 @@ export function PlannerExperience({
           <ArenaCanvas
             arena={match.arena}
             robots={robotViews}
+            contacts={contactViews}
+            ghosts={ghostViews}
             homeAreas={homeAreaOverlays}
             route={selectedRoute}
             cursor={cursor}

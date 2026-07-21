@@ -3587,3 +3587,28 @@ a.planner-menu-item:focus-visible {
     height: 3.2rem;
   }
 }
+
+/* Undo/redo are core, not destructive: give them clear contrast and an accent
+   (not red) hover so they read as the draft-history controls they are. */
+.planner-header-history button {
+  color: rgb(255 255 255 / 62%);
+}
+.planner-header-history button:not(:disabled):hover,
+.planner-header-history button:focus-visible {
+  border-color: rgb(190 242 100 / 45%);
+  color: #d9f99d;
+  outline: none;
+}
+
+/* Destroyed robots in the roster read as unavailable. */
+.planner-robot-selector button[data-destroyed="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.planner-robot-destroyed-label {
+  color: #fda4af;
+  font-size: 0.52rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
