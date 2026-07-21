@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlannerDraftStorage } from "./draft";
 import {
+  clearPlannerDraft,
   legacyPlannerDraftKey,
   loadPlannerDraft,
   plannerDraftKey,
@@ -19,6 +20,9 @@ class MemoryStorage implements PlannerDraftStorage {
   }
   setItem(key: string, value: string) {
     this.values.set(key, value);
+  }
+  removeItem(key: string) {
+    this.values.delete(key);
   }
 }
 
@@ -59,6 +63,9 @@ describe("planner draft persistence", () => {
       setItem: () => {
         throw new Error("quota");
       },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
     };
     expect(loadPlannerDraft(unavailable, "match", "team", "rev")).toEqual({ kind: "unavailable" });
     expect(
@@ -67,5 +74,14 @@ describe("planner draft persistence", () => {
         orders: orders(1),
       }),
     ).toBe(false);
+    expect(() => clearPlannerDraft(unavailable, "match", "team")).not.toThrow();
+  });
+
+  it("clears both the current and legacy keys so a locked turn leaves no stale draft", () => {
+    const storage = new MemoryStorage();
+    storage.values.set(plannerDraftKey("match", "team"), JSON.stringify(orders(1)));
+    storage.values.set(legacyPlannerDraftKey("match", "team"), JSON.stringify(orders(1)));
+    clearPlannerDraft(storage, "match", "team");
+    expect(loadPlannerDraft(storage, "match", "team", "rev")).toEqual({ kind: "none" });
   });
 });

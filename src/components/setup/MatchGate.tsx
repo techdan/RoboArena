@@ -17,6 +17,7 @@ import {
   roomToken,
   RoomRequestError,
 } from "../../lib/net/client";
+import { clearPlannerDraft } from "../../planner/draft";
 import { PlannerExperience } from "../planner/PlannerExperience";
 import { MovieExperience } from "../MovieExperience";
 import { ConnectionOverlay } from "../match/ConnectionOverlay";
@@ -154,6 +155,15 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       });
       setState({ kind: "authorized", roomCode, snapshot: response });
       setConnectionError(null);
+      if (lock) {
+        // The server now holds the canonical submission; a stale local draft
+        // would otherwise look like an unsynced conflict on the next turn.
+        try {
+          clearPlannerDraft(window.localStorage, matchId, response.selfPlayerId);
+        } catch {
+          // Storage may be unavailable; the draft is inert either way.
+        }
+      }
     } catch (caught) {
       setConnectionError(caught instanceof Error ? caught.message : "Orders could not be saved.");
     } finally {

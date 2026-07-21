@@ -20,6 +20,7 @@ export type PlannerDraftLoad =
 export interface PlannerDraftStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 }
 
 export const plannerDraftKey = (matchId: string, teamId: string): string =>
@@ -145,6 +146,25 @@ export const loadPlannerDraft = (
     return { kind: "corrupt" };
   } catch {
     return { kind: "corrupt" };
+  }
+};
+
+/**
+ * Once a turn's orders are locked, the server holds the canonical submission —
+ * the local draft has nothing left to protect and must not survive into the
+ * next turn's mount, where it would otherwise look like an unsynced conflict.
+ */
+export const clearPlannerDraft = (
+  storage: PlannerDraftStorage,
+  matchId: string,
+  teamId: string,
+): void => {
+  try {
+    storage.removeItem(plannerDraftKey(matchId, teamId));
+    storage.removeItem(legacyPlannerDraftKey(matchId, teamId));
+  } catch {
+    // Best-effort: an unavailable/throwing storage backend is already handled
+    // as "unavailable" elsewhere; clearing failure here is not user-visible.
   }
 };
 
