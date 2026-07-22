@@ -8,7 +8,7 @@ RoboArena — a modern web-based clone of the 1991 Maxis tactical game
 _RoboSport_. Two to four internet-connected players privately program robot
 teams, then watch simultaneous resolution as a deterministic movie.
 
-**Main-game scope (Phases 1-12)**: 2-4 humans on separate
+**Main-game scope (Phases 1-12.5)**: 2-4 humans on separate
 internet-connected devices, one Team and unique Side per player, free-for-all
 Survival, no AI. Desktop mouse + keyboard and iPad touch in landscape are v1
 targets. The v1 server is authoritative
@@ -20,8 +20,9 @@ production-grade.
 
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
 draft-complete; Phases 11.8 through 11.8.2 are implemented with visual review open.
-Phase 8 is locally implemented with its external WSS/two-network hosting gate
-still open. The repository has 336 passing tests. Phase 1.5 lint/format/CI is
+Phase 8 is locally complete; its former external-WSS/VM gate is superseded by
+Phase 12.5's Vercel HTTP + Supabase Postgres/Realtime migration. The repository
+has 336 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -30,9 +31,10 @@ three-/four-player online integration remains the Phase 11.6 gate, while
 alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
 inspection, and Pointer Events-based iPad input are draft-complete. Automated
 Playwright execution is temporarily disabled in favor of manual browser/iPad
-checks and user-provided screenshots; the physical
-iPad Safari smoke match and the independent Phase 8 production-hosting closure
-are now consolidated in the Phase 12 v1 ship gate. See
+checks and user-provided screenshots. Phase 12 now closes the local four-session,
+resilience, visual, desktop, and physical-iPad release-candidate gates before
+Phase 12.5 changes production transport/storage and runs two-network deployment
+acceptance. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
 ## Commands
@@ -82,12 +84,12 @@ visual regression smoke test.
 robot and effect presentation, playback transport/scrub/speed/idle controls,
 and a production visual regression test.
 
-**Phase 8 (locally complete; hosting gate open)** — versioned room protocol,
+**Phase 8 (locally complete; deployment migrated to Phase 12.5)** — versioned room protocol,
 hashed anonymous seat ownership, reconnecting long-lived WebSockets, SQLite WAL
 local/test persistence, 2-4 player setup/start UI, and four-browser integration
-coverage. Production targets Vercel for Next.js, Supabase Postgres for durable
-storage, and a separate long-lived host for the room service; the Postgres
-adapter/migrations and external deployment check remain open.
+coverage. The standalone WS/SQLite service remains the local/test profile.
+Phase 12.5 migrates deployed authority to Vercel Functions plus Supabase
+Postgres/Realtime with no VM or custom production WebSocket host.
 
 **Phase 9 (draft-complete)** — authenticated canonical setup snapshot, private
 versioned/reload-safe drafts with explicit prior-turn recovery, deterministic
@@ -121,9 +123,11 @@ glyph-only proportional timelines, compact selector/history bands, authorized
 enemy contacts and last-known-X markers, and smart overlay placement. Automated
 browser validation remains paused; desktop and physical-iPad visual review is open.
 
-**Everything after Phase 11.8.2** — Phase 11.6's remaining real-session gate is
-followed by the Phase 12 production, resilience, real-network, and physical-iPad
-v1 ship gate. Phase 13 polishes and enhances the core battle game; Phase 13.5
+**Everything after Phase 11.8.2** — Phase 11.6's remaining local four-session
+gate rolls into Phase 12's local resilience, visual, desktop, and physical-iPad
+release candidate. Phase 12.5 then migrates to Vercel/Supabase and owns
+concurrency, security, cold-start, two-network, four-player, and deployed-iPad
+acceptance. Phase 13 polishes and enhances the deployed core battle game; Phase 13.5
 then adds online alliances before Stealth or additional sports, while Phase 16
 keeps hot-seat/local-device work last.
 Architecture is sketched in `docs/implementation-plan.md` §1.
@@ -199,8 +203,8 @@ Don't surface these as gaps unless something has changed about scope.
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
 - Vitest 4.1 for tests
 - Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + GSAP; Zustand remains planned
-- Phase 8+: Vercel-hosted Next.js, a separately hosted long-lived WebSocket room
-  service, Supabase Postgres in production, and SQLite only for local/test use;
-  multi-process room distribution and accounts remain post-v1
+- Phase 12.5 deployed target: Vercel-hosted Next.js HTTP authority plus Supabase
+  Postgres and private Realtime invalidation/Presence; SQLite and the standalone
+  WebSocket service remain local/test only; no VM or Redis fan-out layer
 
 Parent project `C:\src\DevProjects\CLAUDE.md` adds rules across the workspace (e.g. all clickable elements get `cursor-pointer`, prefer Server Components by default).

@@ -1,7 +1,7 @@
 # RoboArena core build plan
 
 **Status:** canonical execution sequence for the online free-for-all Survival v1.
-**Updated:** 2026-07-16.
+**Updated:** 2026-07-21.
 
 This file answers one question: **what should be built next, in what order, and
 what must be true before moving on?** `docs/spec.md` remains the canonical game
@@ -12,7 +12,8 @@ phase ordering is ambiguous, use this file.
 ## Current position
 
 Phases 1R through 7 and Phases 9-11 are draft-complete; Phase 8 is locally
-implemented with its deployed WSS/two-network restart gate still open. The engine now
+complete and its former external-WSS hosting work has moved to the redesigned
+Phase 12.5 Vercel/Supabase deployment gate. The engine now
 has binary-realigned primitives, a pure completion-driven turn resolver, and
 named projectile/blast events, per-Team visibility, Scan & Fire, and versioned
 replay recording/verification. The Next.js/PixiJS shell and verified Rubble
@@ -20,8 +21,8 @@ arena imports, deterministic local movie playback, and authoritative room/setup
 boundary, planner, and durable private plan/lock/resolve/watch loop are built.
 Phase 11.5 explainability/replay UX and browser-emulated iPad input are
 draft-complete with both Playwright suites passing on the emulated iPad touch
-context, while the external Phase 8 gate
-remains tracked independently.
+context. Open Phase 11 manual review rolls into the Phase 12 local
+release-candidate gate before any production transport migration begins.
 
 The immediate critical path is:
 
@@ -30,7 +31,8 @@ RE audit -> Phase 1R engine realignment -> Phase 1.5 toolchain
          -> Phase 2 resolver -> Phase 3 projectile/blast events
          -> Phase 4 visibility + Scan & Fire -> Phase 5 replay
          -> renderer -> authoritative room/setup -> planner/online turn loop
-         -> 3-/4-player FFA hardening -> production/device v1 ship gate
+         -> 3-/4-player FFA hardening -> local/device release candidate
+         -> Vercel + Supabase deployment gate
 ```
 
 Phase 3 must preserve fire-time result locking and add deterministic
@@ -190,14 +192,17 @@ After engine/replay stability, follow the product phases in this order:
 
 1. Next.js + Pixi scaffold and one verified row-major imported Rubble arena.
 2. Event-only movie playback.
-3. Durable authoritative WebSocket room foundation, restart-safe async state,
-   and 2-4 player unique-Side setup.
+3. Durable authoritative local WebSocket room foundation, restart-safe async
+   state, and 2-4 player unique-Side setup.
 4. Planner for move/posture/scan with exact timing and undo/redo.
 5. Planner firing controls with authorized conditional previews.
 6. Private lock/readiness, leave-and-return submission, exactly-once server
    resolution, unseen-turn playback, Team Data, explanations, replay, and
    Survival victory.
-7. Three-/four-player FFA integration plus multi-browser/network ship tests.
+7. Three-/four-player FFA integration plus local multi-browser/device closure.
+8. After the local release candidate freezes, migrate production authority to
+   Vercel HTTP Functions plus Supabase Postgres/Realtime and run real-network
+   deployment tests.
 
 Use one arena and preset roster until the complete online match loop works.
 Networking is part of the foundation, not a transport retrofit. Add more arenas,
@@ -220,10 +225,15 @@ playable end to end.
 
 ## Next actions
 
-1. Implement the Supabase Postgres storage adapter/migrations, then deploy the
-   Vercel frontend and external long-lived room service and verify WSS, restart
-   recovery, and rejoin ownership from two real networks/devices.
-2. Phase 11.6 three-/four-player free-for-all hardening is in progress:
+1. Close Phase 11 manual work locally: the Phase 11.8–11.8.2 desktop/iPad-size
+   visual checklist, retained screenshots, and one full four-separate-browser
+   local FFA match, including resignation and reconnect.
+2. Close Phase 12 as the local v1 release candidate: local SQLite restart and
+   idempotency recovery, resilience/trust-boundary items, desktop regression,
+   and one physical-iPad Safari room-to-results match over the local network.
+   Fix only release-blocking playtest defects; Phase 13's open-ended aesthetic
+   polish remains post-v1.
+3. Phase 11.6 three-/four-player free-for-all hardening is otherwise complete:
    Home-corner selection (unique NW/NE/SE/SW per player, `SetHomeSlot`,
    non-compacting slot carry-through) and automated three-/four-player
    private/staggered/restart/disconnect coverage with byte-identical replay
@@ -233,8 +243,11 @@ playable end to end.
    deleted a still-wanted room (`updated_at` only bumps on a mutating save, not
    on a reconnect or idle view, so any fixed cutoff can delete a room a player
    fully intends to return to). Remaining: the real four-separate-session/
-   two-network functional gate (consolidated into Phase 12).
-3. Close the consolidated Phase 12 v1 ship gate: deployed production storage/WSS
-   and two-real-network validation, the real four-browser FFA match, then the
-   physical-iPad Safari room-to-results smoke match. Browser emulation already
-   covers the 1024×768 Field Guide/touch contract.
+   local functional gate (consolidated into Phase 12). The deployed two-network
+   repeat belongs to Phase 12.5.
+4. Only after Phase 12 freezes, execute Phase 12.5: extract transport-independent
+   command handling, add transactional Supabase Postgres storage, expose Vercel
+   HTTP command/projection routes, use private Supabase Realtime invalidation
+   and advisory Presence with polling fallback, then run concurrency/security,
+   cold-start/redeploy, two-network, four-player, and deployed-iPad gates. No VM
+   or custom production WebSocket host is required.

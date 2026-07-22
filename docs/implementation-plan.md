@@ -4,7 +4,7 @@ This is the action-focused execution roadmap from "engine primitives exist" to "
 
 **Audience**: any agent (human or AI) picking up a phase cold. Each phase is self-contained enough to execute independently once dependencies land.
 
-**Main-game scope reminder (Phases 1-12)**: 2-4 humans on separate
+**Main-game scope reminder (Phases 1-12.5)**: 2-4 humans on separate
 internet-connected devices play free-for-all Survival, with one Team and one
 unique Side per player. There is no AI. Three postures (Upright, Ducking,
 Crouching) remain in scope. Hot-seat play, multiple Teams on one Side/alliance
@@ -36,6 +36,8 @@ create v1 implementation dependencies.
 
 ## 1. Architecture overview
 
+**Current local profile through Phase 12**:
+
 ```text
 Browser (one Team/player)                    Authoritative room service
 ┌──────────────────────────────┐            ┌────────────────────────────┐
@@ -53,15 +55,35 @@ Browser (one Team/player)                    Authoritative room service
         └─────────────────────────────────────────────────────────────┘
 ```
 
+**Phase 12.5 deployed profile**:
+
+```text
+Browser (one Team/player)                 Vercel Next.js Functions
+  Next.js/React UI  -- HTTP command -->  validate/authenticate/resolve
+  private projection <-- HTTP fetch --   participant-specific projection
+           ^                                         |
+           | room-changed / presence                 | transaction
+           |                                         v
+  Supabase Realtime <---------------------- Supabase Postgres
+                                             canonical room/match/replay
+
+src/engine/ remains the pure deterministic resolver in both profiles.
+```
+
+Phase 12.5 replaces only the production transport, concurrency, and storage
+boundaries. The local `ws`/SQLite profile remains useful for zero-setup
+development and tests; neither profile changes engine or match semantics.
+
 **Boundary rules** (enforced by directory layout, later by ESLint config):
 
 - `src/engine/` imports nothing from any other `src/` directory. No React, no DOM, no `Math.random`, no `Date.now`, no `window`. Pure deterministic TS.
 - `src/renderer/` imports `engine/` types and consumes `ResolutionEvent[]`. Doesn't run the engine itself.
 - `src/planner/` imports `engine/` types and produces `TurnOrders`. May call lightweight engine helpers (path validity, scan-cone math) but does not run a full turn.
 - `src/app/`, `src/components/` are React UI. They orchestrate planner/renderer.
-- `src/lib/net/` is the v1 room protocol and WebSocket client. The server is
-  authoritative: clients never resolve shared turns or receive opponents'
-  unsubmitted plans or hidden state.
+- `src/lib/net/` owns the versioned room protocol plus transport adapters. The
+  server-side command handler is authoritative: clients never resolve shared
+  turns or receive opponents' unsubmitted plans or hidden state. Supabase
+  Realtime carries invalidation/presence only, never authoritative match data.
 
 **Determinism contract**: every probabilistic decision in the engine goes
 through a seedable RNG (`createRng(seed)`). Replay =
@@ -123,7 +145,7 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Formatter    | Prettier                                                                                             | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later.                                                                       |
 | E2E test     | Retained Playwright specs (automation paused)                                                        | Specs/baselines remain available, but package scripts and CI execution are disabled; current UI validation is manual browser/iPad testing with screenshots. |
 | CI           | GitHub Actions                                                                                       | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands.                                     |
-| Deploy       | Vercel web client + long-lived WebSocket service + Supabase Postgres                                 | Vercel does not provide the sticky process ownership or persistent SQLite filesystem assumed by the room service. Validate the split deployment in Phase 8. |
+| Deploy       | Vercel Next.js Functions + Supabase Postgres/Realtime                                               | Phase 12.5 migrates the local long-lived WS/SQLite profile to stateless HTTP authority, transactional Postgres, and private realtime invalidations; no VM.    |
 | Branching    | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed.         |
 | Commit style | Conventional-ish; first line ≤ 72 chars; bodies describe _why_ + tests. Co-authored where AI-paired. |
 
@@ -605,7 +627,7 @@ export function MoviePlayer({
 
 ---
 
-### Phase 8 — Online room foundation + match setup [🟨 LOCALLY COMPLETE — HOSTING GATE OPEN]
+### Phase 8 — Online room foundation + match setup [✅ LOCALLY COMPLETE — DEPLOYMENT MIGRATED TO 12.5]
 
 **Goal**: establish the internet-first v1 architecture before planner work. A
 host creates a private room, 1-3 other humans join from separate devices, and
@@ -625,8 +647,8 @@ exactly one Team and every Team has a unique Side.
 - `src/app/room/[code]/page.tsx` — room roster, setup, readiness, share link
 - `src/components/setup/TeamRow.tsx` — own team name/color and assigned slot
 - `src/lib/setup/validate.ts` — shared `GameConfig` validation
-- `deploy/room-service.Dockerfile`, `docs/room-service-deployment.md` — portable
-  room service and Vercel/Supabase/external-WSS verification runbook
+- `deploy/room-service.Dockerfile`, `docs/room-service-deployment.md` — retained
+  local/portable WS profile and the superseding Phase 12.5 migration runbook
 
 **Room contract**:
 
@@ -671,17 +693,15 @@ authenticated by its opaque rejoin token.
       to its private planning view
 - [x] All clickable controls are keyboard reachable and use `cursor-pointer`
 
-**Hosting gate**: before the phase closes, deploy the Next.js application to
-Vercel, the room service to a long-lived container/VM host, and the durable
-database to Supabase Postgres; then verify two real networks/devices. Keep each
-room owned by one server process in v1. Cross-process distribution is post-v1,
-but ordinary process/deploy restart recovery is required for asynchronous play.
-
-**Current gate state**: the portable service image, health endpoint, SQLite WAL
+**Local closure**: the portable service image, health endpoint, SQLite WAL
 local/test adapter, graceful shutdown, local restart/idempotency tests, and
-four-browser flow are verified. The Supabase Postgres adapter/migrations,
-deployment credentials, and two external devices remain open; therefore the
-real WSS/two-network restart check is not yet claimed.
+automated four-browser flow are verified. Phase 8 is complete for the local
+profile.
+
+**Migrated deployment work**: the former external-WSS/VM hosting gate is
+superseded by Phase 12.5. That phase replaces the production transport with
+Vercel HTTP Functions plus Supabase Postgres/Realtime, implements shared
+transactional concurrency, and owns the two-real-network deployment checks.
 
 **Effort**: L.
 
@@ -993,7 +1013,7 @@ green after the corrective pass fixed three real defects it surfaced: the board
 cleared its selection notice on touch `pointerleave`, the Aim/Scan dialogs closed
 themselves on the tap's touch-compatibility ghost mousedown, and the emulated
 iPad context wrongly forced Chromium's phone `isMobile` layout. A physical iPad
-Safari room-to-results smoke match remains the Phase 12 release gate and is not
+Safari room-to-results smoke match remains the Phase 12 local-release gate and is not
 claimed by emulation.
 
 ---
@@ -1040,10 +1060,10 @@ simultaneous last-robot draw, disconnect/rejoin in every phase, independent
 unseen-turn playback without a global gate, durable restart recovery, and byte-identical
 replay for every supported configuration.
 
-**Functional gate**: run at least one full match on four separate browser
-sessions. No result or visibility divergence is acceptable. Production hosting,
-two-real-network validation, and physical-device release checks close together
-in Phase 12.
+**Functional gate**: run at least one full match on four separate local browser
+sessions. No result or visibility divergence is acceptable. Phase 12 owns this
+local manual gate; production hosting and two-real-network validation move to
+Phase 12.5.
 
 **Effort**: L.
 
@@ -1082,12 +1102,12 @@ remaining active players were only waiting on the resigner. A two-step
 and the waiting/turn-ready flow views, making resignation user-facing; its
 browser validation is part of the manual Phase 12 pass.
 
-**Still deferred to Phase 12**: the literal four-separate-real-browser-session /
-two-real-network functional gate, which consolidates with the production hosting
-and physical-device checks. The retained Playwright suite previously exercised
-four emulated-iPad browsers through one authoritative planned turn and
-reconnect, but automated execution is paused and is not a substitute for the
-manual real-device gate.
+**Still deferred to Phase 12**: the literal four-separate-local-browser-session
+functional gate and physical-device checks. The two-real-network repeat moves to
+Phase 12.5 with the production architecture migration. The retained Playwright
+suite previously exercised four emulated-iPad browsers through one authoritative
+planned turn and reconnect, but automated execution is paused and is not a
+substitute for the manual gates.
 
 ---
 
@@ -1153,8 +1173,9 @@ v1 ship gate. Four targeted fixes on the existing Phase 11.5 planner:
     existing authorized `previewAim`/`estimate` path for Scan mode) rather than
     duplicating combat math in the renderer.
 
-**Dependencies**: shipped Phase 11.5 planner. Non-blocking for the Phase 12 v1
-ship gate, but is the immediate next work.
+**Dependencies**: shipped Phase 11.5 planner. Required for the Phase 12 local
+release candidate, but already draft-complete apart from the consolidated manual
+review.
 
 **Acceptance**: robots read as their class/posture/aim at a glance; the timeline
 tracks planned time and auto-parks correctly on add/edit/delete/scrub; the
@@ -1173,7 +1194,8 @@ persistence, and reconnect. The high-resolution movie, terrain-preview, and new
 planner Aim/Scan images were reviewed. Automated Playwright commands and CI
 were subsequently disabled by user direction; browser/iPad validation and
 future UI feedback are manual and screenshot-driven.
-Physical iPad Safari and production-network validation remain Phase 12 gates.
+Physical iPad Safari remains a Phase 12 local-release gate; production-network
+validation moves to Phase 12.5.
 
 **Effort**: S–M.
 
@@ -1188,9 +1210,8 @@ strong or weak in player language. Raw engine values remain available for
 verification but never stand alone as unexplained UI. The canonical presentation
 contract is `docs/spec.md` §6 "Planner targeting analysis."
 
-**Dependencies**: Phase 11.7. This is the planner UX closure before Phase 12 can
-be declared complete, but it may proceed in parallel with Phase 12's
-environment-dependent hosting and physical-device work.
+**Dependencies**: Phase 11.7. This is planner UX closure before the Phase 12
+local release candidate can be declared complete.
 
 **Core model and correctness work**:
 
@@ -1880,47 +1901,66 @@ and touch scan-drag + long-press details.
 
 ---
 
-### Phase 12 — v1 production, resilience, and physical-device gate [⬜ V1 SHIP GATE]
+### Phase 12 — local v1 release-candidate and physical-device gate [⬜ LOCAL V1 GATE]
 
-**Goal**: close every environment-dependent and cross-cutting requirement needed
-to call the online free-for-all Survival v1 complete. Phase 11.6 proves the game
-logic with four clients; this phase proves that the same product survives real
-hosting, real networks, real reconnects, and touch-only play on physical iPadOS
-Safari. Placeholder/vector art is acceptable and does not block this gate.
+**Goal**: finish and validate one complete free-for-all Survival v1 locally
+before changing its production transport or storage. Phase 12 closes the open
+Phase 11 manual-review items, proves the existing WS/SQLite profile end to end,
+and addresses local resilience or usability defects found during that pass.
+Passing this phase produces the frozen local release candidate that Phase 12.5
+migrates to Vercel/Supabase without changing gameplay semantics.
 
-**Dependencies**: Phase 11.6 functional gate and Phase 11.8.1 planner UX
-closure. The locally complete Phase 8 work may proceed in parallel, but its
-production hosting gate must close here.
+**Dependencies**: Phase 11.6 automated hardening and the implemented Phase
+11.8–11.8.2 planner UX. The remaining manual visual and four-session checks are
+part of this phase rather than reasons to start deployment early.
 
-**Production and network gate**:
+**Current local gap audit (2026-07-21)**:
 
-- implement and migrate the Supabase Postgres production adapter while keeping
-  SQLite as the local/test profile;
-- deploy the Next.js client to Vercel and the single authoritative WebSocket
-  room service to a long-lived container or VM;
-- verify secure WSS, restart recovery, durable rejoin ownership, private orders,
-  and unseen-turn playback across two real networks/devices;
-- complete a full four-player match without state, result, replay, or visibility
-  divergence.
+- already implemented: strict incoming protocol/order schemas, payload/rate
+  limits, validated arena imports and replay deserialization, generic internal
+  protocol errors, durable pending seed/nonce recovery, request-id caching,
+  locked-order uniqueness, restart tests, corrupt-draft detection/reset, and
+  invalid-seat token removal;
+- implementation still open: planner/movie Error Boundaries, runtime validation
+  of outgoing protocol projections, a richer reconnect state machine, an
+  explicit user-facing reset for all corrupt room/planner local data, safe
+  support/error ids for failed resolution, and a focused local idempotency audit
+  across every mutation named below;
+- manual closure still open: the Phase 11.8 visual checklist/screenshots, the
+  full four-local-session match, the restart matrix, desktop regression, and
+  the physical-iPad Safari pass.
+
+**Local multiplayer and visual-closure gate**:
+
+- complete the Phase 11.8–11.8.2 desktop 100%/125%, 1280×720, 1440×900,
+  grayscale/color-vision, overlay-placement, and retained-screenshot review;
+- run one full match through four separate local browser sessions against the
+  authoritative local room service, including staggered lock, resign,
+  disconnect/rejoin, independent unseen-turn playback, results, and replay;
+- restart the local room service after setup, after locked orders, and after a
+  resolved-but-unacknowledged turn; verify seat ownership, idempotency, and
+  deterministic recovery from SQLite;
+- fix release-blocking visual, interaction, or causality defects discovered by
+  these passes. Broader aesthetic enhancement remains Phase 13.
 
 **Resilience and trust-boundary gate**:
 
 - wrap planner and movie sections in React Error Boundaries with a plain recovery
   action;
-- schema-validate incoming and outgoing WebSocket payloads, orders, arena data,
+- schema-validate incoming and outgoing protocol payloads, orders, arena data,
   and replay data rather than trusting TypeScript casts;
-- distinguish connecting, retrying, resumed, room-expired, seat-forfeited, and
+- distinguish connecting, retrying, resumed, room-missing, seat-forfeited, and
   incompatible-protocol outcomes in the reconnect UI;
 - provide an explicit reset path for corrupt local planner/room data;
 - preserve the previous canonical room state when resolution fails and return a
   safe user-facing error id without leaking hidden data;
 - audit idempotency for start, lock, resolve, acknowledge, and resume retries.
 
-**Physical-device and accessibility gate**:
+**Local physical-device and accessibility gate**:
 
-- complete one physical-iPad Safari room-to-results match in landscape using
-  touch alone, including rotation recovery, safe-area layout, reconnect, Field
-  Guide/context help, planning, movie controls, and results;
+- complete one physical-iPad Safari room-to-results match over the local network
+  in landscape using touch alone, including rotation recovery, safe-area layout,
+  reconnect, Field Guide/context help, planning, movie controls, and results;
 - verify no clipped controls, accidental page gestures, hover-only dependencies,
   or sub-44×44 CSS px touch targets at the supported 1024×768 CSS-pixel viewport;
 - verify keyboard reachability, visible focus, and non-color-only connection,
@@ -1928,12 +1968,136 @@ production hosting gate must close here.
 - repeat the complete loop with desktop mouse and keyboard and confirm acceptable
   planner/movie responsiveness on the supported iPad.
 
-**Acceptance gate**: production storage and WSS restart/rejoin checks pass; a
-full match passes across two real networks; the physical-iPad touch-only smoke
-match passes; desktop regression passes; required resilience states fail safely
-and do not expose private information. Passing this phase means **v1 complete**.
+**Acceptance gate**: the local four-session match, SQLite restart/rejoin passes,
+manual planner review, physical-iPad touch-only smoke match, desktop regression,
+and resilience checks pass without private-information leakage. Passing this
+phase means **local v1 release candidate complete**; deployed v1 is Phase 12.5.
 
 **Effort**: L.
+
+---
+
+### Phase 12.5 — Vercel + Supabase architecture migration and deployment [⬜ V1 DEPLOYMENT GATE]
+
+**Goal**: deploy the frozen Phase 12 release candidate without a VM or
+long-lived custom room-service host. Vercel owns all application compute;
+Supabase provides durable Postgres and managed Realtime. The migration may
+change transport, storage, concurrency, and presence implementation, but must
+not change protocol meaning, match rules, participant projections, or replay
+bytes.
+
+**Dependencies**: Phase 12 local release candidate. Do not begin this migration
+while planner/gameplay cleanup is still moving underneath it. Phase 13 polish is
+not a dependency unless a specific Phase 12 playtest defect is explicitly
+promoted into the v1 gate.
+
+**Deployed architecture contract**:
+
+- Next.js route handlers on Vercel accept schema-validated HTTP commands and
+  return authenticated participant-specific room/match projections;
+- Supabase Postgres is the sole deployed authority for rooms, token hashes,
+  request idempotency, locked orders, pending resolutions, acknowledgements,
+  canonical turns, and replays; SQLite remains the local/test adapter;
+- every gameplay mutation goes through Vercel server code. Browsers never write
+  authoritative game tables or run shared resolution through Supabase APIs;
+- Supabase Realtime Broadcast carries only a room-changed invalidation such as
+  `{ roomCode, revision }`. On receipt, each browser refetches its private
+  projection from Vercel; orders, contacts, events, and match state never enter
+  broadcast payloads;
+- Supabase Presence may supply best-effort online indicators, but presence is
+  never authority for readiness, locking, resolution, acknowledgement,
+  resignation, or seat ownership;
+- the existing opaque rejoin token remains the seat credential. After Vercel
+  validates it, Vercel issues a short-lived room-scoped Realtime JWT; private
+  channel RLS permits that participant to receive Broadcast/Presence only for
+  the authorized room. Clients may publish Presence but not Broadcast;
+- no Vercel WebSocket Function, Redis fan-out layer, VM, container host, sticky
+  process, or in-memory cross-request connection map is required.
+
+**Transactional storage and exactly-once work**:
+
+- replace `RoomService.#locks` in the deployed path with a Postgres row lock
+  (`SELECT ... FOR UPDATE`) or transaction-scoped advisory lock per room;
+- make room/match revision monotonic and use it for conditional writes and
+  client refresh suppression;
+- commit the mutation and its idempotent `(principal, requestId)` response in
+  one transaction; enforce unique locked-order and canonical-turn keys;
+- preserve the existing durable pending-resolution pattern: transactionally
+  persist seed, nonce, and combined orders before running the pure resolver,
+  then apply the result only when the pending nonce/revision still matches.
+  Concurrent Functions may compute the same deterministic candidate, but only
+  one may commit it;
+- emit the room-changed invalidation only after the authoritative transaction
+  commits. A failed broadcast cannot lose state and is repaired by refetch;
+- preserve the previous canonical room state if resolution or commit fails and
+  return a safe error id without exposing hidden data.
+
+**HTTP + Realtime client migration**:
+
+- extract the current WebSocket message dispatcher into a transport-independent
+  command handler so local WS tests and Vercel HTTP routes exercise the same
+  schemas and room transitions;
+- replace the deployed `RoomSocket` path with an HTTP request adapter while
+  preserving the existing typed message/request-id contract and, where useful,
+  the `requestOnce()` call shape to limit component churn;
+- add a private Realtime subscription adapter that refetches after subscribe,
+  reconnect, tab focus/visibility return, and room-changed notifications;
+- add a slow 10–15 second revision poll while a room is actively waiting so a
+  missed or delayed Realtime message affects latency only, never correctness;
+- writes return the caller's fresh projection immediately; other participants
+  refresh through Broadcast or the polling fallback;
+- reconnect UI distinguishes HTTP reachability from Realtime notification
+  health. A temporary Realtime failure must degrade to polling rather than make
+  the match unusable.
+
+**Expected files**:
+
+- `src/app/api/rooms/command/route.ts` — authenticated command endpoint;
+- `src/app/api/rooms/[code]/snapshot/route.ts` — private projection/refetch;
+- `src/app/api/rooms/[code]/realtime-token/route.ts` — short-lived scoped JWT;
+- `server/command-handler.ts` — transport-independent protocol dispatch;
+- `server/postgres-storage.ts` — async transactional Postgres adapter;
+- `src/lib/net/http-client.ts`, `src/lib/net/realtime.ts` — deployed transport;
+- `supabase/migrations/` — room/idempotency/locked-order schema, indexes,
+  Realtime trigger, and private-channel RLS policies.
+
+**Migration and security tests**:
+
+- run the existing room/match/projection/replay contract suite against SQLite
+  and Postgres adapters;
+- race duplicate start, submit, lock, resolve, acknowledge, resign, playback,
+  and resume requests across independent handler instances; exactly one
+  canonical transition may commit;
+- prove a client cannot subscribe to another room, publish a fake Broadcast,
+  read database tables directly, or obtain another participant's projection;
+- inspect Broadcast payload fixtures/traffic to prove they contain revision
+  invalidation only and no private orders, contacts, events, or token material;
+- drop/delay Broadcast messages and restart browser subscriptions; focus,
+  reconnect, and polling must converge on the current canonical revision;
+- verify an ordinary Vercel cold start or redeploy requires no special recovery
+  beyond loading the committed Postgres state.
+
+**Deployment and real-network gate**:
+
+- apply checked-in migrations to a hosted Supabase project and configure only
+  server-side Postgres/signing credentials in Vercel; publishable Realtime
+  configuration may be exposed, but database/service secrets may not;
+- deploy one Next.js application to Vercel; there is no second room-service
+  deployment or `NEXT_PUBLIC_ROOM_WS_URL`;
+- verify private Realtime subscription, polling fallback, Vercel cold
+  start/redeploy, durable rejoin ownership, private orders, and unseen-turn
+  playback across two real networks/devices;
+- complete one full four-player match without state, result, replay, projection,
+  or visibility divergence, then repeat the critical room-to-results path on
+  physical iPad Safari against the deployed application.
+
+**Acceptance gate**: Vercel is the only application host; Supabase Postgres and
+private Realtime are the only deployed state/realtime services; no VM is
+required; concurrency/idempotency and hidden-information tests pass; reconnect
+and missed-notification recovery pass; and the two-network four-player/iPad
+checks pass. Passing this phase means **online FFA Survival v1 deployed**.
+
+**Effort**: XL.
 
 ---
 
@@ -1946,7 +2110,9 @@ performance beyond the Phase 12 floor, and add nonessential responsive,
 connection-state, usability, and balance-preserving quality-of-life
 enhancements.
 
-**Dependencies**: shipped Phase 12 and playtest feedback.
+**Dependencies**: deployed Phase 12.5 and playtest feedback. A narrowly scoped
+release-blocking defect discovered during Phase 12 may be fixed before 12.5,
+but do not pull the open-ended Phase 13 polish backlog into the deployment gate.
 
 **Nonblocking scope**: bespoke art, aesthetic refinement, expanded browser and
 device coverage, and deeper performance optimization. Audio, phone layouts,
@@ -1971,7 +2137,7 @@ SVG/vector art is sufficient for the v1 gate.
 multiple Teams sharing a Side. Alliance play remains separate-device and
 server-authoritative; shared-device privacy handoff belongs only to Phase 16.
 
-**Dependencies**: shipped Phase 12 and the Phase 13 core-battle polish pass.
+**Dependencies**: deployed Phase 12.5 and the Phase 13 core-battle polish pass.
 
 **Implementation work**:
 
@@ -1999,7 +2165,7 @@ byte-identical deterministic replay for every supported configuration.
 
 ### Phase 14 — Stealth parity [⏸ POST-v1]
 
-**Hard gate**: the Phase 12 online FFA v1 release and Phase 13.5 alliance gate
+**Hard gate**: the Phase 12.5 online FFA v1 deployment and Phase 13.5 alliance gate
 must pass before any Phase 14 implementation begins. Stealth acceptance must
 cover both enemy and allied visibility without pooling private contacts.
 
@@ -2360,24 +2526,25 @@ FirstTimeHint local key // (Phase 11.5) whether planner basics were dismissed
 ## 9. Persistence model
 
 **v1 locked**: no accounts, but asynchronous rooms require durable storage.
-Use Supabase Postgres for production and local Supabase Postgres for the normal
-development profile. SQLite WAL remains a local/test adapter while the Postgres
-adapter lands; it must not be deployed inside a Vercel Function. Store room
+Use Supabase Postgres for the Phase 12.5 deployed profile. SQLite WAL remains
+the zero-setup local/test adapter; it must not be deployed inside a Vercel
+Function. Store room
 configuration/state, token hashes, accepted orders, per-player
 `seenThroughTurn`, canonical turn results, and replay digests transactionally.
 The browser stores only settings, room references, and opaque rejoin tokens;
 completed replays can be exported as JSON.
 
-The authoritative long-lived room service is the only database client. The
-Vercel browser application receives only its public WSS URL; database URLs and
-service credentials are server-only. Room semantics must remain independent of
-the selected storage adapter.
+Vercel server-side route handlers are the only deployed authoritative database
+client. Browsers receive only participant-specific HTTP projections and private
+Supabase Realtime invalidations/presence. Database URLs, service credentials,
+and Realtime-signing credentials are server-only. Room semantics must remain
+independent of transport and storage adapters.
 
 ### What lives where
 
 | Kind                                        | Where                                                                        | Lifetime                                            |
 | ------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
-| Active rooms/matches                        | Supabase Postgres + room-service memory cache (SQLite in local/test profile) | Indefinite; no automatic deletion. A player may resign a match explicitly |
+| Active rooms/matches                        | Supabase Postgres deployed; SQLite in local/test profile                     | Indefinite; no automatic deletion. A player may resign a match explicitly |
 | Own room rejoin token                       | Client localStorage                                                          | Until room expires or storage is cleared            |
 | Canonical turn/replay data                  | Supabase Postgres; completed export JSON                                     | Room lifetime; export is player-owned               |
 | Saved teams                                 | v1 built-in presets; post-v1 local/shared library                            | Presets only in v1                                  |
@@ -2610,7 +2777,7 @@ integrity and hidden-information boundaries treated as correctness requirements.
 **Out of v1 scope** (deferred to post-v1):
 
 - Sentry / third-party error reporting
-- multi-instance room migration and distributed-state repair
+- multi-region active-active optimization and distributed-state repair
 - Tab-collision detection ("match open in another tab")
 - push/email notifications and background service workers
 
@@ -2732,8 +2899,8 @@ post-v1. iPad touch support is part of the v1 ship gate.
 | Projectile screen speed                            | Phase 7 presentation           | Tune animation without changing engine outcomes or replay state                                                                                                        |
 | Stealth × Scan-and-Fire interaction                | Post-main-game Phase 14        | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate                                                                                                     |
 | Arena import accuracy                              | Phase 6                        | Verify generated row-major MAP output and exact generated home rectangles                                                                                              |
-| iPad touch playability                             | v1 ship gate (§12)             | Validate the complete loop on real iPadOS Safari in landscape; phones, Android tablets, and native apps remain post-v1                                                 |
-| WebSocket hosting/reliability                      | Phase 8 onward                 | Validate the Vercel frontend + external long-lived WSS service + Supabase Postgres restart path on two real networks; keep one authoritative room process in v1        |
+| iPad touch playability                             | local/deployed gates (§12/12.5) | Validate the complete loop locally and then against the deployed app on real iPadOS Safari in landscape; phones and native apps remain post-v1                         |
+| Serverless transport/reliability                   | Phase 12.5                     | Vercel HTTP commands + private Supabase Realtime invalidations/presence, with Postgres authority and polling fallback; no custom long-lived WS host                     |
 | Absent player stalls orders                        | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1                                          |
 | Replay format breaking changes                     | Phase 5+                       | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9)                                                                       |
 | Named weapon mapping for binary damage/fire tables | Closed in Phase 1R             | Selector dispatch and live callers are source-locked in the claim ledger                                                                                               |
@@ -2750,9 +2917,9 @@ post-v1. iPad touch support is part of the v1 ship gate.
 | Account system                                     | Out of v1                      | No accounts; opaque server-issued rejoin token owns one room seat                                                                                                      |
 | Achievements / progression                         | Out of v1                      | Original had none; matches are standalone                                                                                                                              |
 | Visual regression testing                          | Out of v1                      | Add when art breakage actually causes pain                                                                                                                             |
-| Server scaling                                     | Out of v1                      | Single authoritative room-service process, Supabase Postgres, and memory cache; friend-scale only                                                                      |
+| Server scaling                                     | Out of v1                      | Stateless Vercel handlers plus Supabase Postgres/Realtime are friend-scale; multi-region tuning and production-scale load work remain later                            |
 | Spectator / live spectating                        | Out of v1                      | Public replay URLs cover the main case                                                                                                                                 |
-| Hosting platform choice                            | Phase 8                        | Vercel hosts Next.js; Supabase hosts Postgres; select a long-lived container/VM host for the single-process WSS service without coupling room semantics to that vendor |
+| Hosting platform choice                            | Closed for Phase 12.5          | Vercel hosts Next.js application compute; Supabase hosts Postgres and Realtime; no VM or custom WebSocket host                                                         |
 | Original-game source files                         | Cleanup                        | Keep manual dumps, screenshots, and original packages local and gitignored; publish summarized research notes only                                                     |
 
 ---
@@ -2884,17 +3051,18 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 5       | ✅ DRAFT COMPLETE                  | S      | Replay format (serialize/deserialize/verify)                                                                                                                         |
 | 6       | ✅ DRAFT COMPLETE                  | M      | Next.js + PixiJS scaffold; static renderer; verified row-major Rubble import                                                                                         |
 | 7       | ✅ DRAFT COMPLETE                  | L      | Movie playback — deterministic snapshots, Pixi/GSAP effects, transport controls                                                                                      |
-| 8       | 🟨 LOCALLY COMPLETE / HOSTING OPEN | L      | Online room foundation and 2-4 player setup; deployed WSS/two-network gate remains                                                                                   |
+| 8       | ✅ LOCALLY COMPLETE / DEPLOY MOVED | L      | Online room foundation and 2-4 player setup; former hosting work is redesigned in Phase 12.5                                                                         |
 | 9       | ✅ DRAFT COMPLETE                  | L      | Planner UI: movement / posture / scan, exact timeline, local draft recovery                                                                                          |
 | 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                                                |
 | 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                                            |
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                                        |
-| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (corner selection + automated 3-/4-player coverage done; real four-session gate → Phase 12)                         |
+| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (automated coverage done; local four-session gate → Phase 12, deployed two-network repeat → 12.5)              |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
 | 11.8.2  | 🟡 IMPLEMENTED / VISUAL REVIEW     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
-| 12      | ⬜ V1 SHIP GATE                    | L      | Production hosting, resilience, real-network validation, and physical-iPad acceptance                                                                                |
+| 12      | ⬜ LOCAL V1 GATE                   | L      | Manual Phase 11 closure, local resilience/restart, four-session match, and physical-iPad acceptance                                                                  |
+| 12.5    | ⬜ V1 DEPLOYMENT GATE              | XL     | Vercel HTTP authority + Supabase Postgres/Realtime migration, concurrency, security, and real-network validation                                                     |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
 | 14      | ⏸ POST-MAIN-GAME                   | L      | Stealth class gameplay, visibility, Scan & Fire interactions, setup, and tests                                                                                       |
@@ -2903,11 +3071,11 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
 5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 11.8.1 → 11.8.2 →
-12. Phases 11.8–11.8.2 may run alongside Phase 12's environment-dependent
-setup, but both must close before the v1 gate is declared complete. The concise
+12 local release candidate → 12.5 Vercel/Supabase deployment. Phase 12 freezes
+gameplay/UX locally before Phase 12.5 changes transport and storage. The concise
 gate-by-gate sequence is in `tasks/core-build-plan.md`. Phase 13 presentation
-polish and Phases 13.5–16
-are post-v1 and are not on this path. The post-v1 core-battle sequence is Phase
-13 polish → Phase 13.5 online alliances → Phase 14 Stealth; Phase 15 additional
-sports also requires Phase 13.5, and Phase 16 hot-seat is last. Neither Stealth
-nor a non-Survival sport may enter the v1 critical path.
+polish and Phases 13.5–16 are post-v1 and are not on this path unless a specific
+Phase 12 defect is explicitly promoted. The post-v1 core-battle sequence is
+Phase 13 polish → Phase 13.5 online alliances → Phase 14 Stealth; Phase 15
+additional sports also requires Phase 13.5, and Phase 16 hot-seat is last.
+Neither Stealth nor a non-Survival sport may enter the v1 critical path.

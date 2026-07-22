@@ -49,9 +49,9 @@ Do not expand scope just because the original had a feature. Add original-game p
 
 ## Current State
 
-Phase 1R realignment and Phases 2-7 and 9-11 are draft complete; Phase 8 is locally
-implemented with its external WSS/two-network hosting gate still open; Phase
-1.5 tooling is complete:
+Phase 1R realignment and Phases 2-7 and 9-11 are draft complete; Phase 8 is
+locally complete and its former external-WSS/VM deployment gate is redesigned
+as Phase 12.5; Phase 1.5 tooling is complete:
 
 - `src/engine/` contains pure TypeScript deterministic primitives.
 - Existing tests cover deterministic primitives, audited timing/combat/Survival
@@ -60,8 +60,9 @@ implemented with its external WSS/two-network hosting gate still open; Phase
 - The Next.js shell, PixiJS arena/movie renderer, and verified Rubble Two/Three imports are built.
 - Event-driven movie playback supports deterministic scrub/step/play, speed, and idle compression.
 - The authoritative WebSocket room service, SQLite WAL local/test storage, and
-  2-4 player setup UI are built. Production targets Supabase Postgres; its
-  adapter and migrations remain part of the Phase 8 hosting gate.
+  2-4 player setup UI are built. They remain the Phase 12 local profile. Phase
+  12.5 migrates production authority to Vercel HTTP Functions plus Supabase
+  Postgres/Realtime; no VM or custom production WebSocket host is planned.
 - The movement/posture/scan planner, exact per-selector timeline preview,
   tick-cost routing, versioned/reload-safe local draft recovery, direct
   legal-prefix editing, undo/redo, firing dialogs, repeat fire, authorized
@@ -79,9 +80,10 @@ implemented with its external WSS/two-network hosting gate still open; Phase
   planner is board-first, with compact targeting controls, a class-named robot
   selector, circular scan control, conditional Missile/Rifle ammo presentation,
   icon timeline, tail-only removal, shared scrubber, and shared 50-edit undo/redo.
-  Physical iPad Safari validation, production hosting,
-  and resilience closure form the Phase 12 v1 ship gate; Phase 11.6 multiplayer
-  hardening is next.
+  Phase 12 closes manual visual review, a local four-session match, resilience,
+  local restart/rejoin, desktop regression, and physical iPad Safari as the
+  local release-candidate gate. Phase 12.5 then owns the Vercel/Supabase
+  migration and deployed two-network acceptance.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.
@@ -133,12 +135,15 @@ Future architecture:
 - `src/planner/` builds `TurnOrders` but does not run full turns.
 - `src/renderer/` consumes `ResolutionEvent[]` and animates the movie, likely through PixiJS.
 - `src/app/` and `src/components/` host the Next.js/React UI.
-- `src/lib/net/` owns the v1 typed room protocol, WebSocket client, and reconnect
-  state; `server/` owns authoritative room/match orchestration.
+- `src/lib/net/` owns the v1 typed room protocol plus local-WS and deployed
+  HTTP/Realtime transport adapters; `server/` owns transport-independent
+  authoritative room/match orchestration.
 
-Deployment is split: Vercel hosts Next.js, Supabase hosts production Postgres,
-and a long-lived container/VM host runs the single-process WebSocket room
-service. Never expose the database URL or service credentials to browser code.
+Phase 12.5 deployment uses Vercel for Next.js application compute and Supabase
+for production Postgres plus private Realtime invalidation/Presence. Browsers
+send gameplay mutations only to Vercel and refetch participant-specific
+projections after Realtime invalidations. Never expose database URLs, service
+credentials, or signing credentials to browser code.
 
 Dependency direction is one way: UI/planner/renderer may import engine code; engine must not import them.
 
