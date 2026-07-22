@@ -296,8 +296,8 @@ export function RoomSetup({ code }: { readonly code: string }) {
   return (
     <main className="min-h-screen bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
-      <div className="relative mx-auto max-w-[1080px] px-8 py-10">
-        <header className="flex items-end border-b border-white/8 pb-6">
+      <div className="room-setup-shell relative mx-auto max-w-[1080px] px-8 py-10">
+        <header className="room-setup-header flex items-end border-b border-white/8 pb-6">
           <div>
             <p className="eyebrow mb-3">Private room</p>
             <div className="flex items-center gap-4">
@@ -331,13 +331,13 @@ export function RoomSetup({ code }: { readonly code: string }) {
             </div>
           </div>
         </header>
-        <div className="mt-7 grid grid-cols-[1fr_360px] gap-6">
-          <section className="rounded-3xl border border-white/8 bg-white/[0.035] p-6">
+        <div className="room-setup-grid mt-7 grid grid-cols-[1fr_360px] gap-6">
+          <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="eyebrow">Teams</p>
                 <h2 className="mt-2 text-2xl font-bold">
-                  {room.players.length} / 4 connected seats
+                  {room.players.length} / 4 claimed Team seats
                 </h2>
               </div>
               <Users className="size-5 text-emerald-300" aria-hidden="true" />
@@ -352,8 +352,8 @@ export function RoomSetup({ code }: { readonly code: string }) {
               {4 - room.players.length} more players.
             </div>
           </section>
-          <aside className="space-y-5">
-            <section className="rounded-3xl border border-white/8 bg-white/[0.035] p-6">
+          <aside className="room-setup-aside space-y-5">
+            <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
               <p className="eyebrow mb-5">Your team</p>
               <label className="setup-label">
                 Team name
@@ -446,7 +446,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 </div>
               </fieldset>
             </section>
-            <section className="rounded-3xl border border-white/8 bg-white/[0.035] p-6">
+            <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
               <p className="eyebrow mb-5">Match setup</p>
               <label className="setup-label">
                 Game length

@@ -33,7 +33,7 @@ export function TeamRow({
           </span>
         ) : (
           <span className="text-xs font-bold uppercase tracking-[0.12em] text-white/30">
-            Planning
+            Not ready
           </span>
         )}
         {player.homeSlot === undefined ? null : (

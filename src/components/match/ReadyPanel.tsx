@@ -16,7 +16,11 @@ export function ReadyPanel({
       <ul className="ready-list">
         {match.teams.map((team) => (
           <li key={team.id}>
-            <span className="team-color-dot" style={{ backgroundColor: team.color }} />
+            <span
+              className="team-color-dot"
+              style={{ backgroundColor: team.color }}
+              aria-hidden="true"
+            />
             <span>{team.name}</span>
             <span data-ready={locked.has(team.id)}>
               {locked.has(team.id) ? (

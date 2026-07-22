@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
+import { Home, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TurnOrders } from "../../engine/types";
@@ -24,13 +24,13 @@ import { PlannerExperience } from "../planner/PlannerExperience";
 import { MovieExperience } from "../MovieExperience";
 import { ConnectionOverlay } from "../match/ConnectionOverlay";
 import { ReadyPanel } from "../match/ReadyPanel";
-import { RoomStatus } from "../match/RoomStatus";
 import { TeamDataPanel } from "../match/TeamDataPanel";
 import { TurnExplanation } from "../match/TurnExplanation";
 import { ObservedTurnExport } from "../replay/ObservedTurnExport";
-import { FieldGuideButton } from "../help/HelpProvider";
 import { ResignControl } from "../match/ResignControl";
 import { MatchSectionBoundary } from "../match/MatchSectionBoundary";
+import { MatchFlowHeader } from "../match/MatchFlowHeader";
+import { FinalCeremony } from "../match/FinalCeremony";
 
 type ReconnectOutcome =
   | { readonly kind: "retrying"; readonly message: string }
@@ -281,6 +281,8 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
   if (state.kind === "authorized") {
     const snapshot = state.snapshot;
     const match = deserializeMatchState(snapshot.match);
+    const selfTeam = match.teams.find((team) => team.id === snapshot.selfPlayerId);
+    if (selfTeam === undefined) throw new Error("Participant Team is missing from match state.");
     const recoverPlanner = () => {
       clearPlannerDraft(window.localStorage, matchId, snapshot.selfPlayerId);
       window.location.reload();
@@ -328,19 +330,29 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       return (
         <main className="match-flow-page">
           {reconnect}
-          <RoomStatus status={snapshot.status} />
-          <div className="match-guide-action">
-            <FieldGuideButton />
-          </div>
+          <MatchFlowHeader
+            roomCode={state.roomCode}
+            matchId={matchId}
+            team={selfTeam}
+            turnNumber={match.turnNumber}
+            status={snapshot.status}
+          />
           <div className="match-flow-grid">
             <ReadyPanel match={match} lockedPlayerIds={snapshot.lockedPlayerIds} />
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
           </div>
           <div className="match-flow-actions">
-            <button type="button" disabled={busy} onClick={() => void refresh()}>
+            <button
+              type="button"
+              className="match-acknowledge"
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
               <RefreshCw size={15} aria-hidden="true" /> Refresh status
             </button>
-            <Link href={`/room/${state.roomCode}`}>Leave safely</Link>
+            <Link href="/">
+              <Home size={15} aria-hidden="true" /> Return home safely
+            </Link>
             <ResignControl onResign={() => void resign()} disabled={busy} />
           </div>
         </main>
@@ -349,15 +361,32 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
     if (snapshot.status === "turn-ready") {
       const turn = snapshot.unseenTurns[0];
       if (turn === undefined) {
-        return <main className="match-flow-page">Fetching authorized turn movie…</main>;
+        return (
+          <main className="match-flow-page">
+            {reconnect}
+            <MatchFlowHeader
+              roomCode={state.roomCode}
+              matchId={matchId}
+              team={selfTeam}
+              turnNumber={match.turnNumber}
+              status={snapshot.status}
+            />
+            <p className="match-flow-loading" role="status">
+              Fetching your Turn movie…
+            </p>
+          </main>
+        );
       }
       return (
         <main className="match-flow-page match-movie-page">
           {reconnect}
-          <RoomStatus status={snapshot.status} />
-          <div className="match-guide-action">
-            <FieldGuideButton />
-          </div>
+          <MatchFlowHeader
+            roomCode={state.roomCode}
+            matchId={matchId}
+            team={selfTeam}
+            turnNumber={turn.turnNumber}
+            status={snapshot.status}
+          />
           <MatchSectionBoundary
             section="movie"
             resetKey={`${snapshot.revision}:${turn.turnNumber}`}
@@ -371,54 +400,52 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
             />
           </MatchSectionBoundary>
-          <div className="match-flow-grid">
-            <TurnExplanation events={turn.events} />
-            <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
-          </div>
-          <ObservedTurnExport turn={turn} />
-          <div className="match-flow-actions">
+          <div className="match-movie-handoff">
+            <div>
+              <strong>Finished watching Turn {turn.turnNumber}?</strong>
+              <p>Acknowledging unlocks your next planner. It does not affect other players.</p>
+            </div>
             <button
               type="button"
               className="primary-action match-acknowledge"
               disabled={busy}
               onClick={() => void acknowledge(turn.turnNumber)}
             >
-              {busy ? "Saving playback…" : `Acknowledge Turn ${turn.turnNumber} and plan next`}
+              {busy
+                ? "Saving acknowledgement…"
+                : `Acknowledge Turn ${turn.turnNumber} and plan next`}
             </button>
+          </div>
+          <div className="match-flow-grid">
+            <TurnExplanation events={turn.events} />
+            <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
+          </div>
+          <div className="match-flow-actions match-movie-secondary-actions">
+            <ObservedTurnExport turn={turn} />
+            <Link href="/">
+              <Home size={15} aria-hidden="true" /> Return home safely
+            </Link>
             <ResignControl onResign={() => void resign()} disabled={busy} />
           </div>
         </main>
       );
     }
-    const scoreByTeam = new Map(
-      (snapshot.ceremonyScores ?? []).map((entry) => [entry.teamId, entry.score]),
-    );
     return (
       <main className="match-flow-page results-page">
         {reconnect}
-        <RoomStatus status={snapshot.status} />
-        <section className="final-ceremony">
-          <Trophy size={34} aria-hidden="true" />
-          <p className="eyebrow">Final Ceremony</p>
-          <h1>
-            {snapshot.outcome === "draw" ? "Draw" : `Side ${snapshot.winningSide ?? "—"} survives`}
-          </h1>
-          <ol>
-            {match.teams.map((team) => (
-              <li key={team.id}>
-                <span>{team.name}</span>
-                <strong>{scoreByTeam.get(team.id) ?? 0}</strong>
-              </li>
-            ))}
-          </ol>
-          <p className="match-privacy-note">
-            The server retained and verified the canonical Phase 5 replay. Private opponent orders
-            are not included in participant downloads.
-          </p>
-          <div className="match-flow-actions">
-            <Link href={`/room/${state.roomCode}`}>Return to room</Link>
-          </div>
-        </section>
+        <MatchFlowHeader
+          roomCode={state.roomCode}
+          matchId={matchId}
+          team={selfTeam}
+          turnNumber={match.turnNumber}
+          status={snapshot.status}
+        />
+        <FinalCeremony
+          teams={match.teams}
+          scores={snapshot.ceremonyScores ?? []}
+          {...(snapshot.outcome === undefined ? {} : { outcome: snapshot.outcome })}
+          {...(snapshot.winningSide === undefined ? {} : { winningSide: snapshot.winningSide })}
+        />
       </main>
     );
   }

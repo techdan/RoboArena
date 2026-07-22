@@ -21,8 +21,9 @@ arena imports, deterministic local movie playback, and authoritative room/setup
 boundary, planner, and durable private plan/lock/resolve/watch loop are built.
 Phase 11.5 explainability/replay UX and browser-emulated iPad input are
 draft-complete with both Playwright suites passing on the emulated iPad touch
-context. Open Phase 11 manual review rolls into the Phase 12 local
-release-candidate gate before any production transport migration begins.
+context. Phase 12 resilience and Phase 12.1 bounded presentation polish are
+implemented; open Phase 11/manual/device evidence consolidates in Phase
+12.2 before any production transport migration begins.
 
 The immediate critical path is:
 
@@ -31,7 +32,8 @@ RE audit -> Phase 1R engine realignment -> Phase 1.5 toolchain
          -> Phase 2 resolver -> Phase 3 projectile/blast events
          -> Phase 4 visibility + Scan & Fire -> Phase 5 replay
          -> renderer -> authoritative room/setup -> planner/online turn loop
-         -> 3-/4-player FFA hardening -> local/device release candidate
+         -> 3-/4-player FFA hardening -> Phase 12 resilience
+         -> Phase 12.1 presentation polish -> Phase 12.2 local/device candidate
          -> Vercel + Supabase deployment gate
 ```
 
@@ -225,16 +227,12 @@ playable end to end.
 
 ## Next actions
 
-1. Close Phase 11 manual work locally: the Phase 11.8–11.8.2 desktop/iPad-size
-   visual checklist, retained screenshots, and one full four-separate-browser
-   local FFA match, including resignation and reconnect.
-2. Close Phase 12 as the local v1 release candidate. Its resilience and
-   trust-boundary implementation is complete; record the remaining local SQLite
-   restart matrix, four-session match, desktop regression, and one physical-iPad
-   Safari room-to-results match in `docs/phase12-release-candidate.md`. Fix only
-   release-blocking playtest defects; Phase 13's open-ended aesthetic polish
-   remains post-v1.
-3. Phase 11.6 three-/four-player free-for-all hardening is otherwise complete:
+1. Execute Phase 12.2 and record evidence in
+   `docs/phase12-release-candidate.md`: automated preflight, the Phase
+   11.8–11.8.2 visual checklist/screenshots, one four-separate-browser local FFA
+   match, SQLite restart matrix, desktop/keyboard regression, and one physical
+   iPad Safari room-to-results match. Fix only release blockers.
+2. Phase 11.6 three-/four-player free-for-all hardening is otherwise complete:
    Home-corner selection (unique NW/NE/SE/SW per player, `SetHomeSlot`,
    non-compacting slot carry-through) and automated three-/four-player
    private/staggered/restart/disconnect coverage with byte-identical replay
@@ -244,9 +242,9 @@ playable end to end.
    deleted a still-wanted room (`updated_at` only bumps on a mutating save, not
    on a reconnect or idle view, so any fixed cutoff can delete a room a player
    fully intends to return to). Remaining: the real four-separate-session/
-   local functional gate (consolidated into Phase 12). The deployed two-network
+   local functional gate (consolidated into Phase 12.2). The deployed two-network
    repeat belongs to Phase 12.5.
-4. Only after Phase 12 freezes, execute Phase 12.5: extract transport-independent
+3. Only after Phase 12.2 freezes, execute Phase 12.5: extract transport-independent
    command handling, add transactional Supabase Postgres storage, expose Vercel
    HTTP command/projection routes, use private Supabase Realtime invalidation
    and advisory Presence with polling fallback, then run concurrency/security,

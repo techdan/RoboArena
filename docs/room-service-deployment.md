@@ -12,7 +12,7 @@ RoboArena deploys without a VM or long-lived custom room-service host:
 - **Supabase Realtime Broadcast** sends private room-revision invalidations.
   **Presence** may provide advisory online indicators.
 - **SQLite + the standalone `ws` server** remain the zero-setup local/test
-  profile through the Phase 12 local release-candidate gate.
+  profile through the Phase 12.2 local release-candidate gate.
 
 Every gameplay mutation goes through Vercel server code. The browser never
 writes authoritative tables or resolves shared turns. Realtime messages never
@@ -89,7 +89,7 @@ always come from Postgres through an authenticated Vercel projection.
 
 ## Local development
 
-The existing commands remain the Phase 12 local profile:
+The existing commands remain the Phase 12–12.2 local profile:
 
 ```text
 npm run dev
@@ -113,7 +113,7 @@ Commit configuration and SQL migrations, never generated secrets.
 
 ## Deployment verification gate
 
-1. Finish the Phase 12 local release candidate before changing transport.
+1. Finish the Phase 12.2 local release candidate before changing transport.
 2. Apply migrations to a hosted Supabase project.
 3. Configure server-only database/signing credentials and public Realtime
    connection values in Vercel.

@@ -122,8 +122,8 @@ export function HomeSetup({ arena }: HomeSetupProps) {
   return (
     <main className="min-h-screen bg-[#0d100e] text-white">
       <div className="ambient-grid" aria-hidden="true" />
-      <div className="relative mx-auto max-w-[1180px] px-8 py-10">
-        <header className="flex items-center justify-between border-b border-white/8 pb-6">
+      <div className="home-shell relative mx-auto max-w-[1180px] px-8 py-10">
+        <header className="home-header flex items-center justify-between border-b border-white/8 pb-6">
           <div className="flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-xl border border-lime-300/20 bg-lime-300/10">
               <Gamepad2 className="size-5 text-lime-300" aria-hidden="true" />
@@ -144,8 +144,8 @@ export function HomeSetup({ arena }: HomeSetupProps) {
           </div>
         </header>
 
-        <div className="grid grid-cols-[1.05fr_0.95fr] gap-14 py-14">
-          <section className="pt-8">
+        <div className="home-main grid grid-cols-[1.05fr_0.95fr] gap-14 py-14">
+          <section className="home-intro pt-8">
             <p className="eyebrow mb-5">Online free-for-all / 2–4 players</p>
             <h1 className="max-w-xl text-6xl font-black leading-[0.92] tracking-[-0.07em]">
               Program privately.<span className="block text-white/30">Watch together.</span>
@@ -165,7 +165,7 @@ export function HomeSetup({ arena }: HomeSetupProps) {
               </span>
             </div>
 
-            <figure className="mt-9 w-fit max-w-full">
+            <figure className="home-arena-preview mt-9 w-fit max-w-full">
               <div className="mb-3 flex items-center justify-between gap-4">
                 <figcaption className="eyebrow">Battlefield · {arena.sizeName}</figcaption>
                 <Link className="secondary-link" href="/preview">
@@ -179,7 +179,7 @@ export function HomeSetup({ arena }: HomeSetupProps) {
             </figure>
           </section>
 
-          <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_30px_90px_rgba(0,0,0,.35)]">
+          <section className="home-setup-card rounded-[28px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_30px_90px_rgba(0,0,0,.35)]">
             <div className="mb-6 grid grid-cols-2 rounded-xl bg-black/25 p-1">
               {(["create", "join"] as const).map((option) => (
                 <button

@@ -60,7 +60,7 @@ as Phase 12.5; Phase 1.5 tooling is complete:
 - The Next.js shell, PixiJS arena/movie renderer, and verified Rubble Two/Three imports are built.
 - Event-driven movie playback supports deterministic scrub/step/play, speed, and idle compression.
 - The authoritative WebSocket room service, SQLite WAL local/test storage, and
-  2-4 player setup UI are built. They remain the Phase 12 local profile. Phase
+  2-4 player setup UI are built. They remain the Phase 12–12.2 local profile. Phase
   12.5 migrates production authority to Vercel HTTP Functions plus Supabase
   Postgres/Realtime; no VM or custom production WebSocket host is planned.
 - The movement/posture/scan planner, exact per-selector timeline preview,
@@ -76,15 +76,15 @@ as Phase 12.5; Phase 1.5 tooling is complete:
   targeting overlays, and planner pan/zoom are also draft complete. Automated
   Playwright execution is temporarily disabled; retain its specs/baselines and
   use manual browser/iPad testing plus screenshots for current UI validation.
-  Phases 11.8 and 11.8.1 are implemented with manual visual review open: the
+  Phases 11.8 through 11.8.2 are implemented with manual visual review open: the
   planner is board-first, with compact targeting controls, a class-named robot
   selector, circular scan control, conditional Missile/Rifle ammo presentation,
   icon timeline, tail-only removal, shared scrubber, and shared 50-edit undo/redo.
-  Phase 12 resilience/trust-boundary code is implemented; manual visual review,
+  Phase 12 resilience/trust-boundary code and Phase 12.1 bounded non-planner
+  presentation polish are implemented. Phase 12.2 owns manual visual review,
   a local four-session match, local restart/rejoin, desktop regression, and
-  physical iPad Safari remain the local release-candidate evidence gate. Phase
-  12.5 then owns the Vercel/Supabase migration and deployed two-network
-  acceptance.
+  physical iPad Safari as the local release-candidate evidence gate. Phase 12.5
+  then owns the Vercel/Supabase migration and deployed two-network acceptance.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

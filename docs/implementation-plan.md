@@ -36,7 +36,7 @@ create v1 implementation dependencies.
 
 ## 1. Architecture overview
 
-**Current local profile through Phase 12**:
+**Current local profile through Phase 12.2**:
 
 ```text
 Browser (one Team/player)                    Authoritative room service
@@ -1013,7 +1013,7 @@ green after the corrective pass fixed three real defects it surfaced: the board
 cleared its selection notice on touch `pointerleave`, the Aim/Scan dialogs closed
 themselves on the tap's touch-compatibility ghost mousedown, and the emulated
 iPad context wrongly forced Chromium's phone `isMobile` layout. A physical iPad
-Safari room-to-results smoke match remains the Phase 12 local-release gate and is not
+Safari room-to-results smoke match remains the Phase 12.2 local-release gate and is not
 claimed by emulation.
 
 ---
@@ -1061,7 +1061,7 @@ unseen-turn playback without a global gate, durable restart recovery, and byte-i
 replay for every supported configuration.
 
 **Functional gate**: run at least one full match on four separate local browser
-sessions. No result or visibility divergence is acceptable. Phase 12 owns this
+sessions. No result or visibility divergence is acceptable. Phase 12.2 owns this
 local manual gate; production hosting and two-real-network validation move to
 Phase 12.5.
 
@@ -1102,7 +1102,7 @@ remaining active players were only waiting on the resigner. A two-step
 and the waiting/turn-ready flow views, making resignation user-facing; its
 browser validation is part of the manual Phase 12 pass.
 
-**Still deferred to Phase 12**: the literal four-separate-local-browser-session
+**Still deferred to Phase 12.2**: the literal four-separate-local-browser-session
 functional gate and physical-device checks. The two-real-network repeat moves to
 Phase 12.5 with the production architecture migration. The retained Playwright
 suite previously exercised four emulated-iPad browsers through one authoritative
@@ -1173,7 +1173,7 @@ v1 ship gate. Four targeted fixes on the existing Phase 11.5 planner:
     existing authorized `previewAim`/`estimate` path for Scan mode) rather than
     duplicating combat math in the renderer.
 
-**Dependencies**: shipped Phase 11.5 planner. Required for the Phase 12 local
+**Dependencies**: shipped Phase 11.5 planner. Required for the Phase 12.2 local
 release candidate, but already draft-complete apart from the consolidated manual
 review.
 
@@ -1194,7 +1194,7 @@ persistence, and reconnect. The high-resolution movie, terrain-preview, and new
 planner Aim/Scan images were reviewed. Automated Playwright commands and CI
 were subsequently disabled by user direction; browser/iPad validation and
 future UI feedback are manual and screenshot-driven.
-Physical iPad Safari remains a Phase 12 local-release gate; production-network
+Physical iPad Safari remains a Phase 12.2 local-release gate; production-network
 validation moves to Phase 12.5.
 
 **Effort**: S–M.
@@ -1210,7 +1210,7 @@ strong or weak in player language. Raw engine values remain available for
 verification but never stand alone as unexplained UI. The canonical presentation
 contract is `docs/spec.md` §6 "Planner targeting analysis."
 
-**Dependencies**: Phase 11.7. This is planner UX closure before the Phase 12
+**Dependencies**: Phase 11.7. This is planner UX closure before the Phase 12.2
 local release candidate can be declared complete.
 
 **Core model and correctness work**:
@@ -1901,101 +1901,153 @@ and touch scan-drag + long-press details.
 
 ---
 
-### Phase 12 — local v1 release-candidate and physical-device gate [🟨 IMPLEMENTED — MANUAL GATES OPEN]
+### Phase 12 — local resilience and trust-boundary implementation [✅ IMPLEMENTED]
 
-**Goal**: finish and validate one complete free-for-all Survival v1 locally
-before changing its production transport or storage. Phase 12 closes the open
-Phase 11 manual-review items, proves the existing WS/SQLite profile end to end,
-and addresses local resilience or usability defects found during that pass.
-Passing this phase produces the frozen local release candidate that Phase 12.5
-migrates to Vercel/Supabase without changing gameplay semantics.
+**Goal**: make the complete local WS/SQLite game fail safely before presentation
+polish or deployment migration. This phase owns defensive code and automated
+coverage, not manual browser/device sign-off.
 
-**Dependencies**: Phase 11.6 automated hardening and the implemented Phase
-11.8–11.8.2 planner UX. The remaining manual visual and four-session checks are
-part of this phase rather than reasons to start deployment early.
+**Implemented scope**:
 
-**Current local gap audit (2026-07-21)**:
+- strict incoming protocol/order schemas, payload/rate limits, validated arena
+  imports and replay deserialization;
+- planner/movie Error Boundaries with canonical-state recovery actions;
+- runtime validation of outgoing and incoming participant projections;
+- explicit connecting, retrying, resumed, room-missing, seat-forfeited, and
+  incompatible-protocol outcomes;
+- an app-scoped reset for corrupt room/planner local data;
+- opaque support ids for unexpected failures without hidden-data leakage;
+- durable pending seed/nonce recovery and canonical-state preservation around
+  failed resolution;
+- request-id caching, locked-order uniqueness, restart recovery, and focused
+  idempotency coverage for start, lock, resolve, acknowledge, and resume.
 
-- already implemented: strict incoming protocol/order schemas, payload/rate
-  limits, validated arena imports and replay deserialization, generic internal
-  protocol errors, durable pending seed/nonce recovery, request-id caching,
-  locked-order uniqueness, restart tests, corrupt-draft detection/reset, and
-  invalid-seat token removal;
-- implemented in the Phase 12 resilience pass: planner/movie Error Boundaries,
-  runtime validation of outgoing and incoming participant projections, explicit
-  connecting/retrying/resumed/room-missing/seat-forfeited/incompatible outcomes,
-  an app-scoped local room/planner reset, opaque support ids for unexpected
-  failures, canonical-state preservation assertions around failed resolution,
-  and a focused idempotency audit across the mutations named below;
-- manual closure still open: the Phase 11.8 visual checklist/screenshots, the
-  full four-local-session match, the restart matrix, desktop regression, and
-  the physical-iPad Safari pass.
-
-**Local multiplayer and visual-closure gate**:
-
-- complete the Phase 11.8–11.8.2 desktop 100%/125%, 1280×720, 1440×900,
-  grayscale/color-vision, overlay-placement, and retained-screenshot review;
-- run one full match through four separate local browser sessions against the
-  authoritative local room service, including staggered lock, resign,
-  disconnect/rejoin, independent unseen-turn playback, results, and replay;
-- restart the local room service after setup, after locked orders, and after a
-  resolved-but-unacknowledged turn; verify seat ownership, idempotency, and
-  deterministic recovery from SQLite;
-- fix release-blocking visual, interaction, or causality defects discovered by
-  these passes. Broader aesthetic enhancement remains Phase 13.
-
-**Resilience and trust-boundary gate**:
-
-- wrap planner and movie sections in React Error Boundaries with a plain recovery
-  action;
-- schema-validate incoming and outgoing protocol payloads, orders, arena data,
-  and replay data rather than trusting TypeScript casts;
-- distinguish connecting, retrying, resumed, room-missing, seat-forfeited, and
-  incompatible-protocol outcomes in the reconnect UI;
-- provide an explicit reset path for corrupt local planner/room data;
-- preserve the previous canonical room state when resolution fails and return a
-  safe user-facing error id without leaking hidden data;
-- audit idempotency for start, lock, resolve, acknowledge, and resume retries.
-
-**Local physical-device and accessibility gate**:
-
-- complete one physical-iPad Safari room-to-results match over the local network
-  in landscape using touch alone, including rotation recovery, safe-area layout,
-  reconnect, Field Guide/context help, planning, movie controls, and results;
-- verify no clipped controls, accidental page gestures, hover-only dependencies,
-  or sub-44×44 CSS px touch targets at the supported 1024×768 CSS-pixel viewport;
-- verify keyboard reachability, visible focus, and non-color-only connection,
-  readiness, selection, and result states;
-- repeat the complete loop with desktop mouse and keyboard and confirm acceptable
-  planner/movie responsiveness on the supported iPad.
-
-**Acceptance gate**: the local four-session match, SQLite restart/rejoin passes,
-manual planner review, physical-iPad touch-only smoke match, desktop regression,
-and resilience checks pass without private-information leakage. Passing this
-phase means **local v1 release candidate complete**; deployed v1 is Phase 12.5.
+**Acceptance**: the resilience/trust-boundary implementation and focused tests
+are complete. Manual presentation, multiplayer, restart, desktop, and physical
+device evidence belongs to Phases 12.1–12.2.
 
 **Effort**: L.
 
-**Manual execution record**: use `docs/phase12-release-candidate.md`. Phase 12
-must remain yellow until the four-session, desktop, restart, and physical-iPad
-rows contain real evidence; automated unit/build success does not satisfy those
-device gates.
+---
+
+### Phase 12.1 — bounded v1 match-flow presentation polish [✅ IMPLEMENTED]
+
+**Goal**: give the local v1 a coherent beginning, middle, and end before the
+release-candidate evidence pass. Polish only the non-planner match flow where
+the remaining Phase 13 backlog has clear v1 value: home/setup, waiting/movie,
+and Final Ceremony/results.
+
+**Dependencies**: implemented Phase 12 resilience and the implemented Phase
+11.8–11.8.2 planner. This phase must not change engine rules, authoritative room
+semantics, protocol messages, storage, replay bytes, visibility projections, or
+the Phase 12.5 deployment architecture.
+
+**Canonical agent handoff**: `tasks/phase12.1-presentation-polish.md` contains
+the exact work packages, file boundaries, tests, non-goals, and acceptance
+checklist. If that handoff and this summary disagree, this section controls
+scope and the handoff supplies implementation detail.
+
+**Scoped work packages**:
+
+1. **Final Ceremony/results clarity** — name and visually identify the winning
+   Team in unique-Side v1 instead of leading with an abstract Side number; make
+   draw, scores, team identity, and exit actions immediately understandable.
+2. **Match-flow shell consistency** — waiting, movie, and results use one compact
+   hierarchy for room/team/turn identity, connection state, Field Guide, and the
+   next primary action; remove dead ends and ambiguous return paths.
+3. **Authorized movie completion UX** — keep the arena primary at desktop/iPad
+   sizes, make turn/completion state and the acknowledge-and-continue action
+   easy to find, and keep explanations/Team Data readable without changing
+   playback or acknowledgement semantics.
+4. **Home/setup priority pass** — keep Create/Join, recent rooms, invite, ready,
+   corner, and Start Match controls obvious and above the fold at supported
+   viewports; reduce decorative/demo content only when it competes with play.
+5. **Cross-surface consistency** — reuse existing tokens/components and align
+   typography, spacing, status language, team identity, focus, and button
+   hierarchy across these surfaces. Do not create a new design system.
+6. **Focused automated coverage** — add component/pure tests for winner/draw
+   presentation, safe navigation/actions, and any extracted view-model helpers.
+   Retained Playwright specs may be updated but automated execution remains
+   paused.
+
+**Acceptance gate**:
+
+- a new player can create/join, understand readiness, watch a resolved turn,
+  identify what to do next, and understand the final result without relying on
+  engine terminology or an abstract Side number;
+- the primary action remains visible and unambiguous at 1280×720 desktop and
+  1024×768 iPad landscape without adding phone support;
+- winner/draw presentation uses only already-authorized projection and ceremony
+  data; no hidden state enters props, DOM, accessibility text, or exports;
+- results provide explicit Home and safe room navigation, but no rematch/reset
+  protocol is added;
+- `npm test`, typecheck, lint, format check, and production build pass.
+
+**Implementation note (2026-07-22)**: the authenticated waiting/movie/results
+flow now shares compact Room, Team, Turn, saved-state, status, and Field Guide
+context. The movie acknowledgement follows the arena directly; supporting Team
+Data, explanation, and observed export remain available below it. Final Ceremony
+maps the winning Side to authorized Team identity with draw and legacy fallbacks,
+keeps canonical score order, and exits explicitly to Home without rematch/reset
+semantics. Home and room setup prioritize play controls at the supported
+1280×720 and 1024×768 landscape sizes. Focused static/pure presentation tests
+cover winner/draw/fallback/order/navigation and phase-action copy. Manual visual
+evidence remains Phase 12.2.
+
+**Effort**: S–M.
+
+---
+
+### Phase 12.2 — local v1 release-candidate evidence gate [⬜ MANUAL GATE]
+
+**Goal**: freeze the complete local WS/SQLite v1 after Phase 12 resilience and
+Phase 12.1 presentation polish. This phase is evidence-driven: it runs the
+manual and restart matrices, records defects, and fixes only release blockers.
+
+**Dependencies**: implemented Phase 12 and completed Phase 12.1.
+
+**Required evidence**:
+
+- automated preflight on the exact candidate commit;
+- Phase 11.8–11.8.2 visual review/screenshots at 100%/125%, 1280×720,
+  1440×900, grayscale/color-vision, and the supported iPad viewport;
+- one full four-local-session Survival match covering staggered lock, resign,
+  disconnect/rejoin, independent unseen-turn playback, results, replay, and
+  private-information checks;
+- SQLite restart/rejoin at setup, locked orders, pending resolution, and
+  resolved-before-acknowledgement;
+- complete desktop mouse/keyboard and keyboard-only regression;
+- one physical-iPad Safari room-to-results match over the local network using
+  touch alone, including rotation, safe areas, gestures, help, planning, movie,
+  reconnect, and results.
+
+**Defect policy**: a failed gate produces a narrowly scoped Phase 12/12.1 fix
+and the affected evidence is rerun. Do not start open-ended Phase 13 art,
+responsive, browser-matrix, or performance work. Performance changes require a
+reproduced problem on a supported v1 device.
+
+**Acceptance gate**: every row in `docs/phase12-release-candidate.md` contains
+real evidence and passes without state, replay, visibility, interaction, or
+private-information divergence. Passing this phase means **local v1 release
+candidate complete**; deployed v1 is Phase 12.5.
+
+**Effort**: S plus manual/device time.
 
 ---
 
 ### Phase 12.5 — Vercel + Supabase architecture migration and deployment [⬜ V1 DEPLOYMENT GATE]
 
-**Goal**: deploy the frozen Phase 12 release candidate without a VM or
+**Goal**: deploy the frozen Phase 12.2 release candidate without a VM or
 long-lived custom room-service host. Vercel owns all application compute;
 Supabase provides durable Postgres and managed Realtime. The migration may
 change transport, storage, concurrency, and presence implementation, but must
 not change protocol meaning, match rules, participant projections, or replay
 bytes.
 
-**Dependencies**: Phase 12 local release candidate. Do not begin this migration
-while planner/gameplay cleanup is still moving underneath it. Phase 13 polish is
-not a dependency unless a specific Phase 12 playtest defect is explicitly
-promoted into the v1 gate.
+**Dependencies**: completed Phase 12.2 local release candidate. Do not begin
+this migration while local polish/evidence is still moving underneath it. Phase
+13 polish is not a dependency unless a specific Phase 12.2 playtest defect is
+explicitly promoted into the v1 gate.
 
 **Deployed architecture contract**:
 
@@ -2112,12 +2164,12 @@ checks pass. Passing this phase means **online FFA Survival v1 deployed**.
 **Goal**: polish and deepen the shipped core Survival battle game before adding
 new game modes. Replace or refine vector placeholders where playtesting
 justifies it, broaden visual regression coverage, tune animation and rendering
-performance beyond the Phase 12 floor, and add nonessential responsive,
+performance beyond the Phase 12.2 floor, and add nonessential responsive,
 connection-state, usability, and balance-preserving quality-of-life
 enhancements.
 
 **Dependencies**: deployed Phase 12.5 and playtest feedback. A narrowly scoped
-release-blocking defect discovered during Phase 12 may be fixed before 12.5,
+release-blocking defect discovered during Phase 12.2 may be fixed before 12.5,
 but do not pull the open-ended Phase 13 polish backlog into the deployment gate.
 
 **Nonblocking scope**: bespoke art, aesthetic refinement, expanded browser and
@@ -3062,12 +3114,14 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                                                |
 | 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                                            |
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                                        |
-| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (automated coverage done; local four-session gate → Phase 12, deployed two-network repeat → 12.5)              |
+| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (automated coverage done; local four-session gate → Phase 12.2, deployed two-network repeat → 12.5)            |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
 | 11.8.2  | 🟡 IMPLEMENTED / VISUAL REVIEW     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
-| 12      | 🟨 IMPLEMENTED / MANUAL GATES     | L      | Resilience/trust boundaries implemented; local visual/restart/four-session and physical-iPad acceptance remain open                                                   |
+| 12      | ✅ IMPLEMENTED                     | L      | Local resilience, projection validation, recovery UI, support ids, and idempotency/trust-boundary coverage                                                           |
+| 12.1    | ✅ IMPLEMENTED                     | S–M    | Bounded v1 presentation polish for home/setup, match-flow context, authorized movie handoff, and Final Ceremony/results                                              |
+| 12.2    | ⬜ MANUAL GATE                     | S      | Automated preflight plus local visual, four-session, restart, desktop, and physical-iPad release-candidate evidence                                                   |
 | 12.5    | ⬜ V1 DEPLOYMENT GATE              | XL     | Vercel HTTP authority + Supabase Postgres/Realtime migration, concurrency, security, and real-network validation                                                     |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
@@ -3077,11 +3131,12 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 **Critical path to v1 online FFA**: RE mapping pass → 1R → 1.5 → 2 → 3 → 4 →
 5 → 6 → 7 → 8 → 9 → 10 → 11 → 11.5 → 11.6 → 11.7 → 11.8 → 11.8.1 → 11.8.2 →
-12 local release candidate → 12.5 Vercel/Supabase deployment. Phase 12 freezes
-gameplay/UX locally before Phase 12.5 changes transport and storage. The concise
+12 resilience → 12.1 bounded presentation polish → 12.2 local release
+candidate → 12.5 Vercel/Supabase deployment. Phase 12.2 freezes gameplay/UX
+locally before Phase 12.5 changes transport and storage. The concise
 gate-by-gate sequence is in `tasks/core-build-plan.md`. Phase 13 presentation
 polish and Phases 13.5–16 are post-v1 and are not on this path unless a specific
-Phase 12 defect is explicitly promoted. The post-v1 core-battle sequence is
+Phase 12.2 defect is explicitly promoted. The post-v1 core-battle sequence is
 Phase 13 polish → Phase 13.5 online alliances → Phase 14 Stealth; Phase 15
 additional sports also requires Phase 13.5, and Phase 16 hot-seat is last.
 Neither Stealth nor a non-Survival sport may enter the v1 critical path.

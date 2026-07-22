@@ -1,9 +1,10 @@
-# Phase 12 local release-candidate runbook
+# Phase 12.2 local release-candidate runbook
 
-Phase 12 freezes the local WebSocket/SQLite game before Phase 12.5 changes the
-production transport and storage. Automated Playwright execution remains
-disabled. Record screenshots and observations manually; do not count browser
-emulation as the physical-iPad gate.
+Phase 12.2 freezes the local WebSocket/SQLite game after Phase 12 resilience and
+Phase 12.1 presentation polish, before Phase 12.5 changes the production
+transport and storage. Automated Playwright execution remains disabled. Record
+screenshots and observations manually; do not count browser emulation as the
+physical-iPad gate.
 
 ## Automated preflight
 
@@ -98,7 +99,7 @@ larger. Complete room creation/join through results using touch alone.
 
 ## Sign-off record
 
-Do not mark Phase 12 complete until every row has evidence.
+Do not mark Phase 12.2 complete until every row has evidence.
 
 | Gate | Date/device | Evidence or defect | Result |
 | --- | --- | --- | --- |
@@ -107,4 +108,3 @@ Do not mark Phase 12 complete until every row has evidence.
 | SQLite restart matrix | — | — | Open |
 | Desktop visual/accessibility | — | — | Open |
 | Physical iPad Safari | — | — | Open |
-

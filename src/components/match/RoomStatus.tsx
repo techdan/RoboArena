@@ -1,15 +1,15 @@
 import { CheckCircle2, Clock3, Film, Trophy } from "lucide-react";
 import type { MatchSnapshotMessage } from "../../lib/net/protocol";
+import { matchFlowCopy } from "../../lib/presentation/matchFlow";
 
-const COPY = {
-  planning: ["Your turn", "Program privately, save if desired, then lock when ready."],
-  waiting: ["Orders locked", "You can leave safely. Resolution begins when everyone locks."],
-  "turn-ready": ["Turn ready", "Your authorized movie is ready on this device."],
-  finished: ["Match complete", "Final Ceremony scores are ready."],
-} as const;
-
-export function RoomStatus({ status }: { readonly status: MatchSnapshotMessage["status"] }) {
-  const [title, detail] = COPY[status];
+export function RoomStatus({
+  status,
+  turnNumber = 1,
+}: {
+  readonly status: MatchSnapshotMessage["status"];
+  readonly turnNumber?: number;
+}) {
+  const copy = matchFlowCopy(status, turnNumber);
   const Icon =
     status === "planning"
       ? CheckCircle2
@@ -22,8 +22,8 @@ export function RoomStatus({ status }: { readonly status: MatchSnapshotMessage["
     <section className="match-room-status" data-status={status} role="status">
       <Icon size={20} aria-hidden="true" />
       <div>
-        <strong>{title}</strong>
-        <p>{detail}</p>
+        <strong>{copy.heading}</strong>
+        <p>{copy.detail}</p>
       </div>
     </section>
   );

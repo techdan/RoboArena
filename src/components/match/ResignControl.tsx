@@ -26,7 +26,7 @@ export function ResignControl({
         <span className="font-bold text-red-200">Resign for good?</span>
         <button
           type="button"
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-400/60 bg-red-500/20 px-3 py-1.5 font-bold text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+          className="resign-confirm inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-400/60 bg-red-500/20 px-3 py-1.5 font-bold text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-40"
           disabled={disabled}
           onClick={() => {
             setConfirming(false);
@@ -37,7 +37,7 @@ export function ResignControl({
         </button>
         <button
           type="button"
-          className="cursor-pointer rounded-lg border border-white/15 px-3 py-1.5 font-bold text-white/60 transition hover:border-white/30 hover:text-white/80"
+          className="resign-cancel cursor-pointer rounded-lg border border-white/15 px-3 py-1.5 font-bold text-white/60 transition hover:border-white/30 hover:text-white/80"
           onClick={() => setConfirming(false)}
         >
           Cancel
@@ -49,7 +49,7 @@ export function ResignControl({
   return (
     <button
       type="button"
-      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-bold text-red-200 transition hover:border-red-400/60 disabled:cursor-not-allowed disabled:opacity-40"
+      className="resign-control inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-bold text-red-200 transition hover:border-red-400/60 disabled:cursor-not-allowed disabled:opacity-40"
       disabled={disabled}
       onClick={() => setConfirming(true)}
     >
