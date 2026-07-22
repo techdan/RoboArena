@@ -46,6 +46,16 @@ const weaponIdSchema = z.enum([
 ]);
 const postureSchema = z.enum(["upright", "ducking", "crouching"]);
 const headingSchema = z.enum(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]);
+const terrainSchema = z.enum([
+  "open",
+  "rough",
+  "low-wall",
+  "wall",
+  "bush",
+  "crevice",
+  "outer-wall",
+]);
+const robotClassSchema = z.enum(["rifle", "burst", "auto", "missile", "stealth"]);
 const commandSegmentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("deploy"), to: tileCoordSchema }).strict(),
   z
@@ -360,9 +370,405 @@ export interface ProtocolErrorMessage {
   readonly kind: "ProtocolError";
   readonly code: ProtocolErrorCode;
   readonly message: string;
+  /** Opaque correlation id for unexpected server failures; contains no hidden game data. */
+  readonly supportId?: string;
 }
 
 export type ServerMessage = RoomSnapshotMessage | MatchSnapshotMessage | ProtocolErrorMessage;
+
+const publicPlayerSchema = z
+  .object({
+    id: z.string().min(1),
+    name: playerNameSchema,
+    color: playerColorSchema,
+    ready: z.boolean(),
+    connected: z.boolean(),
+    isHost: z.boolean(),
+    side: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+    homeSlot: homeSlotSchema.optional(),
+  })
+  .strict();
+const publicRoomSchema = z
+  .object({
+    code: roomCodeSchema,
+    phase: z.enum(["setup", "active"]),
+    hostPlayerId: z.string().min(1),
+    config: roomConfigSchema,
+    players: z.array(publicPlayerSchema).min(1).max(4),
+    matchId: z.string().min(1).max(80).optional(),
+  })
+  .strict();
+const participantRoomStatusSchema = z
+  .object({
+    status: z.enum(["planning", "waiting", "turn-ready", "finished"]),
+    turnNumber: z.number().int().min(1),
+    waitingForPlayers: z.number().int().min(0).max(4),
+  })
+  .strict();
+
+const robotDefinitionSchema = z
+  .object({
+    class: robotClassSchema,
+    accuracy: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    armor: z.number().int().positive(),
+    rating: z.number().int().nonnegative(),
+    primaryWeapon: weaponIdSchema,
+    secondaryWeapons: z.array(weaponIdSchema).optional(),
+    stealthVisibility: z.literal("stealth").optional(),
+  })
+  .strict();
+const ammoSchema = z
+  .object({
+    rifle: z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+    "burst-gun": z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+    "auto-rifle": z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+    "missile-launcher": z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+    "grenade-launcher": z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+  })
+  .strict();
+const robotStateSchema = z
+  .object({
+    id: z.string().min(1),
+    teamId: z.string().min(1),
+    definition: robotDefinitionSchema,
+    position: z.union([tileCoordSchema, z.literal("dock")]),
+    hp: z.number().int().nonnegative(),
+    posture: postureSchema,
+    scanHeading: headingSchema,
+    damageStaggerActionsRemaining: z.number().int().nonnegative(),
+    ammo: ammoSchema,
+  })
+  .strict()
+  .refine((robot) => robot.hp <= robot.definition.armor, "Robot HP cannot exceed armor.");
+const teamStateSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    color: z.string().min(1),
+    side: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    homeSlot: homeSlotSchema,
+    brain: z.enum(["human", "stupid"]),
+    robots: z.array(robotStateSchema),
+    score: z.number().int(),
+  })
+  .strict();
+const serializedMatchStateSchema = z
+  .object({
+    config: z
+      .object({
+        sportType: z.enum(["survival", "treasure-hunt", "capture-the-flag", "hostage", "baseball"]),
+        formation: z.enum(["beginner", "standard", "fire-fight", "missile-fest", "beat-the-clock"]),
+        length: z.enum(["skirmish", "melee", "battle", "campaign"]),
+        arenaType: z.enum(["rubble", "suburbs", "computer"]),
+        arenaSizeName: z.string().min(1),
+        turnLengthSeconds: z.number().int().min(1).max(40),
+      })
+      .strict(),
+    turnNumber: z.number().int().min(1),
+    teams: z.array(teamStateSchema).min(1).max(4),
+    arena: z
+      .object({
+        type: z.enum(["rubble", "suburbs", "computer"]),
+        sizeName: z.string().min(1),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        tiles: z.array(z.array(z.object({ terrain: terrainSchema }).strict())),
+        homeAreas: z.array(
+          z
+            .object({ corner: z.enum(["NW", "NE", "SE", "SW"]), tiles: z.array(tileCoordSchema) })
+            .strict(),
+        ),
+      })
+      .strict()
+      .refine(
+        (arena) =>
+          arena.tiles.length === arena.height &&
+          arena.tiles.every((row) => row.length === arena.width),
+        "Arena dimensions do not match its tile grid.",
+      ),
+    lastKnownMarkers: z.array(
+      z
+        .object({
+          teamId: z.string().min(1),
+          markers: z.array(z.object({ enemyId: z.string().min(1), at: tileCoordSchema }).strict()),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+const eventEnvelope = { tick: z.number().int().nonnegative(), seq: z.number().int().nonnegative() };
+const participantContactSchema = z
+  .object({
+    id: z.string().min(1),
+    teamId: z.string().min(1),
+    teamColor: z.string().min(1),
+    robotClass: robotClassSchema,
+    position: tileCoordSchema,
+    hp: z.number().int().nonnegative(),
+    armor: z.number().int().positive(),
+    posture: postureSchema,
+    scanHeading: headingSchema,
+    destroyed: z.boolean(),
+  })
+  .strict();
+const participantEventSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("turn-start"),
+      turnNumber: z.number().int().min(1),
+    })
+    .strict(),
+  z
+    .object({ ...eventEnvelope, kind: z.literal("turn-end"), turnNumber: z.number().int().min(1) })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("command-start"),
+      robotId: z.string().min(1),
+      commandIndex: z.number().int().nonnegative(),
+      commandKind: z.enum([
+        "deploy",
+        "move",
+        "set-posture",
+        "set-scan-direction",
+        "aim-and-fire",
+        "scan-and-fire",
+      ]),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("deployed"),
+      robotId: z.string().min(1),
+      to: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("move-step"),
+      robotId: z.string().min(1),
+      to: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("posture-changed"),
+      robotId: z.string().min(1),
+      posture: postureSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("scan-rotated"),
+      robotId: z.string().min(1),
+      heading: headingSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("enemy-spotted"),
+      teamId: z.string().min(1),
+      enemyId: z.string().min(1),
+      at: tileCoordSchema,
+      contact: participantContactSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("enemy-lost"),
+      teamId: z.string().min(1),
+      enemyId: z.string().min(1),
+      lastSeenAt: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("scan-target-acquired"),
+      shooterId: z.string().min(1),
+      targetId: z.string().min(1),
+      distance: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("fired"),
+      shooterId: z.string().min(1),
+      commandIndex: z.number().int().nonnegative(),
+      weapon: weaponIdSchema,
+      target: tileCoordSchema,
+      fireMode: z.enum(["aim", "scan"]),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("projectile-launched"),
+      projectileId: z.string().min(1),
+      shooterId: z.string().min(1),
+      shotIndex: z.number().int().nonnegative(),
+      weapon: weaponIdSchema,
+      from: tileCoordSchema,
+      target: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("projectile-impacted"),
+      projectileId: z.string().min(1),
+      weapon: weaponIdSchema,
+      target: tileCoordSchema,
+      outcome: z.enum(["hit", "miss", "blast"]),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("shot-missed"),
+      shooterId: z.string().min(1),
+      shotIndex: z.number().int().nonnegative(),
+      target: tileCoordSchema,
+      reason: z.enum(["out-of-range", "angle-blocked", "sight-blocked", "hit-roll", "no-target"]),
+      score: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("damaged"),
+      damageKind: z.enum(["direct", "blast"]),
+      targetId: z.string().min(1),
+      damage: z.number().int().nonnegative(),
+      sourceId: z.string().min(1).optional(),
+      shotIndex: z.number().int().nonnegative().optional(),
+      score: z.number().int().nonnegative().optional(),
+      radius: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
+  z.object({ ...eventEnvelope, kind: z.literal("destroyed"), robotId: z.string().min(1) }).strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("last-known-marker"),
+      teamId: z.string().min(1),
+      enemyId: z.string().min(1),
+      at: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("command-aborted"),
+      robotId: z.string().min(1),
+      commandIndex: z.number().int().nonnegative(),
+      reason: z.literal("destroyed"),
+    })
+    .strict(),
+]);
+
+const roomSnapshotSchema = z
+  .object({
+    version: z.literal(PROTOCOL_VERSION),
+    requestId: requestIdSchema,
+    kind: z.literal("RoomSnapshot"),
+    room: publicRoomSchema,
+    selfPlayerId: z.string().min(1),
+    matchStatus: participantRoomStatusSchema.optional(),
+    participantToken: tokenSchema.optional(),
+  })
+  .strict();
+const matchSnapshotSchema = z
+  .object({
+    version: z.literal(PROTOCOL_VERSION),
+    requestId: requestIdSchema,
+    kind: z.literal("MatchSnapshot"),
+    roomCode: roomCodeSchema,
+    matchId: z.string().min(1).max(80),
+    selfPlayerId: z.string().min(1),
+    match: serializedMatchStateSchema,
+    status: z.enum(["planning", "waiting", "turn-ready", "finished"]),
+    revision: z.string().min(1),
+    ownOrders: turnOrdersSchema,
+    locked: z.boolean(),
+    lockedPlayerIds: z.array(z.string().min(1)).max(4),
+    unseenTurns: z.array(
+      z
+        .object({
+          turnNumber: z.number().int().min(1),
+          initialState: serializedMatchStateSchema,
+          events: z.array(participantEventSchema),
+          playbackTick: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+    outcome: z.enum(["won", "draw"]).optional(),
+    winningSide: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+    ceremonyScores: z
+      .array(z.object({ teamId: z.string().min(1), score: z.number().int() }).strict())
+      .optional(),
+  })
+  .strict();
+const protocolErrorSchema = z
+  .object({
+    version: z.literal(PROTOCOL_VERSION),
+    requestId: requestIdSchema,
+    kind: z.literal("ProtocolError"),
+    code: z.enum([
+      "INVALID_MESSAGE",
+      "RATE_LIMITED",
+      "ROOM_NOT_FOUND",
+      "ROOM_FULL",
+      "ROOM_STARTED",
+      "UNAUTHORIZED",
+      "HOST_ONLY",
+      "NOT_READY",
+      "DUPLICATE_NAME",
+      "DUPLICATE_COLOR",
+      "INVALID_CONFIG",
+      "MATCH_NOT_FOUND",
+      "WRONG_PHASE",
+      "STALE_TURN",
+      "ORDERS_LOCKED",
+      "INVALID_ORDERS",
+      "INTERNAL_ERROR",
+    ]),
+    message: z.string().min(1).max(500),
+    supportId: z
+      .string()
+      .regex(/^[A-Z0-9]{8}$/)
+      .optional(),
+  })
+  .strict();
+
+export const serverMessageSchema = z.discriminatedUnion("kind", [
+  roomSnapshotSchema,
+  matchSnapshotSchema,
+  protocolErrorSchema,
+]);
+
+export const parseServerMessage = (value: unknown): ServerMessage =>
+  serverMessageSchema.parse(value) as ServerMessage;
+
+export const parseServerMessageJson = (json: string): ServerMessage => {
+  let value: unknown;
+  try {
+    value = JSON.parse(json) as unknown;
+  } catch {
+    throw new Error("Server response must be valid JSON.");
+  }
+  return parseServerMessage(value);
+};
 
 export const serializeMatchState = (match: MatchState): SerializedMatchState => ({
   ...match,

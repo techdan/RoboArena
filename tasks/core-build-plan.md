@@ -228,11 +228,12 @@ playable end to end.
 1. Close Phase 11 manual work locally: the Phase 11.8–11.8.2 desktop/iPad-size
    visual checklist, retained screenshots, and one full four-separate-browser
    local FFA match, including resignation and reconnect.
-2. Close Phase 12 as the local v1 release candidate: local SQLite restart and
-   idempotency recovery, resilience/trust-boundary items, desktop regression,
-   and one physical-iPad Safari room-to-results match over the local network.
-   Fix only release-blocking playtest defects; Phase 13's open-ended aesthetic
-   polish remains post-v1.
+2. Close Phase 12 as the local v1 release candidate. Its resilience and
+   trust-boundary implementation is complete; record the remaining local SQLite
+   restart matrix, four-session match, desktop regression, and one physical-iPad
+   Safari room-to-results match in `docs/phase12-release-candidate.md`. Fix only
+   release-blocking playtest defects; Phase 13's open-ended aesthetic polish
+   remains post-v1.
 3. Phase 11.6 three-/four-player free-for-all hardening is otherwise complete:
    Home-corner selection (unique NW/NE/SE/SW per player, `SetHomeSlot`,
    non-compacting slot carry-through) and automated three-/four-player

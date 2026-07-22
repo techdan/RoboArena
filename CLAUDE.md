@@ -22,7 +22,7 @@ production-grade.
 draft-complete; Phases 11.8 through 11.8.2 are implemented with visual review open.
 Phase 8 is locally complete; its former external-WSS/VM gate is superseded by
 Phase 12.5's Vercel HTTP + Supabase Postgres/Realtime migration. The repository
-has 336 passing tests. Phase 1.5 lint/format/CI is
+has 339 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -31,8 +31,9 @@ three-/four-player online integration remains the Phase 11.6 gate, while
 alliance behavior is retained for v2. Phase 11.5 explainability, observed replay
 inspection, and Pointer Events-based iPad input are draft-complete. Automated
 Playwright execution is temporarily disabled in favor of manual browser/iPad
-checks and user-provided screenshots. Phase 12 now closes the local four-session,
-resilience, visual, desktop, and physical-iPad release-candidate gates before
+checks and user-provided screenshots. Phase 12 resilience and trust-boundary
+implementation is complete; its local four-session, visual, desktop, restart,
+and physical-iPad release-candidate gates remain open before
 Phase 12.5 changes production transport/storage and runs two-network deployment
 acceptance. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
@@ -40,7 +41,7 @@ acceptance. See
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 336 tests)
+npm test               # Run all unit tests (currently 339 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -123,9 +124,10 @@ glyph-only proportional timelines, compact selector/history bands, authorized
 enemy contacts and last-known-X markers, and smart overlay placement. Automated
 browser validation remains paused; desktop and physical-iPad visual review is open.
 
-**Everything after Phase 11.8.2** — Phase 11.6's remaining local four-session
-gate rolls into Phase 12's local resilience, visual, desktop, and physical-iPad
-release candidate. Phase 12.5 then migrates to Vercel/Supabase and owns
+**Everything after Phase 11.8.2** — Phase 12's resilience/trust-boundary code is
+implemented. Its remaining local four-session, visual, restart, desktop, and
+physical-iPad evidence is tracked in `docs/phase12-release-candidate.md`.
+Phase 12.5 then migrates to Vercel/Supabase and owns
 concurrency, security, cold-start, two-network, four-player, and deployed-iPad
 acceptance. Phase 13 polishes and enhances the deployed core battle game; Phase 13.5
 then adds online alliances before Stealth or additional sports, while Phase 16

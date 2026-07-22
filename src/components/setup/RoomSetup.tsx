@@ -9,6 +9,7 @@ import {
   rememberMatch,
   rememberRoom,
   requestId,
+  resetLocalGameData,
   roomToken,
   RoomSocket,
 } from "../../lib/net/client";
@@ -35,7 +36,9 @@ export function RoomSetup({ code }: { readonly code: string }) {
   const [editColor, setEditColor] = useState<PlayerColor>("red");
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
-  const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "retrying" | "resumed" | "incompatible-protocol"
+  >("connecting");
 
   const handleMessage = useCallback(
     (message: ServerMessage) => {
@@ -74,6 +77,8 @@ export function RoomSetup({ code }: { readonly code: string }) {
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let reconnectDelay = 500;
+    let incompatibleProtocol = false;
+    let connectedBefore = false;
     const storedToken = roomToken(code);
     tokenRef.current = storedToken ?? undefined;
     if (storedToken === null) setNeedsJoin(true);
@@ -82,7 +87,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
     const connect = () => {
       void socket.connect().catch((caught: unknown) => {
         if (disposed) return;
-        setConnected(false);
+        setConnectionStatus("retrying");
         setError(caught instanceof Error ? caught.message : "Connection failed.");
         scheduleReconnect();
       });
@@ -96,12 +101,15 @@ export function RoomSetup({ code }: { readonly code: string }) {
       reconnectDelay = Math.min(reconnectDelay * 2, 5_000);
     };
     const unsubscribeConnection = socket.subscribeConnection((isConnected) => {
-      setConnected(isConnected);
       if (!isConnected) {
+        if (incompatibleProtocol) return;
+        setConnectionStatus("retrying");
         if (!disposed) setError("Connection lost. Reconnecting…");
         scheduleReconnect();
         return;
       }
+      setConnectionStatus(connectedBefore ? "resumed" : "connected");
+      connectedBefore = true;
       reconnectDelay = 500;
       const activeToken = tokenRef.current;
       if (activeToken === undefined) return;
@@ -117,12 +125,18 @@ export function RoomSetup({ code }: { readonly code: string }) {
           setError(caught instanceof Error ? caught.message : "Connection failed."),
         );
     });
+    const unsubscribeProtocolError = socket.subscribeProtocolError((caught) => {
+      incompatibleProtocol = true;
+      setConnectionStatus("incompatible-protocol");
+      setError(caught.message);
+    });
     connect();
     return () => {
       disposed = true;
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       unsubscribe();
       unsubscribeConnection();
+      unsubscribeProtocolError();
       socket.close();
     };
   }, [code, handleMessage]);
@@ -231,9 +245,19 @@ export function RoomSetup({ code }: { readonly code: string }) {
               </div>
             </fieldset>
             {error === undefined ? null : (
-              <p role="alert" className="text-sm text-red-200">
-                {error}
-              </p>
+              <div role="alert" className="space-y-3 text-sm text-red-200">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  className="secondary-action w-full"
+                  onClick={() => {
+                    resetLocalGameData();
+                    window.location.assign("/");
+                  }}
+                >
+                  Reset saved room and planner data
+                </button>
+              </div>
             )}
             <button className="primary-action w-full" type="submit">
               Join room
@@ -294,7 +318,15 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-3 py-1 text-xs font-bold text-emerald-200"
                 role="status"
               >
-                {connected ? "Setup live" : "Reconnecting…"}
+                {connectionStatus === "connecting"
+                  ? "Connecting…"
+                  : connectionStatus === "retrying"
+                    ? "Retrying…"
+                    : connectionStatus === "incompatible-protocol"
+                      ? "Protocol mismatch"
+                      : connectionStatus === "resumed"
+                        ? "Setup resumed"
+                        : "Setup live"}
               </span>
             </div>
           </div>
@@ -465,12 +497,24 @@ export function RoomSetup({ code }: { readonly code: string }) {
               )}
             </section>
             {error === undefined ? null : (
-              <p
+              <div
                 className="rounded-xl border border-red-300/20 bg-red-300/8 p-3 text-sm text-red-200"
                 role="alert"
               >
-                {error}
-              </p>
+                <p>{error}</p>
+                {(connectionStatus === "incompatible-protocol" || needsJoin) && (
+                  <button
+                    type="button"
+                    className="secondary-action mt-3 w-full"
+                    onClick={() => {
+                      resetLocalGameData();
+                      window.location.assign("/");
+                    }}
+                  >
+                    Reset saved room and planner data
+                  </button>
+                )}
+              </div>
             )}
             <button
               type="button"

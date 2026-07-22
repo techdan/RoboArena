@@ -213,10 +213,16 @@ describe("authoritative match lifecycle", () => {
     acknowledgeTurn(match, "team-2", 1);
     lockParticipantOrders(match, "team-1", emptyOrders(2), "seed-2", "nonce-2");
     lockParticipantOrders(match, "team-2", emptyOrders(2), "seed-2", "nonce-2");
+    const canonicalState = structuredClone(match.state);
+    const resolvingRevision = match.revision;
+    const pendingResolution = structuredClone(match.pendingResolution);
 
     expect(() => resolvePendingTurn(match)).toThrow(/Canonical replay verification failed/);
     expect(match.turns).toHaveLength(1);
     expect(match.phase).toBe("resolving");
+    expect(match.state).toEqual(canonicalState);
+    expect(match.revision).toBe(resolvingRevision);
+    expect(match.pendingResolution).toEqual(pendingResolution);
   });
 
   it("removes unseen enemies and their unobservable event details", () => {

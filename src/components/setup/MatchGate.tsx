@@ -13,9 +13,11 @@ import {
   forgetRoom,
   requestId,
   requestOnce,
+  resetLocalGameData,
   roomForMatch,
   roomToken,
   RoomRequestError,
+  ServerProtocolError,
 } from "../../lib/net/client";
 import { clearPlannerDraft } from "../../planner/draft";
 import { PlannerExperience } from "../planner/PlannerExperience";
@@ -28,6 +30,12 @@ import { TurnExplanation } from "../match/TurnExplanation";
 import { ObservedTurnExport } from "../replay/ObservedTurnExport";
 import { FieldGuideButton } from "../help/HelpProvider";
 import { ResignControl } from "../match/ResignControl";
+import { MatchSectionBoundary } from "../match/MatchSectionBoundary";
+
+type ReconnectOutcome =
+  | { readonly kind: "retrying"; readonly message: string }
+  | { readonly kind: "resumed"; readonly message: string }
+  | { readonly kind: "incompatible-protocol"; readonly message: string };
 
 type GateState =
   | { readonly kind: "checking" }
@@ -36,12 +44,28 @@ type GateState =
       readonly roomCode: string;
       readonly snapshot: MatchSnapshotMessage;
     }
-  | { readonly kind: "denied"; readonly roomCode: string | null; readonly reason: string };
+  | {
+      readonly kind: "denied";
+      readonly roomCode: string | null;
+      readonly reason: string;
+      readonly outcome: "room-missing" | "seat-forfeited" | "unavailable";
+    };
+
+const reconnectFailure = (caught: unknown): ReconnectOutcome =>
+  caught instanceof ServerProtocolError
+    ? { kind: "incompatible-protocol", message: caught.message }
+    : {
+        kind: "retrying",
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "Your seat is safe. Reconnect to fetch the latest durable room state.",
+      };
 
 export function MatchGate({ matchId }: { readonly matchId: string }) {
   const [state, setState] = useState<GateState>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionOutcome, setConnectionOutcome] = useState<ReconnectOutcome | null>(null);
   const playbackTimer = useRef<number | null>(null);
   const refresh = useCallback(async () => {
     const roomCode = roomForMatch(matchId);
@@ -56,7 +80,11 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
     });
     if (response.matchId !== matchId) throw new Error("That room does not own this match.");
     setState({ kind: "authorized", roomCode, snapshot: response });
-    setConnectionError(null);
+    setConnectionOutcome((current) =>
+      current === null
+        ? null
+        : { kind: "resumed", message: "Durable room state resumed successfully." },
+    );
     return response;
   }, [matchId]);
 
@@ -69,6 +97,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         kind: "denied",
         roomCode,
         reason: "Open this match through the room that issued your participant seat.",
+        outcome: "seat-forfeited",
       });
       return;
     }
@@ -86,10 +115,20 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         setState({
           kind: "denied",
           roomCode,
+          outcome:
+            caught instanceof RoomRequestError && caught.code === "ROOM_NOT_FOUND"
+              ? "room-missing"
+              : caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED"
+                ? "seat-forfeited"
+                : "unavailable",
           reason:
             caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED"
               ? "Your saved participant seat is no longer valid. Rejoin the room to continue."
-              : "The authoritative room service could not verify your seat. Try the room again.",
+              : caught instanceof RoomRequestError && caught.code === "ROOM_NOT_FOUND"
+                ? "This room no longer exists on the authoritative room service."
+                : caught instanceof ServerProtocolError
+                  ? caught.message
+                  : "The authoritative room service could not verify your seat. Try the room again.",
         });
       });
     return () => {
@@ -100,12 +139,18 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
   useEffect(() => {
     if (state.kind !== "authorized" || state.snapshot.status !== "waiting") return;
     const interval = window.setInterval(() => {
-      void refresh().catch(() => {
-        setConnectionError("Your seat is safe. Reconnect to fetch the latest durable turn state.");
+      void refresh().catch((caught: unknown) => {
+        setConnectionOutcome(reconnectFailure(caught));
       });
     }, 2500);
     return () => window.clearInterval(interval);
   }, [refresh, state]);
+
+  useEffect(() => {
+    if (connectionOutcome?.kind !== "resumed") return;
+    const timer = window.setTimeout(() => setConnectionOutcome(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [connectionOutcome]);
 
   useEffect(
     () => () => {
@@ -131,7 +176,10 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
           turnNumber,
           tick,
         }).catch(() =>
-          setConnectionError("Playback is local, but its resume position could not be saved."),
+          setConnectionOutcome({
+            kind: "retrying",
+            message: "Playback is local, but its resume position could not be saved.",
+          }),
         );
       }, 400);
     },
@@ -154,7 +202,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         orders,
       });
       setState({ kind: "authorized", roomCode, snapshot: response });
-      setConnectionError(null);
+      setConnectionOutcome(null);
       if (lock) {
         // The server now holds the canonical submission; a stale local draft
         // would otherwise look like an unsynced conflict on the next turn.
@@ -165,7 +213,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         }
       }
     } catch (caught) {
-      setConnectionError(caught instanceof Error ? caught.message : "Orders could not be saved.");
+      setConnectionOutcome(reconnectFailure(caught));
     } finally {
       setBusy(false);
     }
@@ -187,11 +235,9 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         turnNumber,
       });
       setState({ kind: "authorized", roomCode, snapshot: response });
-      setConnectionError(null);
+      setConnectionOutcome(null);
     } catch (caught) {
-      setConnectionError(
-        caught instanceof Error ? caught.message : "Turn could not be acknowledged.",
-      );
+      setConnectionOutcome(reconnectFailure(caught));
     } finally {
       setBusy(false);
     }
@@ -211,11 +257,9 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         matchId,
       });
       setState({ kind: "authorized", roomCode, snapshot: response });
-      setConnectionError(null);
+      setConnectionOutcome(null);
     } catch (caught) {
-      setConnectionError(
-        caught instanceof Error ? caught.message : "Resignation could not be sent.",
-      );
+      setConnectionOutcome(reconnectFailure(caught));
     } finally {
       setBusy(false);
     }
@@ -237,15 +281,20 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
   if (state.kind === "authorized") {
     const snapshot = state.snapshot;
     const match = deserializeMatchState(snapshot.match);
+    const recoverPlanner = () => {
+      clearPlannerDraft(window.localStorage, matchId, snapshot.selfPlayerId);
+      window.location.reload();
+    };
     const reconnect =
-      connectionError === null ? null : (
+      connectionOutcome === null ? null : (
         <ConnectionOverlay
-          message={connectionError}
+          outcome={connectionOutcome.kind}
+          message={connectionOutcome.message}
           busy={busy}
           onRetry={() => {
             setBusy(true);
             void refresh()
-              .catch(() => undefined)
+              .catch((caught: unknown) => setConnectionOutcome(reconnectFailure(caught)))
               .finally(() => setBusy(false));
           }}
         />
@@ -254,18 +303,24 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       return (
         <>
           {reconnect}
-          <PlannerExperience
-            matchId={matchId}
-            roomCode={state.roomCode}
-            selfPlayerId={snapshot.selfPlayerId}
-            match={match}
-            serverOrders={snapshot.ownOrders}
-            serverRevision={snapshot.revision}
-            syncing={busy}
-            onSaveOrders={(orders) => void sendOrders(orders, false)}
-            onLockOrders={(orders) => void sendOrders(orders, true)}
-            onResign={() => void resign()}
-          />
+          <MatchSectionBoundary
+            section="planner"
+            resetKey={snapshot.revision}
+            onRecover={recoverPlanner}
+          >
+            <PlannerExperience
+              matchId={matchId}
+              roomCode={state.roomCode}
+              selfPlayerId={snapshot.selfPlayerId}
+              match={match}
+              serverOrders={snapshot.ownOrders}
+              serverRevision={snapshot.revision}
+              syncing={busy}
+              onSaveOrders={(orders) => void sendOrders(orders, false)}
+              onLockOrders={(orders) => void sendOrders(orders, true)}
+              onResign={() => void resign()}
+            />
+          </MatchSectionBoundary>
         </>
       );
     }
@@ -303,13 +358,19 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
           <div className="match-guide-action">
             <FieldGuideButton />
           </div>
-          <MovieExperience
-            key={turn.turnNumber}
-            initialState={deserializeMatchState(turn.initialState)}
-            events={turn.events}
-            initialTick={turn.playbackTick}
-            onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
-          />
+          <MatchSectionBoundary
+            section="movie"
+            resetKey={`${snapshot.revision}:${turn.turnNumber}`}
+            onRecover={() => window.location.reload()}
+          >
+            <MovieExperience
+              key={turn.turnNumber}
+              initialState={deserializeMatchState(turn.initialState)}
+              events={turn.events}
+              initialTick={turn.playbackTick}
+              onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
+            />
+          </MatchSectionBoundary>
           <div className="match-flow-grid">
             <TurnExplanation events={turn.events} />
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
@@ -367,7 +428,13 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       <section className="max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">
         <ShieldCheck className="mx-auto size-8 text-emerald-300" aria-hidden="true" />
         <p className="eyebrow mt-5">Canonical match {matchId}</p>
-        <h1 className="mt-3 text-3xl font-black tracking-[-0.04em]">Participant token required</h1>
+        <h1 className="mt-3 text-3xl font-black tracking-[-0.04em]">
+          {state.outcome === "room-missing"
+            ? "Room no longer exists"
+            : state.outcome === "seat-forfeited"
+              ? "Participant seat unavailable"
+              : "Room service unavailable"}
+        </h1>
         <p className="mt-4 leading-7 text-white/50">{state.reason}</p>
         {roomCode === null ? (
           <Link href="/" className="primary-action mt-6">
@@ -378,6 +445,16 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             Return to room {roomCode}
           </Link>
         )}
+        <button
+          type="button"
+          className="secondary-action mt-3 w-full"
+          onClick={() => {
+            resetLocalGameData();
+            window.location.assign("/");
+          }}
+        >
+          Reset saved room and planner data
+        </button>
       </section>
     </main>
   );

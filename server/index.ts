@@ -1,6 +1,7 @@
 /** Long-lived HTTP/WebSocket room service for Phase 8. */
 
 import { createServer, type Server as HttpServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
@@ -8,6 +9,7 @@ import { ZodError } from "zod";
 import {
   PROTOCOL_VERSION,
   parseClientMessageJson,
+  parseServerMessage,
   type ClientMessage,
   type MatchSnapshotMessage,
   type ProtocolErrorMessage,
@@ -28,8 +30,11 @@ export const MAX_CLIENT_MESSAGE_BYTES = 256 * 1024;
 export const MESSAGE_RATE_WINDOW_MS = 10_000;
 export const MESSAGE_RATE_LIMIT = 60;
 
-const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
-  if (error instanceof RoomError || error instanceof MatchLifecycleError) {
+export const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage => {
+  if (
+    (error instanceof RoomError || error instanceof MatchLifecycleError) &&
+    error.code !== "INTERNAL_ERROR"
+  ) {
     return {
       version: PROTOCOL_VERSION,
       requestId,
@@ -50,12 +55,15 @@ const errorMessage = (requestId: string, error: unknown): ProtocolErrorMessage =
       message: "The message does not match room protocol version 1.",
     };
   }
+  const supportId = randomBytes(4).toString("hex").toUpperCase();
+  console.error(`[${supportId}] Room request ${requestId} failed:`, error);
   return {
     version: PROTOCOL_VERSION,
     requestId,
     kind: "ProtocolError",
     code: "INTERNAL_ERROR",
-    message: "The room service could not complete that request.",
+    message: `The room service could not complete that request. Support id: ${supportId}.`,
+    supportId,
   };
 };
 
@@ -81,7 +89,9 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
   const connections = new Map<WebSocket, ConnectionState>();
 
   const send = (socket: WebSocket, message: ServerMessage) => {
-    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(parseServerMessage(message)));
+    }
   };
 
   const subscribe = (socket: WebSocket, access: RoomAccess) => {

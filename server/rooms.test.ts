@@ -1,7 +1,7 @@
 /** Phase 8 authoritative room and durable-storage integration tests. */
 
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import {
   PROTOCOL_VERSION,
@@ -12,7 +12,12 @@ import {
 } from "../src/lib/net/protocol";
 import { configForLength, type PlayerColor } from "../src/lib/setup/validate";
 import { verifyReplay } from "../src/engine/replay";
-import { createRoomServer, MAX_CLIENT_MESSAGE_BYTES, MESSAGE_RATE_LIMIT } from "./index";
+import {
+  createRoomServer,
+  errorMessage,
+  MAX_CLIENT_MESSAGE_BYTES,
+  MESSAGE_RATE_LIMIT,
+} from "./index";
 import { canonicalReplay } from "./matches";
 import { assertUniqueV1Seating, RoomError, RoomService, type PlayerRecord } from "./rooms";
 import { RoomStorage } from "./storage";
@@ -24,6 +29,22 @@ const requireToken = (token: string | undefined): string => {
 };
 
 describe("authoritative rooms", () => {
+  it("returns an opaque support id without leaking unexpected failure details", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = errorMessage(
+        "resolve-request",
+        new Error("secret seed and hidden opponent order"),
+      );
+      expect(response).toMatchObject({ code: "INTERNAL_ERROR" });
+      expect(response.supportId).toMatch(/^[A-Z0-9]{8}$/);
+      expect(response.message).toContain(response.supportId);
+      expect(JSON.stringify(response)).not.toContain("secret seed");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("assigns four unique Sides/Home slots and rejects a fifth player", async () => {
     const storage = new RoomStorage(":memory:");
     const service = new RoomService(storage);
@@ -468,14 +489,18 @@ describe("WebSocket room integration", () => {
           }),
         ),
       );
-      const started = await sendRequest(sockets[0]!, {
+      const startMessage = {
         version: PROTOCOL_VERSION,
         requestId: "start",
         kind: "StartMatch",
         code: host.room.code,
         token: requireToken(host.participantToken),
-      });
+      } as const;
+      const started = await sendRequest(sockets[0]!, startMessage);
       expect(started.matchStatus).toMatchObject({ status: "planning", turnNumber: 1 });
+      const retriedStart = await sendRequest(sockets[0]!, startMessage);
+      expect(retriedStart.room.matchId).toBe(started.room.matchId);
+      expect(retriedStart.matchStatus).toEqual(started.matchStatus);
       const snapshot = await sendMatchRequest(sockets[0]!, {
         version: PROTOCOL_VERSION,
         requestId: "planner-state",

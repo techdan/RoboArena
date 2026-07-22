@@ -7,11 +7,13 @@ import type {
   RoomSnapshotMessage,
   ServerMessage,
 } from "./protocol";
+import { parseClientMessage, parseServerMessageJson } from "./protocol";
 
 const DEFAULT_ROOM_SERVER = "ws://localhost:3001";
 const ROOM_TOKEN_PREFIX = "roboarena.room-token.";
 const RECENT_ROOMS_KEY = "roboarena.recent-rooms";
 const MATCH_ROOM_PREFIX = "roboarena.match-room.";
+const PLANNER_DRAFT_PREFIX = "roboarena.planner-draft";
 
 export const roomServerUrl = (): string =>
   process.env.NEXT_PUBLIC_ROOM_WS_URL ?? DEFAULT_ROOM_SERVER;
@@ -53,13 +55,44 @@ export const recentRooms = (): readonly string[] => {
   }
 };
 
+/** Clear only room identity, match routing, and planner drafts owned by RoboArena. */
+export const resetLocalGameData = (): number => {
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (
+        key !== null &&
+        (key.startsWith(ROOM_TOKEN_PREFIX) ||
+          key === RECENT_ROOMS_KEY ||
+          key.startsWith(MATCH_ROOM_PREFIX) ||
+          key.startsWith(PLANNER_DRAFT_PREFIX))
+      ) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => window.localStorage.removeItem(key));
+    return keys.length;
+  } catch {
+    return 0;
+  }
+};
+
 export class RoomRequestError extends Error {
   constructor(
     readonly code: ProtocolErrorCode,
     message: string,
+    readonly supportId?: string,
   ) {
     super(message);
     this.name = "RoomRequestError";
+  }
+}
+
+export class ServerProtocolError extends Error {
+  constructor() {
+    super("The room service returned an incompatible protocol response.");
+    this.name = "ServerProtocolError";
   }
 }
 
@@ -68,6 +101,7 @@ export class RoomSocket {
   #openPromise: Promise<void> | undefined;
   #listeners = new Set<(message: ServerMessage) => void>();
   #connectionListeners = new Set<(connected: boolean) => void>();
+  #protocolErrorListeners = new Set<(error: ServerProtocolError) => void>();
 
   #emitConnection(connected: boolean): void {
     for (const listener of this.#connectionListeners) listener(connected);
@@ -92,8 +126,14 @@ export class RoomSocket {
         reject(new Error("Could not connect to the room service."));
       });
       socket.addEventListener("message", (event) => {
-        const message = JSON.parse(String(event.data)) as ServerMessage;
-        for (const listener of this.#listeners) listener(message);
+        try {
+          const message = parseServerMessageJson(String(event.data));
+          for (const listener of this.#listeners) listener(message);
+        } catch {
+          const error = new ServerProtocolError();
+          for (const listener of this.#protocolErrorListeners) listener(error);
+          socket.close(1002, "Incompatible room protocol");
+        }
       });
       socket.addEventListener("close", () => {
         this.#socket = undefined;
@@ -106,7 +146,7 @@ export class RoomSocket {
 
   async send(message: ClientMessage): Promise<void> {
     await this.connect();
-    this.#socket?.send(JSON.stringify(message));
+    this.#socket?.send(JSON.stringify(parseClientMessage(message)));
   }
 
   subscribe(listener: (message: ServerMessage) => void): () => void {
@@ -117,6 +157,11 @@ export class RoomSocket {
   subscribeConnection(listener: (connected: boolean) => void): () => void {
     this.#connectionListeners.add(listener);
     return () => this.#connectionListeners.delete(listener);
+  }
+
+  subscribeProtocolError(listener: (error: ServerProtocolError) => void): () => void {
+    this.#protocolErrorListeners.add(listener);
+    return () => this.#protocolErrorListeners.delete(listener);
   }
 
   close(): void {
@@ -154,23 +199,33 @@ export async function requestOnce(
   try {
     return await new Promise<RoomSnapshotMessage | MatchSnapshotMessage>((resolve, reject) => {
       let settled = false;
+      let unsubscribe: () => void = () => undefined;
+      let unsubscribeProtocolError: () => void = () => undefined;
       const finish = (callback: () => void) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
         unsubscribe();
+        unsubscribeProtocolError();
         callback();
       };
-      const unsubscribe = socket.subscribe((response) => {
+      unsubscribe = socket.subscribe((response) => {
         if (response.requestId !== message.requestId) return;
         if (response.kind === "ProtocolError")
-          finish(() => reject(new RoomRequestError(response.code, response.message)));
+          finish(() =>
+            reject(new RoomRequestError(response.code, response.message, response.supportId)),
+          );
         else if (expectsMatchSnapshot && response.kind === "MatchSnapshot") {
           finish(() => resolve(response));
         } else if (!expectsMatchSnapshot && response.kind === "RoomSnapshot") {
           finish(() => resolve(response));
+        } else {
+          finish(() => reject(new ServerProtocolError()));
         }
       });
+      unsubscribeProtocolError = socket.subscribeProtocolError((error) =>
+        finish(() => reject(error)),
+      );
       const timeout = setTimeout(
         () => finish(() => reject(new Error("The room service did not respond in time."))),
         10_000,

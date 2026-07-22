@@ -80,10 +80,11 @@ as Phase 12.5; Phase 1.5 tooling is complete:
   planner is board-first, with compact targeting controls, a class-named robot
   selector, circular scan control, conditional Missile/Rifle ammo presentation,
   icon timeline, tail-only removal, shared scrubber, and shared 50-edit undo/redo.
-  Phase 12 closes manual visual review, a local four-session match, resilience,
-  local restart/rejoin, desktop regression, and physical iPad Safari as the
-  local release-candidate gate. Phase 12.5 then owns the Vercel/Supabase
-  migration and deployed two-network acceptance.
+  Phase 12 resilience/trust-boundary code is implemented; manual visual review,
+  a local four-session match, local restart/rejoin, desktop regression, and
+  physical iPad Safari remain the local release-candidate evidence gate. Phase
+  12.5 then owns the Vercel/Supabase migration and deployed two-network
+  acceptance.
 
 The UI stack is Next.js 16, React 19, Tailwind CSS v4, PixiJS, GSAP, and lucide-react;
 Phase 9 uses an immutable local reducer; Zustand is not required yet.

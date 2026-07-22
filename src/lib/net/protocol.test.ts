@@ -1,7 +1,13 @@
 /** Phase 8 protocol and setup schema validation. */
 
 import { describe, expect, it } from "vitest";
-import { clientMessageSchema } from "./protocol";
+import { makeMatch } from "../../engine/__fixtures__/match";
+import {
+  clientMessageSchema,
+  parseServerMessage,
+  serializeMatchState,
+  serverMessageSchema,
+} from "./protocol";
 import { configForLength, roomConfigSchema } from "../setup/validate";
 
 const create = (overrides: Record<string, unknown> = {}) => ({
@@ -117,5 +123,49 @@ describe("room protocol schemas", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("validates complete outgoing participant projections at runtime", () => {
+    const match = serializeMatchState(makeMatch());
+    const message = {
+      version: 1,
+      requestId: "projection-1",
+      kind: "MatchSnapshot",
+      roomCode: "ABC234",
+      matchId: "match-1",
+      selfPlayerId: "team-1",
+      match,
+      status: "planning",
+      revision: "1:1",
+      ownOrders: { turnNumber: 1, timelines: [] },
+      locked: false,
+      lockedPlayerIds: [],
+      unseenTurns: [],
+    } as const;
+
+    expect(serverMessageSchema.safeParse(message).success).toBe(true);
+    expect(parseServerMessage(message)).toEqual(message);
+    expect(
+      serverMessageSchema.safeParse({
+        ...message,
+        match: { ...match, arena: { ...match.arena, width: match.arena.width + 1 } },
+      }).success,
+    ).toBe(false);
+    expect(serverMessageSchema.safeParse({ ...message, hiddenOrders: [] }).success).toBe(false);
+  });
+
+  it("accepts only opaque safe support ids on internal errors", () => {
+    const error = {
+      version: 1,
+      requestId: "failed-1",
+      kind: "ProtocolError",
+      code: "INTERNAL_ERROR",
+      message: "Request failed. Support id: A1B2C3D4.",
+      supportId: "A1B2C3D4",
+    } as const;
+    expect(serverMessageSchema.safeParse(error).success).toBe(true);
+    expect(serverMessageSchema.safeParse({ ...error, supportId: "stack trace" }).success).toBe(
+      false,
+    );
   });
 });

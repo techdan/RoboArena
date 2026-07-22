@@ -1901,7 +1901,7 @@ and touch scan-drag + long-press details.
 
 ---
 
-### Phase 12 — local v1 release-candidate and physical-device gate [⬜ LOCAL V1 GATE]
+### Phase 12 — local v1 release-candidate and physical-device gate [🟨 IMPLEMENTED — MANUAL GATES OPEN]
 
 **Goal**: finish and validate one complete free-for-all Survival v1 locally
 before changing its production transport or storage. Phase 12 closes the open
@@ -1921,11 +1921,12 @@ part of this phase rather than reasons to start deployment early.
   protocol errors, durable pending seed/nonce recovery, request-id caching,
   locked-order uniqueness, restart tests, corrupt-draft detection/reset, and
   invalid-seat token removal;
-- implementation still open: planner/movie Error Boundaries, runtime validation
-  of outgoing protocol projections, a richer reconnect state machine, an
-  explicit user-facing reset for all corrupt room/planner local data, safe
-  support/error ids for failed resolution, and a focused local idempotency audit
-  across every mutation named below;
+- implemented in the Phase 12 resilience pass: planner/movie Error Boundaries,
+  runtime validation of outgoing and incoming participant projections, explicit
+  connecting/retrying/resumed/room-missing/seat-forfeited/incompatible outcomes,
+  an app-scoped local room/planner reset, opaque support ids for unexpected
+  failures, canonical-state preservation assertions around failed resolution,
+  and a focused idempotency audit across the mutations named below;
 - manual closure still open: the Phase 11.8 visual checklist/screenshots, the
   full four-local-session match, the restart matrix, desktop regression, and
   the physical-iPad Safari pass.
@@ -1974,6 +1975,11 @@ and resilience checks pass without private-information leakage. Passing this
 phase means **local v1 release candidate complete**; deployed v1 is Phase 12.5.
 
 **Effort**: L.
+
+**Manual execution record**: use `docs/phase12-release-candidate.md`. Phase 12
+must remain yellow until the four-session, desktop, restart, and physical-iPad
+rows contain real evidence; automated unit/build success does not satisfy those
+device gates.
 
 ---
 
@@ -3061,7 +3067,7 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
 | 11.8.2  | 🟡 IMPLEMENTED / VISUAL REVIEW     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
-| 12      | ⬜ LOCAL V1 GATE                   | L      | Manual Phase 11 closure, local resilience/restart, four-session match, and physical-iPad acceptance                                                                  |
+| 12      | 🟨 IMPLEMENTED / MANUAL GATES     | L      | Resilience/trust boundaries implemented; local visual/restart/four-session and physical-iPad acceptance remain open                                                   |
 | 12.5    | ⬜ V1 DEPLOYMENT GATE              | XL     | Vercel HTTP authority + Supabase Postgres/Realtime migration, concurrency, security, and real-network validation                                                     |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
