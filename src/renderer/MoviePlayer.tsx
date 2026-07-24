@@ -13,6 +13,7 @@ import {
   TERRAIN_ASSET_URLS,
 } from "./assets";
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
+import { clampContentOffset } from "../lib/fitTransform";
 import { renderMovieEffects } from "./effects/effects";
 import {
   movedBeyondGestureThreshold,
@@ -44,6 +45,26 @@ const ZOOM_STEP = 1.25;
 
 const clampZoom = (scale: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 
+interface ViewTransform {
+  readonly x: number;
+  readonly y: number;
+  readonly scale: number;
+}
+
+interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Holds the arena against the viewport edges so panning cannot open dead
+ *  background beside the board. Zoomed out below fit there is no covering pan,
+ *  so the arena centers instead. */
+const clampView = (view: ViewTransform, content: Size, viewport: Size): ViewTransform => ({
+  scale: view.scale,
+  x: clampContentOffset(view.x, content.width * view.scale, viewport.width),
+  y: clampContentOffset(view.y, content.height * view.scale, viewport.height),
+});
+
 export function MoviePlayer({
   initialState,
   events,
@@ -71,10 +92,42 @@ export function MoviePlayer({
   const [compressIdle, setCompressIdle] = useState(true);
   const [rendererStatus, setRendererStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [viewTransform, setViewTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [viewTransform, setViewTransform] = useState<ViewTransform>({ x: 0, y: 0, scale: 1 });
   const [grabbing, setGrabbing] = useState(false);
   const viewTransformRef = useRef(viewTransform);
   viewTransformRef.current = viewTransform;
+
+  // The arena's intrinsic size. The viewport matches it on a roomy desktop, but
+  // narrow screens cap `.movie-viewport` at 100% width, so the two are measured
+  // separately or the pan clamp would fence off reachable board.
+  const contentSize = useMemo(
+    () => ({
+      width: initialState.arena.width * MOVIE_TILE_SIZE,
+      height: initialState.arena.height * MOVIE_TILE_SIZE,
+    }),
+    [initialState.arena.width, initialState.arena.height],
+  );
+  const [viewportSize, setViewportSize] = useState<Size>(contentSize);
+  const viewportSizeRef = useRef(viewportSize);
+  viewportSizeRef.current = viewportSize;
+  const contentSizeRef = useRef(contentSize);
+  contentSizeRef.current = contentSize;
+
+  /** Single funnel for camera changes, so no gesture can escape the clamp. */
+  const commitView = useCallback(
+    (next: ViewTransform | ((current: ViewTransform) => ViewTransform)) => {
+      setViewTransform((current) => {
+        const value = typeof next === "function" ? next(current) : next;
+        const clamped = clampView(value, contentSizeRef.current, viewportSizeRef.current);
+        // Identity-stable when the clamp bites, so dragging against an edge does
+        // not re-render on every pointer move.
+        return clamped.x === current.x && clamped.y === current.y && clamped.scale === current.scale
+          ? current
+          : clamped;
+      });
+    },
+    [],
+  );
   const viewPointersRef = useRef(new Map<number, Point>());
   const panRef = useRef<{
     readonly pointerId: number;
@@ -116,15 +169,18 @@ export function MoviePlayer({
   // on screen. The CSS transform is `translate(x,y) scale(s)` with a 0,0
   // origin, so the content point under the focus is (focus - translate) / s;
   // holding it fixed at the new scale yields the corrected translation.
-  const zoomAbout = useCallback((focal: Point, nextScale: number) => {
-    setViewTransform((transform) => {
-      const scale = clampZoom(nextScale);
-      if (scale === transform.scale) return transform;
-      const contentX = (focal.x - transform.x) / transform.scale;
-      const contentY = (focal.y - transform.y) / transform.scale;
-      return { scale, x: focal.x - contentX * scale, y: focal.y - contentY * scale };
-    });
-  }, []);
+  const zoomAbout = useCallback(
+    (focal: Point, nextScale: number) => {
+      commitView((transform) => {
+        const scale = clampZoom(nextScale);
+        if (scale === transform.scale) return transform;
+        const contentX = (focal.x - transform.x) / transform.scale;
+        const contentY = (focal.y - transform.y) / transform.scale;
+        return { scale, x: focal.x - contentX * scale, y: focal.y - contentY * scale };
+      });
+    },
+    [commitView],
+  );
 
   const viewportCenter = useCallback((): Point => {
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -137,7 +193,26 @@ export function MoviePlayer({
     [viewportCenter, zoomAbout],
   );
 
-  const resetView = useCallback(() => setViewTransform({ x: 0, y: 0, scale: 1 }), []);
+  const resetView = useCallback(() => commitView({ x: 0, y: 0, scale: 1 }), [commitView]);
+
+  // Track the rendered viewport box: narrow screens cap it below the arena's
+  // intrinsic size, and a resize can leave a previously legal pan out of bounds.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) return;
+    const measure = () => {
+      const bounds = viewport.getBoundingClientRect();
+      const size = { width: bounds.width, height: bounds.height };
+      setViewportSize(size);
+      // Clamp against the size just measured; the ref still holds the old one
+      // until React re-renders.
+      setViewTransform((current) => clampView(current, contentSizeRef.current, size));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [commitView]);
 
   // Wheel zoom needs a non-passive native listener so preventDefault can stop
   // the page from scrolling underneath the movie. React's synthetic onWheel is
@@ -393,7 +468,7 @@ export function MoviePlayer({
               x: (first.x + second.x) / 2 - bounds.left,
               y: (first.y + second.y) / 2 - bounds.top,
             };
-            setViewTransform(
+            commitView(
               transformForPinch({
                 initialTransform: pinch.transform,
                 initialMidpoint: pinch.midpoint,
@@ -413,7 +488,7 @@ export function MoviePlayer({
           )
             return;
           pan.moved = true;
-          setViewTransform({
+          commitView({
             ...pan.transform,
             x: pan.transform.x + point.x - pan.start.x,
             y: pan.transform.y + point.y - pan.start.y,

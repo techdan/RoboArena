@@ -25,7 +25,7 @@ import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures
 import { useHelp } from "../help/HelpProvider";
 import { CameraControls } from "../CameraControls";
 import { TargetingLegend } from "./TargetingLegend";
-import { fitTransform, fitWidthZoomFloor } from "../../lib/fitTransform";
+import { clampContentOffset, fitTransform, fitWidthZoomFloor } from "../../lib/fitTransform";
 import {
   LONG_PRESS_MS,
   TouchGestureArbitrator,
@@ -196,6 +196,50 @@ export function ArenaCanvas({
     (scale: number): number => Math.min(MAX_ZOOM, Math.max(minZoomRef.current, scale)),
     [],
   );
+  const viewportSizeRef = useRef(viewportSize);
+  viewportSizeRef.current = viewportSize;
+
+  /**
+   * Single funnel for camera changes, so no gesture can drag the arena's edge
+   * into the middle of the viewport and leave dead background beside it.
+   *
+   * The user transform composes on top of the fit-width base, so the content's
+   * screen edge is `fit.offset + transform`, and its rendered size folds in
+   * both scales. Zoomed out past contain the arena is smaller than the frame
+   * and centers instead.
+   */
+  const clampPan = useCallback(
+    (next: typeof transform): typeof transform => {
+      const fitNow = fitRef.current;
+      const viewport = viewportSizeRef.current;
+      const renderedWidth = arena.width * TILE_SIZE * fitNow.scale * next.scale;
+      const renderedHeight = arena.height * TILE_SIZE * fitNow.scale * next.scale;
+      return {
+        scale: next.scale,
+        x:
+          clampContentOffset(fitNow.offsetX + next.x, renderedWidth, viewport.width) -
+          fitNow.offsetX,
+        y:
+          clampContentOffset(fitNow.offsetY + next.y, renderedHeight, viewport.height) -
+          fitNow.offsetY,
+      };
+    },
+    [arena.height, arena.width],
+  );
+
+  const commitTransform = useCallback(
+    (next: typeof transform | ((current: typeof transform) => typeof transform)) => {
+      setTransform((current) => {
+        const clamped = clampPan(typeof next === "function" ? next(current) : next);
+        // Identity-stable when the clamp bites, so dragging against an edge does
+        // not re-render on every pointer move.
+        return clamped.x === current.x && clamped.y === current.y && clamped.scale === current.scale
+          ? current
+          : clamped;
+      });
+    },
+    [clampPan],
+  );
   const pointersRef = useRef(new Map<number, Point>());
   const touchRef = useRef<{
     readonly pointerId: number;
@@ -224,7 +268,7 @@ export function ArenaCanvas({
       // Focal points arrive in viewport coordinates; the user transform lives in
       // the letterboxed frame, so shift by the fit offset before zooming about.
       const { offsetX, offsetY } = fitRef.current;
-      setTransform((current) => {
+      commitTransform((current) => {
         const scale = clampZoom(nextScale);
         if (scale === current.scale) return current;
         const focalX = focal.x - offsetX;
@@ -234,14 +278,14 @@ export function ArenaCanvas({
         return { scale, x: focalX - contentX * scale, y: focalY - contentY * scale };
       });
     },
-    [clampZoom],
+    [clampZoom, commitTransform],
   );
 
   // Keyboard tile navigation auto-pans so the inspected cell stays on screen,
   // reaching the vertically cropped rows the fit-width default hides.
   const ensureTileVisible = useCallback(
     (tile: TileCoord) => {
-      setTransform((current) => {
+      commitTransform((current) => {
         const scale = fitScale * current.scale;
         const cellLeft = fitRef.current.offsetX + current.x + tile.x * TILE_SIZE * scale;
         const cellRight = cellLeft + TILE_SIZE * scale;
@@ -257,7 +301,7 @@ export function ArenaCanvas({
         return { ...current, x: current.x + dx, y: current.y + dy };
       });
     },
-    [fitScale, viewportSize.height, viewportSize.width],
+    [commitTransform, fitScale, viewportSize.height, viewportSize.width],
   );
 
   const zoomByStep = useCallback(
@@ -286,6 +330,13 @@ export function ArenaCanvas({
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [arena.height, arena.width]);
+
+  // A resize moves both the fit and the legal pan range, so a camera that was
+  // in bounds a moment ago can now leave dead space at an edge. Runs after the
+  // render that refreshed fitRef/viewportSizeRef, so the clamp sees new values.
+  useEffect(() => {
+    commitTransform((current) => current);
+  }, [commitTransform, viewportSize.height, viewportSize.width]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -912,7 +963,7 @@ export function ArenaCanvas({
             pan.moved = true;
             suppressMouseClickRef.current = true;
             setGrabbing(true);
-            setTransform({
+            commitTransform({
               ...pan.startTransform,
               x: pan.startTransform.x + point.x - pan.start.x,
               y: pan.startTransform.y + point.y - pan.start.y,
@@ -932,7 +983,7 @@ export function ArenaCanvas({
             };
             const pinch = pinchRef.current;
             if (pinch === null) return;
-            setTransform(
+            commitTransform(
               transformForPinch({
                 initialTransform: pinch.startTransform,
                 initialMidpoint: pinch.midpoint,
@@ -950,7 +1001,7 @@ export function ArenaCanvas({
           if (!gestureRef.current.markMoved(event.pointerId, active.start, current)) return;
           cancelLongPress();
           if (active.canPan) {
-            setTransform({
+            commitTransform({
               ...active.startTransform,
               x: active.startTransform.x + current.x - active.start.x,
               y: active.startTransform.y + current.y - active.start.y,
@@ -1169,7 +1220,7 @@ export function ArenaCanvas({
           dataAttribute="planner"
           onZoomIn={() => zoomByStep(ZOOM_STEP)}
           onZoomOut={() => zoomByStep(1 / ZOOM_STEP)}
-          onZoomReset={() => setTransform({ x: 0, y: 0, scale: 1 })}
+          onZoomReset={() => commitTransform({ x: 0, y: 0, scale: 1 })}
         />
       </div>
     </div>

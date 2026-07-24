@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitTransform, fitWidthZoomFloor } from "./fitTransform";
+import { clampContentOffset, fitTransform, fitWidthZoomFloor } from "./fitTransform";
 
 describe("fitTransform", () => {
   it("fits on the binding axis and centers the other (wide viewport)", () => {
@@ -63,5 +63,49 @@ describe("fitWidthZoomFloor", () => {
   it("is 1 when the arena already fits within the viewport height", () => {
     // Tall viewport: width scale binds and the whole arena is visible already.
     expect(fitWidthZoomFloor(600, 1200, 768, 768)).toBeCloseTo(1);
+  });
+});
+
+describe("clampContentOffset", () => {
+  it("leaves an in-bounds pan untouched", () => {
+    expect(clampContentOffset(-200, 1600, 800)).toBe(-200);
+  });
+
+  it("never lets the leading edge pull inside the viewport", () => {
+    // Dragging right past the arena's left edge would open dead space.
+    expect(clampContentOffset(120, 1600, 800)).toBe(0);
+    expect(clampContentOffset(0, 1600, 800)).toBe(0);
+  });
+
+  it("never lets the trailing edge pull inside the viewport", () => {
+    // Fully panned: content right edge sits exactly on the viewport right edge.
+    expect(clampContentOffset(-5000, 1600, 800)).toBe(-800);
+    expect(clampContentOffset(-800, 1600, 800) + 1600).toBe(800);
+  });
+
+  it("centers content too small to fill the viewport instead of panning it", () => {
+    // Zoomed out past contain: there is no pan that covers the viewport.
+    expect(clampContentOffset(-300, 600, 800)).toBe(100);
+    expect(clampContentOffset(999, 600, 800)).toBe(100);
+  });
+
+  it("pins content that exactly fills the viewport", () => {
+    expect(clampContentOffset(-40, 800, 800)).toBe(0);
+    expect(clampContentOffset(40, 800, 800)).toBe(0);
+  });
+
+  it("keeps the viewport covered across a full drag sweep", () => {
+    const content = 1600;
+    const viewport = 800;
+    for (let offset = -2400; offset <= 2400; offset += 37) {
+      const clamped = clampContentOffset(offset, content, viewport);
+      expect(clamped).toBeLessThanOrEqual(0);
+      expect(clamped + content).toBeGreaterThanOrEqual(viewport);
+    }
+  });
+
+  it("degrades to no pan rather than NaN on a degenerate viewport", () => {
+    expect(clampContentOffset(Number.NaN, 1600, 800)).toBe(0);
+    expect(clampContentOffset(10, Number.NaN, 800)).toBe(0);
   });
 });

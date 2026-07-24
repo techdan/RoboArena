@@ -53,3 +53,25 @@ export const fitWidthZoomFloor = (
   const containScale = Math.min(widthScale, viewportHeight / contentHeight);
   return Math.min(1, containScale / widthScale);
 };
+
+/**
+ * Keeps a panned camera's content covering the viewport on one axis.
+ *
+ * Without this the arena can be dragged until its edge sits mid-viewport, with
+ * dead background filling the rest — a view no player has a reason to want.
+ *
+ * `offset` is the screen coordinate of the content's leading edge and
+ * `contentExtent` its fully rendered size, so callers fold every scale in
+ * before calling. Content larger than the viewport is held so neither edge
+ * pulls inside the frame; content smaller than the viewport (zoomed out past
+ * contain) has no valid pan at all and is centered instead.
+ */
+export const clampContentOffset = (
+  offset: number,
+  contentExtent: number,
+  viewportExtent: number,
+): number => {
+  if (!Number.isFinite(offset) || !Number.isFinite(contentExtent)) return 0;
+  if (contentExtent <= viewportExtent) return (viewportExtent - contentExtent) / 2;
+  return Math.max(viewportExtent - contentExtent, Math.min(0, offset));
+};
