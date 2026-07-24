@@ -6,12 +6,19 @@
  *    container            ground position; walks the tile path
  *    ├── shadow           ground-anchored contact ellipse
  *    └── lift             hop height, squash, and lean about the ground anchor
- *        ├── body
- *        └── turret
+ *        └── react        event reactions: flinch, collapse, drop-in
+ *            ├── body     + bodyFade, the outgoing texture during a cross-fade
+ *            └── recoil   weapon kick
+ *                └── turret
  *
  *  Keeping the shadow outside `lift` is what makes the hop read as height
  *  rather than as the whole robot being dragged upward — see
  *  `stripBakedShadow` for the other half of that separation.
+ *
+ *  Every layer has exactly one writer, which is what keeps the hop and the
+ *  reactions from fighting: `lift` belongs to the movement profile and is
+ *  rewritten on every snapshot, so anything that must survive a redraw —
+ *  a flinch, a death collapse, a deploy drop — lives on `react` instead.
  */
 
 import { gsap } from "gsap";
@@ -58,8 +65,14 @@ export interface RobotVisual {
   readonly container: Container;
   /** Everything that leaves the ground during a hop. */
   readonly lift: Container;
+  /** Owned solely by event reactions, so a snapshot redraw cannot cancel them. */
+  readonly react: Container;
+  /** Weapon kick, kept off the turret's own posture-driven mount offset. */
+  readonly recoil: Container;
   readonly shadow: Graphics;
   readonly body: Sprite;
+  /** Holds the outgoing body texture while a posture change cross-fades. */
+  readonly bodyFade: Sprite;
   readonly turret: Sprite;
   readonly textures: RobotTextureSet;
   readonly tileSize: number;
@@ -101,6 +114,14 @@ export const createRobotSprite = (
   body.width = bodySize(tileSize);
   body.height = bodySize(tileSize);
 
+  // Sits over the body holding whatever texture is being replaced, so a posture
+  // change dissolves instead of popping.
+  const bodyFade = new Sprite(body.texture);
+  bodyFade.anchor.set(0.5);
+  bodyFade.width = bodySize(tileSize);
+  bodyFade.height = bodySize(tileSize);
+  bodyFade.alpha = 0;
+
   const turret = new Sprite(textures.turret);
   turret.anchor.set(0.5);
   turret.width = turretSize(tileSize);
@@ -117,15 +138,30 @@ export const createRobotSprite = (
   lift.label = "lift";
   lift.pivot.set(0, groundY);
   lift.position.set(0, groundY);
-  lift.addChild(body, turret);
 
+  const recoil = new Container();
+  recoil.label = "recoil";
+  recoil.addChild(turret);
+
+  // Reactions pivot on the feet too, so a collapse folds the hull down rather
+  // than shrinking it toward its own middle.
+  const react = new Container();
+  react.label = "react";
+  react.pivot.set(0, groundY);
+  react.position.set(0, groundY);
+  react.addChild(body, bodyFade, recoil);
+
+  lift.addChild(react);
   container.addChild(shadow, lift);
 
   const visual: RobotVisual = {
     container,
     lift,
+    react,
+    recoil,
     shadow,
     body,
+    bodyFade,
     turret,
     textures,
     tileSize,
@@ -183,9 +219,22 @@ export const updateRobotSprite = (
   }
   visual.container.visible = true;
 
-  visual.body.texture = robot.destroyed
+  const nextTexture = robot.destroyed
     ? visual.textures.wreck
     : visual.textures.bodies[robot.posture];
+  if (visual.body.texture !== nextTexture) {
+    // Cross-fade rather than pop, per implementation-plan.md §5's 100 ms
+    // posture swap: the outgoing texture rides on top and dissolves away.
+    visual.bodyFade.texture = visual.body.texture;
+    visual.body.texture = nextTexture;
+    gsap.killTweensOf(visual.bodyFade);
+    if (update.animate) {
+      visual.bodyFade.alpha = 1;
+      gsap.to(visual.bodyFade, { alpha: 0, duration: 0.1 / Math.max(update.speed, 0.01) });
+    } else {
+      visual.bodyFade.alpha = 0;
+    }
+  }
   visual.turret.visible = !robot.destroyed;
   visual.destroyed = robot.destroyed;
 

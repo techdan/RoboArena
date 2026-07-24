@@ -15,6 +15,7 @@ import {
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
 import { clampContentOffset } from "../lib/fitTransform";
 import { renderMovieEffects } from "./effects/effects";
+import { applyRobotReactions, resetRobotReactions } from "./reactions";
 import {
   movedBeyondGestureThreshold,
   pointDistance,
@@ -356,15 +357,26 @@ export function MoviePlayer({
             speed: speedRef.current,
           });
         }
-        renderMovieEffects(
-          effectsLayer,
-          timeline.eventsByTick.get(snapshot.tick) ?? [],
-          robotPositions,
+        const tickEvents = timeline.eventsByTick.get(snapshot.tick) ?? [];
+        renderMovieEffects(effectsLayer, tickEvents, robotPositions, {
+          reducedMotion: reducedMotionRef.current,
+          speed: speedRef.current,
+          reset: !advanced,
+        });
+
+        // A jump lands on a tick whose reactions never played, so clear any
+        // mid-flinch or mid-collapse pose before the new tick's own reactions.
+        if (!advanced) resetRobotReactions(visuals.values());
+        applyRobotReactions(
+          tickEvents,
           {
-            reducedMotion: reducedMotionRef.current,
-            speed: speedRef.current,
-            reset: !advanced,
+            visualOf: (robotId) => visuals.get(robotId),
+            tileOf: (robotId) => {
+              const position = robotPositions[robotId];
+              return position === undefined || position === "dock" ? undefined : position;
+            },
           },
+          { reducedMotion: reducedMotionRef.current, speed: speedRef.current },
         );
       };
       renderSnapshotRef.current(currentIndexRef.current, false);
