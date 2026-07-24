@@ -16,6 +16,7 @@ import {
   ROBOT_BODY_ASSETS,
   ROBOT_SPRITE_GEOMETRY,
   ROBOT_TURRET_ASSETS,
+  stripBakedShadow,
 } from "./assets";
 
 /** Extra raster density over the 128-unit rig boxes so bodies/turrets stay
@@ -78,14 +79,25 @@ const rasterize = async (svg: string, box: number): Promise<Texture> => {
   }
 };
 
-const loadTeamTexture = async (url: string, teamColor: string, px: number): Promise<Texture> => {
-  const cacheKey = `${url}#${teamColor}`;
+/** Body files ship with a contact shadow baked in; the movie draws that shadow
+ *  itself so it can stay on the ground while the hull hops. */
+type ShadowHandling = "as-authored" | "stripped";
+
+const loadTeamTexture = async (
+  url: string,
+  teamColor: string,
+  px: number,
+  shadow: ShadowHandling = "as-authored",
+): Promise<Texture> => {
+  const cacheKey = `${url}#${teamColor}#${shadow}`;
   const cached = textureCache.get(cacheKey);
   if (cached !== undefined) return cached;
   const loading = (async () => {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Could not fetch robot sprite ${url}.`);
-    return rasterize(recolor(await response.text(), teamColor), px);
+    const source = await response.text();
+    const shaped = shadow === "stripped" ? stripBakedShadow(source) : source;
+    return rasterize(recolor(shaped, teamColor), px);
   })();
   textureCache.set(cacheKey, loading);
   try {
@@ -113,9 +125,9 @@ export const loadRobotTextures = async (
       const key = robotTextureKey(robotClass, teamColor);
       const bodies = ROBOT_BODY_ASSETS[robotClass];
       const [upright, ducking, crouching, turret] = await Promise.all([
-        loadTeamTexture(bodies.upright, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox),
-        loadTeamTexture(bodies.ducking, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox),
-        loadTeamTexture(bodies.crouching, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox),
+        loadTeamTexture(bodies.upright, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox, "stripped"),
+        loadTeamTexture(bodies.ducking, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox, "stripped"),
+        loadTeamTexture(bodies.crouching, teamColor, ROBOT_SPRITE_GEOMETRY.bodyBox, "stripped"),
         loadTeamTexture(
           ROBOT_TURRET_ASSETS[robotClass],
           teamColor,

@@ -89,8 +89,12 @@ export function MoviePlayer({
   } | null>(null);
   const currentIndexRef = useRef(currentIndex);
   const reducedMotionRef = useRef(reducedMotion);
+  // The Pixi render closure outlives any single speed setting, so speed is read
+  // through a ref rather than rebuilding the renderer when it changes.
+  const speedRef = useRef<number>(speed);
   currentIndexRef.current = currentIndex;
   reducedMotionRef.current = reducedMotion;
+  speedRef.current = speed;
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -265,7 +269,10 @@ export function MoviePlayer({
             robotLayer.addChild(visual.container);
           }
           visual.container.visible = true;
-          updateRobotSprite(visual, robot, animate && !reducedMotionRef.current);
+          updateRobotSprite(visual, robot, {
+            animate: animate && !reducedMotionRef.current,
+            speed: speedRef.current,
+          });
         }
         renderMovieEffects(
           effectsLayer,
