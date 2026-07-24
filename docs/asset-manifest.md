@@ -99,11 +99,33 @@ coordinate-derived rotation = `atan2(dy, dx) + π/2`.
   is `tests/visual/movie.spec.ts-snapshots/`; any deliberate art change must
   regenerate it via Playwright `--update-snapshots` and be eyeballed.
 
+## Movement hop rig (shipped)
+
+Movement is the transform-only two-frame hop the art direction called for; no
+drawn hop frames exist or are needed. The profile lives in
+`src/renderer/motion.ts` ("mechanical stomp", chosen over springier
+alternatives on a side-by-side motion bench) and is applied in
+`RobotSprite.tsx`. Two contract points matter to anyone touching the assets:
+
+- **The baked contact shadow is stripped at load.** `stripBakedShadow()`
+  removes the `<ellipse class="shadow">` from every body SVG and the renderer
+  draws it as a ground-anchored `Graphics` instead. A shadow that rides up with
+  the hull flattens the height read completely. `assets.test.ts` source-locks
+  that exactly one such ellipse exists per body file and that stripping leaves
+  the rest of the rig untouched — if the generator's shadow markup changes,
+  that test fails rather than the movie silently gaining two shadows.
+- **Every transform pivots on the ground anchor (64, 93)**, not the sprite
+  centre. Scaling a top-down sprite about its middle reads as inflating; the
+  same numbers about the feet read as compressing under load.
+
+Sprite layers, outermost first: `container` (ground path) → `shadow` +
+`lift` (hop height/squash/lean) → `react` (flinch, collapse, deploy drop) →
+`body`/`bodyFade` + `recoil` → `turret`. Each layer has exactly one writer;
+that is what stops event reactions and the hop from overwriting each other.
+
 ## Not yet consumed (built, waiting for later phases)
 
 - `markers/selection-ring.svg` — planner/room UI selection indicator
   (tint via `--team` CSS var or Pixi tint; it is a pure stroke so tint is safe).
 - Persistent fog-of-war last-known markers (the movie shows only transient
   ghosts today) and `enemy-spotted` treatments.
-- Crouch/2-frame hop movement rig: hop is transform-only per the art
-  direction; a future pass can bob `body`+`turret` between move-steps.

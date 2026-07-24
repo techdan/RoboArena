@@ -2365,8 +2365,9 @@ the cue-producing rows below; all other event kinds intentionally have no visual
 
 | Event kind                              | Animation                                                  | Tools                              |
 | --------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
-| `deployed` / `move-step`                | place or tween the robot to its event-boundary tile        | GSAP tween on `container.position` |
-| `posture-changed`                       | scale the layered robot silhouette for its posture         | GSAP scale tween                   |
+| `deployed`                              | drop in from above with a landing squash                   | `reactions.ts`                     |
+| `move-step`                             | transform-only hop across the tile, filling the tick budget | `motion.ts` + `RobotSprite.tsx`   |
+| `posture-changed`                       | cross-fade the body texture and drop the turret mount      | GSAP alpha tween                   |
 | `scan-rotated`                          | smooth heading-needle rotation                             | GSAP tween on the scan needle      |
 | `fired`                                 | short muzzle flash oriented toward the target              | sprite life cycle                  |
 | `scan-target-acquired`                  | transient scan-lock reticle                                | sprite life cycle                  |
@@ -2375,8 +2376,9 @@ the cue-producing rows below; all other event kinds intentionally have no visual
 | `projectile-impacted` (bullet)          | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle                  |
 | `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite                | sprite life cycle                  |
 | `shot-missed`                           | compact dust miss at the target tile                       | sprite life cycle                  |
-| `damaged`                               | compact hit burst on the target                            | sprite life cycle                  |
-| `destroyed`                             | rotating explosion + fade out + remove sprite              | composed tween chain               |
+| `fired`                                 | muzzle flash plus turret recoil on the shooter             | `reactions.ts`                     |
+| `damaged`                               | hit burst, plus the target flinches away and flashes red   | `reactions.ts`                     |
+| `destroyed`                             | large explosion + the hull folds onto its ground anchor    | composed tween chain               |
 | `enemy-lost` / `last-known-marker`      | transient last-known glyph at the event tile               | sprite life cycle                  |
 
 The transient last-known movie cue communicates the emitted event only. The
@@ -3075,10 +3077,17 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 
 ### Animation timings
 
+All movie durations below scale with playback speed (`speed` divides them), so
+2x and 4x stay in step with the beat instead of truncating mid-animation.
+
 | Animation                          | Duration                                                   | Notes                                    |
 | ---------------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
-| Move-step lerp                     | matches the selector budget: 0.50 s single / 0.67 s double | Engine-driven                            |
+| Move-step hop                      | matches the selector budget: 0.50 s single / 0.67 s double | Engine-driven; see `src/renderer/motion.ts` |
 | Posture sprite swap                | 100 ms cross-fade                                          | Decorative                               |
+| Weapon recoil                      | 220 ms kick and recover                                    | Decorative                               |
+| Damage flinch + red flash          | 340 ms shove, tint fades over the same window              | Decorative                               |
+| Destruction collapse               | 500 ms fold onto the ground anchor                         | Decorative                               |
+| Deploy drop-in                     | 420 ms fall + landing squash                               | Decorative                               |
 | Scan rotation                      | 5 ticks / 83 ms for any changed absolute heading           | Engine-driven                            |
 | Bullet projectile                  | 1 ms per pixel × distance, capped 200 ms                   | Decorative; impact tick is engine-driven |
 | Missile projectile + smoke trail   | 80 ms per tile traveled                                    | Smoke particles fade over 600 ms         |
