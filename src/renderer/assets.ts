@@ -73,12 +73,32 @@ export const ROBOT_TURRET_ASSETS: Readonly<Record<RobotClass, string>> = {
  * in. The turret mount point drops as the hull hunkers — `turretPivotY` is
  * the per-posture mount height in body space (matches each file's
  * `data-turret-pivot`).
+ *
+ * `groundAnchorY` is where the feet meet the ground, and every hop transform
+ * pivots there — scaling a top-down sprite about its centre reads as inflating
+ * rather than compressing under load. `shadow` mirrors the contact ellipse the
+ * generator bakes into each body file; the movie strips it and redraws it as a
+ * ground-anchored sprite so a lifted hull leaves its shadow behind.
  */
 export const ROBOT_SPRITE_GEOMETRY = {
   bodyBox: 128,
   turretBox: 96,
+  groundAnchorY: 93,
   turretPivotY: { upright: 42, ducking: 50, crouching: 54 } as Readonly<Record<Posture, number>>,
+  shadow: { cx: 64, cy: 101, rx: 45, ry: 11.5, fill: "#0a0d12", alpha: 0.25 },
 } as const;
+
+/**
+ * Removes the contact ellipse the robot generator bakes into every body file.
+ *
+ * The movie draws that shadow itself so it can stay on the ground while the
+ * hull hops. Leaving the baked copy in place would lift a second shadow with
+ * the body and flatten the height read entirely. `assets.test.ts` source-locks
+ * the fact that exactly one such ellipse exists in every generated body, so a
+ * silent no-op here would be caught before it ever reaches a browser.
+ */
+export const stripBakedShadow = (svg: string): string =>
+  svg.replace(/[ \t]*<ellipse\s+class="shadow"[^>]*\/>\n?/, "");
 
 export const EFFECT_ASSETS = {
   muzzleFlash: "/assets/effects/muzzle-flash.svg",
