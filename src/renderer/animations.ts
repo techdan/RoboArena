@@ -8,7 +8,7 @@ import type {
   RobotClass,
   TileCoord,
 } from "../engine/types";
-import { TICKS_PER_SECOND } from "../engine/constants";
+import { MOVE_DOUBLE_COST_TICKS, TICKS_PER_SECOND } from "../engine/constants";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 
 export interface MovieRobotSnapshot {
@@ -171,6 +171,19 @@ export const snapshotAtTick = (timeline: MovieTimeline, tick: number): MovieSnap
   return snapshot;
 };
 
+/**
+ * Shortest beat idle compression may collapse to.
+ *
+ * A flat six-frame cap also compressed two-tile moves, which cost 40 ticks and
+ * therefore need eight frames at 12 fps: doubles played at exactly the same
+ * tempo as singles, losing the "two tiles is faster per tile" reading, and the
+ * movie advanced before the robot finished crossing. Compression exists for
+ * waits, so the floor is the longest beat a robot can still be physically
+ * crossing a tile in — anything longer really is idle.
+ */
+export const idleFrameFloor = (fps: number): number =>
+  Math.max(1, Math.ceil((MOVE_DOUBLE_COST_TICKS * fps) / TICKS_PER_SECOND));
+
 export const presentationDelayMs = (input: {
   readonly fromTick: number;
   readonly toTick: number;
@@ -180,6 +193,8 @@ export const presentationDelayMs = (input: {
 }): number => {
   const elapsedTicks = Math.max(1, input.toTick - input.fromTick);
   const elapsedFrames = Math.max(1, Math.ceil((elapsedTicks * input.fps) / TICKS_PER_SECOND));
-  const presentedFrames = input.compressIdle ? Math.min(elapsedFrames, 6) : elapsedFrames;
+  const presentedFrames = input.compressIdle
+    ? Math.min(elapsedFrames, idleFrameFloor(input.fps))
+    : elapsedFrames;
   return Math.max(16, Math.round((presentedFrames * 1000) / input.fps / input.speed));
 };

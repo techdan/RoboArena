@@ -251,9 +251,16 @@ export function MoviePlayer({
         robotLayer.addChild(visual.container);
       }
 
+      // Effects may outlive their own beat, so the effects layer is only wiped
+      // when the viewer jumps rather than advances — a scrub's leftovers belong
+      // to a tick that is no longer on screen.
+      let renderedIndex: number | null = null;
+
       renderSnapshotRef.current = (index, animate) => {
         const snapshot = timeline.snapshots[index];
         if (snapshot === undefined) return;
+        const advanced = renderedIndex !== null && index === renderedIndex + 1;
+        renderedIndex = index;
         const robotPositions: Record<string, TileCoord | "dock"> = {};
         for (const visual of visuals.values()) visual.container.visible = false;
         for (const robot of Object.values(snapshot.robots)) {
@@ -278,7 +285,11 @@ export function MoviePlayer({
           effectsLayer,
           timeline.eventsByTick.get(snapshot.tick) ?? [],
           robotPositions,
-          reducedMotionRef.current,
+          {
+            reducedMotion: reducedMotionRef.current,
+            speed: speedRef.current,
+            reset: !advanced,
+          },
         );
       };
       renderSnapshotRef.current(currentIndexRef.current, false);
