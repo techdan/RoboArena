@@ -50,3 +50,7 @@ data/*.sqlite*
 
 # Claude Code per-developer settings (project-shared settings.json may be committed if added)
 .claude/settings.local.json
+
+# Throwaway graphics spike output — regenerate with
+#   node scripts/spike/generate-demo-terrain.mjs [arena]
+public/spike/

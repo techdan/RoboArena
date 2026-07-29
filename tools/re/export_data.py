@@ -68,15 +68,88 @@ def extract_town(d):
         if w * h != len(body):
             continue
         grid = []
+        # The low nibble is the ART VARIANT, and it carries information the
+        # terrain class alone cannot express: which surface an "open" tile
+        # actually is (outdoor grass vs indoor slab), and which of several
+        # sprites a bush uses. Earlier exports collapsed to the class and threw
+        # both away. Keep the raw nibbles alongside.
+        cells = []
         for y in range(h):
             row = []
+            cell_row = []
             for x in range(w):
                 b = body[y*w + x]
-                props = tils[b >> 4][b & 0xF]
+                tileset, variant = b >> 4, b & 0xF
+                props = tils[tileset][variant]
                 row.append(TERRAIN_CLASS.get(props, "unknown"))
+                cell_row.append({"tileset": tileset, "variant": variant})
             grid.append(row)
-        out.append({"id": cid, "name": names[cid], "width": w, "height": h, "terrain": grid})
+            cells.append(cell_row)
+        out.append({
+            "id": cid, "name": names[cid], "width": w, "height": h,
+            "terrain": grid, "cells": cells,
+        })
     return out
+
+
+# Tilesets drawn over the indoor concrete slab rather than over grass, read off
+# the DIB tile art: tileset 14's ground variant is the light dithered floor, and
+# tileset 11's rough variant is the same debris scatter on that floor instead of
+# on green. The base surface is a property of the TILESET, not of the terrain
+# class — `open` and `rough` each come in an outdoor and an indoor flavour.
+INDOOR_TILESETS = {11, 14}
+
+# Bushes are all tileset 3, but the map author uses variant 9 outdoors and the
+# boulder variants indoors, so the prop variant carries the base surface too.
+INDOOR_BUSH_VARIANTS = {10, 11}
+
+
+def export_arena_variants(arenas_by_town, out_path):
+    """Companion file holding the recovered art-variant data.
+
+    Deliberately NOT folded into `src/lib/arenas/*.json`: those are source-locked
+    and `index.test.ts` pins a sha256 over `JSON.stringify(tiles)`. Changing that
+    schema is a separate, gated decision. This file lets renderers consume the
+    variant data without touching the locked export.
+    """
+    out = {
+        "_note": (
+            "Recovered art variants. Map cell byte = (tileset << 4) | variant "
+            "(reverse-engineering.md section 9). `surface` splits open ground "
+            "(grass or indoor slab), independent of terrain class."
+        ),
+        "indoorTilesets": sorted(INDOOR_TILESETS),
+        "arenas": {},
+    }
+    def base_of(cell, terrain):
+        """Ground the tile is drawn over, independent of its terrain class.
+
+        Bushes are "inherit": their sprite covers the tile, and the original's
+        bush tilesets carry no ground of their own, so the surrounding surface
+        should run underneath. Forcing the boulder variants to "floor" stamps an
+        isolated concrete square under every rock standing on a lawn.
+        """
+        if terrain == "bush":
+            return "inherit"
+        if cell["tileset"] in INDOOR_TILESETS:
+            return "floor"
+        return "grass"
+
+    for town, arenas in arenas_by_town.items():
+        for arena in arenas:
+            base = [
+                [base_of(cell, terrain) for cell, terrain in zip(cell_row, terrain_row)]
+                for cell_row, terrain_row in zip(arena["cells"], arena["terrain"])
+            ]
+            out["arenas"][f"{town}/{arena['name']}"] = {
+                "width": arena["width"],
+                "height": arena["height"],
+                "cells": arena["cells"],
+                "base": base,
+            }
+    with open(out_path, 'w') as f:
+        json.dump(out, f, indent=1)
+    print(f"wrote {out_path} ({len(out['arenas'])} arenas)")
 
 def export_main_game_arenas(arenas, town_path, output_dir):
     selected = {
@@ -280,6 +353,16 @@ def main():
         p = os.path.join(robowin, fn)
         if os.path.exists(p):
             data["arenas"][key] = extract_town(load(p))
+
+    export_arena_variants(
+        data["arenas"],
+        os.path.join(os.path.dirname(out_path), "arena-variants.json"),
+    )
+    # The class-only grids stay in robosport-data.json; the raw nibbles live in
+    # the companion file so this export's shape is unchanged.
+    for arenas in data["arenas"].values():
+        for arena in arenas:
+            arena.pop("cells", None)
 
     with open(out_path, 'w') as f:
         json.dump(data, f, indent=2)
