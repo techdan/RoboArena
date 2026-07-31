@@ -661,21 +661,7 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
   const hasS = (mask & S) !== 0;
   const hasW = (mask & W) !== 0;
   const lowN = (lower & N) !== 0;
-  const lowE = (lower & E) !== 0;
-  const lowS = (lower & S) !== 0;
   const lowW = (lower & W) !== 0;
-
-  /**
-   * A STEP is an edge where the run continues into something shorter — a full
-   * wall meeting a low wall. That junction is where a ruin actually breaks, so
-   * the cap crumbles there. Restricted to genuine steps rather than every
-   * exposed side: `lower` is also set against open ground, and crumbling every
-   * outward face would leave the whole building gnawed.
-   */
-  const stepN = hasN && lowN;
-  const stepE = hasE && lowE;
-  const stepS = hasS && lowS;
-  const stepW = hasW && lowW;
 
   const offX = Math.round(myHeight * OBLIQUE_X * T);
   const offY = Math.round(myHeight * OBLIQUE_Y * T);
@@ -718,24 +704,13 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
   };
 
   /**
-   * Per-position HEIGHT for a ruined low wall.
+   * A ruined LOW wall is PLATEAUS, not per-block noise.
    *
-   * Varying the flank *width* was the wrong axis — it made the ribbon wobble
-   * while its top stayed one flat plane, reading as "narrow flat" beside "wide
-   * flat". A collapsed wall varies in HEIGHT: some courses survive, some are
-   * knocked to a stub.
-   *
-   * Two things this has to get right that the first attempt did not:
-   *  - Step along the RUN, not always along x. A vertical run varies with y;
-   *    keying off x gave every column in the ribbon the same lift, so vertical
-   *    low walls stayed perfectly flat.
-   *  - Vary between PIECES. Seeding off `mask` alone means every tile sharing a
-   *    mask gets an identical profile, which is why the board showed one
-   *    "tall, medium, big drop" phrase repeated down every wall. `ruin` indexes
-   *    several baked profiles and the placement picks one by position.
-   */
-  /**
-   * A ruined wall is PLATEAUS, not per-block noise.
+   * Full walls are deliberately excluded: they hold their height to the last
+   * pixel and the adjoining low piece starts at its own, giving one clean
+   * vertical drop. Generating a ramp, staircase, or footprint erosion at that
+   * junction was tried and reverted — see the decision log in
+   * docs/graphics-plan.md.
    *
    * Both previous attempts sampled a height per sub-tile segment. Independent
    * samples gave a comb; correlated samples gave a gentle wobble. Neither is
@@ -769,16 +744,10 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
       return Math.max(0.16, RUIN_LEVELS[ruin] + jitter);
     }
 
-    // A full wall eases DOWN as it approaches a step onto something shorter,
-    // so the junction reads as a wall settling into its ruined section rather
-    // than a sheer cliff. Expressed in height, never in plan shape.
-    const ramp = (t) => 0.62 + 0.38 * Math.min(1, t / 0.42);
-    let scaled = 1;
-    if (stepN) scaled = Math.min(scaled, ramp(v));
-    if (stepS) scaled = Math.min(scaled, ramp(1 - v));
-    if (stepW) scaled = Math.min(scaled, ramp(u));
-    if (stepE) scaled = Math.min(scaled, ramp(1 - u));
-    return scaled;
+    // Full walls keep their complete height through the last source pixel.
+    // The adjoining low-wall piece begins at its own height, producing one
+    // clean vertical drop rather than a generated ramp, staircase, or wedge.
+    return 1;
   };
 
   // NOTE: an earlier revision bit chunks out of the footprint near a step edge
@@ -828,6 +797,12 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
     const base = joint
       ? mix(mortar, step(sidePal, grain * 0.4), 0.2)
       : step(sidePal, 0.28 + hash2(col, row, 991) * 0.44 + grain * 0.22);
+
+    // Faces stay clean masonry. Making a broken end read as such was tried five
+    // ways — footprint erosion, continuous ramp, quantised staircase, per-brick
+    // damage, and a rubble-core material swap — and every one looked worse at
+    // this size than the plain bond. Left clean deliberately; read the decision
+    // log in docs/graphics-plan.md before attempting a sixth.
     return scale(base, shade);
   };
 
@@ -855,6 +830,71 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
     }
   }
 
+  // ── plinth: the footprint, opaque, at ground level ──
+  //
+  // Every face here is swept from a BOUNDARY pixel — `colBottom` per column,
+  // `rowLeft` per row — which leaves the interior of the footprint relying on
+  // the cap to cover it. The cap is displaced up and right by the projection, so
+  // wherever a piece's own height or its neighbour's differs from what the face
+  // sweeps assumed, a slice of bare ground can show between them. Chasing those
+  // one at a time has cost several rounds; each fix was correct and each left
+  // another seam somewhere else.
+  //
+  // Filling the plan footprint opaquely at ground level removes the whole class:
+  // a structure's tile can never show the terrain beneath it, whatever the caps
+  // and faces do above. Strictly inside the footprint, so it cannot spill onto a
+  // neighbour or open a new seam.
+  for (let fy = 0; fy < T; fy += 1) {
+    for (let fx = 0; fx < T; fx += 1) {
+      if (!inFoot(fx, fy)) continue;
+      put(buf, fx, fy + baseY, sideTexel(fx, 0, 0.42), 1, 0.2);
+    }
+  }
+
+  // ── risers: fill the whole solid where the cap height VARIES ──
+  //
+  // Sweeping only the boundary columns and rows assumes a flat cap: every
+  // column then runs cleanly from its base to one common height. The moment
+  // lift varies along a run — a ruined low wall, or a full wall stepping down
+  // at a junction — adjacent treads sit at different heights with nothing
+  // between them, and the piece renders as detached floating bands. The step
+  // needs its riser: the vertical face joining a higher tread to its lower
+  // neighbour.
+  //
+  // Sweeping every footprint pixel fills the solid exactly, which is what the
+  // piece geometrically is; the cap then draws over everything still hidden.
+  // Skipped for uniform pieces, where the boundary sweeps already suffice.
+  if (stone) {
+    for (let fy = 0; fy < T; fy += 1) {
+      for (let fx = 0; fx < T; fx += 1) {
+        if (!inFoot(fx, fy)) continue;
+        const own = liftScale(fx, fy);
+        sweep(fx, fy, 0, fx, (t) => 0.62 + t * 0.3, own);
+
+        // THE RISER ITSELF. Sweeping each pixel only to its own height leaves a
+        // wedge wherever the height jumps: the sweep traces a one-pixel diagonal
+        // per source pixel, and neighbouring pixels normally offset by one pixel
+        // so their union is solid — but at a step the offsets jump by several,
+        // and the background shows through the gap.
+        //
+        // The face joining a tall tread to its shorter neighbour stands at the
+        // SHORTER one's plan position and spans the two heights. Drawing it from
+        // here, up to whichever neighbour behind us is taller, closes the wedge.
+        // North and east are the ones that matter: south and west are the faces
+        // this projection actually shows.
+        for (const [nx, ny] of [
+          [fx, fy - 1],
+          [fx + 1, fy],
+        ]) {
+          if (!inFoot(nx, ny)) continue;
+          const behind = liftScale(nx, ny);
+          if (behind <= own) continue;
+          sweep(fx, fy, own / behind, fx, (t) => 0.5 + t * 0.3, behind);
+        }
+      }
+    }
+  }
+
   // ── south faces, per column ──
   // Per COLUMN, not per piece. A corner tile's arm reaches the tile edge while
   // its elbow does not, so one piece can have both a connected column and an
@@ -865,8 +905,14 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
     if (bottom < 0) continue;
     const reachesEdge = bottom >= T - 1;
     if (reachesEdge && hasS && southHeight >= myHeight) continue;
-    const tFrom = reachesEdge && hasS ? southHeight / myHeight : 0;
-    sweep(fx, bottom, tFrom, fx, (t) => 0.5 + t * 0.34, liftScale(fx, bottom));
+    // Always sweep the FULL face, never just the part above the neighbour's
+    // nominal top. Stopping at `southHeight / myHeight` assumed the piece to
+    // the south stands at its full height — but low walls are ruined to
+    // anywhere from 0.28 to 1.0 of theirs, and pieces are baked independently
+    // so this one cannot know. The shortfall showed as a sliver of background
+    // between the tall wall's face and the low wall's cap. Over-drawing is free:
+    // painter order puts the southern piece on top of whatever it does occupy.
+    sweep(fx, bottom, 0, fx, (t) => 0.5 + t * 0.34, liftScale(fx, bottom));
   }
 
   // ── west faces, per row ──
@@ -875,8 +921,12 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
     if (left < 0) continue;
     const reachesEdge = left <= 0;
     if (reachesEdge && hasW && !lowW) continue;
-    const tFrom = reachesEdge && hasW ? 0.5 : 0;
-    sweep(left, fy, tFrom, fy, (t) => 0.66 + t * 0.4, liftScale(left, fy));
+    // Full face, for the same reason as the south face: the western neighbour's
+    // actual ruined height is unknowable from here, and the old `0.5` assumed it
+    // stood at nominal. The shortfall showed as a vertical sliver of background
+    // at the join. The sweep only ever moves right of the footprint edge, so
+    // over-drawing cannot spill onto the neighbour's tile.
+    sweep(left, fy, 0, fy, (t) => 0.66 + t * 0.4, liftScale(left, fy));
   }
 
   // ── cap, drawn last so it occludes the tops of the swept faces ──
@@ -912,17 +962,11 @@ const bakeStructure = (kind, mask, lower, drop, ruin = 0) => {
     }
   }
 
-  // ── rubble where the run TERMINATES (≤1 connection), not on exposed flanks ──
-  const connections = (hasN ? 1 : 0) + (hasE ? 1 : 0) + (hasS ? 1 : 0) + (hasW ? 1 : 0);
-  if (connections <= 1) {
-    for (let k = 0; k < 6; k += 1) {
-      const cx = (0.5 + (hash2(k, mask, 503) - 0.5) * 0.7) * T + offX * 0.5;
-      const cy = (0.5 + (hash2(k, mask, 509) - 0.5) * 0.7) * T + baseY * 0.5;
-      const r = T * (0.022 + hash2(k, mask, 521) * 0.03);
-      const tone = step(sidePal, 0.25 + hash2(k, mask, 523) * 0.5);
-      stampEllipse(buf, cx, cy, r, r * 0.76, hash2(k, mask, 541) * Math.PI, tone, 0.34, 1.0);
-    }
-  }
+  // NOTE: loose rubble stamps at run ends and at height drops were tried here
+  // and removed. At tile scale they read as small chunks stuck to the wall face
+  // rather than as debris on the ground — the sprite has no room below its own
+  // footprint for them to land in. If revisited, they belong in the GROUND bake
+  // (which has the whole board to spill across) rather than on the piece.
 
   emit(pieceName(kind, mask, lower, drop, ruin), buf);
 };
