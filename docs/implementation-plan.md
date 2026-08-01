@@ -145,7 +145,7 @@ Some directories don't exist yet — they appear in their phase. The plan says w
 | Formatter    | Prettier                                                                                             | Standard. `format:check` in CI is enough for v1; pre-commit hooks are optional later.                                                                       |
 | E2E test     | Retained Playwright specs (automation paused)                                                        | Specs/baselines remain available, but package scripts and CI execution are disabled; current UI validation is manual browser/iPad testing with screenshots. |
 | CI           | GitHub Actions                                                                                       | Repo will eventually live on GitHub. Workflow: typecheck + lint + test on push to main; build joins once Next.js lands.                                     |
-| Deploy       | Vercel Next.js Functions + Supabase Postgres/Realtime                                               | Phase 12.5 migrates the local long-lived WS/SQLite profile to stateless HTTP authority, transactional Postgres, and private realtime invalidations; no VM.    |
+| Deploy       | Vercel Next.js Functions + Supabase Postgres/Realtime                                                | Phase 12.5 migrates the local long-lived WS/SQLite profile to stateless HTTP authority, transactional Postgres, and private realtime invalidations; no VM.  |
 | Branching    | **Trunk with frequent commits** (current). PR-based later when multi-agent review is needed.         |
 | Commit style | Conventional-ish; first line ≤ 72 chars; bodies describe _why_ + tests. Co-authored where AI-paired. |
 
@@ -1706,7 +1706,7 @@ window, Rubble Three, Rifle robot top-center facing S):
    action strip below; the strip mixes top-edge captions, floating help marks,
    a read-only Weapon group on single-weapon robots, and text-labeled posture
    buttons.
-4. Damage/range labels anchored to the longest *boundary* ray cluster and
+4. Damage/range labels anchored to the longest _boundary_ ray cluster and
    collide near the top edge ("−4 dmg" over "≤18 tiles") even when the
    heading centerline has the longest clear run; the "+4 dmg inside" tag
    detaches visually from its arc.
@@ -1758,7 +1758,7 @@ window, Rubble Three, Rifle robot top-center facing S):
   duplicated time text.
 - The lane never scrolls horizontally within budget; only an over-budget tail
   (greyed, as today) may extend past the 15s mark.
-- **All Programs** expands as a temporary overlay panel *over* the action
+- **All Programs** expands as a temporary overlay panel _over_ the action
   strip and upper arena (absolutely positioned; the layout below does not
   reflow), aligning every robot lane to the shared axis and playhead for turn
   review, with the same scrubber. Escape or the toggle collapses it; the
@@ -1774,7 +1774,7 @@ window, Rubble Three, Rifle robot top-center facing S):
 - Activating a fire mode **replaces the Aim & Fire / Scan & Fire buttons in
   place** with that mode's compact controls, keeping the strip's height and
   the other groups' positions fixed: Scan swaps in `⌖ distance · seconds ·
-  Add · ✕`; Aim swaps in `target readout · fire time · shots · Review · ✕`.
+Add · ✕`; Aim swaps in `target readout · fire time · shots · Review · ✕`.
   Cancel/confirm restores the two entry buttons. The floating config card and
   the idle "Select Aim or Scan to configure fire." placeholder are removed.
 - Hide the Weapon group entirely for single-weapon robots — no read-only
@@ -2187,6 +2187,15 @@ non-planner surfaces (movie, lobby, results) rather than the planning board.
 **Note**: audio explicitly deferred per user direction. Existing intentional
 SVG/vector art is sufficient for the v1 gate.
 
+**Graphics uplift — see `docs/graphics-plan.md`.** The visual half of this phase
+is planned in detail in its own document: tiered scope, standing constraints
+(determinism, iPad budget, asset format, zoom bands), a §8 integration handoff
+naming the three renderer call sites and the blocking data dependency, and a §9
+decision log recording approaches already tried and reverted. A working bench
+lives at the `/graphics-demo` route with its generator in `scripts/spike/`.
+**Read §8 and §9 before starting any of it** — several of the obvious approaches
+have been built and rejected, and the log says why.
+
 ---
 
 ### Phase 13.5 — online alliance and shared-Side modes [⏸ POST-v1 CORE BATTLE]
@@ -2363,23 +2372,23 @@ Implementation: `animations.ts` exhaustively maps every event kind and reduces
 state-changing events into immutable snapshots. Pixi/GSAP visual handlers cover
 the cue-producing rows below; all other event kinds intentionally have no visual cue.
 
-| Event kind                              | Animation                                                  | Tools                              |
-| --------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
-| `deployed`                              | drop in from above with a landing squash                   | `reactions.ts`                     |
-| `move-step`                             | transform-only hop across the tile, filling the tick budget | `motion.ts` + `RobotSprite.tsx`   |
-| `posture-changed`                       | cross-fade the body texture and drop the turret mount      | GSAP alpha tween                   |
-| `scan-rotated`                          | smooth heading-needle rotation                             | GSAP tween on the scan needle      |
-| `fired`                                 | short muzzle flash oriented toward the target              | sprite life cycle                  |
-| `scan-target-acquired`                  | transient scan-lock reticle                                | sprite life cycle                  |
-| `projectile-launched` (bullet/burst)    | short-lived straight tracer                                | temporary Pixi `Graphics`          |
-| `projectile-launched` (missile)         | warm straight-line tracer from source to target            | temporary Pixi `Graphics`          |
-| `projectile-impacted` (bullet)          | small explosion sprite at impact tile, fades over ~3 ticks | sprite life cycle                  |
-| `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite                | sprite life cycle                  |
-| `shot-missed`                           | compact dust miss at the target tile                       | sprite life cycle                  |
-| `fired`                                 | muzzle flash plus turret recoil on the shooter             | `reactions.ts`                     |
-| `damaged`                               | hit burst, plus the target flinches away and flashes red   | `reactions.ts`                     |
-| `destroyed`                             | large explosion + the hull folds onto its ground anchor    | composed tween chain               |
-| `enemy-lost` / `last-known-marker`      | transient last-known glyph at the event tile               | sprite life cycle                  |
+| Event kind                              | Animation                                                   | Tools                           |
+| --------------------------------------- | ----------------------------------------------------------- | ------------------------------- |
+| `deployed`                              | drop in from above with a landing squash                    | `reactions.ts`                  |
+| `move-step`                             | transform-only hop across the tile, filling the tick budget | `motion.ts` + `RobotSprite.tsx` |
+| `posture-changed`                       | cross-fade the body texture and drop the turret mount       | GSAP alpha tween                |
+| `scan-rotated`                          | smooth heading-needle rotation                              | GSAP tween on the scan needle   |
+| `fired`                                 | short muzzle flash oriented toward the target               | sprite life cycle               |
+| `scan-target-acquired`                  | transient scan-lock reticle                                 | sprite life cycle               |
+| `projectile-launched` (bullet/burst)    | short-lived straight tracer                                 | temporary Pixi `Graphics`       |
+| `projectile-launched` (missile)         | warm straight-line tracer from source to target             | temporary Pixi `Graphics`       |
+| `projectile-impacted` (bullet)          | small explosion sprite at impact tile, fades over ~3 ticks  | sprite life cycle               |
+| `projectile-impacted` (missile/grenade) | larger explosion + radial blast wave sprite                 | sprite life cycle               |
+| `shot-missed`                           | compact dust miss at the target tile                        | sprite life cycle               |
+| `fired`                                 | muzzle flash plus turret recoil on the shooter              | `reactions.ts`                  |
+| `damaged`                               | hit burst, plus the target flinches away and flashes red    | `reactions.ts`                  |
+| `destroyed`                             | large explosion + the hull folds onto its ground anchor     | composed tween chain            |
+| `enemy-lost` / `last-known-marker`      | transient last-known glyph at the event tile                | sprite life cycle               |
 
 The transient last-known movie cue communicates the emitted event only. The
 persistent last-known X glyph carried into the following turn remains an
@@ -2602,15 +2611,15 @@ independent of transport and storage adapters.
 
 ### What lives where
 
-| Kind                                        | Where                                                                        | Lifetime                                            |
-| ------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
-| Active rooms/matches                        | Supabase Postgres deployed; SQLite in local/test profile                     | Indefinite; no automatic deletion. A player may resign a match explicitly |
-| Own room rejoin token                       | Client localStorage                                                          | Until room expires or storage is cleared            |
-| Canonical turn/replay data                  | Supabase Postgres; completed export JSON                                     | Room lifetime; export is player-owned               |
-| Saved teams                                 | v1 built-in presets; post-v1 local/shared library                            | Presets only in v1                                  |
-| User settings                               | Client localStorage (`useSettingsStore` with `persist` middleware)           | Until cleared                                       |
-| Participant token (anonymous room identity) | Client localStorage                                                          | Per room; opaque and server-issued                  |
-| Last-played-config                          | Client localStorage                                                          | Until overwritten                                   |
+| Kind                                        | Where                                                              | Lifetime                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Active rooms/matches                        | Supabase Postgres deployed; SQLite in local/test profile           | Indefinite; no automatic deletion. A player may resign a match explicitly |
+| Own room rejoin token                       | Client localStorage                                                | Until room expires or storage is cleared                                  |
+| Canonical turn/replay data                  | Supabase Postgres; completed export JSON                           | Room lifetime; export is player-owned                                     |
+| Saved teams                                 | v1 built-in presets; post-v1 local/shared library                  | Presets only in v1                                                        |
+| User settings                               | Client localStorage (`useSettingsStore` with `persist` middleware) | Until cleared                                                             |
+| Participant token (anonymous room identity) | Client localStorage                                                | Per room; opaque and server-issued                                        |
+| Last-played-config                          | Client localStorage                                                | Until overwritten                                                         |
 
 ### Post-v1 shared-storage schema sketch
 
@@ -2954,33 +2963,33 @@ post-v1. iPad touch support is part of the v1 ship gate.
 
 ## 14. Open questions & risks
 
-| Question                                           | Impact                         | Resolution path                                                                                                                                                        |
-| -------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Projectile screen speed                            | Phase 7 presentation           | Tune animation without changing engine outcomes or replay state                                                                                                        |
-| Stealth × Scan-and-Fire interaction                | Post-main-game Phase 14        | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate                                                                                                     |
-| Arena import accuracy                              | Phase 6                        | Verify generated row-major MAP output and exact generated home rectangles                                                                                              |
-| iPad touch playability                             | local/deployed gates (§12/12.5) | Validate the complete loop locally and then against the deployed app on real iPadOS Safari in landscape; phones and native apps remain post-v1                         |
-| Serverless transport/reliability                   | Phase 12.5                     | Vercel HTTP commands + private Supabase Realtime invalidations/presence, with Postgres authority and polling fallback; no custom long-lived WS host                     |
-| Absent player stalls orders                        | Inherent asynchronous tradeoff | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1                                          |
-| Replay format breaking changes                     | Phase 5+                       | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9)                                                                       |
-| Named weapon mapping for binary damage/fire tables | Closed in Phase 1R             | Selector dispatch and live callers are source-locked in the claim ledger                                                                                               |
-| Sport modes beyond Survival                        | Out of v1                      | All non-Survival modes deferred; engine reserves `sportType` field                                                                                                     |
-| AI tiers                                           | Out of main game               | Deferred until after the explicitly scheduled parity phases                                                                                                            |
-| Audio / SFX / music                                | Out of v1                      | Deferred to post-v1 entirely                                                                                                                                           |
-| Localization                                       | Out of v1                      | English only; not building i18n hooks                                                                                                                                  |
-| Accessibility                                      | Partial v1                     | Keyboard-reachable controls, focus states, readable/non-color-only status, 44×44 touch targets, and iPad touch parity; full game-board screen-reader support later     |
-| Security / abuse prevention                        | Bounded v1                     | Server validation, ownership checks, payload limits, basic rate limits, hidden-state filtering; DDoS/abuse operations remain post-v1                                   |
-| Privacy / analytics / cookie policy                | Out of v1                      | No third-party analytics; participant tokens identify only a room seat                                                                                                 |
-| License / legal disclaimers                        | Out of v1                      | Defer until shared publicly                                                                                                                                            |
-| Production observability                           | Out of v1                      | Console logs are fine for personal use; no Sentry / metrics / alerts                                                                                                   |
-| Full help/tutorial system                          | Post-v1                        | v1 includes tooltips, first-use loop guidance, event explanations, and replay inspection                                                                               |
-| Account system                                     | Out of v1                      | No accounts; opaque server-issued rejoin token owns one room seat                                                                                                      |
-| Achievements / progression                         | Out of v1                      | Original had none; matches are standalone                                                                                                                              |
-| Visual regression testing                          | Out of v1                      | Add when art breakage actually causes pain                                                                                                                             |
-| Server scaling                                     | Out of v1                      | Stateless Vercel handlers plus Supabase Postgres/Realtime are friend-scale; multi-region tuning and production-scale load work remain later                            |
-| Spectator / live spectating                        | Out of v1                      | Public replay URLs cover the main case                                                                                                                                 |
-| Hosting platform choice                            | Closed for Phase 12.5          | Vercel hosts Next.js application compute; Supabase hosts Postgres and Realtime; no VM or custom WebSocket host                                                         |
-| Original-game source files                         | Cleanup                        | Keep manual dumps, screenshots, and original packages local and gitignored; publish summarized research notes only                                                     |
+| Question                                           | Impact                          | Resolution path                                                                                                                                                    |
+| -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Projectile screen speed                            | Phase 7 presentation            | Tune animation without changing engine outcomes or replay state                                                                                                    |
+| Stealth × Scan-and-Fire interaction                | Post-main-game Phase 14         | Do not introduce it into Phase 4 or any Phase 1-11 acceptance gate                                                                                                 |
+| Arena import accuracy                              | Phase 6                         | Verify generated row-major MAP output and exact generated home rectangles                                                                                          |
+| iPad touch playability                             | local/deployed gates (§12/12.5) | Validate the complete loop locally and then against the deployed app on real iPadOS Safari in landscape; phones and native apps remain post-v1                     |
+| Serverless transport/reliability                   | Phase 12.5                      | Vercel HTTP commands + private Supabase Realtime invalidations/presence, with Postgres authority and polling fallback; no custom long-lived WS host                |
+| Absent player stalls orders                        | Inherent asynchronous tradeoff  | Show exactly who is pending; support voluntary resign/host abandonment; do not invent AI orders or silent auto-forfeits in v1                                      |
+| Replay format breaking changes                     | Phase 5+                        | Version 1 rejects unknown versions; add migrations and old-fixture CI when version 2 exists (§9)                                                                   |
+| Named weapon mapping for binary damage/fire tables | Closed in Phase 1R              | Selector dispatch and live callers are source-locked in the claim ledger                                                                                           |
+| Sport modes beyond Survival                        | Out of v1                       | All non-Survival modes deferred; engine reserves `sportType` field                                                                                                 |
+| AI tiers                                           | Out of main game                | Deferred until after the explicitly scheduled parity phases                                                                                                        |
+| Audio / SFX / music                                | Out of v1                       | Deferred to post-v1 entirely                                                                                                                                       |
+| Localization                                       | Out of v1                       | English only; not building i18n hooks                                                                                                                              |
+| Accessibility                                      | Partial v1                      | Keyboard-reachable controls, focus states, readable/non-color-only status, 44×44 touch targets, and iPad touch parity; full game-board screen-reader support later |
+| Security / abuse prevention                        | Bounded v1                      | Server validation, ownership checks, payload limits, basic rate limits, hidden-state filtering; DDoS/abuse operations remain post-v1                               |
+| Privacy / analytics / cookie policy                | Out of v1                       | No third-party analytics; participant tokens identify only a room seat                                                                                             |
+| License / legal disclaimers                        | Out of v1                       | Defer until shared publicly                                                                                                                                        |
+| Production observability                           | Out of v1                       | Console logs are fine for personal use; no Sentry / metrics / alerts                                                                                               |
+| Full help/tutorial system                          | Post-v1                         | v1 includes tooltips, first-use loop guidance, event explanations, and replay inspection                                                                           |
+| Account system                                     | Out of v1                       | No accounts; opaque server-issued rejoin token owns one room seat                                                                                                  |
+| Achievements / progression                         | Out of v1                       | Original had none; matches are standalone                                                                                                                          |
+| Visual regression testing                          | Out of v1                       | Add when art breakage actually causes pain                                                                                                                         |
+| Server scaling                                     | Out of v1                       | Stateless Vercel handlers plus Supabase Postgres/Realtime are friend-scale; multi-region tuning and production-scale load work remain later                        |
+| Spectator / live spectating                        | Out of v1                       | Public replay URLs cover the main case                                                                                                                             |
+| Hosting platform choice                            | Closed for Phase 12.5           | Vercel hosts Next.js application compute; Supabase hosts Postgres and Realtime; no VM or custom WebSocket host                                                     |
+| Original-game source files                         | Cleanup                         | Keep manual dumps, screenshots, and original packages local and gitignored; publish summarized research notes only                                                 |
 
 ---
 
@@ -3080,21 +3089,21 @@ Tailwind v4 defaults (4 px base; `space-y-2` = 8px, etc.) — no custom scale.
 All movie durations below scale with playback speed (`speed` divides them), so
 2x and 4x stay in step with the beat instead of truncating mid-animation.
 
-| Animation                          | Duration                                                   | Notes                                    |
-| ---------------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
+| Animation                          | Duration                                                   | Notes                                       |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------- |
 | Move-step hop                      | matches the selector budget: 0.50 s single / 0.67 s double | Engine-driven; see `src/renderer/motion.ts` |
-| Posture sprite swap                | 100 ms cross-fade                                          | Decorative                               |
-| Weapon recoil                      | 220 ms kick and recover                                    | Decorative                               |
-| Damage flinch + red flash          | 340 ms shove, tint fades over the same window              | Decorative                               |
-| Destruction collapse               | 500 ms fold onto the ground anchor                         | Decorative                               |
-| Deploy drop-in                     | 420 ms fall + landing squash                               | Decorative                               |
-| Scan rotation                      | 5 ticks / 83 ms for any changed absolute heading           | Engine-driven                            |
-| Bullet projectile                  | 1 ms per pixel × distance, capped 200 ms                   | Decorative; impact tick is engine-driven |
-| Missile projectile + smoke trail   | 80 ms per tile traveled                                    | Smoke particles fade over 600 ms         |
-| Hit flash (red tint on target)     | 150 ms                                                     | Decorative                               |
-| Small explosion sprite (hit)       | 250 ms                                                     | 4 frames                                 |
-| Large explosion sprite (destroyed) | 500 ms                                                     | 8 frames + fade                          |
-| Robot return-to-dock fade          | 400 ms                                                     |                                          |
+| Posture sprite swap                | 100 ms cross-fade                                          | Decorative                                  |
+| Weapon recoil                      | 220 ms kick and recover                                    | Decorative                                  |
+| Damage flinch + red flash          | 340 ms shove, tint fades over the same window              | Decorative                                  |
+| Destruction collapse               | 500 ms fold onto the ground anchor                         | Decorative                                  |
+| Deploy drop-in                     | 420 ms fall + landing squash                               | Decorative                                  |
+| Scan rotation                      | 5 ticks / 83 ms for any changed absolute heading           | Engine-driven                               |
+| Bullet projectile                  | 1 ms per pixel × distance, capped 200 ms                   | Decorative; impact tick is engine-driven    |
+| Missile projectile + smoke trail   | 80 ms per tile traveled                                    | Smoke particles fade over 600 ms            |
+| Hit flash (red tint on target)     | 150 ms                                                     | Decorative                                  |
+| Small explosion sprite (hit)       | 250 ms                                                     | 4 frames                                    |
+| Large explosion sprite (destroyed) | 500 ms                                                     | 8 frames + fade                             |
+| Robot return-to-dock fade          | 400 ms                                                     |                                             |
 
 ### SVG conventions
 
@@ -3123,14 +3132,14 @@ All movie durations below scale with playback speed (`speed` divides them), so
 | 10      | ✅ DRAFT COMPLETE                  | M      | Planner UI: firing dialogs (Aim & Fire, Scan & Fire), authorized score estimates, inclusive scan gate                                                                |
 | 11      | ✅ DRAFT COMPLETE                  | XL     | Authoritative online turn loop, private projections, reconnect/playback resume, results, canonical replay                                                            |
 | 11.5    | ✅ DRAFT COMPLETE                  | XL     | v1 Field Guide, contextual help, iPad touch input, onboarding, explanations, and replay inspection (§10, §12)                                                        |
-| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (automated coverage done; local four-session gate → Phase 12.2, deployed two-network repeat → 12.5)            |
+| 11.6    | 🟡 IN PROGRESS                     | L      | Three-/four-player online free-for-all hardening (automated coverage done; local four-session gate → Phase 12.2, deployed two-network repeat → 12.5)                 |
 | 11.7    | ✅ DRAFT COMPLETE                  | S–M    | Planner polish: sprites, honest timeline, live coordinates, targeting heatmap, and Playback-parity pan/zoom                                                          |
 | 11.8    | 🟡 IN PROGRESS                     | M      | Targeting analysis + board-first planner shell implemented (rail, heatmap, wedge/rings, tooltip) and automated gates green; desktop visual/screenshot review remains |
 | 11.8.1  | 🟡 IMPLEMENTED / VISUAL REVIEW     | M      | Board-first icon timeline, circular scan control, conditional Missile weapon/ammo, shared 50-edit undo/redo, and full-width arena                                    |
 | 11.8.2  | 🟡 IMPLEMENTED / VISUAL REVIEW     | S–M    | Full-bleed fit-width arena, merged selector/summary band, glyph-only proportional timeline, in-place fire takeover, smart overlay label placement                    |
 | 12      | ✅ IMPLEMENTED                     | L      | Local resilience, projection validation, recovery UI, support ids, and idempotency/trust-boundary coverage                                                           |
 | 12.1    | ✅ IMPLEMENTED                     | S–M    | Bounded v1 presentation polish for home/setup, match-flow context, authorized movie handoff, and Final Ceremony/results                                              |
-| 12.2    | ⬜ MANUAL GATE                     | S      | Automated preflight plus local visual, four-session, restart, desktop, and physical-iPad release-candidate evidence                                                   |
+| 12.2    | ⬜ MANUAL GATE                     | S      | Automated preflight plus local visual, four-session, restart, desktop, and physical-iPad release-candidate evidence                                                  |
 | 12.5    | ⬜ V1 DEPLOYMENT GATE              | XL     | Vercel HTTP authority + Supabase Postgres/Realtime migration, concurrency, security, and real-network validation                                                     |
 | 13      | ⏸ POST-v1                          | L      | Core-battle polish, art refinement, usability enhancements, and expanded performance work                                                                            |
 | 13.5    | ⏸ POST-v1 CORE BATTLE              | L      | Online alliance and shared-Side modes on separate devices                                                                                                            |
