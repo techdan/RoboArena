@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * ⚠️  THROWAWAY SPIKE — NOT PRODUCTION CODE ⚠️
+ * 🔧 REFERENCE BENCH — NOT PRODUCTION CODE
+ *
+ * Retained deliberately (2026-08-01) as the reference implementation for the
+ * graphics work and as a bench for tweaking the look without touching the game.
+ * Skips everything production needs — determinism contract, tests, atlasing,
+ * iPad budget, LOD. See docs/graphics-plan.md §8 before porting any of it.
  *
  * A/B bench for docs/graphics-plan.md. Rev 2: the board is now a single
  * continuously-baked ground image plus autotiled wall structures and bush
  * props, rather than a grid of independently generated tiles. See
  * scripts/spike/generate-demo-terrain.mjs for why.
  *
- * Desktop only. Delete with public/spike/ and scripts/spike/ when done.
+ * Desktop only.
  */
 
 import {

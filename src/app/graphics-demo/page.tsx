@@ -1,9 +1,12 @@
 /**
- * ⚠️  THROWAWAY SPIKE — NOT PRODUCTION CODE ⚠️
+ * 🔧 REFERENCE BENCH — NOT PRODUCTION CODE
  *
- * A/B bench for docs/graphics-plan.md. Desktop only. Delete this route with
- * src/components/spike/, scripts/spike/, and public/spike/ once the graphics
- * investment decision is made.
+ * Retained deliberately (2026-08-01) as the reference implementation for the
+ * graphics work and as a bench for tweaking the look without touching the game.
+ * Skips everything production needs — determinism contract, tests, atlasing,
+ * iPad budget, LOD. See docs/graphics-plan.md §8 before porting any of it.
+ *
+ * A/B bench for docs/graphics-plan.md. Desktop only.
  */
 
 import { GraphicsDemo } from "../../components/spike/GraphicsDemo";

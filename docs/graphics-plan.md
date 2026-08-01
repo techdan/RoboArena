@@ -32,7 +32,7 @@ Two honest caveats set the direction of this plan:
    shadows, TAA, parallax occlusion, and volumetrics answer questions a top-down
    2D tactical board never asks.
 
-What genuinely transfers is the *method*: **generate surfaces procedurally
+What genuinely transfers is the _method_: **generate surfaces procedurally
 instead of authoring one image per type, then light them with a real model and
 grade the result.** That method is fully available in PixiJS v8 and is where all
 the visual delta lives.
@@ -43,18 +43,18 @@ the visual delta lives.
 
 Grounded in the shipped code, not in taste.
 
-| Symptom | Root cause | Evidence |
-|---|---|---|
-| Ground reads as wallpaper | Exactly **one 24×24 SVG per terrain type**, stamped per tile. Every `open` tile in an arena is byte-identical. | `src/renderer/assets.ts:26`; `PixiArena.tsx:63-77` |
-| No depth anywhere | Zero lighting. Tiles are `new Sprite(texture)` plus a position. No normal maps, no light direction, no AO, no cast shadows. | `PixiArena.tsx:71`; `MoviePlayer.tsx:300-306` |
-| Hard grid seams | No edge-transition tiles. Grass meets rubble on an exact cell boundary. | `TERRAIN_ASSETS` is keyed by terrain alone — no neighbour awareness |
-| Robots read as stickers | Lighting is *painted into* the sprite as vertical linear gradients (`fp-steel`, `fp-iron`, `fp-paint`). A turret facing north and one facing south are shaded identically. | `scripts/generate-robot-assets.mjs:39-67` |
-| **Emissives don't emit** | The art already carries glow hooks — `#6ff2ff` sensor lenses, `#3ad9ee` glow plates, `#e0742f` missile indicators — but they are composited as ordinary flat fills, indistinguishable from paint. | `generate-robot-assets.mjs:296-297, 322-325, 371-375, 381-383` |
-| Combat lacks punch | Effects composite flat — no additive blending, no bloom, no light emission, no camera response. | `src/renderer/effects/effects.ts` |
-| No atmosphere | Flat `#151816` background, no vignette, no colour grade, no grain. | `PixiArena.tsx:34` |
-| **Detail is invisible at play size** | Robots render at roughly 15–130 px depending on zoom (§4.5). The body texture is rasterized at 256 px. At default zoom most of that detail never reaches a pixel. | `RobotSprite.tsx:34,37`; `robotTextures.ts:25` |
+| Symptom                              | Root cause                                                                                                                                                                                        | Evidence                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Ground reads as wallpaper            | Exactly **one 24×24 SVG per terrain type**, stamped per tile. Every `open` tile in an arena is byte-identical.                                                                                    | `src/renderer/assets.ts:26`; `PixiArena.tsx:63-77`                  |
+| No depth anywhere                    | Zero lighting. Tiles are `new Sprite(texture)` plus a position. No normal maps, no light direction, no AO, no cast shadows.                                                                       | `PixiArena.tsx:71`; `MoviePlayer.tsx:300-306`                       |
+| Hard grid seams                      | No edge-transition tiles. Grass meets rubble on an exact cell boundary.                                                                                                                           | `TERRAIN_ASSETS` is keyed by terrain alone — no neighbour awareness |
+| Robots read as stickers              | Lighting is _painted into_ the sprite as vertical linear gradients (`fp-steel`, `fp-iron`, `fp-paint`). A turret facing north and one facing south are shaded identically.                        | `scripts/generate-robot-assets.mjs:39-67`                           |
+| **Emissives don't emit**             | The art already carries glow hooks — `#6ff2ff` sensor lenses, `#3ad9ee` glow plates, `#e0742f` missile indicators — but they are composited as ordinary flat fills, indistinguishable from paint. | `generate-robot-assets.mjs:296-297, 322-325, 371-375, 381-383`      |
+| Combat lacks punch                   | Effects composite flat — no additive blending, no bloom, no light emission, no camera response.                                                                                                   | `src/renderer/effects/effects.ts`                                   |
+| No atmosphere                        | Flat `#151816` background, no vignette, no colour grade, no grain.                                                                                                                                | `PixiArena.tsx:34`                                                  |
+| **Detail is invisible at play size** | Robots render at roughly 15–130 px depending on zoom (§4.5). The body texture is rasterized at 256 px. At default zoom most of that detail never reaches a pixel.                                 | `RobotSprite.tsx:34,37`; `robotTextures.ts:25`                      |
 
-**Core insight**: the gap is *variance and lighting*, not shader sophistication.
+**Core insight**: the gap is _variance and lighting_, not shader sophistication.
 Human vision reads "cheap" primarily from repetition detection and from absent
 shading cues. Per-tile variation plus one consistent light direction beats a PBR
 pipeline running on tiled wallpaper, every time.
@@ -75,7 +75,7 @@ Locked, so no tier quietly grows into them:
 - **No engine changes.** `src/engine/` is untouched by every tier.
 - **No new runtime art dependencies.** Generation happens at build time via
   `scripts/`, output checked in, same as the Foundry Plate robot set. New
-  *build-time* devDependencies (a Node rasterizer, an image encoder) are fine and
+  _build-time_ devDependencies (a Node rasterizer, an image encoder) are fine and
   expected — the constraint is on what ships to the browser.
 - **No inherited constants.** Every existing rendering constant — tile sizes,
   zoom bounds, texture resolutions, oversample factors — was chosen against the
@@ -99,7 +99,7 @@ must be a **pure hash of `(arena identity, x, y)`** — never `Math.random()`,
 never `Date.now()`.
 
 Note that `Arena` (`src/engine/types.ts:331`) carries **no seed field**; seeds are
-per-*turn* (`ReplayTurn.seed`). Hashing on the turn seed would be actively wrong —
+per-_turn_ (`ReplayTurn.seed`). Hashing on the turn seed would be actively wrong —
 the ground would resample every turn and visibly crawl between rounds. Hash on
 `arena.sizeName` plus coordinates instead: arenas are a fixed source-locked
 library, so that identity is stable across turns and identical for every player
@@ -111,7 +111,7 @@ Recommended primitive: a 32-bit FNV-1a or xorshift over
 ### 4.2 iPad performance budget
 
 v1 supports iPadOS Safari in landscape. The reference project manages 28–30 fps
-on *desktop* Apple silicon. We therefore ship **quality tiers**, not a single
+on _desktop_ Apple silicon. We therefore ship **quality tiers**, not a single
 pipeline:
 
 - **`low`** — Tier 1 only (varied albedo). Guaranteed path. Must hold 60 fps.
@@ -119,7 +119,7 @@ pipeline:
 - **`high`** — everything.
 
 Default selection by device probe, with a manual override in settings. Movie
-playback runs at `MOVIE_FPS_OPTIONS` (max 20 *simulation* frames/sec), so there
+playback runs at `MOVIE_FPS_OPTIONS` (max 20 _simulation_ frames/sec), so there
 is headroom — but pinch-zoom and pan must stay smooth at 60 fps regardless.
 **Every tier lands with a measured frame time on a physical iPad before it is
 marked complete.**
@@ -140,7 +140,7 @@ Generators continue to define art as geometry — that is what keeps the Foundry
 Plate rig maintainable, reviewable, and parametric. They then **rasterize to
 channels**, and channels are what the game loads. This is the real method
 transfer from the reference project: its "19 procedural surfaces" are not 19
-images, they are 19 *materials*, each a bundle of channels.
+images, they are 19 _materials_, each a bundle of channels.
 
 **Why robots are raster too.** An earlier revision of this plan kept robots
 vector. That was wrong, for one decisive reason: **scene coherence**. Today the
@@ -152,27 +152,27 @@ That is per-pixel information and vector cannot express it.
 
 The two arguments that had favoured vector both fail:
 
-- *Runtime team recolour.* The paint-not-tint decision (2026-07-08,
+- _Runtime team recolour._ The paint-not-tint decision (2026-07-08,
   `robotTextures.ts:4`) correctly rejected a naive whole-sprite tint, which would
   multiply the grey steel. A **separate paint-mask channel** tints only masked
   pixels and was not on the table then. The current path is also expensive:
   `loadRobotTextures` rasterizes per distinct (class, team) pair, so a four-player
   melee can mean 40–80 runtime fetch→parse→decode→canvas→upload cycles at movie
   load — a real hitch on iPad. A baked atlas plus a mask replaces all of it.
-- *On-demand resolution for the hero view.* Replaced by a board-res atlas plus a
+- _On-demand resolution for the hero view._ Replaced by a board-res atlas plus a
   high-res set loaded per-robot only while the hero view is open. One robot at a
   time, so memory stays bounded.
 
 **Robot channel layout** — 15 bodies (5 classes × 3 postures) + 5 turrets = 20
 sprites:
 
-| Channel | Carries |
-|---|---|
-| Albedo RGB | Team-neutral steel/iron/gun, with grain, wear, edge scuffing |
-| Albedo A | **Paint mask** — which pixels take team colour |
-| Normal RG | Geometry, for Tier 2 lighting |
-| Packed B | **Emissive** — the `#6ff2ff` / `#3ad9ee` / `#e0742f` hooks Tier 4 needs |
-| Packed A | Roughness |
+| Channel    | Carries                                                                 |
+| ---------- | ----------------------------------------------------------------------- |
+| Albedo RGB | Team-neutral steel/iron/gun, with grain, wear, edge scuffing            |
+| Albedo A   | **Paint mask** — which pixels take team colour                          |
+| Normal RG  | Geometry, for Tier 2 lighting                                           |
+| Packed B   | **Emissive** — the `#6ff2ff` / `#3ad9ee` / `#e0742f` hooks Tier 4 needs |
+| Packed A   | Roughness                                                               |
 
 Packs to **2 RGBA textures per sprite, 40 total**, atlas-able — against 80
 runtime-rasterized textures today. Team recolour becomes a shader multiply, so
@@ -181,7 +181,7 @@ all four palettes are free.
 **What raster costs us, honestly.** The one real loss is source-lockable text
 assets: `assets.test.ts` greps SVG source to prove exactly one shadow ellipse
 exists per body (`assets.ts:100`), and that does not survive a PNG. Replace it by
-testing generator *inputs* — noise parameters, palette, variant count, seam
+testing generator _inputs_ — noise parameters, palette, variant count, seam
 continuity — plus a perceptual hash of the baked output. Two consolations:
 `stripBakedShadow` becomes unnecessary (with raster you simply never bake the
 shadow into the body, which is cleaner than regex-stripping it), and generators
@@ -190,7 +190,7 @@ though the game loads the raster.
 
 Bundle size is immaterial at this scale, and "infinite vector crispness" was
 never real: Pixi rasterizes SVG once at a fixed resolution anyway, and raster with
-mipmaps minifies *better* at the Icon band.
+mipmaps minifies _better_ at the Icon band.
 
 **Budget**: terrain and robots ship as mipmapped WebP atlases, target under 1.5 MB
 each on disk and under ~16 MB GPU-resident at the base band, with hero-resolution
@@ -214,7 +214,7 @@ then multiplies by 0.5–3.0 (`MoviePlayer.tsx:42-43`).
 escalating visual impact; zooming out must stay clean and legible for pure
 strategy and planning. Seeing more board is a real product requirement — this is
 an arena game and spatial context matters — so the answer is **not** to make
-everything bigger. It is to make the representation *change* with zoom.
+everything bigger. It is to make the representation _change_ with zoom.
 
 Three rules follow, and every robot/marker tier must honour them:
 
@@ -223,7 +223,7 @@ Three rules follow, and every robot/marker tier must honour them:
    **screen pixels**, not world pixels, with a minimum. Zooming out must not
    shrink them into nothing. (This is how map labels work; today everything is
    baked into one texture, so everything scales uniformly — that is the defect.)
-2. **Detail appears rather than merely magnifying.** Zooming in should *reveal*
+2. **Detail appears rather than merely magnifying.** Zooming in should _reveal_
    lighting, damage, and material that were not drawn at all when zoomed out.
    That is what makes zoom feel rewarding instead of merely functional, and it is
    also what keeps the zoomed-out view uncluttered.
@@ -232,13 +232,13 @@ Three rules follow, and every robot/marker tier must honour them:
 
 **LOD bands** (robot on-screen size, cross-faded at the boundaries):
 
-| Band | Size | Reads as | Carries |
-|---|---|---|---|
-| **Icon** | < 24 px | Strategic token | Silhouette, Side fill, class glyph, facing wedge, alive/dead. Emissive reduced to a single screen-space dot. No surface detail. |
-| **Standard** | 24–72 px | The game | Foundry Plate art, emissive + bloom, rim light, posture, shadow |
-| **Detail** | > 72 px | Cinematic | Adds normal-mapped lighting, damage decals, scorch, smoke, material response |
+| Band         | Size     | Reads as        | Carries                                                                                                                         |
+| ------------ | -------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Icon**     | < 24 px  | Strategic token | Silhouette, Side fill, class glyph, facing wedge, alive/dead. Emissive reduced to a single screen-space dot. No surface detail. |
+| **Standard** | 24–72 px | The game        | Foundry Plate art, emissive + bloom, rim light, posture, shadow                                                                 |
+| **Detail**   | > 72 px  | Cinematic       | Adds normal-mapped lighting, damage decals, scorch, smoke, material response                                                    |
 
-These figures describe the board *as currently configured*. They are the starting
+These figures describe the board _as currently configured_. They are the starting
 measurement, **not** the design target — see §4.6.
 
 Additionally, the Icon band must be **art-directed on its own terms**, not defined
@@ -282,6 +282,7 @@ decision. Pick one derivation and apply it to both.
 and 4 both need — rather than having whichever ships first improvise it.
 
 **Scope**:
+
 - Node rasterizer devDependency (`@napi-rs/canvas` or `resvg`) so generators can
   draw their vector shape vocabulary into a pixel buffer.
 - Noise library: fBm and Worley with **periodic wrapping**, plus the §4.1
@@ -308,7 +309,7 @@ this document.
 
 > **Revised 2026-07-28** after the demo spike. The original scope — "6–8 tileable
 > variants per terrain type, selected by hash" — is **too weak a model and has
-> been replaced**. Per-tile variants fix *repetition* but cannot fix region
+> been replaced**. Per-tile variants fix _repetition_ but cannot fix region
 > shape, orientation, or structure: gravel still crops into rectangles, walls
 > still look identical in every direction, and bushes are still circles on a
 > grid. The spike demonstrated all three failures and then fixed them. What
@@ -337,7 +338,7 @@ colour at any distance.
 warm grass is most of why the original's buildings read as enclosed spaces rather
 than as walls standing on a lawn. Two rules the spike had to learn:
 
-- **The slab runs *under* the walls.** Give bounding-wall tiles a partial weight
+- **The slab runs _under_ the walls.** Give bounding-wall tiles a partial weight
   (0.55) in the floor field so the 0.5 threshold lands mid-wall and the slab edge
   is hidden beneath the wall ribbon. Weight them zero and a strip of grass shows
   between floor and wall base, which reads as a building sitting on a lawn.
@@ -351,8 +352,8 @@ than as walls standing on a lawn. Two rules the spike had to learn:
 **✅ The floor was recovered, not invented (2026-07-28).** The original stores
 each map cell as `(tileset << 4) | variant`
 (`docs/reverse-engineering.md` §9): the high nibble picks the terrain class, the
-low nibble picks the **art variant**. Indoor concrete is a *variant of open
-ground*, authored per tile. Earlier extraction collapsed to the class and
+low nibble picks the **art variant**. Indoor concrete is a _variant of open
+ground_, authored per tile. Earlier extraction collapsed to the class and
 discarded both nibbles.
 
 It is not derivable after the fact — flood-filling Rubble Two for enclosed
@@ -399,13 +400,14 @@ data file or a gated extension to the arena schema.
 **Walls and low walls are not two types.** They are one structure type with a
 height property (open 0, low wall 1, wall 2). This is load-bearing: modelling
 them as separate types makes each autotile against its own kind only, so a wall
-beside a low wall sees no neighbour on that side and *both terminate in a broken
-end*. They visibly refuse to join. Height-as-a-property lets a run continue
+beside a low wall sees no neighbour on that side and _both terminate in a broken
+end_. They visibly refuse to join. Height-as-a-property lets a run continue
 across an elevation change, which is how the original reads as one building with
 a lower section.
 
 Each piece is selected by three things:
-- **`mask`** — 4-bit adjacency to *any* structure. Drives run continuity,
+
+- **`mask`** — 4-bit adjacency to _any_ structure. Drives run continuity,
   corners, T-junctions, and where a run terminates in breakage.
 - **`lower`** — 4-bit "that neighbour is shorter than me". Drives edge lighting,
   so a side facing something shorter catches sun or casts shadow.
@@ -418,14 +420,14 @@ product is far larger than any board needs (the spike's board needs 12 pieces).
 
 **Geometry: the base is pinned to the tile and the cap lifts upward.**
 
-Each piece is a box standing *on* the ground. Its base occupies the tile; its top
+Each piece is a box standing _on_ the ground. Its base occupies the tile; its top
 face is drawn offset **up** the screen by the wall's height (~0.2 tile for a low
 wall, ~0.46 for a full wall), and the vertical faces span the gap between them.
 A low wall and a full wall therefore share the same ground line and differ only
 in how far the cap is raised — which is the one thing that should encode height.
 
-An intermediate revision of the spike built this backwards: it pinned the *top*
-to the tile and hung the side face *below*, so the base moved with height and
+An intermediate revision of the spike built this backwards: it pinned the _top_
+to the tile and hung the side face _below_, so the base moved with height and
 nothing was anchored to the ground. Everything looked like it was floating, and
 no amount of shading fixed it because the error was geometric. **Anchor the base,
 lift the cap.**
@@ -471,12 +473,14 @@ courses, because that is how courses lie on a vertical surface. Patterning the
 cap makes a wall read as a floor tile.
 
 Two supporting details, each individually necessary:
+
 - **A contact shadow at the base.** Correct geometry still reads as hovering
   without one.
 - **Painter's order (sort by row).** Lifted caps reach into the row above, so a
   southern piece must draw over a northern one.
 
 Three further rules the spike proved matter:
+
 - **Courses follow the run direction.** This is the entire source of the
   original's vertical-vs-horizontal read; it is not coded separately.
 - **Breakage marks where the STRUCTURE run ends**, not where its height or
@@ -518,7 +522,7 @@ BITMAPINFOHEADER and fails on them.
 
 **Foliage is a union of leaf clusters, not a blob with a wobbly edge.** A radius
 function `r(θ)` is fundamentally a circle however much noise it carries — real
-foliage's lumpy outline is a *consequence* of its clumps. Build from 8–12
+foliage's lumpy outline is a _consequence_ of its clumps. Build from 8–12
 overlapping domed clumps plus a few detached sprigs, take the union as the
 silhouette, and let the height field carry per-clump shading.
 
@@ -534,13 +538,13 @@ bakes the whole ground at 96 px/tile, which for a 32×32 battle arena would be
 3072² ≈ 37 MB GPU. Too much for iPad, and it grows with arena size. The fix is
 to split into three bands, because each has different resolution needs:
 
-| Band | Contents | Storage | Battle arena |
-|---|---|---|---|
-| **Macro** | Broad tone, region fields, dirt scars | Per-arena image at ~16 px/tile — low-frequency content does not need resolution | 512² ≈ 1 MB |
-| **Scatter** | Debris, rocks, tufts | Shared sprite library + per-arena **placement list** (JSON, not pixels) | ~0.3 MB, constant |
-| **Micro** | Grain, surface texture | One **tiling** 256² texture; repetition is invisible because it is high-frequency and low-contrast | 0.25 MB, constant |
+| Band        | Contents                              | Storage                                                                                            | Battle arena      |
+| ----------- | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------- |
+| **Macro**   | Broad tone, region fields, dirt scars | Per-arena image at ~16 px/tile — low-frequency content does not need resolution                    | 512² ≈ 1 MB       |
+| **Scatter** | Debris, rocks, tufts                  | Shared sprite library + per-arena **placement list** (JSON, not pixels)                            | ~0.3 MB, constant |
+| **Micro**   | Grain, surface texture                | One **tiling** 256² texture; repetition is invisible because it is high-frequency and low-contrast | 0.25 MB, constant |
 
-The only per-arena *pixel* data is the cheap macro layer, so memory is
+The only per-arena _pixel_ data is the cheap macro layer, so memory is
 essentially **constant regardless of arena size** — a 40×40 campaign arena costs
 what a 16×16 skirmish does.
 
@@ -593,6 +597,7 @@ arena has a piece.
 gives the board physical depth.
 
 **Scope**:
+
 - Generate **normal + roughness/height** channels alongside each Tier 1 albedo.
 - Render terrain once into a `RenderTexture`, then one fullscreen light pass:
   a single committed sun direction plus ambient.
@@ -614,6 +619,7 @@ declared light direction; `medium` tier holds iPad frame budget.
 **Goal**: atmosphere and combat weight.
 
 **Scope**:
+
 - Pixi v8 `Filter` chain on the movie stage: threshold + downsample bloom,
   vignette, filmic tonemap and colour grade, subtle grain.
 - Additive blending for muzzle flashes, tracers, and explosion cores.
@@ -636,10 +642,11 @@ direction already did the hard part.
 
 **Why this one first.** Light is the only cue that survives the bottom of the
 zoom band (§4.5). A 2 px glowing lens still reads as a glowing lens; a 2 px panel
-line reads as noise. And the emissive hooks are *already authored* into every
+line reads as noise. And the emissive hooks are _already authored_ into every
 turret — they are simply composited as flat paint today.
 
 **Scope**:
+
 - **Build the robot channel pipeline** (§4.4): extend
   `generate-robot-assets.mjs` to bake albedo + paint mask + normal + emissive +
   roughness into two packed RGBA atlases, replacing the 80 runtime SVG
@@ -676,6 +683,7 @@ routes through the same pipe rather than adding a second one.
 zoomed in, clean strategic legibility zoomed out.
 
 **Scope**:
+
 - Implement the §4.5 band system with cross-faded transitions.
 - **Icon band**: a simplified representation — strong Side fill, class glyph,
   facing wedge, single emissive dot. Drawn deliberately, not merely scaled down.
@@ -733,16 +741,16 @@ above.
 
 ## 6. Sequencing and effort
 
-| Tier | Effort | Visual delta | Risk |
-|---|---|---|---|
-| 0 — shared channel-bake pipeline | M | None directly | Low. Pure infrastructure. |
-| 1 — terrain variance | M | **Highest overall** | Low. Additive; revert is deleting assets. |
-| 2 — 2D lighting | M | High | Medium. Custom shaders; iPad perf is the risk. |
-| 3 — post stack | M | Medium | Medium. Readability regression is the risk. |
-| 4 — robot material + emissive + rim | L | **Highest on bots** | Medium. Replaces the live texture path. |
-| 5 — semantic zoom / LOD | L | High (interaction) | Medium. Touches every marker's sizing. |
-| 6 — hero view | M | High (single surface) | Low. New surface, nothing to regress. |
-| 7 — progressive damage | M | Medium | Low. |
+| Tier                                | Effort | Visual delta          | Risk                                           |
+| ----------------------------------- | ------ | --------------------- | ---------------------------------------------- |
+| 0 — shared channel-bake pipeline    | M      | None directly         | Low. Pure infrastructure.                      |
+| 1 — terrain variance                | M      | **Highest overall**   | Low. Additive; revert is deleting assets.      |
+| 2 — 2D lighting                     | M      | High                  | Medium. Custom shaders; iPad perf is the risk. |
+| 3 — post stack                      | M      | Medium                | Medium. Readability regression is the risk.    |
+| 4 — robot material + emissive + rim | L      | **Highest on bots**   | Medium. Replaces the live texture path.        |
+| 5 — semantic zoom / LOD             | L      | High (interaction)    | Medium. Touches every marker's sizing.         |
+| 6 — hero view                       | M      | High (single surface) | Low. New surface, nothing to regress.          |
+| 7 — progressive damage              | M      | Medium                | Low.                                           |
 
 **Tier 0 is implied by the §4.4 decision and should be named explicitly**: the
 Node rasterizer devDependency, noise library, channel packing, atlas emission,
@@ -765,15 +773,16 @@ work Tier 2 and Tier 7 would otherwise have had to do.
 Append one row per completed tier. Record what shipped, what it cost in frame
 time, and what it broke.
 
-| Date | Tier | Outcome | Frame time (desktop / iPad) | Baselines regenerated | Notes |
-|---|---|---|---|---|---|
-| — | — | — | — | — | No production tier landed yet. |
+| Date | Tier | Outcome | Frame time (desktop / iPad) | Baselines regenerated | Notes                          |
+| ---- | ---- | ------- | --------------------------- | --------------------- | ------------------------------ |
+| —    | —    | —       | —                           | —                     | No production tier landed yet. |
 
-### Demo spike (2026-07-28) — throwaway, not a tier
+### Demo spike (2026-07-28) — a bench, not a tier
 
-Built to decide whether to fund this plan at all. Desktop only. **Not production
-code and not a head start on Tier 0** — no determinism contract, no tests, no
-atlasing, no LOD bands, no iPad budget, hardcoded 16×12 board.
+Built to decide whether to fund this plan at all; **retained 2026-08-01** as the
+reference implementation and a bench for tweaking the look. Desktop only. **Not
+production code** — no determinism contract, no tests, no atlasing, no LOD bands,
+no iPad budget. See §8 for the integration path.
 
 - `scripts/spike/generate-demo-terrain.mjs` — reads the **real source-locked
   arena JSON** from `src/lib/arenas/` and bakes ground, autotiled structures, and
@@ -782,7 +791,8 @@ atlasing, no LOD bands, no iPad budget, hardcoded 16×12 board.
 - `src/components/spike/GraphicsDemo.tsx`, `src/app/graphics-demo/page.tsx` —
   A/B bench with per-technique toggles and a zoom slider
 
-**Delete all four paths once the decision is made.**
+**Retained, not to be deleted** — see §8.1. It now also carries
+`scripts/spike/compose-board.py`, an offline board renderer that needs no browser.
 
 **Findings.**
 
@@ -814,7 +824,7 @@ atlasing, no LOD bands, no iPad budget, hardcoded 16×12 board.
    structures autotile correctly with no new cases), and **8.4 MB for one arena
    at 64 px/tile confirms the §Tier-1 storage split is required, not optional**.
 6. **Painter's order needs a within-row term.** The oblique cap is displaced up
-   and to the *right*, so the viewer sits down-left and west is nearer. Sorting
+   and to the _right_, so the viewer sits down-left and west is nearer. Sorting
    by row alone left the within-row order running west→east, which painted
    farther eastern pieces over nearer western ones — mixed-height junctions read
    as overlapping rectangles. Correct order is row ascending, then column
@@ -828,58 +838,176 @@ atlasing, no LOD bands, no iPad budget, hardcoded 16×12 board.
 
 ---
 
-## 8. Decision log
+## 8. Taking the spike into the game
 
-| Date | Decision | Rationale |
-|---|---|---|
-| 2026-07-28 | No Three.js / no 3D | Reference project's stack solves 3D problems we don't have; would harm tactical readability |
-| 2026-07-28 | Hash appearance on `arena.sizeName`, not turn seed | `Arena` has no seed; turn seed would make ground crawl between turns |
-| 2026-07-28 | Per-leg walk cycle rejected | Four legs across ~30 px is noise; existing hop rig already sells movement |
-| 2026-07-28 | Board size stays; zoom carries visual impact | Arena context is a product requirement — solved by LOD bands (§4.5), not by bigger tiles |
-| 2026-07-28 | Tier 4 pulled ahead of Tier 2 | Cheap, self-contained, largest robot-facing delta; art hooks already authored |
-| 2026-07-28 | ~~Terrain is raster; robots stay vector~~ **SUPERSEDED same day** | Optimised each asset class in isolation and missed scene coherence. See next row. |
-| 2026-07-28 | **Vector authoring, raster channel delivery — for terrain *and* robots** | Scene coherence is decisive: textured lit ground carrying flat vector robots is worse than uniform flatness. Both recolour and hero-view resolution have better raster answers (paint-mask channel; on-demand hero set). §4.4 |
-| 2026-07-28 | Team recolour moves to a paint-mask channel + shader multiply | The 2026-07-08 paint-not-tint decision correctly rejected a *whole-sprite* tint; a masked tint was not considered. Cuts 80 runtime rasterizations to one atlas decode. |
-| 2026-07-28 | Source-grep asset tests replaced by generator-input tests + perceptual hash | Raster output cannot be grepped; this is the one genuine capability lost to raster |
-| 2026-07-28 | **No inherited rendering constants** | Existing tile sizes, zoom bounds, and texture resolutions were phase-local choices; each is re-derived to maximize display impact and re-validated against the perf budget (§4.6) |
-| 2026-07-28 | Zoom ceiling decoupled from texture budget | Terrain composites to a `RenderTexture` regardless, so it can re-composite at higher resolution for the visible region — bounded memory, unbounded zoom |
-| 2026-07-28 | Icon band is art-directed, not degraded | Emissive points and motion survive arbitrary minification; the zoomed-out view is a designed aesthetic in its own right |
-| 2026-07-28 | **Tier 1 is three layers, not per-tile variants** | Per-tile variants fix repetition but not region shape, orientation, or structure. Ground baked per arena from world-continuous noise; walls autotiled form-first; bushes as off-grid props. Proven in the spike. |
-| 2026-07-28 | Walls are form-first, pattern-second | The original reads as architecture because top face / front face / edge lighting dominate; brick is incidental. Rev 1 inverted this and looked stamped. |
-| 2026-07-28 | Structure breakage only at run ends | Damage applied along a run's length punches holes through intact walls; ends are where breakage reads as architecture. |
-| 2026-07-28 | Region membership is a smooth field, not a per-tile boolean | Bilinear over the tile mask plus noise perturbation is what stops rough ground cropping into rectangles. |
-| 2026-07-28 | **Walls and low walls are one structure type with a height property** | Modelling them as separate types makes each autotile against its own kind, so a wall beside a low wall sees no neighbour and both break off — they visibly refuse to join. Height-as-property makes a mixed-elevation building read as one object. |
-| 2026-07-28 | Foliage is a union of clumps with crisp alpha | `r(θ)` is a circle however much noise it carries; and feathering a rim-darkened colour smears a dark halo. Leaf edges catch light. |
-| 2026-07-28 | Ground storage splits macro / scatter / micro by frequency | Only the low-res macro layer is per-arena pixels; scatter and micro are shared libraries plus placement data, so memory is constant in arena size. Composite is viewport-sized, not arena-sized. |
-| 2026-07-28 | ~~Side faces overflow *below* the footprint~~ **SUPERSEDED same day** | Pinned the top to the tile so the base moved with height — everything read as floating. Geometric error, not a shading one. |
-| 2026-07-28 | **Structure base is pinned to the tile; the cap lifts upward** | Low and full walls share a ground line and differ only in cap lift, so height is the sole encoder of "tall". South faces then meet the neighbour's lifted cap exactly, for free. |
-| 2026-07-28 | Brick on the vertical faces; caps stay flat | Courses lie horizontally on vertical surfaces. Patterning the cap makes a wall read as a floor tile. |
-| 2026-07-28 | **Oblique projection: cap offset by height × (0.11 right, 0.23 up), side faces are the swept volume** | Sweeping along a projection vector mitres every corner and wall end automatically. Axis-aligned strips gave 90° corners that read as pasted-on rectangles. Base footprint stays tile-aligned, so the grid is never skewed. |
-| 2026-07-28 | Face exposure is per column / per row, not per piece | A corner piece has one arm at the tile edge (connected) and an elbow that is not (exposed). A single per-piece flag punched holes at every building corner. |
-| 2026-07-28 | **Compound interiors are concrete slab, not grass** | Cool grey against warm grass is most of what makes the original's buildings read as enclosed spaces. Requires a floor terrain type RoboArena lacks — a content decision, flagged not assumed. |
-| 2026-07-28 | Slab runs under the walls; field is gated to slab tiles | Partial weight on bounding walls hides the slab edge beneath the wall ribbon; gating stops bilinear from bleeding a concrete bubble through doorways. Diagonals count, or interior corners show a green wedge. |
-| 2026-07-28 | Low sections need ≥2 tiles and a muted palette | A single pale cap embedded in a brick run reads as a hole rather than as a lower course. |
-| 2026-07-28 | **Variant data RECOVERED — `export_data.py` now emits `arena-variants.json`** | Cell byte is `(tileset << 4) \| variant`; the low nibble carries indoor-vs-outdoor surface and per-tile prop art. Heuristic got 84→87 tiles; the real data is exact. |
-| 2026-07-28 | Shipped arena JSON left untouched | `index.test.ts` pins a sha256 over `JSON.stringify(tiles)`. The source lock is working; changing the canonical schema is a separate gated decision. Companion file instead. |
-| 2026-07-28 | The blue prop is a **rounded boulder cluster**, not crystals or crates | Decoded from the original's own DIB tile art. Also avoids the "game-trope object under a robot" problem that crates and crystals share. `crate.svg`'s "crystal" description was a guess. |
-| 2026-07-28 | Prop variant is authored per tile — read it, don't derive it | Variant 9 = foliage, 10/11 = boulders. Correlates perfectly with indoors/outdoors on Rubble Two, but that is the map author's choice, not a rule to infer. |
-| 2026-07-28 | Ruined walls vary in **height**, not width | Stepping the flank width only makes the ribbon wobble while its top stays one flat plane — "narrow flat next to wide flat". A collapsed wall loses courses, so the per-column cap elevation is what must step. |
-| 2026-07-28 | Base surface is per-TILESET, not per terrain class | `rough` has indoor (tileset 11) and outdoor (3) flavours just as `open` does. Splitting only `open` leaves grass growing through compound floors. 154 floor tiles on Rubble Two, not 84. |
-| 2026-07-28 | Indoor prop is a **grey rock with smaller ones beside it** | Blue read as clouds; equal-sized lumps in a ring read as a cluster of puffs. The size hierarchy plus a hard lighting terminator is what makes it stone. |
-| 2026-07-28 | Props are sized to read as **cover**, with several arrangements | One large + chips, three medium, one very large + chips, two medium + scatter. A single silhouette recoloured reads as decoration; cover has to look like something a chassis hides behind. |
-| 2026-07-28 | ~~Non-floor tiles receive slab by directional dilation~~ **REVERTED to bilinear** | Bilinear samples the 2×2 neighbourhood, so it handles inside corners — where a wall touches floor only diagonally, 43 tiles on Rubble Two — for free. Every hand-rolled dilation had to rediscover that case and then over-reach fixing it, spilling concrete onto the lawn. Three rounds of larger machinery to re-derive a property the one-line approach had by construction. |
-| 2026-07-28 | **A tile's recovered `base` describes its ART, not the ground it occupies** | This was the root cause of the last surviving slab artifact, and it is the trap most likely to recur. An *indoor* wall is drawn on the indoor tileset, so its `base` is legitimately `floor` — 8 such tiles on Rubble Two. `floorWeight` tested `isFloor` before `isStructure`, so those walls took weight 1, flooded their whole tile with slab, and spilled concrete past the wall onto the grass. **Always resolve structure-ness before surface-ness: a wall is a slab boundary regardless of what tileset its art came from.** |
-| 2026-07-28 | Ruin profiles vary per PIECE, keyed by position | Seeding collapse off `mask` alone gives every tile sharing a mask an identical profile, so the board repeats one "tall, medium, drop" phrase down every wall. Bake several profiles; the placement picks one by position hash. |
-| 2026-07-28 | Ruin height steps along the RUN axis | Keying off x left every column of a vertical ribbon at one elevation, so vertical low walls stayed perfectly flat while horizontal ones varied. |
-| 2026-07-28 | ~~Ruin steps are correlated and shallow~~ **SUPERSEDED** | Narrowing the range traded a comb for a wobble. Both were per-segment sampling, which is the wrong structure. |
-| 2026-07-28 | **A ruin is PLATEAUS: one level per tile, correlated across tiles** | Real collapse holds a height for a stretch, drops hard, holds, climbs back — a run-length property that cannot live inside one tile's profile. Level becomes part of the piece identity; the placement picks it from low-frequency noise over world position. Wide range kept; sequential see-sawing gone. |
-| 2026-07-28 | ~~Caps crumble at height steps by eroding the footprint~~ **REVERTED** | Eroding the PLAN shape damages a piece's connection to its neighbours — it punched holes at corners and junctions, and did not read as a transition anyway. Never erode plan shape for a surface effect. |
-| 2026-07-28 | **Ruin height = plateau (coarse) + low-variance jitter (fine)** | One scale cannot do both jobs. The per-tile plateau supplies the wide range and the U-shaped drops; a small jitter along the run supplies the jaggedness. Keying the jitter to the run axis only keeps the jag on the top edge instead of speckling across the wall's thickness. |
-| 2026-07-28 | **A ruined low wall's varying cap height needs RISERS, on both axes** | Sweeping only boundary columns and rows assumes a flat cap, so adjacent low-wall plateaus at different heights can expose background wedges. Sweep every footprint pixel and extend the shorter pixel toward whichever neighbour behind it (north or east) is taller. This keeps the ruined low wall solid without manufacturing a transition shape on the full wall. |
-| 2026-07-29 | **A piece may not assume a neighbour stands at nominal height** | Pieces are baked independently, so cross-piece geometry has to be conservative. The tall wall's south face stopped at `southHeight / myHeight` — the neighbour's *nominal* top — but a ruined low wall stands at anywhere from 0.28 to 1.0 of its own, and the shortfall showed as a sliver of background at the join. Sweep the FULL face and let painter order cover the overlap: over-drawing is free, guessing is not. |
-| 2026-07-29 | Break a ruined junction with rubble, not with geometry | A ruined wall should not end in a machined cut, but three geometric attempts at that junction — footprint erosion, continuous ramp, quantised staircase — all either disconnected pieces or replaced one tidy edge with a mechanical one. Loose debris at the drop is additive, cannot sever anything, and is what actually falls off a collapsing wall. Piece count is the fingerprint of which state is live: 123 textures / 32 pieces without the staircase, 171 / 48 with it. |
-| 2026-07-29 | **Full-to-low wall transitions use one CLEAN DROP** | Generated ramps progressed from a fine staircase to coarse steps, prongs, and an overworked rubble wedge. None improved on the legibility of a full-height wall ending cleanly where the adjoining low-wall piece begins. Keep the full wall flat through its last source pixel and let the height discontinuity form one vertical drop. |
-| 2026-07-28 | Slab reaches into walls by **directional dilation**, not an interpolated field | Bilinear fills a bounding wall tile from every direction, so at a run END — where the ribbon narrows and the oblique offset shifts it aside — a wedge of concrete juts onto the grass. Dilating only from floor-facing edges leaves nothing to spill. This was the real cause of the artifact; an earlier tie-break fix addressed a different, real, but unrelated bug. |
-| 2026-07-28 | Walls are ribbons (~0.46 tile), not filled squares | A full-tile cap reads as a row of boxes. Narrow caps with ground either side read as a building — and the centre-plus-arms footprint yields corners, T-junctions, and stubs for free. |
-| 2026-07-28 | Rubble marks termini (≤1 connection), not "no neighbour on that side" | On a straight run both flanks lack neighbours; treating those as ends litters debris down the length of an intact wall. |
-| 2026-07-28 | Contact shadow at every structure base | Correct geometry still reads as hovering without one. |
+**Read this section and §9's decision log before writing any code.** The spike
+cost far more iterations than the algorithms suggest, and almost all of that was
+spent rediscovering things §9 already records.
+
+### 8.1 Status
+
+The spike is **retained, not throwaway** (revised 2026-08-01). It stays as a
+reference implementation and a bench for tweaking the look without touching the
+game. Do not delete it when the production path lands; delete it only when the
+production renderer has clearly superseded it.
+
+```
+scripts/spike/generate-demo-terrain.mjs   the generator (the valuable part)
+scripts/spike/compose-board.py            offline board render, no browser
+src/components/spike/GraphicsDemo.tsx     the A/B bench + tile hover readout
+src/app/graphics-demo/                     route: /graphics-demo
+public/spike/terrain/<arena>/              generated output (gitignored)
+```
+
+Rebuild output with `node scripts/spike/generate-demo-terrain.mjs [arena]`.
+Inspect without a browser via `python scripts/spike/compose-board.py x0 y0 x1 y1`.
+
+### 8.2 What the spike proved, and what it did not
+
+**Proven, and expected to carry over intact:** per-arena continuous ground
+baking; the rough/floor field treatment; 4-bit structure autotiling over a
+height property; the oblique projection with south+west faces; ribbon footprints
+with centre-plus-arms; plateau-based low-wall ruin; clump-union foliage; the
+grey boulder prop; and the recovered variant data.
+
+**Not addressed at all, and all of it is required for production:** the §4.1
+determinism contract, any test, atlasing, WebP, mipmaps, the §4.2 iPad budget,
+the §4.5 LOD bands, and the §Tier-1 macro/scatter/micro storage split. The spike
+bakes one 1536² PNG per arena at 64 px/tile, which is over budget and does not
+scale to the 32×32 battle arena.
+
+**Deliberately left clean:** wall faces. Five separate attempts to make a broken
+end read as broken are recorded in §9. Do not attempt a sixth without reading
+them; the summary is that silhouette approaches disconnect pieces or read as
+mechanical, and texture approaches need surrounding context that ~14 px of
+visible face does not provide.
+
+### 8.3 The blocking dependency
+
+`docs/extracted/arena-variants.json` carries the recovered `(tileset, variant)`
+nibbles — indoor floor surfaces and prop art selection. **`docs/extracted/` is
+gitignored**, so a fresh clone cannot build the terrain. `arena-variants.json`
+was force-added at commit `bb3cbb7`, but nothing keeps it in sync.
+
+Resolve this **first**, before any renderer work. Two options:
+
+1. Give the recovered data a committed home — a checked-in file with its own
+   provenance hash, mirroring how `src/lib/arenas/*.json` is handled.
+2. Extend the arena schema itself to carry `base` and prop variant per tile.
+   Note this changes `src/lib/arenas/*.json`, which is **source-locked**:
+   `src/lib/arenas/index.test.ts` pins a sha256 over `JSON.stringify(tiles)`.
+   That test failing is the lock working, not a problem to route around — the
+   digest must be updated deliberately, in its own commit.
+
+Regenerate with:
+`python tools/re/export_data.py "RoboSport (1991)/games/RoboSpor/ROBOWIN" docs/extracted/robosport-data.json`
+
+### 8.4 Integration points
+
+Terrain is drawn in exactly three places, all the same shape — a per-tile loop
+stamping one SVG per terrain type:
+
+| File                                     | Line | Surface                     |
+| ---------------------------------------- | ---- | --------------------------- |
+| `src/renderer/PixiArena.tsx`             | ~69  | `/preview` arena thumbnails |
+| `src/renderer/MoviePlayer.tsx`           | ~300 | the movie board             |
+| `src/components/planner/ArenaCanvas.tsx` | ~398 | the planner board           |
+
+All three resolve `TERRAIN_ASSETS[terrain]` from `src/renderer/assets.ts`. The
+production shape replaces that loop with: one ground sprite, plus structure and
+prop sprites placed from a manifest in painter order.
+
+**Painter order is not optional** and is easy to get wrong: sort by row
+ascending, then **column descending**. The oblique cap is displaced up-and-right,
+so west is nearer. Sorting by row alone paints farther eastern pieces over nearer
+western ones — invisible on uniform walls, glaring at any height change.
+
+### 8.5 Suggested order
+
+1. **Data home** (§8.3). Blocks everything else.
+2. **Tier 0** — the shared bake pipeline with its determinism tests. The spike's
+   noise and hashing are the reference; the tests are new work. Do this before
+   porting any look, because §4.1 correctness is cheapest to establish when
+   nothing depends on it yet.
+3. **Ground only**, behind a flag, on `/preview` first. One surface, no
+   structures, easy to compare against the shipped SVG path.
+4. **Structures and props**, still `/preview`. Autotiling, painter order,
+   plinth. Port the §Tier-1 regression checks here — they map to defects that
+   actually occurred.
+5. **Storage split** (§Tier 1 open question) before touching the movie or
+   planner, since the 32×32 battle arena is what breaks the naive bake.
+6. **Movie and planner**, one at a time. Both have visual-regression baselines
+   that will need regenerating; state which in the PR.
+7. **LOD bands** (§Tier 5) last. Note §4.5's empirical finding: without
+   screen-space floors the Icon band is unusable, not merely weaker.
+
+### 8.6 Two things that will bite
+
+**Robots are still vector, terrain is raster.** §4.4 explains why that split is
+correct, but it means the scene has two asset pipelines. Tier 4 moves robots to
+channel delivery; until then expect the coherence mismatch §4.4 warns about —
+lit textured ground with flat vector robots on it.
+
+**The spike bakes lighting into the albedo.** That is faithful to Tier 2's single
+committed sun direction and was the right call for a bench, but it forecloses
+transient point lights (muzzle flashes illuminating nearby ground). If Tier 3's
+combat lighting matters, the ground needs a real normal channel and a runtime
+light pass, not a baked-lit image.
+
+---
+
+## 9. Decision log
+
+| Date       | Decision                                                                                              | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-28 | No Three.js / no 3D                                                                                   | Reference project's stack solves 3D problems we don't have; would harm tactical readability                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-28 | Hash appearance on `arena.sizeName`, not turn seed                                                    | `Arena` has no seed; turn seed would make ground crawl between turns                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-07-28 | Per-leg walk cycle rejected                                                                           | Four legs across ~30 px is noise; existing hop rig already sells movement                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-07-28 | Board size stays; zoom carries visual impact                                                          | Arena context is a product requirement — solved by LOD bands (§4.5), not by bigger tiles                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | Tier 4 pulled ahead of Tier 2                                                                         | Cheap, self-contained, largest robot-facing delta; art hooks already authored                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2026-07-28 | ~~Terrain is raster; robots stay vector~~ **SUPERSEDED same day**                                     | Optimised each asset class in isolation and missed scene coherence. See next row.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-28 | **Vector authoring, raster channel delivery — for terrain _and_ robots**                              | Scene coherence is decisive: textured lit ground carrying flat vector robots is worse than uniform flatness. Both recolour and hero-view resolution have better raster answers (paint-mask channel; on-demand hero set). §4.4                                                                                                                                                                                                                                                                                                       |
+| 2026-07-28 | Team recolour moves to a paint-mask channel + shader multiply                                         | The 2026-07-08 paint-not-tint decision correctly rejected a _whole-sprite_ tint; a masked tint was not considered. Cuts 80 runtime rasterizations to one atlas decode.                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-28 | Source-grep asset tests replaced by generator-input tests + perceptual hash                           | Raster output cannot be grepped; this is the one genuine capability lost to raster                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-07-28 | **No inherited rendering constants**                                                                  | Existing tile sizes, zoom bounds, and texture resolutions were phase-local choices; each is re-derived to maximize display impact and re-validated against the perf budget (§4.6)                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-28 | Zoom ceiling decoupled from texture budget                                                            | Terrain composites to a `RenderTexture` regardless, so it can re-composite at higher resolution for the visible region — bounded memory, unbounded zoom                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-28 | Icon band is art-directed, not degraded                                                               | Emissive points and motion survive arbitrary minification; the zoomed-out view is a designed aesthetic in its own right                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-28 | **Tier 1 is three layers, not per-tile variants**                                                     | Per-tile variants fix repetition but not region shape, orientation, or structure. Ground baked per arena from world-continuous noise; walls autotiled form-first; bushes as off-grid props. Proven in the spike.                                                                                                                                                                                                                                                                                                                    |
+| 2026-07-28 | Walls are form-first, pattern-second                                                                  | The original reads as architecture because top face / front face / edge lighting dominate; brick is incidental. Rev 1 inverted this and looked stamped.                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-28 | Structure breakage only at run ends                                                                   | Damage applied along a run's length punches holes through intact walls; ends are where breakage reads as architecture.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-28 | Region membership is a smooth field, not a per-tile boolean                                           | Bilinear over the tile mask plus noise perturbation is what stops rough ground cropping into rectangles.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | **Walls and low walls are one structure type with a height property**                                 | Modelling them as separate types makes each autotile against its own kind, so a wall beside a low wall sees no neighbour and both break off — they visibly refuse to join. Height-as-property makes a mixed-elevation building read as one object.                                                                                                                                                                                                                                                                                  |
+| 2026-07-28 | Foliage is a union of clumps with crisp alpha                                                         | `r(θ)` is a circle however much noise it carries; and feathering a rim-darkened colour smears a dark halo. Leaf edges catch light.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-07-28 | Ground storage splits macro / scatter / micro by frequency                                            | Only the low-res macro layer is per-arena pixels; scatter and micro are shared libraries plus placement data, so memory is constant in arena size. Composite is viewport-sized, not arena-sized.                                                                                                                                                                                                                                                                                                                                    |
+| 2026-07-28 | ~~Side faces overflow _below_ the footprint~~ **SUPERSEDED same day**                                 | Pinned the top to the tile so the base moved with height — everything read as floating. Geometric error, not a shading one.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-28 | **Structure base is pinned to the tile; the cap lifts upward**                                        | Low and full walls share a ground line and differ only in cap lift, so height is the sole encoder of "tall". South faces then meet the neighbour's lifted cap exactly, for free.                                                                                                                                                                                                                                                                                                                                                    |
+| 2026-07-28 | Brick on the vertical faces; caps stay flat                                                           | Courses lie horizontally on vertical surfaces. Patterning the cap makes a wall read as a floor tile.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-07-28 | **Oblique projection: cap offset by height × (0.11 right, 0.23 up), side faces are the swept volume** | Sweeping along a projection vector mitres every corner and wall end automatically. Axis-aligned strips gave 90° corners that read as pasted-on rectangles. Base footprint stays tile-aligned, so the grid is never skewed.                                                                                                                                                                                                                                                                                                          |
+| 2026-07-28 | Face exposure is per column / per row, not per piece                                                  | A corner piece has one arm at the tile edge (connected) and an elbow that is not (exposed). A single per-piece flag punched holes at every building corner.                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-28 | **Compound interiors are concrete slab, not grass**                                                   | Cool grey against warm grass is most of what makes the original's buildings read as enclosed spaces. Requires a floor terrain type RoboArena lacks — a content decision, flagged not assumed.                                                                                                                                                                                                                                                                                                                                       |
+| 2026-07-28 | Slab runs under the walls; field is gated to slab tiles                                               | Partial weight on bounding walls hides the slab edge beneath the wall ribbon; gating stops bilinear from bleeding a concrete bubble through doorways. Diagonals count, or interior corners show a green wedge.                                                                                                                                                                                                                                                                                                                      |
+| 2026-07-28 | Low sections need ≥2 tiles and a muted palette                                                        | A single pale cap embedded in a brick run reads as a hole rather than as a lower course.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | **Variant data RECOVERED — `export_data.py` now emits `arena-variants.json`**                         | Cell byte is `(tileset << 4) \| variant`; the low nibble carries indoor-vs-outdoor surface and per-tile prop art. Heuristic got 84→87 tiles; the real data is exact.                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-07-28 | Shipped arena JSON left untouched                                                                     | `index.test.ts` pins a sha256 over `JSON.stringify(tiles)`. The source lock is working; changing the canonical schema is a separate gated decision. Companion file instead.                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-28 | The blue prop is a **rounded boulder cluster**, not crystals or crates                                | Decoded from the original's own DIB tile art. Also avoids the "game-trope object under a robot" problem that crates and crystals share. `crate.svg`'s "crystal" description was a guess.                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | Prop variant is authored per tile — read it, don't derive it                                          | Variant 9 = foliage, 10/11 = boulders. Correlates perfectly with indoors/outdoors on Rubble Two, but that is the map author's choice, not a rule to infer.                                                                                                                                                                                                                                                                                                                                                                          |
+| 2026-07-28 | Ruined walls vary in **height**, not width                                                            | Stepping the flank width only makes the ribbon wobble while its top stays one flat plane — "narrow flat next to wide flat". A collapsed wall loses courses, so the per-column cap elevation is what must step.                                                                                                                                                                                                                                                                                                                      |
+| 2026-07-28 | Base surface is per-TILESET, not per terrain class                                                    | `rough` has indoor (tileset 11) and outdoor (3) flavours just as `open` does. Splitting only `open` leaves grass growing through compound floors. 154 floor tiles on Rubble Two, not 84.                                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | Indoor prop is a **grey rock with smaller ones beside it**                                            | Blue read as clouds; equal-sized lumps in a ring read as a cluster of puffs. The size hierarchy plus a hard lighting terminator is what makes it stone.                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-28 | Props are sized to read as **cover**, with several arrangements                                       | One large + chips, three medium, one very large + chips, two medium + scatter. A single silhouette recoloured reads as decoration; cover has to look like something a chassis hides behind.                                                                                                                                                                                                                                                                                                                                         |
+| 2026-07-28 | ~~Non-floor tiles receive slab by directional dilation~~ **REVERTED to bilinear**                     | Bilinear samples the 2×2 neighbourhood, so it handles inside corners — where a wall touches floor only diagonally, 43 tiles on Rubble Two — for free. Every hand-rolled dilation had to rediscover that case and then over-reach fixing it, spilling concrete onto the lawn. Three rounds of larger machinery to re-derive a property the one-line approach had by construction.                                                                                                                                                    |
+| 2026-07-28 | **A tile's recovered `base` describes its ART, not the ground it occupies**                           | This was the root cause of the last surviving slab artifact, and it is the trap most likely to recur. An _indoor_ wall is drawn on the indoor tileset, so its `base` is legitimately `floor` — 8 such tiles on Rubble Two. `floorWeight` tested `isFloor` before `isStructure`, so those walls took weight 1, flooded their whole tile with slab, and spilled concrete past the wall onto the grass. **Always resolve structure-ness before surface-ness: a wall is a slab boundary regardless of what tileset its art came from.** |
+| 2026-07-28 | Ruin profiles vary per PIECE, keyed by position                                                       | Seeding collapse off `mask` alone gives every tile sharing a mask an identical profile, so the board repeats one "tall, medium, drop" phrase down every wall. Bake several profiles; the placement picks one by position hash.                                                                                                                                                                                                                                                                                                      |
+| 2026-07-28 | Ruin height steps along the RUN axis                                                                  | Keying off x left every column of a vertical ribbon at one elevation, so vertical low walls stayed perfectly flat while horizontal ones varied.                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-28 | ~~Ruin steps are correlated and shallow~~ **SUPERSEDED**                                              | Narrowing the range traded a comb for a wobble. Both were per-segment sampling, which is the wrong structure.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 2026-07-28 | **A ruin is PLATEAUS: one level per tile, correlated across tiles**                                   | Real collapse holds a height for a stretch, drops hard, holds, climbs back — a run-length property that cannot live inside one tile's profile. Level becomes part of the piece identity; the placement picks it from low-frequency noise over world position. Wide range kept; sequential see-sawing gone.                                                                                                                                                                                                                          |
+| 2026-07-28 | ~~Caps crumble at height steps by eroding the footprint~~ **REVERTED**                                | Eroding the PLAN shape damages a piece's connection to its neighbours — it punched holes at corners and junctions, and did not read as a transition anyway. Never erode plan shape for a surface effect.                                                                                                                                                                                                                                                                                                                            |
+| 2026-07-28 | **Ruin height = plateau (coarse) + low-variance jitter (fine)**                                       | One scale cannot do both jobs. The per-tile plateau supplies the wide range and the U-shaped drops; a small jitter along the run supplies the jaggedness. Keying the jitter to the run axis only keeps the jag on the top edge instead of speckling across the wall's thickness.                                                                                                                                                                                                                                                    |
+| 2026-07-28 | **A ruined low wall's varying cap height needs RISERS, on both axes**                                 | Sweeping only boundary columns and rows assumes a flat cap, so adjacent low-wall plateaus at different heights can expose background wedges. Sweep every footprint pixel and extend the shorter pixel toward whichever neighbour behind it (north or east) is taller. This keeps the ruined low wall solid without manufacturing a transition shape on the full wall.                                                                                                                                                               |
+| 2026-07-29 | **A piece may not assume a neighbour stands at nominal height**                                       | Pieces are baked independently, so cross-piece geometry has to be conservative. The tall wall's south face stopped at `southHeight / myHeight` — the neighbour's _nominal_ top — but a ruined low wall stands at anywhere from 0.28 to 1.0 of its own, and the shortfall showed as a sliver of background at the join. Sweep the FULL face and let painter order cover the overlap: over-drawing is free, guessing is not.                                                                                                          |
+| 2026-07-29 | Break a ruined junction with rubble, not with geometry                                                | A ruined wall should not end in a machined cut, but three geometric attempts at that junction — footprint erosion, continuous ramp, quantised staircase — all either disconnected pieces or replaced one tidy edge with a mechanical one. Loose debris at the drop is additive, cannot sever anything, and is what actually falls off a collapsing wall. Piece count is the fingerprint of which state is live: 123 textures / 32 pieces without the staircase, 171 / 48 with it.                                                   |
+| 2026-07-29 | **Full-to-low wall transitions use one CLEAN DROP**                                                   | Generated ramps progressed from a fine staircase to coarse steps, prongs, and an overworked rubble wedge. None improved on the legibility of a full-height wall ending cleanly where the adjoining low-wall piece begins. Keep the full wall flat through its last source pixel and let the height discontinuity form one vertical drop.                                                                                                                                                                                            |
+| 2026-07-28 | Slab reaches into walls by **directional dilation**, not an interpolated field                        | Bilinear fills a bounding wall tile from every direction, so at a run END — where the ribbon narrows and the oblique offset shifts it aside — a wedge of concrete juts onto the grass. Dilating only from floor-facing edges leaves nothing to spill. This was the real cause of the artifact; an earlier tie-break fix addressed a different, real, but unrelated bug.                                                                                                                                                             |
+| 2026-07-28 | Walls are ribbons (~0.46 tile), not filled squares                                                    | A full-tile cap reads as a row of boxes. Narrow caps with ground either side read as a building — and the centre-plus-arms footprint yields corners, T-junctions, and stubs for free.                                                                                                                                                                                                                                                                                                                                               |
+| 2026-07-28 | Rubble marks termini (≤1 connection), not "no neighbour on that side"                                 | On a straight run both flanks lack neighbours; treating those as ends litters debris down the length of an intact wall.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-28 | Contact shadow at every structure base                                                                | Correct geometry still reads as hovering without one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |

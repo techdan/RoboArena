@@ -1,5 +1,10 @@
 /**
- * ⚠️  THROWAWAY SPIKE — NOT PRODUCTION CODE ⚠️
+ * 🔧 REFERENCE BENCH — NOT PRODUCTION CODE
+ *
+ * Retained deliberately (2026-08-01) as the reference implementation for the
+ * graphics work and as a bench for tweaking the look without touching the game.
+ * Skips everything production needs — determinism contract, tests, atlasing,
+ * iPad budget, LOD. See docs/graphics-plan.md §8 before porting any of it.
  *
  * Decision instrument for docs/graphics-plan.md. Rev 2, rebuilt around the
  * 2026-07-28 art feedback: the first pass generated *tiles in isolation*, which
@@ -20,8 +25,8 @@
  *   3. BUSHES are props, not tiles: irregular silhouettes with feathered alpha
  *      that overhang their square.
  *
- * Still deliberately breaks the plan's rules: no determinism contract, no
- * tests, no atlasing, desktop only. Delete with public/spike/ when done.
+ * Deliberately breaks the plan's rules: no determinism contract, no tests,
+ * no atlasing, desktop only.
  *
  * Run: node scripts/spike/generate-demo-terrain.mjs
  */

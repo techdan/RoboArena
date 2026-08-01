@@ -1,4 +1,6 @@
-"""⚠️  THROWAWAY SPIKE — NOT PRODUCTION CODE ⚠️
+"""🔧 REFERENCE BENCH — NOT PRODUCTION CODE
+
+Retained deliberately (2026-08-01). See docs/graphics-plan.md section 8.
 
 Offline board compositor — renders exactly what the demo page renders.
 
