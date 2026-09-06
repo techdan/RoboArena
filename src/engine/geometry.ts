@@ -18,6 +18,38 @@ export const floorEuclideanDistance = (a: TileCoord, b: TileCoord): number => {
 export const chebyshevDistance = (a: TileCoord, b: TileCoord): number =>
   Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
+interface EndpointSamples {
+  readonly center: TileCoord;
+  readonly major?: TileCoord;
+  readonly diagonal?: TileCoord;
+}
+
+/** Exact target-end cover sampling produced by seg87:0x1BF8 → 0x1CE0 (spec §6). */
+export const targetCoverSamples = (from: TileCoord, to: TileCoord): EndpointSamples => {
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  const distance = Math.max(dx, dy);
+  if (distance === 0) return { center: to };
+
+  const stepX = Math.sign(from.x - to.x);
+  const stepY = Math.sign(from.y - to.y);
+  const xMajor = dx > dy; // Ties are y-major in the original.
+  const major =
+    distance >= 2
+      ? xMajor
+        ? { x: to.x + stepX, y: to.y }
+        : { x: to.x, y: to.y + stepY }
+      : undefined;
+  const diagonal =
+    distance > 1 && Math.abs(dx - dy) < 2 ? { x: to.x + stepX, y: to.y + stepY } : undefined;
+
+  return {
+    center: to,
+    ...(major === undefined ? {} : { major }),
+    ...(diagonal === undefined ? {} : { diagonal }),
+  };
+};
+
 const HEADING_VECTORS: Readonly<Record<Heading, readonly [x: number, y: number]>> = {
   N: [0, -1],
   NE: [1, -1],

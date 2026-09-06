@@ -11,6 +11,7 @@ import {
 import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
 import {
   floorEuclideanDistance as floorDistance,
+  targetCoverSamples,
   tilesAlongLineExclusive as lineExclusive,
 } from "../engine/geometry";
 import {
@@ -175,26 +176,6 @@ const previewScanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord):
     if (terrain === "low-wall" || terrain === "bush") strength = Math.max(0, strength - 3);
   }
   return strength;
-};
-
-// Keep browser-side sampling local until the shared geometry extraction lands.
-const targetCoverSamples = (from: TileCoord, to: TileCoord) => {
-  const dx = Math.abs(to.x - from.x);
-  const dy = Math.abs(to.y - from.y);
-  const distance = Math.max(dx, dy);
-  const stepX = Math.sign(from.x - to.x);
-  const stepY = Math.sign(from.y - to.y);
-  return {
-    center: to,
-    major:
-      distance < 2
-        ? undefined
-        : dx > dy
-          ? { x: to.x + stepX, y: to.y }
-          : { x: to.x, y: to.y + stepY },
-    diagonal:
-      distance > 1 && Math.abs(dx - dy) < 2 ? { x: to.x + stepX, y: to.y + stepY } : undefined,
-  };
 };
 
 const coverAt = (

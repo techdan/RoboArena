@@ -6,8 +6,10 @@
  * and—only for exact or near diagonals—the corner neighbor toward the shooter.
  */
 
-import { tilesAlongLineExclusive } from "./geometry.js";
+import { targetCoverSamples, tilesAlongLineExclusive } from "./geometry.js";
 import type { ArenaTile, CoverClass, Posture, Terrain, TileCoord } from "./types.js";
+
+export { targetCoverSamples } from "./geometry.js";
 
 export type CoverResolution =
   | { readonly outcome: "blocked"; readonly stoppedAt: TileCoord }
@@ -39,38 +41,6 @@ export const coverClassForTerrain = (
 ): CoverClass | "blocked" => {
   if (terrain === "wall" || terrain === "outer-wall") return "blocked";
   return coverClassForEffectiveHeight(posture, terrain === "low-wall" ? 3 : 2, terrain === "bush");
-};
-
-interface EndpointSamples {
-  readonly center: TileCoord;
-  readonly major?: TileCoord;
-  readonly diagonal?: TileCoord;
-}
-
-/** Exact target-end sampling produced by seg87:0x1BF8 → 0x1CE0. */
-export const targetCoverSamples = (from: TileCoord, to: TileCoord): EndpointSamples => {
-  const dx = Math.abs(to.x - from.x);
-  const dy = Math.abs(to.y - from.y);
-  const distance = Math.max(dx, dy);
-  if (distance === 0) return { center: to };
-
-  const stepX = Math.sign(from.x - to.x);
-  const stepY = Math.sign(from.y - to.y);
-  const xMajor = dx > dy; // Ties are y-major in the original.
-  const major =
-    distance >= 2
-      ? xMajor
-        ? { x: to.x + stepX, y: to.y }
-        : { x: to.x, y: to.y + stepY }
-      : undefined;
-  const diagonal =
-    distance > 1 && Math.abs(dx - dy) < 2 ? { x: to.x + stepX, y: to.y + stepY } : undefined;
-
-  return {
-    center: to,
-    ...(major === undefined ? {} : { major }),
-    ...(diagonal === undefined ? {} : { diagonal }),
-  };
 };
 
 export const resolveCover = (input: {
