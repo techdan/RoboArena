@@ -1,0 +1,60 @@
+{
+  "formatVersion": 1,
+  "name": "Missile blast affects a nearby friendly robot",
+  "description": "A friendly robot one tile from the impact receives blast damage; the launcher spends one missile.",
+  "arena": { "width": 12, "height": 12 },
+  "teams": [
+    {
+      "id": "red",
+      "robots": [
+        { "id": "launcher", "class": "missile", "position": { "x": 1, "y": 3 } },
+        { "id": "friendly", "class": "rifle", "position": { "x": 4, "y": 3 } }
+      ]
+    },
+    {
+      "id": "blue",
+      "robots": [{ "id": "target", "class": "rifle", "position": { "x": 5, "y": 3 } }]
+    }
+  ],
+  "turns": [
+    {
+      "seed": "blast-1",
+      "orders": {
+        "turnNumber": 1,
+        "timelines": [
+          {
+            "robotId": "launcher",
+            "segments": [
+              {
+                "kind": "aim-and-fire",
+                "weapon": "missile-launcher",
+                "target": { "x": 5, "y": 3 },
+                "repeat": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "damaged", "damageKind": "blast", "targetId": "friendly" },
+      "count": 1
+    },
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "damaged", "damageKind": "blast", "targetId": "target" },
+      "count": 1
+    },
+    {
+      "kind": "robot",
+      "turn": 1,
+      "robotId": "launcher",
+      "equals": { "hp": 100, "ammo": { "missile-launcher": 2 } }
+    }
+  ]
+}

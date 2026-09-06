@@ -46,6 +46,13 @@ screenshots for UI feedback until the suite is deliberately re-enabled.
 
 ## Repository layout
 
+For reproducible game situations without browser setup, use the
+[headless scenario runner](docs/scenario-runner.md):
+
+```sh
+npm run scenario -- run scenarios/wall-blocked-shot.json --out out/scenarios/wall
+```
+
 ```
 docs/
   spec.md                 CANONICAL game spec (rules + numbers; read this first)

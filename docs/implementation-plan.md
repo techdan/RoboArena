@@ -94,6 +94,14 @@ any machine.
 
 ## 2. Repository layout
 
+**Developer tooling addition (2026-09-06): implemented.** The local
+[headless scenario runner](scenario-runner.md) loads small JSON arena/robot
+setups, runs canonical orders through the existing resolver, asserts per-turn
+state/events, and exports verified canonical replays. Three saved regressions
+cover movement timing, wall-blocked fire, and friendly missile blast damage.
+This does not close Phase 12.2's manual browser/iPad or room lifecycle gates;
+scenario-to-UI loading and room-service automation remain separate follow-ups.
+
 ```
 RoboArena/
 ├── src/

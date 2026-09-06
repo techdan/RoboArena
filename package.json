@@ -19,6 +19,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
+    "scenario": "tsx src/scenario/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,62 @@
+{
+  "formatVersion": 1,
+  "name": "Wall blocks rifle fire",
+  "description": "An intervening wall blocks a tile-targeted rifle shot without damaging the target.",
+  "arena": {
+    "width": 12,
+    "height": 12,
+    "terrain": [{ "at": { "x": 4, "y": 3 }, "terrain": "wall" }]
+  },
+  "teams": [
+    {
+      "id": "red",
+      "robots": [{ "id": "shooter", "class": "rifle", "position": { "x": 2, "y": 3 } }]
+    },
+    {
+      "id": "blue",
+      "robots": [{ "id": "target", "class": "rifle", "position": { "x": 6, "y": 3 } }]
+    }
+  ],
+  "turns": [
+    {
+      "seed": "wall-1",
+      "orders": {
+        "turnNumber": 1,
+        "timelines": [
+          {
+            "robotId": "shooter",
+            "segments": [
+              {
+                "kind": "aim-and-fire",
+                "weapon": "rifle",
+                "target": { "x": 6, "y": 3 },
+                "repeat": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "fired", "shooterId": "shooter" },
+      "count": 1
+    },
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "shot-missed", "reason": "sight-blocked" },
+      "count": 1
+    },
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "damaged", "targetId": "target" },
+      "count": 0
+    },
+    { "kind": "robot", "turn": 1, "robotId": "target", "equals": { "hp": 140 } }
+  ]
+}

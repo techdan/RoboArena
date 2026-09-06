@@ -1,0 +1,76 @@
+{
+  "formatVersion": 1,
+  "name": "Movement timing and consecutive turns",
+  "description": "A two-tile selector completes at tick 40, followed by a one-tile selector at tick 30 of the next turn.",
+  "arena": { "width": 12, "height": 12 },
+  "teams": [
+    {
+      "id": "red",
+      "robots": [{ "id": "runner", "class": "rifle", "position": { "x": 1, "y": 1 } }]
+    },
+    {
+      "id": "blue",
+      "robots": [{ "id": "observer", "class": "rifle", "position": { "x": 10, "y": 10 } }]
+    }
+  ],
+  "turns": [
+    {
+      "seed": "movement-1",
+      "orders": {
+        "turnNumber": 1,
+        "timelines": [
+          {
+            "robotId": "runner",
+            "segments": [
+              {
+                "kind": "move",
+                "posture": "upright",
+                "path": [{ "via": { "x": 2, "y": 1 }, "to": { "x": 3, "y": 1 } }]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "seed": "movement-2",
+      "orders": {
+        "turnNumber": 2,
+        "timelines": [
+          {
+            "robotId": "runner",
+            "segments": [
+              { "kind": "move", "posture": "upright", "path": [{ "to": { "x": 4, "y": 1 } }] }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "event-count",
+      "turn": 1,
+      "where": { "kind": "move-step", "robotId": "runner", "tick": 40 },
+      "count": 1
+    },
+    {
+      "kind": "robot",
+      "turn": 1,
+      "robotId": "runner",
+      "equals": { "position": { "x": 3, "y": 1 } }
+    },
+    {
+      "kind": "event-count",
+      "turn": 2,
+      "where": { "kind": "move-step", "robotId": "runner", "tick": 30 },
+      "count": 1
+    },
+    {
+      "kind": "robot",
+      "turn": 2,
+      "robotId": "runner",
+      "equals": { "position": { "x": 4, "y": 1 }, "hp": 140 }
+    }
+  ]
+}
