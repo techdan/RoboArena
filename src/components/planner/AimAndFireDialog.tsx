@@ -3,6 +3,7 @@
 import { ArrowLeft, Crosshair, ShieldAlert, Target, X } from "lucide-react";
 import { useMemo } from "react";
 import type { Arena, Posture, RobotState, TileCoord, WeaponId } from "../../engine/types";
+import { blastDamagePresentation, fireActionCount } from "../../planner/combatPresentation";
 import { previewAim, WEAPON_LABELS, type AuthorizedContact } from "../../planner/firingHelpers";
 import { usePlannerDialogFocus } from "./usePlannerDialogFocus";
 
@@ -52,6 +53,8 @@ export function AimAndFireDialog({
     () => previewAim({ arena, shooter, target, weapon, authorizedContacts }),
     [arena, authorizedContacts, shooter, target, weapon],
   );
+  const count = fireActionCount(weapon, shots);
+  const blast = blastDamagePresentation(weapon);
   return (
     <div className="aim-review-backdrop" role="presentation">
       <section
@@ -89,8 +92,13 @@ export function AimAndFireDialog({
             Fire time <strong>{fireSeconds.toFixed(2)}s</strong>
           </span>
           <span>
-            Shots <strong>{shots}</strong>
+            Fire <strong>{count.primary}</strong>
           </span>
+          {count.projectiles === null ? null : (
+            <span>
+              Projectiles <strong>{count.projectiles}</strong>
+            </span>
+          )}
         </div>
         {preview.status === "eligible" && preview.resolution === "direct-hit-roll" ? (
           <div className="fire-preview">
@@ -127,9 +135,18 @@ export function AimAndFireDialog({
               <span>Deterministic blast trajectory</span>
             </div>
             <p>
-              This explosive impacts the programmed tile and resolves blast damage by radius and
-              cover. Damage RNG remains server-authoritative.
+              This explosive impacts the programmed tile. Blast radius {blast?.radius ?? 0} damages
+              every robot in range, including allies; cover reduces the damage.
             </p>
+            <div className="blast-safety" role="alert">
+              <ShieldAlert size={16} aria-hidden="true" />
+              <span>
+                <strong>Friendly fire:</strong> check the radius before committing scarce
+                ammunition.
+              </span>
+            </div>
+            {blast === null ? null : <p>Base damage: {blast.bands}.</p>}
+            <p>Damage RNG remains server-authoritative.</p>
           </div>
         ) : (
           <div className="fire-blocked" role="status">
@@ -148,7 +165,7 @@ export function AimAndFireDialog({
             disabled={preview.status !== "eligible"}
             onClick={onConfirm}
           >
-            Add {shots} Shot{shots === 1 ? "" : "s"}
+            Add {count.primary}
           </button>
         </footer>
       </section>

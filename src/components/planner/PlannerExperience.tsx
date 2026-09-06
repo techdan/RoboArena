@@ -46,6 +46,7 @@ import {
   targetingOpportunityTicks,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
+import { fireActionCount } from "../../planner/combatPresentation";
 import {
   nextSurvivingRobotId,
   participantRobotDisplayName,
@@ -985,6 +986,7 @@ export function PlannerExperience({
               authorizedContacts={authorizedContacts}
               onBack={() => setAimReviewOpen(false)}
               onConfirm={() => {
+                const count = fireActionCount(aimDialog.weapon, aimShots);
                 const shots = Array.from(
                   { length: aimShots },
                   () =>
@@ -997,7 +999,7 @@ export function PlannerExperience({
                 );
                 commitSegments(
                   shots,
-                  `${aimShots} Aim & Fire shot${aimShots === 1 ? "" : "s"} added at ${aimDialog.target.x},${aimDialog.target.y}.`,
+                  `${count.primary} added at ${aimDialog.target.x},${aimDialog.target.y}${count.projectiles === null ? "" : ` · ${count.projectiles}`}.`,
                 );
               }}
             />

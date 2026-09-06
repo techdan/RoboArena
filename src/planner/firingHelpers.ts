@@ -10,6 +10,10 @@ import {
 } from "../engine/constants";
 import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
 import {
+  floorEuclideanDistance as floorDistance,
+  tilesAlongLineExclusive as lineExclusive,
+} from "../engine/geometry";
+import {
   calculateDirectDamageRangeFromFactors,
   calculateLiveFireBreakdownFromFactors,
   distanceScoreAdjustment,
@@ -24,6 +28,7 @@ import type {
   Posture,
   RobotState,
   RobotCommandSegment,
+  Terrain,
   TileCoord,
   WeaponId,
 } from "../engine/types";
@@ -70,6 +75,9 @@ export interface AuthorizedContact {
 export interface HitEstimate {
   readonly posture: Posture;
   readonly coverClass: CoverClass;
+  readonly coverSource:
+    "none" | "target-bush" | "adjacent-bush" | "target-low-wall" | "adjacent-low-wall";
+  readonly targetTerrain: Terrain;
   readonly score: number;
   readonly threshold: number;
   readonly chancePercent: number;
@@ -145,40 +153,9 @@ export const availableWeapons = (
   );
 };
 
-const floorDistance = (from: TileCoord, to: TileCoord): number => {
-  const dx = from.x - to.x;
-  const dy = from.y - to.y;
-  return Math.floor(Math.sqrt(dx * dx + dy * dy));
-};
-
 export const isTileInScanGate = (from: TileCoord, heading: Heading, target: TileCoord): boolean => {
   const [headingX, headingY] = HEADING_VECTORS[heading];
   return headingX * (target.x - from.x) + headingY * (target.y - from.y) >= 0;
-};
-
-const lineExclusive = (from: TileCoord, to: TileCoord): readonly TileCoord[] => {
-  const tiles: TileCoord[] = [];
-  let x = from.x;
-  let y = from.y;
-  const dx = Math.abs(to.x - x);
-  const dy = Math.abs(to.y - y);
-  const stepX = x < to.x ? 1 : -1;
-  const stepY = y < to.y ? 1 : -1;
-  let error = dx - dy;
-  while (x !== to.x || y !== to.y) {
-    const doubled = 2 * error;
-    if (doubled > -dy) {
-      error -= dy;
-      x += stepX;
-    }
-    if (doubled < dx) {
-      error += dx;
-      y += stepY;
-    }
-    if (x === to.x && y === to.y) break;
-    tiles.push({ x, y });
-  }
-  return tiles;
 };
 
 const isOnScanGateBoundary = (from: TileCoord, heading: Heading, target: TileCoord): boolean => {
@@ -200,7 +177,8 @@ const previewScanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord):
   return strength;
 };
 
-const targetSamples = (from: TileCoord, to: TileCoord) => {
+// Keep browser-side sampling local until the shared geometry extraction lands.
+const targetCoverSamples = (from: TileCoord, to: TileCoord) => {
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
   const distance = Math.max(dx, dy);
@@ -219,17 +197,45 @@ const targetSamples = (from: TileCoord, to: TileCoord) => {
   };
 };
 
-const coverAt = (arena: Arena, from: TileCoord, to: TileCoord, posture: Posture): CoverClass => {
-  if (from.x === to.x && from.y === to.y) return 4;
-  const samples = targetSamples(from, to);
-  const terrains = [samples.center, samples.major, samples.diagonal]
+const coverAt = (
+  arena: Arena,
+  from: TileCoord,
+  to: TileCoord,
+  posture: Posture,
+): Pick<HitEstimate, "coverClass" | "coverSource"> => {
+  if (from.x === to.x && from.y === to.y) return { coverClass: 4, coverSource: "none" };
+  const samples = targetCoverSamples(from, to);
+  const centerTerrain = terrainAt(arena, samples.center);
+  const adjacentTerrains = [samples.major, samples.diagonal]
     .filter((tile): tile is TileCoord => tile !== undefined)
     .map((tile) => terrainAt(arena, tile));
-  const elevated = terrains.includes("low-wall");
-  const bush = terrains.includes("bush");
-  if (elevated) return posture === "upright" ? 3 : posture === "ducking" ? 2 : 1;
-  if (bush) return posture === "upright" ? 4 : posture === "ducking" ? 3 : 2;
-  return posture === "crouching" ? 3 : 4;
+  const coverSource: HitEstimate["coverSource"] =
+    centerTerrain === "low-wall"
+      ? "target-low-wall"
+      : adjacentTerrains.includes("low-wall")
+        ? "adjacent-low-wall"
+        : centerTerrain === "bush"
+          ? "target-bush"
+          : adjacentTerrains.includes("bush")
+            ? "adjacent-bush"
+            : "none";
+  const coverClass =
+    coverSource === "target-low-wall" || coverSource === "adjacent-low-wall"
+      ? posture === "upright"
+        ? 3
+        : posture === "ducking"
+          ? 2
+          : 1
+      : coverSource === "target-bush" || coverSource === "adjacent-bush"
+        ? posture === "upright"
+          ? 4
+          : posture === "ducking"
+            ? 3
+            : 2
+        : posture === "crouching"
+          ? 3
+          : 4;
+  return { coverClass, coverSource };
 };
 
 const estimate = (
@@ -244,14 +250,14 @@ const estimate = (
   scanStrength: number,
 ): HitEstimate => {
   const distance = floorDistance(from, target);
-  const coverClass = coverAt(arena, from, target, posture);
+  const { coverClass, coverSource } = coverAt(arena, from, target, posture);
   const weaponDefinition = {
     id: weapon,
     ...WEAPON_CATALOG_DATA[weapon],
     ...WEAPON_TIMING[weapon],
     maxRange: WEAPON_MAX_RANGE,
   } as const;
-  const targetTerrain = terrainAt(arena, target);
+  const targetTerrain = terrainAt(arena, target) ?? "open";
   const accuracyIndex =
     fireMode === "scan"
       ? (weaponDefinition.scanAccuracyAddIndex ?? weaponDefinition.accuracyAddIndex ?? 0)
@@ -295,6 +301,8 @@ const estimate = (
   return {
     posture,
     coverClass,
+    coverSource,
+    targetTerrain,
     score: breakdown.finalScore,
     threshold: breakdown.threshold,
     chancePercent: breakdown.chancePercent,

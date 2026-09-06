@@ -427,7 +427,11 @@ selected maximum distance. Every guide radius is drawn at `(r + 1)` tile units
 from the shooter center, the exact floored-Euclidean threshold, so the guides
 always agree with the per-tile fills. Explosive tools draw only the range
 limit. A hover tooltip beside the cursor shows the tile's percentage, distance,
-and adjusted on-hit damage range.
+adjusted on-hit damage range, assumed or observed target posture, local
+target/adjacent cover source, target-terrain and range score contributions,
+Scan sight strength and penalty where applicable, and score clamping when the
+raw subtotal exceeds the lookup-table bounds. Aim tooltips explicitly state
+that only cover on the target tile or its sampled adjacent tiles applies.
 
 Cover depends on target posture. An empty tile therefore has no single
 posture-independent chance. The planner defaults hypothetical tiles to an
@@ -442,7 +446,9 @@ or Scan never creates a side rail or changes arena width. The single equipped
 weapon is read-only context. Scan exposes distance and duration while Aim
 exposes target and finite **Fire time** in seconds. Fire time advances in the
 weapon's exact Aim interval; the strip also shows the derived shot count, capped
-by remaining turn budget and finite ammunition. The planner materializes those
+by remaining turn budget and finite ammunition. Burst counts distinguish firing
+actions from their total bullets; explosives are counted as missiles or grenades.
+The planner materializes those
 shots as consecutive ordinary Aim & Fire selectors, so later commands can
 follow them. Ctrl+Shift starts the control at 2 firing intervals. The
 reverse-engineering record confirms the repeat-fire shortcut and selector
@@ -463,12 +469,15 @@ entire bounds block board hover, click, drag, and touch behavior; entering it
 clears any board tooltip, and board hover resumes only after leaving the panel.
 
 Hover or keyboard focus presents exact tile information in the cursor tooltip.
+Near the bottom edge, the tooltip opens upward to keep longer explanations visible.
 In Scan mode, a desktop left-click has no effect and never programs movement; a
 touch tap positions and leaves the same tooltip visible as the iPad replacement
 for hover. Aim left-click selects or retargets the fixed tile. **Review Shot**
 opens a temporary confirmation card with coordinate,
 distance, fire time, derived shot count, and the 3 posture estimates for a
 hypothetical target, or only the observed posture for an authorized contact.
+Explosive reviews show the catalog's blast radius and base damage bands, with an
+explicit reminder that blasts can damage allies and consume finite ammunition.
 The internal reconciled
 `0..19` lookup-table calculation remains verified by tests but is not persistent
 planner chrome.

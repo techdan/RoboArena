@@ -2239,6 +2239,12 @@ a.planner-menu-item:focus-visible {
 .planner-tile-tooltip[data-flip="true"] {
   transform: translateX(-100%);
 }
+.planner-tile-tooltip[data-flip-y="true"] {
+  transform: translateY(-100%);
+}
+.planner-tile-tooltip[data-flip="true"][data-flip-y="true"] {
+  transform: translate(-100%, -100%);
+}
 .planner-tile-tooltip span:first-child {
   color: #d9f99d;
   font-size: 0.68rem;
@@ -3720,7 +3726,16 @@ a.planner-menu-item:focus-visible {
 .fire-inline-mode {
   display: grid;
   place-items: center;
+  gap: 0.1rem;
   color: #67e8f9;
+}
+.fire-inline-mode small {
+  max-width: 4.8rem;
+  overflow: hidden;
+  color: rgb(255 255 255 / 52%);
+  font-size: 0.45rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .fire-inline-target {
   min-width: 3.2rem;
@@ -3750,9 +3765,23 @@ a.planner-menu-item:focus-visible {
   font-size: 0.62rem;
 }
 .fire-inline-shots {
+  display: grid;
   color: #fcd34d;
   font-family: ui-monospace, monospace;
   font-size: 0.52rem;
+}
+.fire-inline-shots span {
+  color: rgb(255 255 255 / 48%);
+}
+.blast-safety {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(251 113 133 / 38%);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  color: #fecdd3;
+  background: rgb(159 18 57 / 14%);
 }
 .fire-inline-primary,
 .fire-inline-cancel {

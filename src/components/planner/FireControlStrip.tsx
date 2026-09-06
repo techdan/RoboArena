@@ -3,6 +3,7 @@
 import { Crosshair, Radar, X } from "lucide-react";
 import { TICKS_PER_SECOND } from "../../engine/constants";
 import type { TileCoord, WeaponId } from "../../engine/types";
+import { fireActionCount } from "../../planner/combatPresentation";
 import { PLANNER_WEAPON_RANGE, WEAPON_LABELS } from "../../planner/firingHelpers";
 
 interface SharedControlsProps {
@@ -38,10 +39,12 @@ export function AimFireControls({
 }: AimFireControlsProps) {
   const intervalSeconds = firingIntervalTicks / TICKS_PER_SECOND;
   const fireSeconds = shots * intervalSeconds;
+  const count = fireActionCount(weapon, shots);
   return (
     <div className="fire-inline" aria-label="Aim and Fire controls">
       <span className="fire-inline-mode" title={`Aim & Fire · ${WEAPON_LABELS[weapon]}`}>
         <Crosshair size={15} aria-hidden="true" />
+        <small>{WEAPON_LABELS[weapon]}</small>
       </span>
       <span className="fire-inline-target" aria-live="polite">
         {target === null ? "Choose tile" : `${target.x},${target.y}`}
@@ -73,7 +76,8 @@ export function AimFireControls({
         />
       </label>
       <small className="fire-inline-shots">
-        {shots} shot{shots === 1 ? "" : "s"}
+        {count.primary}
+        {count.projectiles === null ? null : <span>{count.projectiles}</span>}
       </small>
       <button
         type="button"
@@ -120,6 +124,7 @@ export function ScanFireControls({
     <div className="fire-inline" aria-label="Scan and Fire controls">
       <span className="fire-inline-mode" title={`Scan & Fire · ${WEAPON_LABELS[weapon]}`}>
         <Radar size={15} aria-hidden="true" />
+        <small>{WEAPON_LABELS[weapon]}</small>
       </span>
       <label className="fire-inline-number">
         <span>Dist</span>

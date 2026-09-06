@@ -932,9 +932,10 @@ export function ArenaCanvas({
     cursor === null
       ? 0
       : Math.min(
-          viewportSize.height - 64,
+          viewportSize.height - 4,
           Math.max(4, fit.offsetY + transform.y + cursor.y * TILE_SIZE * tooltipScale - 4),
         );
+  const tooltipFlipY = tooltipTop > viewportSize.height / 2;
 
   return (
     <div className="planner-canvas-shell">
@@ -1188,6 +1189,7 @@ export function ArenaCanvas({
           <div
             className="planner-tile-tooltip"
             data-flip={tooltipFlip ? "true" : "false"}
+            data-flip-y={tooltipFlipY ? "true" : "false"}
             style={{ left: tooltipLeft, top: tooltipTop }}
             aria-hidden="true"
           >

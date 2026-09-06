@@ -104,6 +104,57 @@ describe("authorized firing previews", () => {
     expect(authorized.estimates.map((entry) => entry.posture)).toEqual(["ducking"]);
   });
 
+  it("identifies whether partial cover is on the target or immediately adjacent", () => {
+    const base = makeOpenArena(10, 5);
+    const tiles = base.tiles.map((row) => [...row]);
+    tiles[2]![4] = { terrain: "low-wall" };
+    const arena: Arena = { ...base, tiles };
+    const shooter = makeRobot("r1", "t1", "rifle", { x: 1, y: 2 }, { scanHeading: "E" });
+
+    expect(
+      previewAim({
+        arena,
+        shooter,
+        target: { x: 4, y: 2 },
+        weapon: "rifle",
+        authorizedContacts: [],
+        assumedPostures: ["upright"],
+      }).estimates[0],
+    ).toMatchObject({
+      coverClass: 3,
+      coverSource: "target-low-wall",
+      targetTerrain: "low-wall",
+    });
+    expect(
+      previewAim({
+        arena,
+        shooter,
+        target: { x: 5, y: 2 },
+        weapon: "rifle",
+        authorizedContacts: [],
+        assumedPostures: ["upright"],
+      }).estimates[0],
+    ).toMatchObject({
+      coverClass: 3,
+      coverSource: "adjacent-low-wall",
+      targetTerrain: "open",
+    });
+    expect(
+      previewAim({
+        arena,
+        shooter,
+        target: { x: 6, y: 2 },
+        weapon: "rifle",
+        authorizedContacts: [],
+        assumedPostures: ["upright"],
+      }).estimates[0],
+    ).toMatchObject({
+      coverClass: 4,
+      coverSource: "none",
+      targetTerrain: "open",
+    });
+  });
+
   it("explains blast weapons without inventing a direct-fire hit score", () => {
     const arena = makeOpenArena(20, 5);
     const shooter = makeRobot("r1", "t1", "missile", { x: 2, y: 2 }, { scanHeading: "E" });

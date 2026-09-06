@@ -46,6 +46,24 @@ describe("compact fire controls", () => {
     expect(html).toContain("3 shots");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Review<\/button>/);
   });
+
+  it("labels Burst fire time as bursts and bullets instead of generic shots", () => {
+    const html = renderToStaticMarkup(
+      <AimFireControls
+        weapon="burst-gun"
+        target={{ x: 4, y: 2 }}
+        shots={3}
+        maxShots={12}
+        firingIntervalTicks={15}
+        canReview
+        onShotsChange={noop}
+        onCancel={noop}
+        onReview={noop}
+      />,
+    );
+    expect(html).toContain("3 bursts");
+    expect(html).toContain("9 bullets");
+  });
 });
 
 describe("targeting map legend", () => {
