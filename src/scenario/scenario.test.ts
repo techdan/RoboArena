@@ -47,6 +47,22 @@ describe("scenario runner", () => {
     expect(result.report.checks[0]).toMatchObject({ passed: false, actual: { hp: 140 } });
   });
 
+  it("omits undefined movement waypoints while preserving two-tile steps and replay results", () => {
+    const input = example();
+    const expected = runScenario(input);
+    const segment = input.turns[1]!.orders.timelines[0]!.segments[0]!;
+    if (segment.kind !== "move") throw new Error("Expected movement fixture");
+    segment.path[0]!.via = undefined;
+
+    const result = runScenario(input);
+    expect(serializeReplay(result.replay)).toBe(serializeReplay(expected.replay));
+    const movement = result.replay.turns[1]!.orders.timelines[0]!.segments[0]!;
+    if (movement.kind !== "move") throw new Error("Expected movement replay");
+    expect(Object.hasOwn(movement.path[0]!, "via")).toBe(false);
+    expect(Object.hasOwn(segment.path[0]!, "via")).toBe(true);
+    expect(result.report.passed).toBe(true);
+  });
+
   it("rejects malformed setups, misspelled expectations and unknown references", () => {
     const input = example();
     expect(() => runScenario({ ...input, formatVersion: 2 })).toThrow();

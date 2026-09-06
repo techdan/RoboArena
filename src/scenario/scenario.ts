@@ -6,7 +6,13 @@ import { ROBOT_DEFINITIONS, WEAPONS } from "../engine/catalog.js";
 import { canTraverseTile } from "../engine/movement.js";
 import { createReplayLog, serializeReplay, verifyReplay } from "../engine/replay.js";
 import { resolveTurn } from "../engine/resolver.js";
-import type { MatchState, ResolutionEvent, TeamState, WeaponId } from "../engine/types.js";
+import type {
+  MatchState,
+  ResolutionEvent,
+  TeamState,
+  TurnOrders,
+  WeaponId,
+} from "../engine/types.js";
 import { turnOrdersSchema } from "../lib/net/protocol.js";
 
 const id = z.string().min(1).max(80);
@@ -224,6 +230,24 @@ export const scenarioSchema = z
 
 export type Scenario = z.infer<typeof scenarioSchema>;
 
+/** Omit undefined optional fields before passing parsed orders to the strict engine types. */
+function engineOrders(orders: Scenario["turns"][number]["orders"]): TurnOrders {
+  return {
+    ...orders,
+    timelines: orders.timelines.map((timeline) => ({
+      ...timeline,
+      segments: timeline.segments.map((segment) =>
+        segment.kind !== "move"
+          ? segment
+          : {
+              ...segment,
+              path: segment.path.map(({ to, via }) => (via === undefined ? { to } : { to, via })),
+            },
+      ),
+    })),
+  };
+}
+
 /** Object subsets recurse; scalars and arrays compare exactly. No expressions or eval. */
 const matches = (actual: unknown, expected: unknown): boolean => {
   if (expected !== null && typeof expected === "object" && !Array.isArray(expected)) {
@@ -356,6 +380,7 @@ export function runScenario(input: unknown, seedOverride?: string) {
   const initialState = buildState(scenario);
   const turns = scenario.turns.map((turn, index) => ({
     ...turn,
+    orders: engineOrders(turn.orders),
     // Preserve exact --seed for turn 1; give subsequent turns stable distinct seeds.
     seed:
       seedOverride === undefined
