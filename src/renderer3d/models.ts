@@ -8,18 +8,21 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RobotClass } from "../engine/types";
 import type { ArenaThemeId } from "./themes";
 
-/** Robot design families: same classes and weapons, different locomotion. */
-export type RobotFamily = "walker" | "hound" | "titan" | "mantis" | "biped" | "hover" | "treads";
-export const DEFAULT_ROBOT_FAMILY: RobotFamily = "walker";
+/** Robot design families: same classes and weapons, different locomotion.
+ *  The shipped "mixed" roster gives each class its own chassis (strider Rifle,
+ *  hound Burst, crab Machine gun, titan Missile); the rest are concept sets. */
+export type RobotFamily =
+  "mixed" | "walker" | "hound" | "titan" | "mantis" | "biped" | "hover" | "treads";
+export const DEFAULT_ROBOT_FAMILY: RobotFamily = "mixed";
 export const isRobotFamily = (value: unknown): value is RobotFamily =>
   typeof value === "string" &&
-  ["walker", "hound", "titan", "mantis", "biped", "hover", "treads"].includes(value);
+  ["mixed", "walker", "hound", "titan", "mantis", "biped", "hover", "treads"].includes(value);
 
 const ROBOT_KINDS = ["rifle", "burst", "auto", "missile"] as const;
 
 export const MODEL_URLS = {
   robot: (family: RobotFamily, kind: (typeof ROBOT_KINDS)[number]) =>
-    family === "walker"
+    family === "mixed"
       ? `/assets/models/robots/${kind}.glb`
       : `/assets/models/robots/${family}/${kind}.glb`,
   props: (theme: ArenaThemeId) => `/assets/models/arena/props-${theme}.glb`,

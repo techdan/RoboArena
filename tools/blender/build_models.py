@@ -291,7 +291,14 @@ def hip_sockets(hull_z: float, positions: list[tuple[float, float]]) -> None:
         empty(f"Hip{i}", (x, y, hull_z))
 
 
-def build_robot(kind: str, family: str = "walker") -> None:
+# The shipped roster mixes chassis so each class reads by silhouette alone.
+CLASS_FAMILY = {"rifle": "biped", "burst": "hound", "auto": "walker", "missile": "titan"}
+
+
+def build_robot(kind: str, family: str = "mixed") -> None:
+    export_family = family
+    if family == "mixed":
+        family = CLASS_FAMILY[kind]
     reset_scene()
     m = robot_materials()
 
@@ -563,20 +570,33 @@ def build_robot(kind: str, family: str = "walker") -> None:
             hull.append(cyl(f"fam_sprocket{side}", 0.06, 0.03, (x + side * 0.06, -tl + 0.04, -0.09),
                             m["hazard"], rot=(0, math.pi / 2, 0), verts=10))
 
+    # Guns are the class identity, so they are drawn oversized with bright
+    # muzzle rings: readable at gameplay distance, not to scale with the hull.
+    gun_scale = {"rifle": 1.55, "burst": 1.6, "auto": 1.55, "missile": 1.3}[kind]
+    turret_scale = 1.2
+    if kind != "missile":
+        for i, muzzle in enumerate(muzzles):
+            barrel.append(cyl(f"b_ring{i}", 0.026 if kind != "auto" else 0.06, 0.03,
+                              (muzzle[0], muzzle[1] + 0.03, muzzle[2]), m["hazard"],
+                              rot=(math.pi / 2, 0, 0), verts=14))
+
     # Hull is authored around its pivot at the origin, then placed at hull height.
     hull_obj = join("Hull", hull)
     turret_obj = join("Turret", turret)
+    turret_obj.data.transform(Matrix.Scale(turret_scale, 4))
     barrel_obj = join("Barrel", barrel)
     leg_parts(m, upper, lower, heavy)
 
     empty("TurretMount", (0, 0, 0.05 if kind != "auto" else 0.06))
-    empty("BarrelMount", barrel_mount)
+    mount = tuple(c * turret_scale for c in barrel_mount)
+    empty("BarrelMount", mount)
     for i, muzzle in enumerate(muzzles):
-        mz = (muzzle[0] - barrel_mount[0], muzzle[1] - barrel_mount[1], muzzle[2] - barrel_mount[2])
+        mz = tuple((muzzle[k] - barrel_mount[k]) * gun_scale for k in range(3))
         empty(f"Muzzle{i}", mz)
     # Barrel geometry is authored in turret space; shift it so the BarrelMount is
-    # its origin (recoil slides it along its own forward axis).
+    # its origin (recoil slides it along its own forward axis), then enlarge it.
     set_origin(barrel_obj, barrel_mount)
+    barrel_obj.data.transform(Matrix.Scale(gun_scale, 4))
     barrel_obj.location = (0, 0, 0)
     hip_sockets(0.0, hips if legs else [])
 
@@ -587,8 +607,8 @@ def build_robot(kind: str, family: str = "walker") -> None:
         rig += f"_{int(reach * 1000)}"
     empty(rig, (0, 0, 0))
     del hull_obj, turret_obj
-    folder = os.path.join(OUT_DIR, "robots") if family == "walker" else os.path.join(
-        OUT_DIR, "robots", family)
+    folder = os.path.join(OUT_DIR, "robots") if export_family == "mixed" else os.path.join(
+        OUT_DIR, "robots", export_family)
     os.makedirs(folder, exist_ok=True)
     export(os.path.join(folder, f"{kind}.glb"))
 
@@ -1001,7 +1021,7 @@ def build_arena_scrapyard() -> None:
 
 
 def main() -> None:
-    families = ("walker", "hound", "titan", "mantis", "biped", "hover", "treads")
+    families = ("mixed", "walker", "hound", "titan", "mantis", "biped", "hover", "treads")
     only = os.environ.get("ROBOT_FAMILIES")
     for family in (only.split(",") if only else families):
         for kind in ("rifle", "burst", "auto", "missile"):
