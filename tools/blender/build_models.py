@@ -471,7 +471,43 @@ def build_robot(kind: str, family: str = "walker") -> None:
     half_w = max(abs(x) for x, _ in hips)
     half_l = max(abs(y) for _, y in hips)
     code = "s"
-    if family == "biped":
+    reach = None
+    corners = [(half_w, -half_l), (-half_w, -half_l), (half_w, half_l), (-half_w, half_l)]
+    if family == "hound":
+        # Agile robot-dog: four slim upright legs under the body, knees folding back.
+        code = "b"
+        hips = [(x * 0.95, y * 1.05) for x, y in corners]
+        upper, lower = 0.3, 0.33
+        hull_z = 0.5
+        heavy *= 0.9
+        for i, (x, y) in enumerate(hips):
+            hull.append(cyl(f"fam_shoulder{i}", 0.05, 0.06, (x, y, -0.02), m["metal"],
+                            rot=(0, math.pi / 2, 0), verts=16))
+    elif family == "titan":
+        # Heavy siege walker: tall, column-like legs with huge joints, like a war elephant.
+        code = "b"
+        hips = [(x * 1.08, y * 1.1) for x, y in corners]
+        upper, lower = 0.38 + 0.03 * (heavy - 1), 0.42 + 0.03 * (heavy - 1)
+        hull_z = 0.72
+        heavy *= 1.9
+        for i, (x, y) in enumerate(hips):
+            hull.append(box(f"fam_housing{i}", (0.07, 0.08, 0.07), (x, y, 0.0), m["metal"],
+                            bevel=0.02))
+            hull.append(box(f"fam_armor{i}", (0.02, 0.085, 0.075), (x + math.copysign(0.07, x), y, 0.0),
+                            m["paint"], bevel=0.01))
+        hull.append(box("fam_belly", (half_w * 0.9, half_l * 0.9, 0.05), (0, 0, -0.13), m["metal"],
+                        bevel=0.02))
+        hull.append(box("fam_beacon", (0.03, 0.03, 0.02), (0, 0.05, 0.14), m["optic"], bevel=0.008))
+    elif family == "mantis":
+        # Insectoid stalker: long, thin legs with knees raised high above a low body.
+        code = "s"
+        reach = 0.86
+        hips = [(x * 0.9, y * 0.95) for x, y in corners]
+        upper, lower = 0.44, 0.58
+        hull_z = 0.3
+        heavy *= 0.75
+        hull.append(box("fam_spine", (0.02, half_l * 1.2, 0.02), (0, 0, 0.11), m["glow"], bevel=0))
+    elif family == "biped":
         # Reverse-jointed two-legged walker: tall stance, chunky thighs.
         code = "b"
         legs = 2
@@ -546,7 +582,10 @@ def build_robot(kind: str, family: str = "walker") -> None:
 
     # Rig metrics travel as an extra-free empty name so the runtime needs no
     # hand-maintained table: Rig_<hullHeight>_<upper>_<lower> (millitiles).
-    empty(f"Rig_{int(hull_z * 1000)}_{int(upper * 1000)}_{int(lower * 1000)}_{code}", (0, 0, 0))
+    rig = f"Rig_{int(hull_z * 1000)}_{int(upper * 1000)}_{int(lower * 1000)}_{code}"
+    if reach is not None:
+        rig += f"_{int(reach * 1000)}"
+    empty(rig, (0, 0, 0))
     del hull_obj, turret_obj
     folder = os.path.join(OUT_DIR, "robots") if family == "walker" else os.path.join(
         OUT_DIR, "robots", family)
@@ -962,7 +1001,9 @@ def build_arena_scrapyard() -> None:
 
 
 def main() -> None:
-    for family in ("walker", "biped", "hover", "treads"):
+    families = ("walker", "hound", "titan", "mantis", "biped", "hover", "treads")
+    only = os.environ.get("ROBOT_FAMILIES")
+    for family in (only.split(",") if only else families):
         for kind in ("rifle", "burst", "auto", "missile"):
             build_robot(kind, family)
     build_arena()

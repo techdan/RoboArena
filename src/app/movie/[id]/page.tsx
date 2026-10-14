@@ -4,7 +4,7 @@ import { FieldGuideButton } from "../../../components/help/HelpProvider";
 import { LobbyBreadcrumb } from "../../../components/LobbyBreadcrumb";
 import { MovieExperience } from "../../../components/MovieExperience";
 import { createCannedMovie } from "../../../lib/replays/cannedMovie";
-import { createShowcaseMovie } from "../../../lib/replays/showcaseMovie";
+import { createLineupMovie, createShowcaseMovie } from "../../../lib/replays/showcaseMovie";
 
 interface MoviePageProps {
   readonly params: Promise<{ readonly id: string }>;
@@ -13,10 +13,11 @@ interface MoviePageProps {
 
 export default async function MoviePage({ params, searchParams }: MoviePageProps) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  if (id !== "demo" && id !== "showcase") notFound();
+  if (id !== "demo" && id !== "showcase" && id !== "lineup") notFound();
   const requestedTick = Number(query.t ?? 0);
   const initialTick = Number.isFinite(requestedTick) ? Math.max(0, requestedTick) : 0;
   if (id === "showcase") return <ShowcasePage initialTick={initialTick} />;
+  if (id === "lineup") return <ShowcasePage initialTick={0} lineup />;
   const movie = await createCannedMovie();
 
   return (
@@ -93,8 +94,14 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
   );
 }
 
-async function ShowcasePage({ initialTick }: { readonly initialTick: number }) {
-  const movie = createShowcaseMovie();
+async function ShowcasePage({
+  initialTick,
+  lineup = false,
+}: {
+  readonly initialTick: number;
+  readonly lineup?: boolean;
+}) {
+  const movie = lineup ? createLineupMovie() : createShowcaseMovie();
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#070a0d] text-white">
       <div className="ambient-grid" aria-hidden="true" />

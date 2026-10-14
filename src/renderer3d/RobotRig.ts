@@ -171,10 +171,12 @@ export class RobotRig {
       upper.add(knee);
       hip.add(upper);
       this.hull.add(hip);
-      // Spider legs plant feet out to the side; biped feet plant under their hips.
+      // Spider legs plant feet out to the side; upright feet plant under their hips.
       const outward = new THREE.Vector2(hipPosition.x, hipPosition.z).normalize();
       const reach =
-        model.locomotion === "biped" ? 0 : (model.upperLength + model.lowerLength) * 0.62;
+        model.locomotion === "upright"
+          ? 0
+          : (model.upperLength + model.lowerLength) * model.restReach;
       this.legs.push({
         hip,
         upper,
@@ -418,7 +420,7 @@ export class RobotRig {
 
   /** Tracked hulls barely drop when crouching; hover hulls sink most of the way. */
   private postureHeight(posture: Posture): number {
-    const give = { legs: 1, biped: 1, hover: 0.8, treads: 0.2 }[this.model.locomotion];
+    const give = { legs: 1, upright: 1, hover: 0.8, treads: 0.2 }[this.model.locomotion];
     return this.model.hullHeight * (1 - (1 - POSTURE_HEIGHT[posture]) * give);
   }
 
@@ -509,7 +511,7 @@ export class RobotRig {
     const idleBob = this.destroyedState
       ? 0
       : Math.sin(now * 2.1 + this.idlePhase) * (hovering ? 0.03 : 0.006);
-    const bobScale = { legs: 0.025, biped: 0.045, hover: 0, treads: 0.004 }[locomotion];
+    const bobScale = { legs: 0.025, upright: 0.045, hover: 0, treads: 0.004 }[locomotion];
     const walkBob = moving ? Math.abs(Math.sin(this.gaitClock)) * bobScale : 0;
     const height = this.height.step(sdt);
     const local = this.velocity.clone().rotateAround(new THREE.Vector2(), -this.bodyYaw);
@@ -543,8 +545,8 @@ export class RobotRig {
     this.applyRootTransform();
 
     // 4. Feet: planted in world space, stepping in alternating groups.
-    const biped = this.model.locomotion === "biped";
-    const stepDuration = (biped ? 0.24 : 0.15) / Math.max(0.5, speed);
+    const upright = this.model.locomotion === "upright";
+    const stepDuration = (upright ? 0.24 : 0.15) / Math.max(0.5, speed);
     const threshold = this.destroyedState ? 0 : moving ? 0.12 : 0.04;
     const stepping = [false, false];
     for (const leg of this.legs) if (leg.stepping) stepping[leg.group] = true;
@@ -566,7 +568,7 @@ export class RobotRig {
           if (moving || this.destroyedState) this.events.onFootfall?.(leg.planted, false);
         } else {
           leg.planted.lerpVectors(leg.stepFrom, leg.stepTo, skitterEase(u));
-          leg.planted.y = swingHeight(u, biped ? 0.24 : 0.16);
+          leg.planted.y = swingHeight(u, upright ? 0.24 : 0.16);
         }
         continue;
       }
@@ -595,10 +597,11 @@ export class RobotRig {
       const dx = footLocal.x - leg.hip.position.x;
       const dy = footLocal.y - leg.hip.position.y;
       const dz = footLocal.z - leg.hip.position.z;
-      // Spider legs swing their IK plane toward the foot; biped legs keep it
+      // Spider legs swing their IK plane toward the foot; upright legs keep it
       // pointing backward so the knee folds behind like a reverse-jointed walker.
-      leg.hip.rotation.set(0, biped ? Math.PI / 2 : Math.atan2(-dz, dx), 0);
-      const reach = biped ? -dz : Math.hypot(dx, dz);
+      // Upright legs (bipeds and hound-style quadrupeds) share this mode.
+      leg.hip.rotation.set(0, upright ? Math.PI / 2 : Math.atan2(-dz, dx), 0);
+      const reach = upright ? -dz : Math.hypot(dx, dz);
       const solution = solveLeg(reach, dy, this.model.upperLength, this.model.lowerLength);
       leg.upper.rotation.set(0, 0, solution.hipPitch);
       leg.knee.rotation.set(0, 0, solution.kneePitch);

@@ -9,10 +9,11 @@ import type { RobotClass } from "../engine/types";
 import type { ArenaThemeId } from "./themes";
 
 /** Robot design families: same classes and weapons, different locomotion. */
-export type RobotFamily = "walker" | "biped" | "hover" | "treads";
+export type RobotFamily = "walker" | "hound" | "titan" | "mantis" | "biped" | "hover" | "treads";
 export const DEFAULT_ROBOT_FAMILY: RobotFamily = "walker";
 export const isRobotFamily = (value: unknown): value is RobotFamily =>
-  value === "walker" || value === "biped" || value === "hover" || value === "treads";
+  typeof value === "string" &&
+  ["walker", "hound", "titan", "mantis", "biped", "hover", "treads"].includes(value);
 
 const ROBOT_KINDS = ["rifle", "burst", "auto", "missile"] as const;
 
@@ -24,12 +25,13 @@ export const MODEL_URLS = {
   props: (theme: ArenaThemeId) => `/assets/models/arena/props-${theme}.glb`,
 } as const;
 
-/** How the rig moves the hull: spider legs, two reverse-jointed legs, or no legs. */
-export type Locomotion = "legs" | "biped" | "hover" | "treads";
+/** How the rig moves the hull: splayed spider legs, upright legs that plant
+ *  under their hips with knees folding backward, or no legs at all. */
+export type Locomotion = "legs" | "upright" | "hover" | "treads";
 
 const LOCOMOTION_CODES: Readonly<Record<string, Locomotion>> = {
   s: "legs",
-  b: "biped",
+  b: "upright",
   h: "hover",
   t: "treads",
 };
@@ -52,6 +54,8 @@ export interface RobotModel {
   readonly upperLength: number;
   readonly lowerLength: number;
   readonly locomotion: Locomotion;
+  /** How far splayed feet rest from their hips, as a fraction of leg length. */
+  readonly restReach: number;
 }
 
 export type PropName =
@@ -97,7 +101,7 @@ const detachPart = (root: THREE.Object3D, name: string): THREE.Object3D => {
 const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel => {
   const rig = scene.children.find((child) => child.name.startsWith("Rig_"));
   if (rig === undefined) throw new Error(`${robotClass} model has no Rig_ metrics node.`);
-  const [, hullText, upperText, lowerText, code] = rig.name.split("_");
+  const [, hullText, upperText, lowerText, code, reachText] = rig.name.split("_");
   const [hull, upper, lower] = [hullText, upperText, lowerText].map(Number);
   const position = (name: string) => findNode(scene, name).position.clone();
   const hips: THREE.Vector3[] = [];
@@ -124,6 +128,7 @@ const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel =
     upperLength: (upper ?? 300) / 1000,
     lowerLength: (lower ?? 400) / 1000,
     locomotion: LOCOMOTION_CODES[code ?? "s"] ?? "legs",
+    restReach: reachText === undefined ? 0.62 : Number(reachText) / 1000,
   };
 };
 
