@@ -180,8 +180,8 @@ export function createPlannerConcept(): PlannerConcept {
     };
     own.push(robot);
     const segments: RobotCommandSegment[] = [];
-    let route: TileCoord[] = [plan.start];
-    let secondMarks: number[] = [];
+    const route: TileCoord[] = [plan.start];
+    const secondMarks: number[] = [];
     if (plan.to !== null) {
       const move = planMovement(arena, plan.start, plan.to, "upright");
       if (move.kind === "error") throw new Error(`concept route ${plan.name}: ${move.reason}`);
@@ -228,8 +228,6 @@ export function createPlannerConcept(): PlannerConcept {
         rehearsalProjection.position === "dock" ? plan.start : rehearsalProjection.position,
       ...(aim?.kind === "aim-and-fire" ? { aimAt: aim.target } : {}),
     });
-    route = [];
-    secondMarks = [];
   }
 
   const contacts = [
