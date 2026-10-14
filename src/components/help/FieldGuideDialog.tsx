@@ -3,6 +3,8 @@
 import { BookOpen, Bot, Footprints, Map } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { helpTopicsForTab, type HelpTab, type HelpTopicId } from "../../lib/help/content";
+import { BootCampLink } from "./BootCampPrompt";
+import { SquadComparison } from "./SquadComparison";
 
 const TABS: readonly { readonly id: HelpTab; readonly label: string; readonly icon: typeof Bot }[] =
   [
@@ -59,9 +61,12 @@ export function FieldGuideDialog({
             <BookOpen aria-hidden="true" /> Field Guide
           </h2>
         </div>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Close Field Guide">
-          ×
-        </button>
+        <div className="field-guide-header-actions">
+          <BootCampLink newTab />
+          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close Field Guide">
+            ×
+          </button>
+        </div>
       </header>
       <div className="field-guide-tabs" role="tablist" aria-label="Field Guide sections">
         {TABS.map(({ id, label, icon: Icon }) => (
@@ -78,6 +83,7 @@ export function FieldGuideDialog({
         ))}
       </div>
       <div className="field-guide-list" role="tabpanel">
+        {tab === "robots" ? <SquadComparison variant="compact" headingLevel={4} /> : null}
         {helpTopicsForTab(tab).map((topic) => (
           <article key={topic.id}>
             <div>

@@ -21,6 +21,8 @@ import {
   type PlayerColor,
 } from "../../lib/setup/validate";
 import { TeamRow } from "./TeamRow";
+import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
+import { FieldGuideButton } from "../help/HelpProvider";
 
 export function RoomSetup({ code }: { readonly code: string }) {
   const router = useRouter();
@@ -330,7 +332,14 @@ export function RoomSetup({ code }: { readonly code: string }) {
               </span>
             </div>
           </div>
+          <div className="ml-auto flex items-center gap-3">
+            <BootCampLink returnTo={`/room/${code}`} />
+            <FieldGuideButton />
+          </div>
         </header>
+        <div className="mt-6">
+          <BootCampPrompt returnTo={`/room/${code}`} />
+        </div>
         <div className="room-setup-grid mt-7 grid grid-cols-[1fr_360px] gap-6">
           <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
             <div className="mb-5 flex items-center justify-between">
