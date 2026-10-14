@@ -103,7 +103,7 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
     rim: { color: 0xff3cc8, intensity: 1.4 },
     environment: 0.12,
     floodlights: null,
-    bloom: { strength: 0.75, radius: 0.5, threshold: 0.78 },
+    bloom: { strength: 0.6, radius: 0.35, threshold: 0.85 },
     vignette: 0.4,
     apron: 0x040309,
     floor: {
@@ -121,7 +121,7 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
       homeStripe: "rgba(255, 60, 200, 0.10)",
       scorchChance: 0,
       glowSeams: "rgba(40, 210, 255, 0.55)",
-      glowIntensity: 0.55,
+      glowIntensity: 0.35,
       roughness: 0.32,
       metalness: 0.35,
     },

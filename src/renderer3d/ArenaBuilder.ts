@@ -167,7 +167,7 @@ const paintFloor = (
         glow.strokeStyle = palette.glowSeams;
         glow.lineWidth = 1.5;
         glow.strokeRect(px + 0.75, py + 0.75, FLOOR_PX - 1.5, FLOOR_PX - 1.5);
-        context.strokeStyle = "rgba(60, 200, 255, 0.35)";
+        context.strokeStyle = "rgba(60, 200, 255, 0.18)";
         context.lineWidth = 1.5;
         context.strokeRect(px + 0.75, py + 0.75, FLOOR_PX - 1.5, FLOOR_PX - 1.5);
       }

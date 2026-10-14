@@ -665,11 +665,11 @@ def build_arena_neon() -> None:
 
     body = material("NeonBody", (0.018, 0.022, 0.034), metallic=0.7, roughness=0.22)
     panel = material("NeonPanel", (0.04, 0.05, 0.08), metallic=0.8, roughness=0.3)
-    cyan = material("NeonCyan", (0.2, 0.9, 1.0), emission=(0.15, 0.85, 1.0), strength=3.0)
-    magenta = material("NeonMagenta", (1.0, 0.2, 0.8), emission=(1.0, 0.15, 0.75), strength=2.6)
-    amber = material("NeonAmber", (1.0, 0.6, 0.1), emission=(1.0, 0.55, 0.1), strength=2.4)
+    cyan = material("NeonCyan", (0.2, 0.9, 1.0), emission=(0.15, 0.85, 1.0), strength=1.4)
+    magenta = material("NeonMagenta", (1.0, 0.2, 0.8), emission=(1.0, 0.15, 0.75), strength=1.4)
+    amber = material("NeonAmber", (1.0, 0.6, 0.1), emission=(1.0, 0.55, 0.1), strength=1.4)
     crystal = material("NeonCrystal", (0.25, 0.95, 0.85), metallic=0.1, roughness=0.1,
-                       emission=(0.1, 0.7, 0.6), strength=2.2)
+                       emission=(0.1, 0.7, 0.6), strength=0.9)
     objects = []
 
     parts = [box("w_core", (0.47, 0.47, 0.36), (0, 0, 0.36), body, bevel=0.025)]
