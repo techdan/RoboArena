@@ -165,7 +165,7 @@ export function createPlannerConcept(): PlannerConcept {
   const pick = (team: typeof red, robotClass: RobotClass) =>
     team.robots.find((robot) => robot.definition.class === robotClass)!;
   const budgetTicks = base.config.turnLengthSeconds * TICKS_PER_SECOND;
-  const rehearsalTick = Math.round(budgetTicks * 0.4);
+  const rehearsalTick = 150;
 
   // Put the visible enemy rifle on the firing position's clearest good shot.
   const rifleTarget = rifleTargetFor(base.arena, pick(red, "rifle"), PLAN[0]!.to!);

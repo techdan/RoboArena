@@ -705,6 +705,20 @@ export class BattleScene3D {
     this.ghosts.length = 0;
   }
 
+  /** Planning look: drops the floodlight haze and dust so the floor reads cleanly. */
+  setPlanningLook(on: boolean): void {
+    for (const beam of this.beams) beam.visible = !on;
+    if (this.motes !== null) this.motes.visible = !on;
+    // A narrow top-down lens sits much further out than the movie camera.
+    const { width, height } = this.state.arena;
+    this.controls.maxDistance = Math.max(width, height) * (on ? 4.5 : 2.2);
+    // Keep fog off the board when the camera stands far overhead.
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = Math.max(width, height) * (on ? 4 : 1.1);
+      this.scene.fog.far = Math.max(width, height) * (on ? 9 : 3);
+    }
+  }
+
   /** Narrows or widens the lens; a narrow lens keeps top-down views nearly flat. */
   setFov(degrees: number): void {
     this.camera.fov = degrees;

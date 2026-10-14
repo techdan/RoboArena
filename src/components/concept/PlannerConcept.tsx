@@ -19,10 +19,10 @@ export type ConceptView = "top" | "tilt";
 
 /** Top-down planning camera: straight down through a narrow lens. */
 const TOP: Record<ConceptShot, { centre: [number, number]; height: number }> = {
-  overview: { centre: [11.2, 14.6], height: 50 },
+  overview: { centre: [7.1, 14.4], height: 68 },
   command: { centre: [11.5, 21.5], height: 30 },
   aim: { centre: [7.5, 13.5], height: 36 },
-  rehearse: { centre: [11.2, 14.6], height: 50 },
+  rehearse: { centre: [7.1, 14.4], height: 68 },
 };
 
 const CLASS_LABEL: Record<string, string> = {
@@ -50,7 +50,7 @@ const CAMERAS: Record<
 > = {
   overview: { from: [12.5, 21, 37], to: [12.5, 0, 14.5] },
   command: { from: [12.5, 11, 31], to: [12, 0, 19.5] },
-  aim: { from: [12, 13.5, 29], to: [11.5, 0, 13.5] },
+  aim: { from: [8, 12, 27], to: [6.5, 0, 13.5] },
   rehearse: { from: [12.5, 21, 37], to: [12.5, 0, 14.5] },
 };
 
@@ -103,6 +103,7 @@ export function PlannerConcept({
         return;
       }
       scene.render(0, { animate: false, speed: 1, reducedMotion: false });
+      scene.setPlanningLook(true);
       decorate(scene, concept, shot, selected);
       if (view === "top") {
         const top = TOP[shot];
@@ -120,7 +121,16 @@ export function PlannerConcept({
       }
       scene.resize();
       if (capture) scene.advance(1.2);
-      setAnchor(scene.screenOf(shot === "command" ? selected.start : selected.end, 0.9));
+      setAnchor(
+        scene.screenOf(
+          shot === "command"
+            ? selected.start
+            : shot === "rehearse"
+              ? selected.rehearsal
+              : selected.end,
+          0.9,
+        ),
+      );
       (window as unknown as { __planner3d?: unknown }).__planner3d = scene;
       setReady(true);
     })();
@@ -196,7 +206,7 @@ export function PlannerConcept({
           className="absolute -translate-x-1/2 -translate-y-full rounded-md border border-white/10 bg-black/70 px-2 py-1 text-[11px] text-white/85 backdrop-blur"
           style={{ left: anchor.x, top: anchor.y - 10 }}
         >
-          Lance ends here · facing N
+          {shot === "rehearse" ? "Lance at 2.5 s, mid-route" : "Lance ends here · facing N"}
         </div>
       )}
 
