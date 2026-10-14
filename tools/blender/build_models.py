@@ -511,6 +511,15 @@ def arena_materials():
         "glow": material("ArenaGlow", (0.4, 0.85, 1.0), emission=(0.3, 0.85, 1.0), strength=5.0),
         "sandbag": material("Sandbag", (0.3, 0.26, 0.18), roughness=0.95),
         "seat_glow": material("SeatGlow", (1.0, 0.6, 0.25), emission=(1.0, 0.55, 0.2), strength=0.35),
+        "capstone": material("CapStone", (0.105, 0.1, 0.095), roughness=0.95),
+        "ribbon": material("RibbonLED", (1.0, 0.45, 0.12), emission=(1.0, 0.42, 0.1), strength=1.6),
+        "canopy_light": material("CanopyLight", (1.0, 0.93, 0.8), emission=(1.0, 0.92, 0.78), strength=2.2),
+        "crowd": [material(f"Crowd{i}", c, roughness=0.85) for i, c in enumerate([
+            (0.42, 0.08, 0.06), (0.08, 0.16, 0.42), (0.5, 0.42, 0.12), (0.12, 0.3, 0.12),
+            (0.35, 0.33, 0.3), (0.06, 0.06, 0.07), (0.45, 0.2, 0.05), (0.22, 0.1, 0.3)])],
+        "skin": material("CrowdHead", (0.36, 0.27, 0.2), roughness=0.7),
+        "banners": [material(f"Banner{i}", c, roughness=0.8) for i, c in enumerate([
+            (0.62, 0.08, 0.06), (0.06, 0.2, 0.62), (0.08, 0.42, 0.14), (0.72, 0.5, 0.06)])],
     }
 
 
@@ -545,7 +554,14 @@ def build_arena() -> None:
                 continue
             parts.append(box(f"w_b{row}{col}", (0.118, 0.47, 0.068), (x, 0, h), m["brick"],
                              bevel=0.012, rot=(0, 0, rnd.uniform(-0.02, 0.02))))
-    parts.append(box("w_cap", (0.5, 0.5, 0.04), (0, 0, 0.7), m["concrete_dark"], bevel=0.015))
+    # Broken capstones: two weathered slabs with a gap and a tilted, chipped end.
+    parts.append(box("w_cap0", (0.27, 0.5, 0.04), (-0.23, 0, 0.7), m["capstone"], bevel=0.018))
+    parts.append(box("w_cap1", (0.19, 0.48, 0.035), (0.29, -0.01, 0.695), m["capstone"],
+                     bevel=0.018, rot=(0.05, -0.06, 0.03)))
+    for i in range(3):
+        parts.append(box(f"w_chip{i}", (0.035, 0.03, 0.02),
+                         (rnd.uniform(-0.4, 0.4), rnd.uniform(-0.4, 0.4), 0.755),
+                         m["capstone"], bevel=0.008, rot=(0, 0, rnd.uniform(0, 3))))
     objects.append(join("Wall", parts))
 
     # Low wall: a sandbag-topped concrete barrier, crouch-height.
@@ -615,14 +631,44 @@ def build_arena() -> None:
                          m["glow"], bevel=0.01))
     objects.append(join("FloodTower", parts))
 
-    # Grandstand section: dark tiered seating with lit seat rows.
+    # Grandstand section: tiered seating packed with a crowd, an LED ribbon board
+    # on the front rail, team banners on the back wall and a lit canopy above.
     parts = []
+    crowd_rnd = random.Random(99)
     for tier in range(5):
+        top = 0.24 + tier * 0.4
         parts.append(box(f"gs_t{tier}", (2.0, 0.3, 0.12 + tier * 0.2),
                          (0, tier * 0.6, 0.12 + tier * 0.2), m["concrete_dark"], bevel=0.02))
         parts.append(box(f"gs_s{tier}", (1.9, 0.04, 0.02),
-                         (0, tier * 0.6 - 0.22, 0.25 + tier * 0.4), m["seat_glow"], bevel=0))
-    parts.append(box("gs_rail", (2.0, 0.02, 0.04), (0, -0.28, 0.3), m["hazard"], bevel=0))
+                         (0, tier * 0.6 - 0.27, top + 0.01), m["seat_glow"], bevel=0))
+        for seat in range(17):
+            if crowd_rnd.random() < 0.18:
+                continue
+            x = -1.84 + seat * 0.23 + crowd_rnd.uniform(-0.03, 0.03)
+            y = tier * 0.6 - 0.08 + crowd_rnd.uniform(-0.03, 0.03)
+            lean = crowd_rnd.uniform(-0.12, 0.12)
+            shirt = m["crowd"][crowd_rnd.randrange(len(m["crowd"]))]
+            parts.append(box(f"gs_p{tier}_{seat}", (0.07, 0.05, 0.1), (x, y, top + 0.1), shirt,
+                             bevel=0.02, rot=(lean, 0, crowd_rnd.uniform(-0.2, 0.2))))
+            parts.append(sphere(f"gs_h{tier}_{seat}", 0.052, (x, y - 0.01, top + 0.25),
+                                m["skin"], subdiv=1))
+            if crowd_rnd.random() < 0.22:  # an arm or a flag raised in the air
+                parts.append(box(f"gs_a{tier}_{seat}", (0.018, 0.018, 0.1),
+                                 (x + 0.06, y, top + 0.33), shirt, bevel=0.006,
+                                 rot=(0, crowd_rnd.uniform(-0.4, 0.4), 0)))
+    parts.append(box("gs_rail", (2.0, 0.025, 0.1), (0, -0.3, 0.26), m["concrete_dark"], bevel=0.008))
+    parts.append(box("gs_ribbon", (1.98, 0.006, 0.055), (0, -0.327, 0.27), m["ribbon"], bevel=0))
+    parts.append(box("gs_back", (2.0, 0.08, 1.3), (0, 2.98, 1.3), m["concrete_dark"], bevel=0.02))
+    for i in range(6):
+        x = -1.6 + i * 0.64
+        parts.append(box(f"gs_banner{i}", (0.16, 0.008, 0.36), (x, 2.89, 2.0),
+                         m["banners"][i % 4], bevel=0, rot=(0.04, 0, 0)))
+        parts.append(box(f"gs_bpole{i}", (0.19, 0.012, 0.012), (x, 2.885, 2.37), m["steel"], bevel=0))
+    parts.append(box("gs_canopy", (2.05, 0.9, 0.03), (0, 2.25, 2.62), m["steel"], bevel=0.01,
+                     rot=(-0.12, 0, 0)))
+    for i in range(5):
+        parts.append(box(f"gs_clight{i}", (0.14, 0.04, 0.008), (-1.6 + i * 0.8, 1.55, 2.53),
+                         m["canopy_light"], bevel=0, rot=(-0.12, 0, 0)))
     objects.append(join("Grandstand", parts))
 
     # Lay props out in a row so the file previews sensibly; the runtime reads them
