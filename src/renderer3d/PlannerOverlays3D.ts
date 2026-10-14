@@ -342,7 +342,8 @@ export class PlannerOverlays3D {
     const rayMaterial = additive(color, 0.9);
     for (const side of [-1, 1]) {
       const angle = yaw + side * halfAngle;
-      const tip = new THREE.Vector2(Math.sin(angle), Math.cos(angle)).multiplyScalar(range + 0.5);
+      // Laid flat, local (x, y) lands on world (x, -y).
+      const tip = new THREE.Vector2(Math.sin(angle), -Math.cos(angle)).multiplyScalar(range + 0.5);
       group.add(flat(stripGeometry([new THREE.Vector2(0, 0), tip], 0.05), rayMaterial.clone(), 0));
     }
     this.group.add(group);

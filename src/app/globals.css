@@ -4504,6 +4504,14 @@ a.planner-menu-item:focus-visible {
 .turn-track-name[data-over="true"] small {
   color: #fca5a5;
 }
+@media (pointer: fine) {
+  /* Mouse users get a shorter track so more of the board stays visible. */
+  .turn-track .all-programs-row,
+  .turn-track .turn-track-name,
+  .turn-track .timeline-command {
+    min-height: 2.1rem;
+  }
+}
 .turn-track .all-programs-axis span[data-major="false"] {
   border-left-color: rgb(255 255 255 / 4%);
 }

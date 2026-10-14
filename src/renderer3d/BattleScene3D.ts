@@ -901,6 +901,8 @@ export class BattleScene3D {
   setPlanningLook(on: boolean): void {
     for (const beam of this.beams) beam.visible = !on;
     if (this.motes !== null) this.motes.visible = !on;
+    // Floodlight glare is drama for the movie; while planning it hides the board.
+    this.bloom.strength = this.theme.bloom.strength * (on ? 0.35 : 1);
     // A narrow top-down lens sits much further out than the movie camera.
     const { width, height } = this.state.arena;
     this.controls.maxDistance = Math.max(width, height) * (on ? 4.5 : 2.2);
