@@ -497,7 +497,7 @@ def build_robot(kind: str) -> None:
 
 def arena_materials():
     return {
-        "concrete": material("Concrete", (0.3, 0.29, 0.27), roughness=0.85),
+        "concrete": material("Concrete", (0.26, 0.25, 0.23), roughness=0.85),
         "concrete_dark": material("ConcreteDark", (0.16, 0.16, 0.16), roughness=0.9),
         "brick": material("Brick", (0.32, 0.12, 0.08), roughness=0.82),
         "rebar": material("Rebar", (0.25, 0.14, 0.08), metallic=0.8, roughness=0.6),
@@ -510,6 +510,7 @@ def arena_materials():
         "wood": material("CrateWood", (0.3, 0.2, 0.11), roughness=0.8),
         "glow": material("ArenaGlow", (0.4, 0.85, 1.0), emission=(0.3, 0.85, 1.0), strength=5.0),
         "sandbag": material("Sandbag", (0.3, 0.26, 0.18), roughness=0.95),
+        "seat_glow": material("SeatGlow", (1.0, 0.6, 0.25), emission=(1.0, 0.55, 0.2), strength=1.2),
     }
 
 
@@ -624,7 +625,7 @@ def build_arena() -> None:
         parts.append(box(f"gs_t{tier}", (2.0, 0.3, 0.12 + tier * 0.2),
                          (0, tier * 0.6, 0.12 + tier * 0.2), m["concrete_dark"], bevel=0.02))
         parts.append(box(f"gs_s{tier}", (1.9, 0.04, 0.02),
-                         (0, tier * 0.6 - 0.22, 0.25 + tier * 0.4), m["glow"], bevel=0))
+                         (0, tier * 0.6 - 0.22, 0.25 + tier * 0.4), m["seat_glow"], bevel=0))
     parts.append(box("gs_rail", (2.0, 0.02, 0.04), (0, -0.28, 0.3), m["hazard"], bevel=0))
     objects.append(join("Grandstand", parts))
 
