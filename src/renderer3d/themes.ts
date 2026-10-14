@@ -3,7 +3,7 @@
  *  and post-processing, so one renderer can wear very different looks.
  */
 
-export type ArenaThemeId = "coliseum" | "neon" | "scrapyard";
+export type ArenaThemeId = "coliseum" | "neon" | "scrapyard" | "factory";
 
 export interface FloorPalette {
   readonly base: string;
@@ -177,9 +177,47 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
     motes: { color: 0xf3d2a0, count: 260, additive: false },
     robotGlow: 1.4,
   },
+  factory: {
+    id: "factory",
+    name: "Foundry",
+    tagline:
+      "A steel-mill arena: riveted machine blocks, sodium lamps and furnaces glowing behind.",
+    sky: ["#050403", "#120c08", "#2a1a10"],
+    fog: { color: 0x150d08, near: 30, far: 85 },
+    exposure: 1.0,
+    hemi: { sky: 0x9ab0d0, ground: 0x2a1a10, intensity: 0.22 },
+    sun: { color: 0xc8d6ff, intensity: 2.0, azimuth: -1.9, elevation: 1.1 },
+    rim: { color: 0xff7a2a, intensity: 1.6 },
+    environment: 0.22,
+    floodlights: { color: 0xffb466, intensity: 8, beam: 0.026 },
+    bloom: { strength: 0.6, radius: 0.45, threshold: 0.8 },
+    vignette: 0.4,
+    apron: 0x121110,
+    floor: {
+      base: "#34363a",
+      mottleLight: "rgba(150,150,160,0.08)",
+      mottleDark: "rgba(8,6,4,0.2)",
+      plateTone: 12,
+      rough: "rgba(40, 30, 22, 0.75)",
+      gravel: [70, 0.7, 0.72],
+      seam: "rgba(4, 4, 4, 0.7)",
+      seamHighlight: "rgba(220, 220, 230, 0.08)",
+      rivets: "rgba(200, 200, 210, 0.2)",
+      creviceFill: "rgba(12, 6, 2, 0.75)",
+      creviceGlow: "rgba(255, 110, 20, 0.6)",
+      homeStripe: "rgba(240, 180, 20, 0.14)",
+      scorchChance: 0.09,
+      glowSeams: null,
+      glowIntensity: 0,
+      roughness: 0.5,
+      metalness: 0.55,
+    },
+    motes: { color: 0xff8a3a, count: 200, additive: true },
+    robotGlow: 1.8,
+  },
 };
 
 export const DEFAULT_ARENA_THEME: ArenaThemeId = "coliseum";
 
 export const isArenaThemeId = (value: unknown): value is ArenaThemeId =>
-  value === "coliseum" || value === "neon" || value === "scrapyard";
+  value === "coliseum" || value === "neon" || value === "scrapyard" || value === "factory";

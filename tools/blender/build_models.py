@@ -1020,6 +1020,150 @@ def build_arena_scrapyard() -> None:
     layout_and_export(objects, "scrapyard")
 
 
+def build_arena_factory() -> None:
+    """Foundry: riveted steel machine blocks, chevron barriers and furnaces glowing
+    behind the arena, lit by sodium lamps under a smoky roof."""
+    reset_scene()
+    import random
+
+    steel = material("FoundrySteel", (0.14, 0.15, 0.16), metallic=0.85, roughness=0.45)
+    dark = material("FoundryDark", (0.07, 0.075, 0.08), metallic=0.8, roughness=0.5)
+    worn = material("FoundryWorn", (0.32, 0.31, 0.29), metallic=0.9, roughness=0.35)
+    rust = material("FoundryRust", (0.3, 0.12, 0.05), metallic=0.5, roughness=0.75)
+    yellow = material("FoundryYellow", (0.85, 0.6, 0.05), metallic=0.3, roughness=0.5)
+    black = material("FoundryBlack", (0.02, 0.02, 0.02), roughness=0.7)
+    pipe = material("FoundryPipe", (0.42, 0.18, 0.08), metallic=0.7, roughness=0.4)
+    tarp = material("FoundryTarp", (0.07, 0.09, 0.05), roughness=0.95)
+    molten = material("Molten", (1.0, 0.45, 0.1), emission=(1.0, 0.4, 0.06), strength=2.6)
+    amber = material("FoundryAmber", (1.0, 0.55, 0.15), emission=(1.0, 0.5, 0.12), strength=1.8)
+    lamp = material("FoundryLamp", (1.0, 0.75, 0.45), emission=(1.0, 0.7, 0.4), strength=3.0)
+    warn = material("FoundryWarn", (1.0, 0.12, 0.05), emission=(1.0, 0.1, 0.04), strength=2.0)
+    objects = []
+
+    def chevrons(prefix, half_x, y, z, height, count):
+        out = []
+        for i in range(count):
+            x = -half_x + (i + 0.5) * (2 * half_x / count)
+            out.append(box(f"{prefix}{i}", (half_x / count * 0.45, 0.004, height), (x, y, z),
+                           black if i % 2 else yellow, bevel=0, rot=(0, 0.5, 0)))
+        return out
+
+    # Wall: a riveted machine block with seam lines, a hazard band and a side pipe.
+    rnd = random.Random(70)
+    parts = [box("w_core", (0.48, 0.48, 0.34), (0, 0, 0.36), steel, bevel=0.012),
+             box("w_base", (0.5, 0.5, 0.05), (0, 0, 0.05), dark, bevel=0.01),
+             box("w_top", (0.49, 0.49, 0.02), (0, 0, 0.71), dark, bevel=0.008)]
+    for side in (-1, 1):
+        parts += chevrons(f"w_chev{side}", 0.46, side * 0.483, 0.12, 0.035, 8)
+        parts.append(box(f"w_seam{side}", (0.004, 0.485, 0.3), (side * 0.16, 0, 0.38), dark, bevel=0))
+        for k in range(4):
+            parts.append(cyl(f"w_rivet{side}{k}", 0.012, 0.01, (-0.36 + k * 0.24, side * 0.485, 0.62),
+                             worn, rot=(math.pi / 2, 0, 0), verts=8))
+    parts.append(cyl("w_pipe", 0.04, 0.68, (0.43, -0.5, 0.38), pipe, verts=12))
+    parts.append(cyl("w_valve", 0.06, 0.02, (0.43, -0.54, 0.45), rust, rot=(math.pi / 2, 0, 0),
+                     verts=10))
+    objects.append(join("Wall", parts))
+
+    # WallB: a transformer block with cooling fins and a glowing vent.
+    parts = [box("wb_core", (0.46, 0.46, 0.34), (0, 0, 0.36), dark, bevel=0.015),
+             box("wb_base", (0.5, 0.5, 0.05), (0, 0, 0.05), steel, bevel=0.01)]
+    for i in range(9):
+        x = -0.4 + i * 0.1
+        for side in (-1, 1):
+            parts.append(box(f"wb_fin{side}{i}", (0.012, 0.04, 0.28), (x, side * 0.49, 0.38), steel,
+                             bevel=0.003))
+    parts.append(box("wb_vent", (0.2, 0.004, 0.05), (0, -0.462, 0.58), amber, bevel=0))
+    parts.append(box("wb_cap", (0.48, 0.48, 0.02), (0, 0, 0.71), dark, bevel=0.006))
+    parts.append(cyl("wb_insul", 0.05, 0.12, (0.2, 0.2, 0.78), rust, verts=10))
+    objects.append(join("WallB", parts))
+
+    # Low wall: a steel jersey barrier painted with chevrons.
+    parts = [box("lw_base", (0.48, 0.24, 0.17), (0, 0, 0.17), steel, bevel=0.03, taper=(1.0, 0.55))]
+    for side in (-1, 1):
+        parts += chevrons(f"lw_chev{side}", 0.44, side * 0.18, 0.2, 0.08, 6)
+    parts.append(box("lw_rail", (0.49, 0.03, 0.02), (0, 0, 0.35), worn, bevel=0.006))
+    objects.append(join("LowWall", parts))
+
+    # Outer wall: a bulkhead with I-beams and a red warning strip.
+    parts = [box("ow_core", (0.5, 0.5, 0.65), (0, 0, 0.65), dark, bevel=0.01)]
+    for x in (-0.38, 0.38):
+        parts.append(box(f"ow_beam{x}", (0.05, 0.52, 0.66), (x, 0, 0.66), steel, bevel=0.006))
+    parts.append(box("ow_warn", (0.44, 0.515, 0.012), (0, 0, 1.15), warn, bevel=0))
+    parts += chevrons("ow_chev", 0.5, -0.505, 0.12, 0.06, 10)
+    objects.append(join("OuterWall", parts))
+
+    # "Bush": a tarp thrown over a pile of crates, soft cover in a hard place.
+    parts = [box("b_crate0", (0.16, 0.14, 0.12), (-0.08, 0.04, 0.12), rust, bevel=0.01),
+             box("b_crate1", (0.12, 0.12, 0.1), (0.12, -0.06, 0.1), steel, bevel=0.01),
+             sphere("b_tarp", 0.36, (0, 0, 0.12), tarp, scale=(1.0, 0.85, 0.62), subdiv=2)]
+    obj = join("Bush", parts)
+    jitter_mesh(obj, 0.03, 71)
+    objects.append(obj)
+
+    # Rough ground: steel offcuts, bolts and a dropped chain.
+    for v in range(3):
+        rnd = random.Random(90 + v)
+        parts = []
+        for i in range(4):
+            parts.append(box(f"r{v}_p{i}", (rnd.uniform(0.05, 0.12), rnd.uniform(0.03, 0.07), 0.008),
+                             (rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), 0.02),
+                             (worn, rust, steel)[i % 3], bevel=0.002,
+                             rot=(rnd.uniform(-0.4, 0.4), rnd.uniform(-0.4, 0.4), rnd.uniform(0, 3))))
+        cx, cy = rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2)
+        for k in range(6):
+            parts.append(torus(f"r{v}_link{k}", 0.025, 0.006, (cx + k * 0.035, cy + math.sin(k) * 0.03,
+                                                             0.01), dark, segments=10, rings=4,
+                               rot=(math.pi / 2 if k % 2 else 0, 0, rnd.uniform(0, 1))))
+        objects.append(join(f"Rubble{v}", parts))
+
+    # Crate: a steel parts bin with yellow corners.
+    parts = [box("c_body", (0.2, 0.2, 0.17), (0, 0, 0.17), steel, bevel=0.012)]
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            parts.append(box(f"c_corner{sx}{sy}", (0.025, 0.025, 0.175), (sx * 0.19, sy * 0.19, 0.17),
+                             yellow, bevel=0.004))
+    objects.append(join("Crate", parts))
+
+    # Corner tower: a lattice gantry column with hanging sodium lamps and a beacon.
+    parts = [box("ft_col", (0.12, 0.12, 2.1), (0, 0, 2.1), steel, bevel=0.01)]
+    for k in range(8):
+        parts.append(box(f"ft_brace{k}", (0.13, 0.13, 0.015), (0, 0, 0.4 + k * 0.5), dark, bevel=0))
+    parts.append(box("ft_arm", (0.7, 0.06, 0.06), (0, 0, 4.1), steel, bevel=0.008))
+    for i in range(3):
+        x = -0.55 + i * 0.55
+        parts.append(cyl(f"ft_cord{i}", 0.006, 0.3, (x, 0, 3.92), black, verts=6))
+        parts.append(cyl(f"ft_shade{i}", 0.12, 0.08, (x, 0, 3.74), dark, verts=16, radius2=0.04))
+        parts.append(cyl(f"ft_lamp{i}", 0.09, 0.012, (x, 0, 3.69), lamp, verts=16))
+    parts.append(sphere("ft_beacon", 0.05, (0, 0, 4.25), warn))
+    objects.append(join("FloodTower", parts))
+
+    # Backdrop: a furnace bank with glowing mouths, chimneys and a catwalk.
+    parts = []
+    rnd = random.Random(101)
+    parts.append(box("gs_wall", (2.0, 0.6, 1.6), (0, 1.2, 1.6), dark, bevel=0.02))
+    for i in range(3):
+        x = -1.33 + i * 1.33
+        parts.append(box(f"gs_furnace{i}", (0.42, 0.45, 0.7), (x, 0.4, 0.7), rust, bevel=0.04,
+                         taper=(0.85, 0.85)))
+        parts.append(box(f"gs_mouth{i}", (0.22, 0.01, 0.16), (x, -0.06, 0.45), molten, bevel=0))
+        parts.append(box(f"gs_lip{i}", (0.26, 0.05, 0.02), (x, -0.06, 0.28), worn, bevel=0.005))
+        parts.append(cyl(f"gs_chimney{i}", 0.13, 1.6, (x + 0.15, 1.0, 2.8), steel, verts=14))
+        parts.append(torus(f"gs_band{i}", 0.13, 0.015, (x + 0.15, 1.0, 3.3), rust, segments=16,
+                           rings=6))
+        parts.append(box(f"gs_pour{i}", (0.03, 0.03, 0.12), (x - 0.25, -0.02, 0.15), molten,
+                         bevel=0))
+    parts.append(box("gs_catwalk", (2.0, 0.22, 0.02), (0, 0.0, 1.55), steel, bevel=0.005))
+    for k in range(17):
+        parts.append(cyl(f"gs_post{k}", 0.008, 0.22, (-1.9 + k * 0.237, -0.2, 1.67), yellow, verts=6))
+    parts.append(box("gs_rail", (2.0, 0.008, 0.008), (0, -0.2, 1.78), yellow, bevel=0))
+    for k in range(4):
+        y = rnd.uniform(0.2, 0.6)
+        parts.append(cyl(f"gs_pipe{k}", 0.05, 4.0, (0, y, 2.0 + k * 0.2), pipe,
+                         rot=(0, math.pi / 2, 0), verts=12))
+    objects.append(join("Grandstand", parts))
+    layout_and_export(objects, "factory")
+
+
 def main() -> None:
     families = ("mixed", "walker", "hound", "titan", "mantis", "biped", "hover", "treads")
     only = os.environ.get("ROBOT_FAMILIES")
@@ -1029,6 +1173,7 @@ def main() -> None:
     build_arena()
     build_arena_neon()
     build_arena_scrapyard()
+    build_arena_factory()
 
 
 if __name__ == "__main__":
