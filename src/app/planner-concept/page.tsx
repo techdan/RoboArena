@@ -7,10 +7,15 @@ const SHOTS: readonly ConceptShot[] = ["overview", "command", "aim", "rehearse"]
 export default async function PlannerConceptPage({
   searchParams,
 }: {
-  readonly searchParams: Promise<{ readonly shot?: string; readonly theme?: string }>;
+  readonly searchParams: Promise<{
+    readonly shot?: string;
+    readonly theme?: string;
+    readonly view?: string;
+  }>;
 }) {
   const query = await searchParams;
   const shot = SHOTS.find((candidate) => candidate === query.shot) ?? "overview";
   const theme = isArenaThemeId(query.theme) ? query.theme : "coliseum";
-  return <PlannerConcept concept={createPlannerConcept()} shot={shot} theme={theme} />;
+  const view = query.view === "tilt" ? "tilt" : "top";
+  return <PlannerConcept concept={createPlannerConcept()} shot={shot} theme={theme} view={view} />;
 }

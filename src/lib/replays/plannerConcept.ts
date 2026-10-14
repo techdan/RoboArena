@@ -102,11 +102,12 @@ const PLAN: readonly {
     name: "Lance",
     start: { x: 8, y: 22 },
     startHeading: "N",
-    to: { x: 10, y: 16 },
+    to: { x: 5, y: 17 },
+    // Aim target is filled in with the best open tile; see `rifleTarget`.
     then: [
       { kind: "set-scan-direction", heading: "N" },
-      { kind: "aim-and-fire", target: { x: 11, y: 11 }, weapon: "rifle", repeat: false },
-      { kind: "aim-and-fire", target: { x: 11, y: 11 }, weapon: "rifle", repeat: false },
+      { kind: "aim-and-fire", target: { x: 0, y: 0 }, weapon: "rifle", repeat: false },
+      { kind: "aim-and-fire", target: { x: 0, y: 0 }, weapon: "rifle", repeat: false },
     ],
     endHeading: "N",
   },
@@ -166,9 +167,20 @@ export function createPlannerConcept(): PlannerConcept {
   const budgetTicks = base.config.turnLengthSeconds * TICKS_PER_SECOND;
   const rehearsalTick = Math.round(budgetTicks * 0.4);
 
+  // Put the visible enemy rifle on the firing position's clearest good shot.
+  const rifleTarget = rifleTargetFor(base.arena, pick(red, "rifle"), PLAN[0]!.to!);
+  const plans = PLAN.map((plan) => ({
+    ...plan,
+    then: plan.then.map((segment) =>
+      segment.kind === "aim-and-fire" && segment.weapon === "rifle"
+        ? { ...segment, target: rifleTarget }
+        : segment,
+    ),
+  }));
+
   const robots: ConceptRobot[] = [];
   const own: RobotState[] = [];
-  for (const plan of PLAN) {
+  for (const plan of plans) {
     const source = pick(red, plan.robotClass);
     const robot: RobotState = {
       ...source,
@@ -231,7 +243,7 @@ export function createPlannerConcept(): PlannerConcept {
   }
 
   const contacts = [
-    { robot: pick(blue, "rifle"), tile: { x: 11, y: 11 }, label: "Blue Rifle" },
+    { robot: pick(blue, "rifle"), tile: rifleTarget, label: "Blue Rifle" },
     { robot: pick(blue, "burst"), tile: { x: 18, y: 13 }, label: "Blue Burst" },
   ];
   const contactStates: RobotState[] = contacts.map(({ robot, tile }) => ({
@@ -288,7 +300,7 @@ export function createPlannerConcept(): PlannerConcept {
       tile,
       label,
     })),
-    lastKnown: [{ x: 4, y: 11 }],
+    lastKnown: [{ x: 16, y: 6 }],
     heat,
     shot: {
       shooterId: rifle.id,
@@ -312,3 +324,27 @@ const coverText = (source: string): string =>
     "target-low-wall": "Target behind low wall",
     "adjacent-low-wall": "Low wall beside target",
   })[source] ?? source;
+
+const rifleTargetFor = (arena: MatchState["arena"], rifle: RobotState, from: TileCoord) => {
+  const shooter: RobotState = { ...rifle, position: from, scanHeading: "N" };
+  const tiles = previewTargetingTiles({
+    arena,
+    shooter,
+    weapon: "rifle",
+    authorizedContacts: [],
+    fireMode: "aim",
+    maxDistance: PLANNER_WEAPON_RANGE.rifle,
+  }).filter(
+    (tile) =>
+      tile.chancePercent !== null &&
+      tile.chancePercent >= 50 &&
+      tile.distance >= 6 &&
+      tile.distance <= 10 &&
+      tile.tile.x >= 3 &&
+      tile.tile.y < from.y - 3,
+  );
+  const best = [...tiles].sort(
+    (a, b) => (b.chancePercent ?? 0) - (a.chancePercent ?? 0) || b.distance - a.distance,
+  )[0];
+  return best?.tile ?? { x: from.x, y: from.y - 6 };
+};

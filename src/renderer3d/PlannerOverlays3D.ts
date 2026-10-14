@@ -280,7 +280,7 @@ export class PlannerOverlays3D {
     const start = yaw - Math.PI / 2 - halfAngle;
     const fill = flat(
       new THREE.CircleGeometry(range + 0.5, 64, start, halfAngle * 2),
-      additive(color, 0.07),
+      additive(color, 0.03),
       0,
     );
     const arc = flat(

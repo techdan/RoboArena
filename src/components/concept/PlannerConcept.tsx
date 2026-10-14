@@ -15,6 +15,15 @@ import { headingYaw } from "../../renderer3d/kinematics";
 import type { ArenaThemeId } from "../../renderer3d/themes";
 
 export type ConceptShot = "overview" | "command" | "aim" | "rehearse";
+export type ConceptView = "top" | "tilt";
+
+/** Top-down planning camera: straight down through a narrow lens. */
+const TOP: Record<ConceptShot, { centre: [number, number]; height: number }> = {
+  overview: { centre: [11.2, 14.6], height: 50 },
+  command: { centre: [11.5, 21.5], height: 30 },
+  aim: { centre: [7.5, 13.5], height: 36 },
+  rehearse: { centre: [11.2, 14.6], height: 50 },
+};
 
 const CLASS_LABEL: Record<string, string> = {
   rifle: "Rifle",
@@ -49,10 +58,12 @@ export function PlannerConcept({
   concept,
   shot,
   theme,
+  view,
 }: {
   readonly concept: Concept;
   readonly shot: ConceptShot;
   readonly theme: ArenaThemeId;
+  readonly view: ConceptView;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
@@ -93,11 +104,20 @@ export function PlannerConcept({
       }
       scene.render(0, { animate: false, speed: 1, reducedMotion: false });
       decorate(scene, concept, shot, selected);
-      const camera = CAMERAS[shot];
-      scene.lookFrom(
-        { x: camera.from[0], y: camera.from[1], z: camera.from[2] },
-        { x: camera.to[0], y: camera.to[1], z: camera.to[2] },
-      );
+      if (view === "top") {
+        const top = TOP[shot];
+        scene.setFov(30);
+        scene.lookFrom(
+          { x: top.centre[0], y: top.height, z: top.centre[1] + 0.01 },
+          { x: top.centre[0], y: 0, z: top.centre[1] },
+        );
+      } else {
+        const camera = CAMERAS[shot];
+        scene.lookFrom(
+          { x: camera.from[0], y: camera.from[1], z: camera.from[2] },
+          { x: camera.to[0], y: camera.to[1], z: camera.to[2] },
+        );
+      }
       scene.resize();
       if (capture) scene.advance(1.2);
       setAnchor(scene.screenOf(shot === "command" ? selected.start : selected.end, 0.9));
@@ -108,7 +128,7 @@ export function PlannerConcept({
       disposed = true;
       scene?.dispose();
     };
-  }, [concept, shot, selected, theme]);
+  }, [concept, shot, selected, theme, view]);
 
   const seconds = (ticks: number) => (ticks / 60).toFixed(1).replace(/\.0$/, "");
   const budget = concept.budgetTicks;
@@ -168,7 +188,7 @@ export function PlannerConcept({
           className="absolute -translate-x-1/2 -translate-y-full rounded-md bg-black/70 px-2 py-1 font-mono text-[10px] text-white/80"
           style={{ left: anchor.x, top: anchor.y - 8 }}
         >
-          Lance fires from here at 5.5 s
+          Lance fires from here
         </div>
       )}
       {(shot === "overview" || shot === "rehearse") && anchor !== null && (
@@ -179,6 +199,8 @@ export function PlannerConcept({
           Lance ends here · facing N
         </div>
       )}
+
+      <ViewControls view={view} />
 
       {/* Turn track. */}
       <section className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/10 bg-[#0a0d12]/80 px-4 pb-3 pt-2 backdrop-blur-md">
@@ -270,6 +292,45 @@ function decorate(
   else overlays.selection(shot === "rehearse" ? selected.rehearsal : selected.end, color);
   for (const contact of concept.contacts) overlays.contact(contact.tile);
   for (const tile of concept.lastKnown) overlays.lastKnown(tile);
+}
+
+function ViewControls({ view }: { readonly view: ConceptView }) {
+  const options = [
+    { id: "top", label: "Top" },
+    { id: "tilt", label: "Tilted" },
+    { id: "orbit", label: "Orbit" },
+  ];
+  return (
+    <div className="absolute bottom-[196px] right-4 flex items-center gap-2">
+      <div className="flex rounded-full border border-white/12 bg-black/60 p-1 backdrop-blur">
+        {options.map((option) => (
+          <span
+            key={option.id}
+            className={`rounded-full px-3 py-1 text-xs font-bold ${option.id === view ? "bg-white text-black" : "text-white/60"}`}
+          >
+            {option.label}
+          </span>
+        ))}
+      </div>
+      <div className="flex rounded-full border border-white/12 bg-black/60 p-1 font-mono text-xs text-white/70 backdrop-blur">
+        <span className="px-2 py-1" title="Rotate left">
+          ⟲
+        </span>
+        <span className="px-2 py-1" title="Rotate right">
+          ⟳
+        </span>
+        <span className="px-2 py-1" title="Zoom out">
+          −
+        </span>
+        <span className="px-2 py-1" title="Zoom in">
+          +
+        </span>
+        <span className="px-2 py-1" title="Frame squad">
+          ⌖
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function SquadCard({

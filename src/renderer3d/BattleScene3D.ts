@@ -705,6 +705,12 @@ export class BattleScene3D {
     this.ghosts.length = 0;
   }
 
+  /** Narrows or widens the lens; a narrow lens keeps top-down views nearly flat. */
+  setFov(degrees: number): void {
+    this.camera.fov = degrees;
+    this.camera.updateProjectionMatrix();
+  }
+
   /** Places the free camera (captures and debugging). */
   lookFrom(position: THREE.Vector3Like, target: THREE.Vector3Like): void {
     this.setCameraMode("free");
