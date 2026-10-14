@@ -16,7 +16,14 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { Heading, MatchState, Posture, RobotClass, TileCoord, WeaponId } from "../engine/types";
+import type {
+  Heading,
+  MatchState,
+  Posture,
+  RobotClass,
+  TileCoord,
+  WeaponId,
+} from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import type { MovieSnapshot, MovieTimeline } from "../renderer/animations";
 import { planMovement } from "../renderer/motion";
@@ -410,7 +417,14 @@ export class BattleScene3D {
     const { top, right, bottom, left } = this.viewInsets;
     // Shift the lens centre into the area not covered by overlaid UI.
     if (top + right + bottom + left > 0)
-      this.camera.setViewOffset(width, height, (right - left) / 2, (bottom - top) / 2, width, height);
+      this.camera.setViewOffset(
+        width,
+        height,
+        (right - left) / 2,
+        (bottom - top) / 2,
+        width,
+        height,
+      );
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }
@@ -753,18 +767,28 @@ export class BattleScene3D {
     const controls = this.controls;
     if (view === "orbit") {
       controls.enableRotate = true;
-      controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+      controls.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.PAN,
+      };
       controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
       this.setFov(38);
       const yaw = (quarter * Math.PI) / 2;
       const target = new THREE.Vector3(width / 2, 0, height / 2);
-      const offset = new THREE.Vector3(Math.sin(yaw), 0.95, Math.cos(yaw)).multiplyScalar(Math.max(width, height));
+      const offset = new THREE.Vector3(Math.sin(yaw), 0.95, Math.cos(yaw)).multiplyScalar(
+        Math.max(width, height),
+      );
       this.moveCamera(target.clone().add(offset), target, animate);
       return;
     }
     controls.enableRotate = false;
     controls.zoomToCursor = true;
-    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
     controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     controls.screenSpacePanning = true;
     const fov = view === "top" ? 30 : 34;
@@ -775,11 +799,13 @@ export class BattleScene3D {
     const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
     const aspect = Math.max(0.3, openWidth / openHeight);
     // The lens spans the full canvas height; only the open fraction may hold the arena.
-    const half = Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
+    const half =
+      Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
     const rotated = quarter % 2 === 1;
     const spanX = (rotated ? height : width) + 1.5;
     const spanZ = (rotated ? width : height) + 1.5;
-    const distance = Math.max(spanZ / 2 / half, spanX / 2 / (half * aspect)) * (view === "top" ? 1 : 1.08);
+    const distance =
+      Math.max(spanZ / 2 / half, spanX / 2 / (half * aspect)) * (view === "top" ? 1 : 1.08);
     const polar = view === "top" ? 0.0005 : THREE.MathUtils.degToRad(35);
     const yaw = (quarter * Math.PI) / 2;
     const target = new THREE.Vector3(width / 2, 0, height / 2);
@@ -857,8 +883,7 @@ export class BattleScene3D {
         previous.x !== robot.position.x ||
         previous.y !== robot.position.y;
       if (moved) {
-        if (animate && previous !== undefined)
-          rig.moveTo(robot.position, 0.22, false, this.now);
+        if (animate && previous !== undefined) rig.moveTo(robot.position, 0.22, false, this.now);
         else rig.place(robot.position, this.now);
         this.posed.set(robot.id, robot.position);
       }
