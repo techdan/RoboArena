@@ -8,7 +8,10 @@ import {
   deserializeMatchState,
   PROTOCOL_VERSION,
   type MatchSnapshotMessage,
+  type ParticipantTurnResult,
 } from "../../lib/net/protocol";
+import { loadArchivedTurn, saveArchivedTurn } from "../../lib/replays/turnArchive";
+import { TurnReel } from "../match/TurnReel";
 import {
   forgetRoom,
   requestId,
@@ -66,6 +69,30 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
   const [state, setState] = useState<GateState>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
   const [connectionOutcome, setConnectionOutcome] = useState<ReconnectOutcome | null>(null);
+  // An earlier turn chosen from the reel; null plays the default (latest) movie.
+  const [rewatch, setRewatch] = useState<ParticipantTurnResult | null>(null);
+  const [archiveRevision, setArchiveRevision] = useState(0);
+  const unseenTurns = state.kind === "authorized" ? state.snapshot.unseenTurns : null;
+  useEffect(() => {
+    if (unseenTurns === null || unseenTurns.length === 0) return;
+    let cancelled = false;
+    void Promise.all(unseenTurns.map((turn) => saveArchivedTurn(matchId, turn))).then(() => {
+      if (!cancelled) setArchiveRevision((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId, unseenTurns]);
+  const selectRewatch = useCallback(
+    (turnNumber: number | null) => {
+      if (turnNumber === null) {
+        setRewatch(null);
+        return;
+      }
+      void loadArchivedTurn(matchId, turnNumber).then((turn) => setRewatch(turn));
+    },
+    [matchId],
+  );
   const playbackTimer = useRef<number | null>(null);
   const refresh = useCallback(async () => {
     const roomCode = roomForMatch(matchId);
@@ -387,18 +414,33 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             turnNumber={turn.turnNumber}
             status={snapshot.status}
           />
+          <TurnReel
+            matchId={matchId}
+            currentTurn={turn.turnNumber}
+            selectedTurn={rewatch?.turnNumber ?? null}
+            onSelect={selectRewatch}
+            refreshKey={String(archiveRevision)}
+          />
           <MatchSectionBoundary
             section="movie"
-            resetKey={`${snapshot.revision}:${turn.turnNumber}`}
+            resetKey={`${snapshot.revision}:${turn.turnNumber}:${rewatch?.turnNumber ?? "latest"}`}
             onRecover={() => window.location.reload()}
           >
-            <MovieExperience
-              key={turn.turnNumber}
-              initialState={deserializeMatchState(turn.initialState)}
-              events={turn.events}
-              initialTick={turn.playbackTick}
-              onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
-            />
+            {rewatch !== null && rewatch.turnNumber !== turn.turnNumber ? (
+              <MovieExperience
+                key={`rewatch-${rewatch.turnNumber}`}
+                initialState={deserializeMatchState(rewatch.initialState)}
+                events={rewatch.events}
+              />
+            ) : (
+              <MovieExperience
+                key={turn.turnNumber}
+                initialState={deserializeMatchState(turn.initialState)}
+                events={turn.events}
+                initialTick={turn.playbackTick}
+                onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
+              />
+            )}
           </MatchSectionBoundary>
           <div className="match-movie-handoff">
             <div>
@@ -446,6 +488,26 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
           {...(snapshot.outcome === undefined ? {} : { outcome: snapshot.outcome })}
           {...(snapshot.winningSide === undefined ? {} : { winningSide: snapshot.winningSide })}
         />
+        <TurnReel
+          matchId={matchId}
+          currentTurn={null}
+          selectedTurn={rewatch?.turnNumber ?? null}
+          onSelect={selectRewatch}
+          refreshKey={String(archiveRevision)}
+        />
+        {rewatch !== null ? (
+          <MatchSectionBoundary
+            section="movie"
+            resetKey={`final:${rewatch.turnNumber}`}
+            onRecover={() => setRewatch(null)}
+          >
+            <MovieExperience
+              key={`rewatch-${rewatch.turnNumber}`}
+              initialState={deserializeMatchState(rewatch.initialState)}
+              events={rewatch.events}
+            />
+          </MatchSectionBoundary>
+        ) : null}
       </main>
     );
   }

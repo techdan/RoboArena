@@ -3934,3 +3934,46 @@ a.planner-menu-item:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* Turn reel: rewatch earlier turn movies */
+.turn-reel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 12px;
+  max-width: 1180px;
+}
+.turn-reel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  color: rgb(255 255 255 / 45%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.turn-reel-button {
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: rgb(255 255 255 / 70%);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.turn-reel-button:hover {
+  border-color: rgb(190 242 100 / 40%);
+  color: white;
+}
+.turn-reel-button[aria-pressed="true"] {
+  border-color: rgb(190 242 100 / 55%);
+  background: rgb(190 242 100 / 14%);
+  color: rgb(217 249 157);
+}
+.turn-reel-button:focus-visible {
+  outline: 2px solid rgb(190 242 100);
+  outline-offset: 2px;
+}
