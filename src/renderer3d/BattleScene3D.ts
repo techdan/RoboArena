@@ -16,11 +16,12 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { MatchState, TileCoord, WeaponId } from "../engine/types";
+import type { MatchState, Posture, RobotClass, TileCoord, WeaponId } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import type { MovieSnapshot, MovieTimeline } from "../renderer/animations";
 import { planMovement } from "../renderer/motion";
 import { buildArena, type ArenaBuild } from "./ArenaBuilder";
+import { PlannerOverlays3D } from "./PlannerOverlays3D";
 import { Effects3D } from "./Effects3D";
 import {
   grenadeFlightSeconds,
@@ -135,6 +136,9 @@ export class BattleScene3D {
   private readonly theme: ArenaTheme;
   private robotFamily: RobotFamily = DEFAULT_ROBOT_FAMILY;
   private motes: THREE.Points | null = null;
+  private readonly ghosts: RobotRig[] = [];
+  /** Planner overlays (routes, heatmaps, wedges) projected onto the floor. */
+  readonly overlays = new PlannerOverlays3D();
 
   private constructor(
     private readonly host: HTMLElement,
@@ -210,6 +214,7 @@ export class BattleScene3D {
     rim.target.position.set(width / 2, 0, height / 2);
     this.scene.add(rim, rim.target);
     this.scene.add(this.effects.group);
+    this.scene.add(this.overlays.group);
 
     this.composer = new EffectComposer(
       this.renderer,
@@ -662,6 +667,44 @@ export class BattleScene3D {
     this.composer.render(step);
   }
 
+  /** Faces a live robot's chassis toward a world yaw (planner poses). */
+  faceRobot(id: string, yaw: number): void {
+    this.rigs.get(id)?.faceYaw(yaw, false);
+  }
+
+  /** Host-relative CSS pixel position of a point above a tile (HTML anchoring). */
+  screenOf(tile: TileCoord, height = 0.8): { x: number; y: number } {
+    const point = this.worldOf(tile, height).project(this.camera);
+    const rect = this.host.getBoundingClientRect();
+    return { x: ((point.x + 1) / 2) * rect.width, y: ((1 - point.y) / 2) * rect.height };
+  }
+
+  /** Adds a hologram of a robot class at a tile: a planned destination. */
+  addGhost(
+    robotClass: RobotClass,
+    color: string,
+    tile: TileCoord,
+    yaw: number,
+    posture: Posture = "upright",
+    opacity = 0.32,
+  ): void {
+    const model = this.library?.robots.get(robotClass);
+    if (model === undefined) return;
+    const ghost = new RobotRig(`ghost-${this.ghosts.length}`, model, color, {}, 0);
+    ghost.place(tile, this.now);
+    ghost.faceYaw(yaw, false);
+    ghost.setScanYaw(yaw, false);
+    ghost.setPosture(posture, false);
+    ghost.makeHologram(color, opacity);
+    this.ghosts.push(ghost);
+    this.scene.add(ghost.root);
+  }
+
+  clearGhosts(): void {
+    for (const ghost of this.ghosts) this.scene.remove(ghost.root);
+    this.ghosts.length = 0;
+  }
+
   /** Places the free camera (captures and debugging). */
   lookFrom(position: THREE.Vector3Like, target: THREE.Vector3Like): void {
     this.setCameraMode("free");
@@ -687,6 +730,8 @@ export class BattleScene3D {
       }
     }
     for (const rig of this.rigs.values()) rig.update(this.now, dt, this.speed);
+    for (const ghost of this.ghosts) ghost.update(this.now, dt, this.speed);
+    this.overlays.update(this.now);
     this.effects.update(dt * Math.min(2, Math.max(0.5, this.speed)));
     this.updateCamera(dt);
     if (draw) this.composer.render(dt);

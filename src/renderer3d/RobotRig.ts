@@ -281,6 +281,35 @@ export class RobotRig {
     this.bodyYawTarget = yawToward(to.x - this.position.x, to.y - this.position.y);
   }
 
+  /** Turns the chassis to a world yaw (planner poses and ghosts). */
+  faceYaw(yaw: number, animate: boolean): void {
+    this.bodyYawTarget = yaw;
+    if (!animate) {
+      this.bodyYaw = yaw;
+      this.applyRootTransform();
+    }
+  }
+
+  /** Re-skins the rig as a translucent hologram (planner ghosts). */
+  makeHologram(color: string, opacity = 0.32): void {
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.root.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.material = material;
+        node.castShadow = false;
+        node.receiveShadow = false;
+      }
+    });
+    this.hpBar.visible = false;
+  }
+
   setPosture(posture: Posture, animate: boolean): void {
     this.posture = posture;
     this.height.target = this.postureHeight(posture);
