@@ -11,6 +11,7 @@ import * as THREE from "three";
 import type { Arena, Terrain } from "../engine/types";
 import { hash01 } from "./kinematics";
 import type { ModelLibrary, PropName } from "./models";
+import type { ArenaTheme, FloorPalette } from "./themes";
 
 const FLOOR_PX = 64;
 
@@ -65,24 +66,35 @@ const tileMatrix = (
     new THREE.Vector3(scale.x, scale.y, scale.z),
   );
 
-/** Paints the arena floor: plated concrete, scorched dirt, gravel and crevices. */
-const paintFloor = (arena: Arena): HTMLCanvasElement => {
+/** Paints the arena floor (colour map, plus an emissive map for glowing seams). */
+const paintFloor = (
+  arena: Arena,
+  palette: FloorPalette,
+): { color: HTMLCanvasElement; glow: HTMLCanvasElement | null } => {
   const canvas = document.createElement("canvas");
   canvas.width = arena.width * FLOOR_PX;
   canvas.height = arena.height * FLOOR_PX;
+  const glowCanvas = palette.glowSeams === null ? null : document.createElement("canvas");
+  if (glowCanvas !== null) {
+    glowCanvas.width = canvas.width;
+    glowCanvas.height = canvas.height;
+  }
   const context = canvas.getContext("2d");
-  if (context === null) return canvas;
+  const glow = glowCanvas?.getContext("2d") ?? null;
+  if (context === null) return { color: canvas, glow: glowCanvas };
+  if (glow !== null) {
+    glow.fillStyle = "#000";
+    glow.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
-  // Base: warm dusty concrete with large-scale mottling.
-  context.fillStyle = "#4a4741";
+  context.fillStyle = palette.base;
   context.fillRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i < arena.width * arena.height * 0.9; i += 1) {
     const x = hash01("mx", i) * canvas.width;
     const y = hash01("my", i) * canvas.height;
     const r = 20 + hash01("mr", i) * 90;
-    const light = hash01("ml", i) > 0.5;
     const gradient = context.createRadialGradient(x, y, 0, x, y, r);
-    gradient.addColorStop(0, light ? "rgba(140,128,104,0.10)" : "rgba(20,18,15,0.12)");
+    gradient.addColorStop(0, hash01("ml", i) > 0.5 ? palette.mottleLight : palette.mottleDark);
     gradient.addColorStop(1, "rgba(0,0,0,0)");
     context.fillStyle = gradient;
     context.fillRect(x - r, y - r, r * 2, r * 2);
@@ -94,101 +106,110 @@ const paintFloor = (arena: Arena): HTMLCanvasElement => {
       const px = tx * FLOOR_PX;
       const py = ty * FLOOR_PX;
       const key = `${tx},${ty}`;
-      // Each tile is a concrete plate: subtle per-plate tone, bevelled seams.
-      const tone = (hash01(key, 1) - 0.5) * 14;
-      context.fillStyle = `rgba(${tone > 0 ? 255 : 0},${tone > 0 ? 245 : 0},${tone > 0 ? 220 : 0},${Math.abs(tone) / 255})`;
+      const tone = (hash01(key, 1) - 0.5) * palette.plateTone;
+      context.fillStyle =
+        tone > 0 ? `rgba(255,245,220,${tone / 255})` : `rgba(0,0,0,${-tone / 255})`;
       context.fillRect(px, py, FLOOR_PX, FLOOR_PX);
       if (terrain === "rough") {
-        context.fillStyle = "rgba(58, 46, 34, 0.75)";
+        context.fillStyle = palette.rough;
         context.fillRect(px, py, FLOOR_PX, FLOOR_PX);
-        for (let g = 0; g < 70; g += 1) {
-          const gx = px + hash01(key, 10 + g) * FLOOR_PX;
-          const gy = py + hash01(key, 200 + g) * FLOOR_PX;
-          const s = 1 + hash01(key, 400 + g) * 3.5;
-          const shade = 60 + hash01(key, 600 + g) * 80;
-          context.fillStyle = `rgb(${shade},${shade * 0.92},${shade * 0.8})`;
-          context.fillRect(gx, gy, s, s);
+        const [shadeBase, g, b] = palette.gravel;
+        for (let n = 0; n < 70; n += 1) {
+          const gx = px + hash01(key, 10 + n) * FLOOR_PX;
+          const gy = py + hash01(key, 200 + n) * FLOOR_PX;
+          const size = 1 + hash01(key, 400 + n) * 3.5;
+          const shade = shadeBase + hash01(key, 600 + n) * 80;
+          context.fillStyle = `rgb(${shade},${shade * g},${shade * b})`;
+          context.fillRect(gx, gy, size, size);
         }
       }
       if (terrain === "crevice") {
-        context.fillStyle = "rgba(20, 16, 12, 0.6)";
+        context.fillStyle = palette.creviceFill;
         context.fillRect(px, py, FLOOR_PX, FLOOR_PX);
-        context.fillStyle = "#050404";
-        context.beginPath();
+        const crack = new Path2D();
         const steps = 7;
-        context.moveTo(px, py + FLOOR_PX * 0.5);
-        for (let s = 0; s <= steps; s += 1) {
-          const sx = px + (FLOOR_PX * s) / steps;
-          context.lineTo(sx, py + FLOOR_PX * (0.12 + hash01(key, 800 + s) * 0.2));
+        crack.moveTo(px, py + FLOOR_PX * 0.5);
+        for (let n = 0; n <= steps; n += 1) {
+          crack.lineTo(px + (FLOOR_PX * n) / steps, py + FLOOR_PX * (0.12 + hash01(key, 800 + n) * 0.2));
         }
-        for (let s = steps; s >= 0; s -= 1) {
-          const sx = px + (FLOOR_PX * s) / steps;
-          context.lineTo(sx, py + FLOOR_PX * (0.68 + hash01(key, 900 + s) * 0.2));
+        for (let n = steps; n >= 0; n -= 1) {
+          crack.lineTo(px + (FLOOR_PX * n) / steps, py + FLOOR_PX * (0.68 + hash01(key, 900 + n) * 0.2));
         }
-        context.closePath();
-        context.fill();
-        context.strokeStyle = "rgba(255, 120, 40, 0.35)";
+        crack.closePath();
+        context.fillStyle = "#050404";
+        context.fill(crack);
+        context.strokeStyle = palette.creviceGlow;
         context.lineWidth = 1.5;
-        context.stroke();
+        context.stroke(crack);
+        if (glow !== null) {
+          glow.strokeStyle = palette.creviceGlow;
+          glow.lineWidth = 2.5;
+          glow.stroke(crack);
+        }
       }
-      if (terrain === "open" && hash01(key, 7) > 0.93) {
-        // Scorch marks from earlier bouts.
-        const gradient = context.createRadialGradient(
-          px + FLOOR_PX / 2,
-          py + FLOOR_PX / 2,
-          2,
-          px + FLOOR_PX / 2,
-          py + FLOOR_PX / 2,
-          FLOOR_PX * 0.7,
-        );
-        gradient.addColorStop(0, "rgba(8,6,5,0.55)");
+      if (terrain === "open" && hash01(key, 7) < palette.scorchChance) {
+        const cx = px + FLOOR_PX / 2;
+        const cy = py + FLOOR_PX / 2;
+        const gradient = context.createRadialGradient(cx, cy, 2, cx, cy, FLOOR_PX * 0.7);
+        gradient.addColorStop(0, "rgba(8,6,5,0.5)");
         gradient.addColorStop(1, "rgba(0,0,0,0)");
         context.fillStyle = gradient;
         context.fillRect(px - FLOOR_PX / 2, py - FLOOR_PX / 2, FLOOR_PX * 2, FLOOR_PX * 2);
       }
       // Plate seams: the readable tactical grid.
-      context.strokeStyle = "rgba(10, 10, 9, 0.55)";
+      context.strokeStyle = palette.seam;
       context.lineWidth = 2;
       context.strokeRect(px + 1, py + 1, FLOOR_PX - 2, FLOOR_PX - 2);
-      context.strokeStyle = "rgba(200, 190, 170, 0.08)";
+      context.strokeStyle = palette.seamHighlight;
       context.lineWidth = 1;
       context.strokeRect(px + 3, py + 3, FLOOR_PX - 6, FLOOR_PX - 6);
-      // Rivets on plate corners.
-      context.fillStyle = "rgba(190, 180, 160, 0.18)";
-      for (const [cx, cy] of [
-        [6, 6],
-        [FLOOR_PX - 6, 6],
-        [6, FLOOR_PX - 6],
-        [FLOOR_PX - 6, FLOOR_PX - 6],
-      ] as const) {
-        context.beginPath();
-        context.arc(px + cx, py + cy, 1.6, 0, Math.PI * 2);
-        context.fill();
+      if (glow !== null && palette.glowSeams !== null) {
+        glow.strokeStyle = palette.glowSeams;
+        glow.lineWidth = 1.5;
+        glow.strokeRect(px + 0.75, py + 0.75, FLOOR_PX - 1.5, FLOOR_PX - 1.5);
+        context.strokeStyle = "rgba(60, 200, 255, 0.35)";
+        context.lineWidth = 1.5;
+        context.strokeRect(px + 0.75, py + 0.75, FLOOR_PX - 1.5, FLOOR_PX - 1.5);
+      }
+      if (palette.rivets !== null) {
+        context.fillStyle = palette.rivets;
+        for (const [cx, cy] of [
+          [6, 6],
+          [FLOOR_PX - 6, 6],
+          [6, FLOOR_PX - 6],
+          [FLOOR_PX - 6, FLOOR_PX - 6],
+        ] as const) {
+          context.beginPath();
+          context.arc(px + cx, py + cy, 1.6, 0, Math.PI * 2);
+          context.fill();
+        }
       }
     }
   }
 
-  // Home pads: hazard-striped deployment corners.
+  // Home pads: striped deployment corners.
   for (const home of arena.homeAreas) {
     for (const tile of home.tiles) {
       const px = tile.x * FLOOR_PX;
       const py = tile.y * FLOOR_PX;
-      context.save();
-      context.beginPath();
-      context.rect(px, py, FLOOR_PX, FLOOR_PX);
-      context.clip();
-      context.strokeStyle = "rgba(240, 170, 30, 0.09)";
-      context.lineWidth = 8;
-      for (let s = -FLOOR_PX; s < FLOOR_PX * 2; s += 20) {
-        context.beginPath();
-        context.moveTo(px + s, py);
-        context.lineTo(px + s + FLOOR_PX, py + FLOOR_PX);
-        context.stroke();
+      for (const target of glow === null ? [context] : [context, glow]) {
+        target.save();
+        target.beginPath();
+        target.rect(px, py, FLOOR_PX, FLOOR_PX);
+        target.clip();
+        target.strokeStyle = palette.homeStripe;
+        target.lineWidth = 8;
+        for (let offset = -FLOOR_PX; offset < FLOOR_PX * 2; offset += 20) {
+          target.beginPath();
+          target.moveTo(px + offset, py);
+          target.lineTo(px + offset + FLOOR_PX, py + FLOOR_PX);
+          target.stroke();
+        }
+        target.restore();
       }
-      context.restore();
     }
   }
-  return canvas;
+  return { color: canvas, glow: glowCanvas };
 };
 
 export interface ArenaBuild {
@@ -204,22 +225,32 @@ export const buildArena = (
   arena: Arena,
   library: ModelLibrary,
   renderer: THREE.WebGLRenderer,
+  theme: ArenaTheme,
 ): ArenaBuild => {
   const group = new THREE.Group();
   group.name = "arena";
   const disposables: { dispose(): void }[] = [];
 
   // Floor.
-  const floorCanvas = paintFloor(arena);
-  const floorTexture = new THREE.CanvasTexture(floorCanvas);
+  const painted = paintFloor(arena, theme.floor);
+  const floorTexture = new THREE.CanvasTexture(painted.color);
   floorTexture.colorSpace = THREE.SRGBColorSpace;
   floorTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
   floorTexture.generateMipmaps = true;
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: floorTexture,
-    roughness: 0.88,
-    metalness: 0.05,
+    roughness: theme.floor.roughness,
+    metalness: theme.floor.metalness,
   });
+  if (painted.glow !== null) {
+    const glowTexture = new THREE.CanvasTexture(painted.glow);
+    glowTexture.colorSpace = THREE.SRGBColorSpace;
+    glowTexture.anisotropy = floorTexture.anisotropy;
+    floorMaterial.emissiveMap = glowTexture;
+    floorMaterial.emissive.set(0xffffff);
+    floorMaterial.emissiveIntensity = 1.6;
+    disposables.push(glowTexture);
+  }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(arena.width / 2, 0, arena.height / 2);
@@ -229,7 +260,7 @@ export const buildArena = (
   disposables.push(floorTexture, floorMaterial, floor.geometry);
 
   // Apron beyond the arena: dark asphalt reaching the stands.
-  const apronMaterial = new THREE.MeshStandardMaterial({ color: 0x1d1e1f, roughness: 0.95 });
+  const apronMaterial = new THREE.MeshStandardMaterial({ color: theme.apron, roughness: 0.95 });
   const apron = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), apronMaterial);
   apron.rotation.x = -Math.PI / 2;
   apron.scale.set(arena.width + 40, arena.height + 40, 1);
@@ -249,7 +280,7 @@ export const buildArena = (
       const quarter = Math.floor(hash01(key, 1) * 4) * (Math.PI / 2);
       switch (terrain) {
         case "wall":
-          placements.push({ prop: "Wall", matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }) });
+          placements.push({ prop: library.props.has("WallB") && hash01(key, 13) > 0.5 ? "WallB" : "Wall", matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }) });
           break;
         case "outer-wall":
           placements.push({ prop: "OuterWall", matrix: tileMatrix(cx, cz, 0) });
@@ -326,7 +357,7 @@ export const buildArena = (
   if (crevices.length > 0) {
     const geometry = new THREE.PlaneGeometry(0.98, 0.5);
     geometry.rotateX(-Math.PI / 2);
-    const material = new THREE.MeshBasicMaterial({ color: 0x3a1206, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    const material = new THREE.MeshBasicMaterial({ color: theme.id === "neon" ? 0x5a0a48 : theme.id === "scrapyard" ? 0x000000 : 0x3a1206, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
     const glow = new THREE.InstancedMesh(geometry, material, crevices.length);
     crevices.forEach((matrix, index) => glow.setMatrixAt(index, matrix.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.004, 0))));
     glow.instanceMatrix.needsUpdate = true;

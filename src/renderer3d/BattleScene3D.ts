@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -31,6 +32,7 @@ import {
 } from "./kinematics";
 import { loadModelLibrary, type ModelLibrary } from "./models";
 import { RobotRig } from "./RobotRig";
+import { ARENA_THEMES, DEFAULT_ARENA_THEME, type ArenaTheme, type ArenaThemeId } from "./themes";
 
 export type CameraMode = "director" | "free" | "overview";
 
@@ -71,6 +73,27 @@ interface Focus {
   readonly until: number;
 }
 
+/** Vertical sky gradient (zenith, mid, horizon) used as the scene background. */
+const skyTexture = (stops: readonly [string, string, string]): THREE.Texture => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (context !== null) {
+    const gradient = context.createLinearGradient(0, 0, 0, 256);
+    // The camera looks down on the arena, so only the top of the frame shows
+    // sky: put the bright horizon band there and let it fall off into night.
+    gradient.addColorStop(0, stops[1]);
+    gradient.addColorStop(0.3, stops[2]);
+    gradient.addColorStop(1, stops[0]);
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 4, 256);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+};
+
 export class BattleScene3D {
   readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
@@ -78,6 +101,7 @@ export class BattleScene3D {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
+  private readonly ao: GTAOPass;
   private readonly controls: OrbitControls;
   private readonly effects = new Effects3D();
   private readonly rigs = new Map<string, RobotRig>();
@@ -103,11 +127,17 @@ export class BattleScene3D {
   private manualClock = false;
   onCameraModeChange: ((mode: CameraMode) => void) | null = null;
 
+  private readonly theme: ArenaTheme;
+  private motes: THREE.Points | null = null;
+
   private constructor(
     private readonly host: HTMLElement,
     private readonly state: MatchState,
     private readonly timeline: MovieTimeline,
+    themeId: ArenaThemeId,
   ) {
+    this.theme = ARENA_THEMES[themeId];
+    const theme = this.theme;
     this.renderer = new THREE.WebGLRenderer({
       antialias: false,
       powerPreference: "high-performance",
@@ -117,7 +147,7 @@ export class BattleScene3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = theme.exposure;
     this.canvas = this.renderer.domElement;
     this.canvas.dataset.movieCanvas = "true";
     this.canvas.dataset.movieRenderer = "3d";
@@ -134,18 +164,26 @@ export class BattleScene3D {
     this.lookCurrent.set(width / 2, 0, height / 2);
     this.camera.lookAt(this.lookCurrent);
 
-    // Night stadium: deep blue sky, warm floodlight key, cool fill.
-    this.scene.background = new THREE.Color(0x0b0f16);
-    this.scene.fog = new THREE.Fog(0x0b0f16, Math.max(width, height) * 1.2, Math.max(width, height) * 3.2);
+    this.scene.background = skyTexture(theme.sky);
+    this.scene.fog = new THREE.Fog(
+      theme.fog.color,
+      Math.max(theme.fog.near, Math.max(width, height) * 1.1),
+      Math.max(theme.fog.far, Math.max(width, height) * 3),
+    );
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.35;
+    this.scene.environmentIntensity = theme.environment;
     pmrem.dispose();
 
-    const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x2a2118, 0.55);
+    const hemi = new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity);
     this.scene.add(hemi);
-    this.sun = new THREE.DirectionalLight(0xfff0dc, 2.0);
-    this.sun.position.set(width * 0.15 - 8, 26, height * 0.05 - 6);
+    this.sun = new THREE.DirectionalLight(theme.sun.color, theme.sun.intensity);
+    const sunDistance = 30;
+    this.sun.position.set(
+      width / 2 + Math.cos(theme.sun.azimuth) * Math.cos(theme.sun.elevation) * sunDistance,
+      Math.sin(theme.sun.elevation) * sunDistance,
+      height / 2 + Math.sin(theme.sun.azimuth) * Math.cos(theme.sun.elevation) * sunDistance,
+    );
     this.sun.target.position.set(width / 2, 0, height / 2);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -154,7 +192,7 @@ export class BattleScene3D {
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun, this.sun.target);
-    const rim = new THREE.DirectionalLight(0x6fa8ff, 0.9);
+    const rim = new THREE.DirectionalLight(theme.rim.color, theme.rim.intensity);
     rim.position.set(width + 10, 14, height + 12);
     rim.target.position.set(width / 2, 0, height / 2);
     this.scene.add(rim, rim.target);
@@ -165,9 +203,21 @@ export class BattleScene3D {
       new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType }),
     );
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 0.82);
+    // Ambient occlusion grounds robots and props: contact shadows in every crease.
+    this.ao = new GTAOPass(this.scene, this.camera, 1, 1);
+    this.ao.blendIntensity = 0.9;
+    this.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.5, thickness: 1, scale: 1 });
+    this.composer.addPass(this.ao);
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(1, 1),
+      theme.bloom.strength,
+      theme.bloom.radius,
+      theme.bloom.threshold,
+    );
     this.composer.addPass(this.bloom);
-    this.composer.addPass(new ShaderPass(VignetteShader));
+    const vignette = new ShaderPass(VignetteShader);
+    vignette.uniforms["strength"]!.value = theme.vignette;
+    this.composer.addPass(vignette);
     this.composer.addPass(new OutputPass());
 
     this.controls = new OrbitControls(this.camera, this.canvas);
@@ -185,9 +235,9 @@ export class BattleScene3D {
     host: HTMLElement,
     state: MatchState,
     timeline: MovieTimeline,
-    options: { readonly manualClock?: boolean } = {},
+    options: { readonly manualClock?: boolean; readonly theme?: ArenaThemeId } = {},
   ): Promise<BattleScene3D> {
-    const scene = new BattleScene3D(host, state, timeline);
+    const scene = new BattleScene3D(host, state, timeline, options.theme ?? DEFAULT_ARENA_THEME);
     if (options.manualClock === true) scene.manualClock = true;
     try {
       await scene.initialize();
@@ -199,11 +249,12 @@ export class BattleScene3D {
   }
 
   private async initialize(): Promise<void> {
-    this.library = await loadModelLibrary();
+    this.library = await loadModelLibrary(this.theme.id);
     if (this.disposed) return;
-    this.arena = buildArena(this.state.arena, this.library, this.renderer);
+    this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme);
     this.scene.add(this.arena.group);
-    this.addFloodlightBeams(this.arena.floodlights);
+    if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
+    this.addMotes();
     // Warm up shaders so the first explosion does not hitch.
     this.resize();
     this.renderer.compile(this.scene, this.camera);
@@ -224,10 +275,11 @@ export class BattleScene3D {
       const length = light.distanceTo(center) * 0.9;
       const geometry = new THREE.ConeGeometry(2.6, length, 24, 1, true);
       geometry.translate(0, -length / 2, 0);
+      const flood = this.theme.floodlights;
       const material = new THREE.MeshBasicMaterial({
-        color: 0xfff1d0,
+        color: flood?.color ?? 0xfff1d0,
         transparent: true,
-        opacity: 0.022,
+        opacity: flood?.beam ?? 0.022,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide,
@@ -238,11 +290,37 @@ export class BattleScene3D {
       beam.rotateX(-Math.PI / 2);
       this.scene.add(beam);
       this.beams.push(beam);
-      const spot = new THREE.SpotLight(0xfff0d8, 10, length * 1.6, 0.5, 0.9, 1.2);
+      const spot = new THREE.SpotLight(flood?.color ?? 0xfff0d8, flood?.intensity ?? 10, length * 1.6, 0.5, 0.9, 1.2);
       spot.position.copy(light);
       spot.target.position.copy(center);
       this.scene.add(spot, spot.target);
     }
+  }
+
+  /** Slow drifting motes (dust, embers, data sparks) that give the air depth. */
+  private addMotes(): void {
+    const motes = this.theme.motes;
+    if (motes === null) return;
+    const { width, height } = this.state.arena;
+    const positions = new Float32Array(motes.count * 3);
+    for (let i = 0; i < motes.count; i += 1) {
+      positions[i * 3] = hash01("mote-x", i) * (width + 8) - 4;
+      positions[i * 3 + 1] = 0.2 + hash01("mote-y", i) * 4;
+      positions[i * 3 + 2] = hash01("mote-z", i) * (height + 8) - 4;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      color: motes.color,
+      size: motes.additive ? 0.06 : 0.05,
+      transparent: true,
+      opacity: motes.additive ? 0.8 : 0.55,
+      depthWrite: false,
+      blending: motes.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+    this.motes = new THREE.Points(geometry, material);
+    this.motes.frustumCulled = false;
+    this.scene.add(this.motes);
   }
 
   setCameraMode(mode: CameraMode): void {
@@ -270,6 +348,7 @@ export class BattleScene3D {
     const height = Math.max(1, this.host.clientHeight);
     this.renderer.setSize(width, height, false);
     this.composer.setSize(width, height);
+    this.ao.setSize(width, height);
     this.bloom.resolution.set(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -280,12 +359,18 @@ export class BattleScene3D {
     if (existing !== undefined) return existing;
     const model = this.library?.robots.get(robot.robotClass);
     if (model === undefined) return undefined;
-    const rig = new RobotRig(id, model, robot.teamColor, {
-      onFootfall: (at, heavy) => {
-        if (!this.reducedMotion) this.effects.footfall(at, heavy);
+    const rig = new RobotRig(
+      id,
+      model,
+      robot.teamColor,
+      {
+        onFootfall: (at, heavy) => {
+          if (!this.reducedMotion) this.effects.footfall(at, heavy);
+        },
+        onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
       },
-      onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
-    });
+      this.theme.robotGlow,
+    );
     this.rigs.set(id, rig);
     this.scene.add(rig.root);
     return rig;
@@ -614,6 +699,15 @@ export class BattleScene3D {
       this.camera.position.x += Math.sin(t * 1.3) * shake * 0.08;
       this.camera.position.y += Math.sin(t * 1.7 + 1) * shake * 0.06;
       this.camera.position.z += Math.sin(t * 1.1 + 2) * shake * 0.08;
+    }
+    if (this.motes !== null) {
+      const positions = this.motes.geometry.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < positions.count; i += 1) {
+        const y = positions.getY(i) + dt * (0.05 + (i % 7) * 0.012);
+        positions.setY(i, y > 4.2 ? 0.2 : y);
+        positions.setX(i, positions.getX(i) + Math.sin(this.now * 0.4 + i) * dt * 0.08);
+      }
+      positions.needsUpdate = true;
     }
     for (const beam of this.beams) {
       (beam.material as THREE.MeshBasicMaterial).opacity = 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;

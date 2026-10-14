@@ -290,8 +290,14 @@ export function MoviePlayer({
       if (disposed) return;
       // `?capture` freezes the render loop so automated visual checks can step
       // scene time deterministically (software GL is too slow for real time).
-      const capture = new URLSearchParams(window.location.search).has("capture");
-      scene = await BattleScene3D.create(host, initialState, timeline, { manualClock: capture });
+      const query = new URLSearchParams(window.location.search);
+      const capture = query.has("capture");
+      const { isArenaThemeId } = await import("../renderer3d/themes");
+      const requestedTheme = query.get("theme");
+      scene = await BattleScene3D.create(host, initialState, timeline, {
+        manualClock: capture,
+        ...(isArenaThemeId(requestedTheme) ? { theme: requestedTheme } : {}),
+      });
       if (disposed) {
         scene.dispose();
         return;

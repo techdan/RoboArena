@@ -597,15 +597,15 @@ export class Effects3D {
 
   explosion(at: THREE.Vector3, scale: number): void {
     const big = scale >= 1;
-    this.flash(at.clone().setY(at.y + 0.4), 0xff8a30, big ? 60 : 18, big ? 5 : 9, big ? 9 : 5);
+    this.flash(at.clone().setY(at.y + 0.4), 0xff8a30, big ? 30 : 12, big ? 5 : 9, big ? 8 : 5);
     this.shake = Math.min(1.2, this.shake + (big ? 0.65 : 0.18) * scale);
     // Core flash.
     this.glow.spawn({
       position: at,
-      life: big ? 0.22 : 0.12,
-      size: [0.6 * scale, 1.7 * scale],
-      color: [0xffffff, 0xffb040],
-      alpha: [1, 0],
+      life: big ? 0.18 : 0.1,
+      size: [0.45 * scale, 1.15 * scale],
+      color: [0xfff4e0, 0xffa030],
+      alpha: [0.85, 0],
     });
     // Fireball: layered additive puffs from white-hot to deep orange.
     const fireCount = Math.round(26 * scale);

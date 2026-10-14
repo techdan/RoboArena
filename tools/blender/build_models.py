@@ -510,7 +510,7 @@ def arena_materials():
         "wood": material("CrateWood", (0.3, 0.2, 0.11), roughness=0.8),
         "glow": material("ArenaGlow", (0.4, 0.85, 1.0), emission=(0.3, 0.85, 1.0), strength=5.0),
         "sandbag": material("Sandbag", (0.3, 0.26, 0.18), roughness=0.95),
-        "seat_glow": material("SeatGlow", (1.0, 0.6, 0.25), emission=(1.0, 0.55, 0.2), strength=1.2),
+        "seat_glow": material("SeatGlow", (1.0, 0.6, 0.25), emission=(1.0, 0.55, 0.2), strength=0.35),
     }
 
 
@@ -546,10 +546,6 @@ def build_arena() -> None:
             parts.append(box(f"w_b{row}{col}", (0.118, 0.47, 0.068), (x, 0, h), m["brick"],
                              bevel=0.012, rot=(0, 0, rnd.uniform(-0.02, 0.02))))
     parts.append(box("w_cap", (0.5, 0.5, 0.04), (0, 0, 0.7), m["concrete_dark"], bevel=0.015))
-    for i in range(3):
-        parts.append(cyl(f"w_rebar{i}", 0.01, 0.18, (-0.3 + i * 0.3, rnd.uniform(-0.2, 0.2), 0.8),
-                         m["rebar"], rot=(rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), 0),
-                         verts=6))
     objects.append(join("Wall", parts))
 
     # Low wall: a sandbag-topped concrete barrier, crouch-height.
@@ -633,13 +629,235 @@ def build_arena() -> None:
     # by name and resets each to the origin.
     for i, obj in enumerate(objects):
         obj.location = (i * 1.5, 0, 0)
-    export(os.path.join(OUT_DIR, "arena", "props.glb"))
+    export(os.path.join(OUT_DIR, "arena", "props-coliseum.glb"))
+
+
+def layout_and_export(objects, name: str) -> None:
+    for i, obj in enumerate(objects):
+        obj.location = (i * 1.5, 0, 0)
+    export(os.path.join(OUT_DIR, "arena", f"props-{name}.glb"))
+
+
+def torus(name, major, minor, loc, mat, rot=(0.0, 0.0, 0.0), segments=24, rings=10):
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor,
+                                     major_segments=segments, minor_segments=rings,
+                                     location=loc, rotation=rot)
+    obj = bpy.context.active_object
+    obj.name = name
+    return finish(obj, mat, 0)
+
+
+def edge_strips(prefix, half, top, mat, thickness=0.012):
+    """Emissive trims along the four top edges of a box footprint."""
+    hx, hy = half
+    return [
+        box(f"{prefix}_n", (hx, thickness, thickness), (0, -hy, top), mat, bevel=0),
+        box(f"{prefix}_s", (hx, thickness, thickness), (0, hy, top), mat, bevel=0),
+        box(f"{prefix}_e", (thickness, hy, thickness), (hx, 0, top), mat, bevel=0),
+        box(f"{prefix}_w", (thickness, hy, thickness), (-hx, 0, top), mat, bevel=0),
+    ]
+
+
+def build_arena_neon() -> None:
+    """Neon Grid: obsidian monoliths with light-trim edges and data crystals."""
+    reset_scene()
+    import random
+
+    body = material("NeonBody", (0.018, 0.022, 0.034), metallic=0.7, roughness=0.22)
+    panel = material("NeonPanel", (0.04, 0.05, 0.08), metallic=0.8, roughness=0.3)
+    cyan = material("NeonCyan", (0.2, 0.9, 1.0), emission=(0.15, 0.85, 1.0), strength=7.0)
+    magenta = material("NeonMagenta", (1.0, 0.2, 0.8), emission=(1.0, 0.15, 0.75), strength=6.0)
+    amber = material("NeonAmber", (1.0, 0.6, 0.1), emission=(1.0, 0.55, 0.1), strength=5.0)
+    crystal = material("NeonCrystal", (0.25, 0.95, 0.85), metallic=0.1, roughness=0.1,
+                       emission=(0.1, 0.7, 0.6), strength=2.2)
+    objects = []
+
+    parts = [box("w_core", (0.47, 0.47, 0.36), (0, 0, 0.36), body, bevel=0.025)]
+    parts += [box("w_inset", (0.4, 0.475, 0.22), (0, 0, 0.34), panel, bevel=0.01)]
+    parts += edge_strips("w_trim", (0.47, 0.47), 0.725, cyan)
+    parts += [box("w_seam", (0.006, 0.476, 0.2), (0, 0, 0.34), cyan, bevel=0)]
+    objects.append(join("Wall", parts))
+
+    parts = [box("lw_core", (0.47, 0.22, 0.17), (0, 0, 0.17), body, bevel=0.03, taper=(1.0, 0.8))]
+    parts += [box("lw_strip", (0.47, 0.012, 0.012), (0, 0, 0.345), magenta, bevel=0)]
+    parts += [box("lw_foot", (0.48, 0.24, 0.01), (0, 0, 0.012), magenta, bevel=0)]
+    objects.append(join("LowWall", parts))
+
+    parts = [box("ow_core", (0.5, 0.5, 0.65), (0, 0, 0.65), body, bevel=0.015)]
+    parts += edge_strips("ow_trim", (0.5, 0.5), 1.31, magenta)
+    parts += [box("ow_mid", (0.505, 0.505, 0.01), (0, 0, 0.6), cyan, bevel=0)]
+    objects.append(join("OuterWall", parts))
+
+    rnd = random.Random(5)
+    parts = [cyl("b_base", 0.22, 0.04, (0, 0, 0.02), body, verts=6)]
+    for i in range(5):
+        a = rnd.uniform(0, 2 * math.pi)
+        r = rnd.uniform(0.0, 0.14)
+        h = rnd.uniform(0.25, 0.55)
+        shard = cyl(f"b_c{i}", rnd.uniform(0.04, 0.07), h, (math.cos(a) * r, math.sin(a) * r, h / 2),
+                    crystal, verts=6, radius2=0.0,
+                    rot=(rnd.uniform(-0.35, 0.35), rnd.uniform(-0.35, 0.35), 0))
+        parts.append(shard)
+    objects.append(join("Bush", parts))
+
+    for v in range(3):
+        rnd = random.Random(40 + v)
+        parts = []
+        for i in range(4):
+            sz = rnd.uniform(0.04, 0.1)
+            parts.append(box(f"r{v}_{i}", (sz, sz, sz * 0.5),
+                             (rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), sz * 0.5),
+                             body, bevel=0.01, rot=(0, 0, rnd.uniform(0, 3))))
+        for i in range(3):
+            parts.append(cyl(f"r{v}_s{i}", 0.018, 0.12, (rnd.uniform(-0.3, 0.3),
+                                                          rnd.uniform(-0.3, 0.3), 0.04),
+                             cyan if i % 2 else amber, verts=5, radius2=0.0,
+                             rot=(rnd.uniform(0.6, 1.4), 0, rnd.uniform(0, 6))))
+        objects.append(join(f"Rubble{v}", parts))
+
+    parts = [box("c_body", (0.18, 0.18, 0.18), (0, 0, 0.18), panel, bevel=0.015)]
+    parts += [box("c_band", (0.185, 0.185, 0.012), (0, 0, 0.24), amber, bevel=0)]
+    objects.append(join("Crate", parts))
+
+    parts = [cyl("ft_pole", 0.06, 4.2, (0, 0, 2.1), body, verts=8)]
+    for i in range(3):
+        parts.append(torus(f"ft_ring{i}", 0.3 - i * 0.06, 0.018, (0, 0, 3.6 + i * 0.35),
+                           magenta if i % 2 else cyan))
+    parts.append(box("ft_frame", (0.6, 0.08, 0.3), (0, 0, 4.4), body, bevel=0.01))
+    for i in range(4):
+        parts.append(box(f"ft_lamp{i}", (0.12, 0.05, 0.1), (-0.42 + i * 0.28, -0.1, 4.4), cyan,
+                         bevel=0.01))
+    objects.append(join("FloodTower", parts))
+
+    parts = []
+    for tier in range(5):
+        parts.append(box(f"gs_t{tier}", (2.0, 0.3, 0.12 + tier * 0.2),
+                         (0, tier * 0.6, 0.12 + tier * 0.2), body, bevel=0.02))
+        parts.append(box(f"gs_s{tier}", (1.95, 0.01, 0.01),
+                         (0, tier * 0.6 - 0.3, 0.24 + tier * 0.4), magenta if tier % 2 else cyan,
+                         bevel=0))
+    objects.append(join("Grandstand", parts))
+    layout_and_export(objects, "neon")
+
+
+def build_arena_scrapyard() -> None:
+    """Scrapyard Sunset: rusted container walls, tyre stacks, cacti and scrap."""
+    reset_scene()
+    import random
+
+    rust = material("Rust", (0.34, 0.14, 0.06), metallic=0.55, roughness=0.75)
+    paint_teal = material("ContainerTeal", (0.13, 0.33, 0.33), metallic=0.4, roughness=0.65)
+    paint_orange = material("ContainerOrange", (0.55, 0.22, 0.06), metallic=0.4, roughness=0.6)
+    steel = material("ScrapSteel", (0.32, 0.31, 0.3), metallic=0.85, roughness=0.45)
+    rubber = material("Tyre", (0.03, 0.03, 0.03), roughness=0.9)
+    cactus = material("Cactus", (0.2, 0.33, 0.13), roughness=0.75)
+    wood = material("DryWood", (0.36, 0.25, 0.14), roughness=0.9)
+    sand = material("SandStone", (0.55, 0.42, 0.28), roughness=0.95)
+    drum = material("DrumRed", (0.55, 0.12, 0.06), metallic=0.5, roughness=0.5)
+    lamp = material("SodiumLamp", (1.0, 0.7, 0.35), emission=(1.0, 0.65, 0.3), strength=6.0)
+    objects = []
+
+    # Wall: a cut shipping-container section with corrugated sides.
+    for variant, paint in ((0, paint_teal), (1, paint_orange)):
+        rnd = random.Random(60 + variant)
+        parts = [box("w_frame", (0.48, 0.48, 0.34), (0, 0, 0.36), paint, bevel=0.01)]
+        for i in range(9):
+            x = -0.42 + i * 0.105
+            parts.append(box(f"w_rib_n{i}", (0.022, 0.012, 0.32), (x, -0.485, 0.36), paint,
+                             bevel=0.004))
+            parts.append(box(f"w_rib_s{i}", (0.022, 0.012, 0.32), (x, 0.485, 0.36), paint,
+                             bevel=0.004))
+        for z in (0.03, 0.7):
+            parts.append(box(f"w_rail{z}", (0.5, 0.5, 0.025), (0, 0, z), rust, bevel=0.004))
+        for i in range(5):
+            parts.append(box(f"w_patch{i}", (rnd.uniform(0.04, 0.12), 0.006, rnd.uniform(0.03, 0.1)),
+                             (rnd.uniform(-0.35, 0.35), -0.5 if i % 2 else 0.5,
+                              rnd.uniform(0.15, 0.6)), rust, bevel=0))
+        objects.append(join("Wall" if variant == 0 else "WallB", parts))
+
+    # Low wall: stacked tyres on a sandbag base.
+    parts = [box("lw_base", (0.46, 0.2, 0.06), (0, 0, 0.06), sand, bevel=0.03)]
+    for i in range(3):
+        for j in range(2):
+            parts.append(torus(f"lw_t{i}{j}", 0.13, 0.055, (-0.3 + i * 0.3, 0, 0.17 + j * 0.11),
+                               rubber))
+    objects.append(join("LowWall", parts))
+
+    parts = [box("ow_core", (0.5, 0.5, 0.6), (0, 0, 0.6), rust, bevel=0.01)]
+    for i in range(10):
+        parts.append(box(f"ow_rib{i}", (0.02, 0.51, 0.58), (-0.45 + i * 0.1, 0, 0.6), rust,
+                         bevel=0.004))
+    parts.append(box("ow_cap", (0.52, 0.52, 0.03), (0, 0, 1.22), steel, bevel=0.006))
+    objects.append(join("OuterWall", parts))
+
+    # "Bush": a desert saguaro with a dry shrub at its foot.
+    parts = [cyl("b_trunk", 0.07, 0.55, (0, 0, 0.275), cactus, verts=10),
+             sphere("b_top", 0.07, (0, 0, 0.55), cactus)]
+    for side in (1, -1):
+        parts.append(cyl(f"b_arm{side}", 0.045, 0.14, (side * 0.11, 0, 0.25), cactus, verts=8,
+                         rot=(0, math.pi / 2, 0)))
+        parts.append(cyl(f"b_up{side}", 0.045, 0.18, (side * 0.17, 0, 0.33), cactus, verts=8))
+        parts.append(sphere(f"b_tip{side}", 0.045, (side * 0.17, 0, 0.42), cactus))
+    rnd = random.Random(9)
+    for i in range(7):
+        a = rnd.uniform(0, 6.28)
+        parts.append(cyl(f"b_twig{i}", 0.008, 0.2, (0.15 + math.cos(a) * 0.08, math.sin(a) * 0.08 + 0.12,
+                                                    0.07), wood, verts=4,
+                         rot=(rnd.uniform(-0.8, 0.8), rnd.uniform(-0.8, 0.8), 0)))
+    objects.append(join("Bush", parts))
+
+    # Rough ground: scrap heaps (bent plates, pipes and a cog).
+    for v in range(3):
+        rnd = random.Random(80 + v)
+        parts = []
+        for i in range(3):
+            parts.append(box(f"r{v}_p{i}", (rnd.uniform(0.08, 0.14), rnd.uniform(0.06, 0.1), 0.008),
+                             (rnd.uniform(-0.28, 0.28), rnd.uniform(-0.28, 0.28), 0.03),
+                             rust if i % 2 else steel, bevel=0.002,
+                             rot=(rnd.uniform(-0.5, 0.5), rnd.uniform(-0.5, 0.5), rnd.uniform(0, 3))))
+        parts.append(cyl(f"r{v}_pipe", 0.025, 0.3, (rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2),
+                                                     0.03), steel, verts=10,
+                         rot=(math.pi / 2, 0, rnd.uniform(0, 3))))
+        cog_at = (rnd.uniform(-0.25, 0.25), rnd.uniform(-0.25, 0.25), 0.012)
+        parts.append(cyl(f"r{v}_cog", 0.07, 0.02, cog_at, rust, verts=16))
+        for t in range(8):
+            a = t * math.pi / 4
+            parts.append(box(f"r{v}_tooth{t}", (0.015, 0.012, 0.01),
+                             (cog_at[0] + math.cos(a) * 0.08, cog_at[1] + math.sin(a) * 0.08, 0.012),
+                             rust, bevel=0, rot=(0, 0, a)))
+        objects.append(join(f"Rubble{v}", parts))
+
+    parts = [cyl("c_drum", 0.13, 0.36, (0, 0, 0.18), drum, verts=18)]
+    for z in (0.1, 0.26):
+        parts.append(torus(f"c_rim{z}", 0.13, 0.008, (0, 0, z), steel, segments=24, rings=6))
+    objects.append(join("Crate", parts))
+
+    parts = [cyl("ft_pole", 0.07, 4.0, (0, 0, 2.0), wood, verts=8),
+             box("ft_arm", (0.5, 0.04, 0.04), (0, 0, 3.9), steel, bevel=0.005)]
+    for i in range(3):
+        parts.append(box(f"ft_lamp{i}", (0.09, 0.07, 0.06), (-0.35 + i * 0.35, -0.04, 3.82), lamp,
+                         bevel=0.01))
+    objects.append(join("FloodTower", parts))
+
+    # Backdrop: stacked containers instead of stands.
+    parts = []
+    rnd = random.Random(99)
+    for i in range(4):
+        for level in range(rnd.randint(1, 3)):
+            paint = (paint_teal, paint_orange, rust)[(i + level) % 3]
+            parts.append(box(f"gs_c{i}{level}", (0.48, 0.3, 0.3),
+                             (-1.5 + i * 1.0, rnd.uniform(-0.1, 0.3), 0.3 + level * 0.6), paint,
+                             bevel=0.01, rot=(0, 0, rnd.uniform(-0.08, 0.08))))
+    objects.append(join("Grandstand", parts))
+    layout_and_export(objects, "scrapyard")
 
 
 def main() -> None:
     for kind in ("rifle", "burst", "auto", "missile"):
         build_robot(kind)
     build_arena()
+    build_arena_neon()
+    build_arena_scrapyard()
 
 
 if __name__ == "__main__":

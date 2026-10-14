@@ -6,6 +6,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RobotClass } from "../engine/types";
+import type { ArenaThemeId } from "./themes";
 
 export const MODEL_URLS = {
   robots: {
@@ -14,7 +15,7 @@ export const MODEL_URLS = {
     auto: "/assets/models/robots/auto.glb",
     missile: "/assets/models/robots/missile.glb",
   },
-  props: "/assets/models/arena/props.glb",
+  props: (theme: ArenaThemeId) => `/assets/models/arena/props-${theme}.glb`,
 } as const;
 
 export interface RobotModel {
@@ -38,6 +39,7 @@ export interface RobotModel {
 
 export type PropName =
   | "Wall"
+  | "WallB"
   | "LowWall"
   | "OuterWall"
   | "Bush"
@@ -108,6 +110,7 @@ const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel =
 
 const PROP_NAMES: readonly PropName[] = [
   "Wall",
+  "WallB",
   "LowWall",
   "OuterWall",
   "Bush",
@@ -119,30 +122,53 @@ const PROP_NAMES: readonly PropName[] = [
   "Grandstand",
 ];
 
-let libraryPromise: Promise<ModelLibrary> | null = null;
+let robotsPromise: Promise<ReadonlyMap<RobotClass, RobotModel>> | null = null;
+const propsPromises = new Map<ArenaThemeId, Promise<ReadonlyMap<PropName, THREE.Object3D>>>();
 
-/** Loads every model once per page; later movies reuse the parsed templates. */
-export const loadModelLibrary = (): Promise<ModelLibrary> => {
-  libraryPromise ??= (async () => {
-    const loader = new GLTFLoader();
-    const robotEntries = Object.entries(MODEL_URLS.robots) as [RobotClass, string][];
-    const [robotScenes, propsGltf] = await Promise.all([
-      Promise.all(robotEntries.map(async ([kind, url]) => [kind, await loader.loadAsync(url)] as const)),
-      loader.loadAsync(MODEL_URLS.props),
-    ]);
+const loadRobots = (loader: GLTFLoader) => {
+  robotsPromise ??= (async () => {
+    const entries = Object.entries(MODEL_URLS.robots) as [RobotClass, string][];
+    const scenes = await Promise.all(
+      entries.map(async ([kind, url]) => [kind, await loader.loadAsync(url)] as const),
+    );
     const robots = new Map<RobotClass, RobotModel>();
-    for (const [kind, gltf] of robotScenes) robots.set(kind, parseRobot(kind, gltf.scene));
+    for (const [kind, gltf] of scenes) robots.set(kind, parseRobot(kind, gltf.scene));
     // Stealth is post-v1; until it has its own model it borrows the rifle chassis.
     const rifle = robots.get("rifle");
     if (rifle !== undefined) robots.set("stealth", { ...rifle, robotClass: "stealth" });
-    const props = new Map<PropName, THREE.Object3D>();
-    for (const name of PROP_NAMES) props.set(name, detachPart(propsGltf.scene, name));
-    return { robots, props };
+    return robots;
   })();
-  libraryPromise.catch(() => {
-    libraryPromise = null;
+  robotsPromise.catch(() => {
+    robotsPromise = null;
   });
-  return libraryPromise;
+  return robotsPromise;
+};
+
+const loadProps = (loader: GLTFLoader, theme: ArenaThemeId) => {
+  let promise = propsPromises.get(theme);
+  if (promise === undefined) {
+    promise = (async () => {
+      const gltf = await loader.loadAsync(MODEL_URLS.props(theme));
+      const props = new Map<PropName, THREE.Object3D>();
+      for (const name of PROP_NAMES) {
+        // Optional variants (e.g. WallB) only exist in some themes.
+        if (gltf.scene.getObjectByName(name) !== undefined) {
+          props.set(name, detachPart(gltf.scene, name));
+        }
+      }
+      return props;
+    })();
+    propsPromises.set(theme, promise);
+    promise.catch(() => propsPromises.delete(theme));
+  }
+  return promise;
+};
+
+/** Loads every model once per page; later movies reuse the parsed templates. */
+export const loadModelLibrary = async (theme: ArenaThemeId): Promise<ModelLibrary> => {
+  const loader = new GLTFLoader();
+  const [robots, props] = await Promise.all([loadRobots(loader), loadProps(loader, theme)]);
+  return { robots, props };
 };
 
 /** Team colours from the room palette; anything else is parsed as a CSS colour. */
@@ -172,7 +198,7 @@ export interface MaterialSet {
 }
 
 /** Builds the material remapping for one team: `TeamPaint` and `Glow` take the team colour. */
-export const teamMaterials = (teamColor: string): MaterialSet => {
+export const teamMaterials = (teamColor: string, glowIntensity = 1.8): MaterialSet => {
   const paint = teamPaint(teamColor);
   const cache = new Map<THREE.Material, THREE.Material>();
   const charred = new THREE.MeshStandardMaterial({
@@ -196,7 +222,7 @@ export const teamMaterials = (teamColor: string): MaterialSet => {
           const glow = paint.clone().lerp(new THREE.Color(0xffffff), 0.12);
           clone.color.copy(glow);
           clone.emissive.copy(glow);
-          clone.emissiveIntensity = 1.8;
+          clone.emissiveIntensity = glowIntensity;
           next = clone;
         }
       }

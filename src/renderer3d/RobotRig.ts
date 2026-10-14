@@ -125,8 +125,9 @@ export class RobotRig {
     private readonly model: RobotModel,
     teamColor: string,
     private readonly events: RigEvents = {},
+    glowIntensity = 1.8,
   ) {
-    const materials = teamMaterials(teamColor);
+    const materials = teamMaterials(teamColor, glowIntensity);
     this.charred = materials.charred;
     this.spin = model.robotClass === "auto";
     this.idlePhase = hash01(id) * Math.PI * 2;
@@ -222,7 +223,7 @@ export class RobotRig {
     this.hpBar = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: this.hpTexture, depthTest: false, transparent: true }),
     );
-    this.hpBar.scale.set(0.62, 0.097, 1);
+    this.hpBar.scale.set(0.46, 0.072, 1);
     this.hpBar.renderOrder = 10;
     this.root.add(this.hpBar);
   }
@@ -326,6 +327,8 @@ export class RobotRig {
     if (hp === this.hp && max === this.hpMax) return;
     this.hp = hp;
     this.hpMax = Math.max(1, max);
+    // Healthy robots carry no bar: the arena stays readable with 16 robots.
+    this.hpBar.visible = !this.destroyedState && hp < this.hpMax;
     this.drawHpBar();
   }
 
@@ -354,7 +357,7 @@ export class RobotRig {
     if (destroyed === this.destroyedState) return;
     this.destroyedState = destroyed;
     this.ring.visible = !destroyed;
-    this.hpBar.visible = !destroyed;
+    this.hpBar.visible = !destroyed && this.hp < this.hpMax;
     for (const { mesh, original } of this.paintMeshes) {
       mesh.material = destroyed
         ? Array.isArray(original)
