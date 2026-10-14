@@ -248,7 +248,7 @@ export const buildArena = (
     glowTexture.anisotropy = floorTexture.anisotropy;
     floorMaterial.emissiveMap = glowTexture;
     floorMaterial.emissive.set(0xffffff);
-    floorMaterial.emissiveIntensity = 1.6;
+    floorMaterial.emissiveIntensity = theme.floor.glowIntensity;
     disposables.push(glowTexture);
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);

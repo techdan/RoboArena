@@ -21,6 +21,7 @@ export interface FloorPalette {
   readonly scorchChance: number;
   /** Lines painted into the emissive map instead of the colour map (neon). */
   readonly glowSeams: string | null;
+  readonly glowIntensity: number;
   readonly roughness: number;
   readonly metalness: number;
 }
@@ -57,7 +58,7 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
     id: "coliseum",
     name: "Floodlit Coliseum",
     tagline: "Night match under stadium floodlights: ruined brick, wet concrete, long beams.",
-    sky: ["#03050a", "#0b1220", "#1a2235"],
+    sky: ["#020308", "#0a1426", "#22304a"],
     fog: { color: 0x0b1018, near: 34, far: 90 },
     exposure: 1.0,
     hemi: { sky: 0x8fb4ff, ground: 0x2a2118, intensity: 0.35 },
@@ -83,6 +84,7 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
       homeStripe: "rgba(240, 170, 30, 0.08)",
       scorchChance: 0.07,
       glowSeams: null,
+      glowIntensity: 0,
       roughness: 0.62,
       metalness: 0.08,
     },
@@ -94,14 +96,14 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
     name: "Neon Grid",
     tagline: "A synthwave holo-arena: obsidian monoliths, glowing grid, purple haze.",
     sky: ["#02010a", "#140630", "#3a0f4a"],
-    fog: { color: 0x12052a, near: 26, far: 80 },
-    exposure: 1.1,
-    hemi: { sky: 0x6a4cff, ground: 0x05020c, intensity: 0.35 },
+    fog: { color: 0x07021a, near: 30, far: 90 },
+    exposure: 0.9,
+    hemi: { sky: 0x4a32c8, ground: 0x030108, intensity: 0.22 },
     sun: { color: 0x9db8ff, intensity: 0.9, azimuth: -2.0, elevation: 1.05 },
     rim: { color: 0xff3cc8, intensity: 1.4 },
-    environment: 0.6,
+    environment: 0.12,
     floodlights: null,
-    bloom: { strength: 1.05, radius: 0.55, threshold: 0.55 },
+    bloom: { strength: 0.75, radius: 0.5, threshold: 0.78 },
     vignette: 0.4,
     apron: 0x040309,
     floor: {
@@ -118,18 +120,19 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
       creviceGlow: "rgba(255, 60, 200, 0.7)",
       homeStripe: "rgba(255, 60, 200, 0.10)",
       scorchChance: 0,
-      glowSeams: "rgba(40, 210, 255, 0.85)",
-      roughness: 0.28,
-      metalness: 0.6,
+      glowSeams: "rgba(40, 210, 255, 0.55)",
+      glowIntensity: 0.55,
+      roughness: 0.32,
+      metalness: 0.35,
     },
-    motes: { color: 0x6fe0ff, count: 220, additive: true },
-    robotGlow: 3.2,
+    motes: { color: 0x6fe0ff, count: 140, additive: true },
+    robotGlow: 2.2,
   },
   scrapyard: {
     id: "scrapyard",
     name: "Scrapyard Sunset",
     tagline: "Golden-hour desert junkyard: rusted containers, tyre stacks, dust in the air.",
-    sky: ["#3f6fa8", "#e79a5a", "#ffd39a"],
+    sky: ["#2b4f86", "#d9774a", "#ffcf86"],
     fog: { color: 0xd8a27a, near: 30, far: 95 },
     exposure: 0.95,
     hemi: { sky: 0xa8c8ff, ground: 0x6b4a2a, intensity: 0.85 },
@@ -155,6 +158,7 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
       homeStripe: "rgba(255, 255, 255, 0.10)",
       scorchChance: 0.04,
       glowSeams: null,
+      glowIntensity: 0,
       roughness: 0.95,
       metalness: 0,
     },
