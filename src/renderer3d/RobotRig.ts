@@ -90,8 +90,10 @@ export class RobotRig {
   private readonly hpBar: THREE.Sprite;
   private readonly hpCanvas: HTMLCanvasElement;
   private readonly hpTexture: THREE.CanvasTexture;
-  private readonly paintMeshes: { mesh: THREE.Mesh; original: THREE.Material | THREE.Material[] }[] =
-    [];
+  private readonly paintMeshes: {
+    mesh: THREE.Mesh;
+    original: THREE.Material | THREE.Material[];
+  }[] = [];
   private readonly charred: THREE.Material;
   private readonly spin: boolean;
 
@@ -169,8 +171,10 @@ export class RobotRig {
       upper.add(knee);
       hip.add(upper);
       this.hull.add(hip);
+      // Spider legs plant feet out to the side; biped feet plant under their hips.
       const outward = new THREE.Vector2(hipPosition.x, hipPosition.z).normalize();
-      const reach = (model.upperLength + model.lowerLength) * 0.62;
+      const reach =
+        model.locomotion === "biped" ? 0 : (model.upperLength + model.lowerLength) * 0.62;
       this.legs.push({
         hip,
         upper,
@@ -277,7 +281,7 @@ export class RobotRig {
 
   setPosture(posture: Posture, animate: boolean): void {
     this.posture = posture;
-    this.height.target = this.model.hullHeight * POSTURE_HEIGHT[posture];
+    this.height.target = this.postureHeight(posture);
     if (!animate) this.height.snap(this.height.target);
   }
 
@@ -393,7 +397,7 @@ export class RobotRig {
       }
     } else {
       this.reattachTurret();
-      this.height.target = this.model.hullHeight * POSTURE_HEIGHT[this.posture];
+      this.height.target = this.postureHeight(this.posture);
       this.height.snap(this.height.target);
       this.roll.snap(0);
       this.pitch.snap(0);
@@ -410,6 +414,12 @@ export class RobotRig {
     this.turret.position.copy(this.model.turretMount);
     this.turret.rotation.set(0, 0, 0);
     this.turret.scale.setScalar(1);
+  }
+
+  /** Tracked hulls barely drop when crouching; hover hulls sink most of the way. */
+  private postureHeight(posture: Posture): number {
+    const give = { legs: 1, biped: 1, hover: 0.8, treads: 0.2 }[this.model.locomotion];
+    return this.model.hullHeight * (1 - (1 - POSTURE_HEIGHT[posture]) * give);
   }
 
   private plantAll(now: number): void {
@@ -439,7 +449,9 @@ export class RobotRig {
   private applyRootTransform(): void {
     this.root.position.set(this.position.x, 0, this.position.y);
     this.root.rotation.y = this.bodyYaw;
-    this.turret.rotation.y = this.destroyedState ? this.turret.rotation.y : this.turretYaw - this.bodyYaw;
+    this.turret.rotation.y = this.destroyedState
+      ? this.turret.rotation.y
+      : this.turretYaw - this.bodyYaw;
     this.root.updateMatrixWorld(true);
   }
 
@@ -492,11 +504,18 @@ export class RobotRig {
     // 3. Secondary motion springs (presentation time runs with playback speed).
     const sdt = dt * Math.max(0.25, speed);
     this.gaitClock += sdt * (moving ? 14 : 1.2);
-    const idleBob = this.destroyedState ? 0 : Math.sin(now * 2.1 + this.idlePhase) * 0.006;
-    const walkBob = moving ? Math.abs(Math.sin(this.gaitClock)) * 0.025 : 0;
+    const locomotion = this.model.locomotion;
+    const hovering = locomotion === "hover" && !this.destroyedState;
+    const idleBob = this.destroyedState
+      ? 0
+      : Math.sin(now * 2.1 + this.idlePhase) * (hovering ? 0.03 : 0.006);
+    const bobScale = { legs: 0.025, biped: 0.045, hover: 0, treads: 0.004 }[locomotion];
+    const walkBob = moving ? Math.abs(Math.sin(this.gaitClock)) * bobScale : 0;
     const height = this.height.step(sdt);
     const local = this.velocity.clone().rotateAround(new THREE.Vector2(), -this.bodyYaw);
-    this.pitch.target = this.destroyedState ? this.pitch.target : -local.y * 0.06;
+    this.pitch.target = this.destroyedState
+      ? this.pitch.target
+      : -local.y * (hovering ? 0.16 : 0.06);
     this.roll.target = this.destroyedState
       ? this.roll.target
       : wrapAngle(this.bodyYawTarget - this.bodyYaw) * 0.25;
@@ -524,7 +543,8 @@ export class RobotRig {
     this.applyRootTransform();
 
     // 4. Feet: planted in world space, stepping in alternating groups.
-    const stepDuration = 0.15 / Math.max(0.5, speed);
+    const biped = this.model.locomotion === "biped";
+    const stepDuration = (biped ? 0.24 : 0.15) / Math.max(0.5, speed);
     const threshold = this.destroyedState ? 0 : moving ? 0.12 : 0.04;
     const stepping = [false, false];
     for (const leg of this.legs) if (leg.stepping) stepping[leg.group] = true;
@@ -546,7 +566,7 @@ export class RobotRig {
           if (moving || this.destroyedState) this.events.onFootfall?.(leg.planted, false);
         } else {
           leg.planted.lerpVectors(leg.stepFrom, leg.stepTo, skitterEase(u));
-          leg.planted.y = swingHeight(u, 0.16);
+          leg.planted.y = swingHeight(u, biped ? 0.24 : 0.16);
         }
         continue;
       }
@@ -575,8 +595,10 @@ export class RobotRig {
       const dx = footLocal.x - leg.hip.position.x;
       const dy = footLocal.y - leg.hip.position.y;
       const dz = footLocal.z - leg.hip.position.z;
-      leg.hip.rotation.set(0, Math.atan2(-dz, dx), 0);
-      const reach = Math.hypot(dx, dz);
+      // Spider legs swing their IK plane toward the foot; biped legs keep it
+      // pointing backward so the knee folds behind like a reverse-jointed walker.
+      leg.hip.rotation.set(0, biped ? Math.PI / 2 : Math.atan2(-dz, dx), 0);
+      const reach = biped ? -dz : Math.hypot(dx, dz);
       const solution = solveLeg(reach, dy, this.model.upperLength, this.model.lowerLength);
       leg.upper.rotation.set(0, 0, solution.hipPitch);
       leg.knee.rotation.set(0, 0, solution.kneePitch);

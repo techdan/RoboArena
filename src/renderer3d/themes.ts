@@ -43,13 +43,25 @@ export interface ArenaTheme {
   };
   readonly rim: { readonly color: number; readonly intensity: number };
   readonly environment: number;
-  readonly floodlights: { readonly color: number; readonly intensity: number; readonly beam: number } | null;
-  readonly bloom: { readonly strength: number; readonly radius: number; readonly threshold: number };
+  readonly floodlights: {
+    readonly color: number;
+    readonly intensity: number;
+    readonly beam: number;
+  } | null;
+  readonly bloom: {
+    readonly strength: number;
+    readonly radius: number;
+    readonly threshold: number;
+  };
   readonly vignette: number;
   readonly apron: number;
   readonly floor: FloorPalette;
   /** Drifting ambient motes: dust, embers or data sparks. */
-  readonly motes: { readonly color: number; readonly count: number; readonly additive: boolean } | null;
+  readonly motes: {
+    readonly color: number;
+    readonly count: number;
+    readonly additive: boolean;
+  } | null;
   readonly robotGlow: number;
 }
 

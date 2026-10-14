@@ -509,7 +509,10 @@ export class Effects3D {
     for (let i = 0; i < 3; i += 1) {
       this.smoke.spawn({
         position: at,
-        velocity: dir.clone().multiplyScalar(0.6 + Math.random() * 0.5).setY(0.25 + Math.random() * 0.2),
+        velocity: dir
+          .clone()
+          .multiplyScalar(0.6 + Math.random() * 0.5)
+          .setY(0.25 + Math.random() * 0.2),
         life: 0.7 + Math.random() * 0.5,
         size: [0.1, 0.42],
         color: [0x9a958c, 0x55524d],
@@ -567,7 +570,11 @@ export class Effects3D {
     for (let i = 0; i < 8; i += 1) {
       this.smoke.spawn({
         position: from,
-        velocity: { x: (Math.random() - 0.5) * 1.6, y: 0.2 + Math.random() * 0.6, z: (Math.random() - 0.5) * 1.6 },
+        velocity: {
+          x: (Math.random() - 0.5) * 1.6,
+          y: 0.2 + Math.random() * 0.6,
+          z: (Math.random() - 0.5) * 1.6,
+        },
         life: 1 + Math.random() * 0.8,
         size: [0.15, 0.6],
         color: [0xc8c0b0, 0x6d6862],
@@ -610,7 +617,11 @@ export class Effects3D {
     // Fireball: layered additive puffs from white-hot to deep orange.
     const fireCount = Math.round(26 * scale);
     for (let i = 0; i < fireCount; i += 1) {
-      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.9, Math.random() - 0.5).normalize();
+      const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() * 0.9,
+        Math.random() - 0.5,
+      ).normalize();
       this.glow.spawn({
         position: { x: at.x + dir.x * 0.1, y: at.y + 0.1 + dir.y * 0.1, z: at.z + dir.z * 0.1 },
         velocity: dir.multiplyScalar((1.2 + Math.random() * 2.4) * scale),
@@ -625,7 +636,11 @@ export class Effects3D {
     }
     // Sparks.
     for (let i = 0; i < Math.round(28 * scale); i += 1) {
-      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8 + 0.2, Math.random() - 0.5).normalize();
+      const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() * 0.8 + 0.2,
+        Math.random() - 0.5,
+      ).normalize();
       this.glow.spawn({
         position: at,
         velocity: dir.multiplyScalar(3 + Math.random() * 5 * scale),
@@ -641,8 +656,16 @@ export class Effects3D {
     // Smoke column: rises, spreads, lingers.
     for (let i = 0; i < Math.round(18 * scale); i += 1) {
       this.smoke.spawn({
-        position: { x: at.x + (Math.random() - 0.5) * 0.4 * scale, y: at.y + 0.2, z: at.z + (Math.random() - 0.5) * 0.4 * scale },
-        velocity: { x: (Math.random() - 0.5) * 0.8, y: 0.5 + Math.random() * 0.9, z: (Math.random() - 0.5) * 0.8 },
+        position: {
+          x: at.x + (Math.random() - 0.5) * 0.4 * scale,
+          y: at.y + 0.2,
+          z: at.z + (Math.random() - 0.5) * 0.4 * scale,
+        },
+        velocity: {
+          x: (Math.random() - 0.5) * 0.8,
+          y: 0.5 + Math.random() * 0.9,
+          z: (Math.random() - 0.5) * 0.8,
+        },
         life: 1.6 + Math.random() * 1.6,
         size: [0.3 * scale, (1.0 + Math.random() * 0.6) * scale],
         color: [0x5a524a, 0x2a2826],
@@ -660,12 +683,24 @@ export class Effects3D {
   hitSparks(at: THREE.Vector3, from: THREE.Vector3): void {
     const back = at.clone().sub(from).setY(0).normalize().negate();
     this.flash(at, 0xffd080, 10, 14, 3);
-    this.glow.spawn({ position: at, life: 0.08, size: [0.25, 0.4], color: [0xffffff, 0xffc060], alpha: [1, 0] });
+    this.glow.spawn({
+      position: at,
+      life: 0.08,
+      size: [0.25, 0.4],
+      color: [0xffffff, 0xffc060],
+      alpha: [1, 0],
+    });
     for (let i = 0; i < 16; i += 1) {
       const v = back
         .clone()
         .multiplyScalar(2 + Math.random() * 3)
-        .add(new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4));
+        .add(
+          new THREE.Vector3(
+            (Math.random() - 0.5) * 4,
+            Math.random() * 3,
+            (Math.random() - 0.5) * 4,
+          ),
+        );
       this.glow.spawn({
         position: at,
         velocity: v,
@@ -695,8 +730,16 @@ export class Effects3D {
   dust(at: THREE.Vector3, amount = 1): void {
     for (let i = 0; i < Math.round(7 * amount); i += 1) {
       this.smoke.spawn({
-        position: { x: at.x + (Math.random() - 0.5) * 0.2, y: 0.05, z: at.z + (Math.random() - 0.5) * 0.2 },
-        velocity: { x: (Math.random() - 0.5) * 1.2 * amount, y: 0.4 + Math.random() * 0.8, z: (Math.random() - 0.5) * 1.2 * amount },
+        position: {
+          x: at.x + (Math.random() - 0.5) * 0.2,
+          y: 0.05,
+          z: at.z + (Math.random() - 0.5) * 0.2,
+        },
+        velocity: {
+          x: (Math.random() - 0.5) * 1.2 * amount,
+          y: 0.4 + Math.random() * 0.8,
+          z: (Math.random() - 0.5) * 1.2 * amount,
+        },
         life: 0.6 + Math.random() * 0.6,
         size: [0.1 * amount, 0.45 * amount],
         color: [0x8a7a62, 0x5a4e3e],
@@ -715,7 +758,11 @@ export class Effects3D {
       const angle = (i / count) * Math.PI * 2 + Math.random();
       this.smoke.spawn({
         position: { x: at.x, y: 0.03, z: at.z },
-        velocity: { x: Math.cos(angle) * (heavy ? 1.4 : 0.3), y: 0.15, z: Math.sin(angle) * (heavy ? 1.4 : 0.3) },
+        velocity: {
+          x: Math.cos(angle) * (heavy ? 1.4 : 0.3),
+          y: 0.15,
+          z: Math.sin(angle) * (heavy ? 1.4 : 0.3),
+        },
         life: heavy ? 0.7 : 0.45,
         size: [0.08, heavy ? 0.42 : 0.2],
         color: [0x8a7d68, 0x5a5044],
@@ -729,7 +776,13 @@ export class Effects3D {
   /** Hologram reticle closing on a scan-locked target. */
   lockOn(at: THREE.Vector3, color: THREE.ColorRepresentation = 0xff3b30): void {
     this.shockwave(at.clone().setY(0.03), 0.55, 0.45, color, true);
-    this.glow.spawn({ position: at.clone().setY(at.y + 0.1), life: 0.4, size: [0.5, 0.15], color: [color, color], alpha: [0.8, 0] });
+    this.glow.spawn({
+      position: at.clone().setY(at.y + 0.1),
+      life: 0.4,
+      size: [0.5, 0.15],
+      color: [color, color],
+      alpha: [0.8, 0],
+    });
   }
 
   /** Ghost marker where an enemy was last seen. */
@@ -755,7 +808,11 @@ export class Effects3D {
     this.thrown.push({
       object,
       velocity: velocity.clone(),
-      spin: new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12),
+      spin: new THREE.Vector3(
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 12,
+      ),
       resting: false,
     });
   }
@@ -765,9 +822,17 @@ export class Effects3D {
       if (this.debris.length >= DEBRIS_POOL) this.debris.shift();
       this.debris.push({
         position: at.clone().setY(Math.max(0.05, at.y)),
-        velocity: new THREE.Vector3((Math.random() - 0.5) * speed, 1.5 + Math.random() * speed, (Math.random() - 0.5) * speed),
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * speed,
+          1.5 + Math.random() * speed,
+          (Math.random() - 0.5) * speed,
+        ),
         rotation: new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6),
-        spin: new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20),
+        spin: new THREE.Vector3(
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+        ),
         scale: 0.5 + Math.random() * 1.2,
         age: 0,
         life: 2.5 + Math.random() * 1.5,
@@ -887,7 +952,11 @@ export class Effects3D {
       const at = burner.at();
       if (Math.random() < dt * 22 * burner.strength) {
         this.glow.spawn({
-          position: { x: at.x + (Math.random() - 0.5) * 0.25, y: at.y + 0.05, z: at.z + (Math.random() - 0.5) * 0.25 },
+          position: {
+            x: at.x + (Math.random() - 0.5) * 0.25,
+            y: at.y + 0.05,
+            z: at.z + (Math.random() - 0.5) * 0.25,
+          },
           velocity: { x: 0, y: 0.5 + Math.random() * 0.5, z: 0 },
           life: 0.35 + Math.random() * 0.3,
           size: [0.18, 0.05],
@@ -899,13 +968,17 @@ export class Effects3D {
       if (Math.random() < dt * 10 * burner.strength) {
         this.smoke.spawn({
           position: { x: at.x, y: at.y + 0.25, z: at.z },
-          velocity: { x: 0.15 + (Math.random() - 0.5) * 0.2, y: 0.6 + Math.random() * 0.4, z: (Math.random() - 0.5) * 0.2 },
+          velocity: {
+            x: 0.15 + (Math.random() - 0.5) * 0.2,
+            y: 0.6 + Math.random() * 0.4,
+            z: (Math.random() - 0.5) * 0.2,
+          },
           life: 2.2 + Math.random(),
           size: [0.18, 0.9],
           color: [0x3c3834, 0x1c1b1a],
           alpha: [0.6, 0],
           drag: 0.6,
-          spin: (Math.random() - 0.5),
+          spin: Math.random() - 0.5,
         });
       }
     }

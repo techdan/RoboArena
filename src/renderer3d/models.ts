@@ -8,15 +8,31 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RobotClass } from "../engine/types";
 import type { ArenaThemeId } from "./themes";
 
+/** Robot design families: same classes and weapons, different locomotion. */
+export type RobotFamily = "walker" | "biped" | "hover" | "treads";
+export const DEFAULT_ROBOT_FAMILY: RobotFamily = "walker";
+export const isRobotFamily = (value: unknown): value is RobotFamily =>
+  value === "walker" || value === "biped" || value === "hover" || value === "treads";
+
+const ROBOT_KINDS = ["rifle", "burst", "auto", "missile"] as const;
+
 export const MODEL_URLS = {
-  robots: {
-    rifle: "/assets/models/robots/rifle.glb",
-    burst: "/assets/models/robots/burst.glb",
-    auto: "/assets/models/robots/auto.glb",
-    missile: "/assets/models/robots/missile.glb",
-  },
+  robot: (family: RobotFamily, kind: (typeof ROBOT_KINDS)[number]) =>
+    family === "walker"
+      ? `/assets/models/robots/${kind}.glb`
+      : `/assets/models/robots/${family}/${kind}.glb`,
   props: (theme: ArenaThemeId) => `/assets/models/arena/props-${theme}.glb`,
 } as const;
+
+/** How the rig moves the hull: spider legs, two reverse-jointed legs, or no legs. */
+export type Locomotion = "legs" | "biped" | "hover" | "treads";
+
+const LOCOMOTION_CODES: Readonly<Record<string, Locomotion>> = {
+  s: "legs",
+  b: "biped",
+  h: "hover",
+  t: "treads",
+};
 
 export interface RobotModel {
   readonly robotClass: RobotClass;
@@ -35,6 +51,7 @@ export interface RobotModel {
   readonly hullHeight: number;
   readonly upperLength: number;
   readonly lowerLength: number;
+  readonly locomotion: Locomotion;
 }
 
 export type PropName =
@@ -80,7 +97,8 @@ const detachPart = (root: THREE.Object3D, name: string): THREE.Object3D => {
 const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel => {
   const rig = scene.children.find((child) => child.name.startsWith("Rig_"));
   if (rig === undefined) throw new Error(`${robotClass} model has no Rig_ metrics node.`);
-  const [, hull, upper, lower] = rig.name.split("_").map(Number);
+  const [, hullText, upperText, lowerText, code] = rig.name.split("_");
+  const [hull, upper, lower] = [hullText, upperText, lowerText].map(Number);
   const position = (name: string) => findNode(scene, name).position.clone();
   const hips: THREE.Vector3[] = [];
   for (let index = 0; scene.getObjectByName(`Hip${index}`) !== undefined; index += 1) {
@@ -105,6 +123,7 @@ const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel =
     hullHeight: (hull ?? 400) / 1000,
     upperLength: (upper ?? 300) / 1000,
     lowerLength: (lower ?? 400) / 1000,
+    locomotion: LOCOMOTION_CODES[code ?? "s"] ?? "legs",
   };
 };
 
@@ -122,26 +141,29 @@ const PROP_NAMES: readonly PropName[] = [
   "Grandstand",
 ];
 
-let robotsPromise: Promise<ReadonlyMap<RobotClass, RobotModel>> | null = null;
+const robotsPromises = new Map<RobotFamily, Promise<ReadonlyMap<RobotClass, RobotModel>>>();
 const propsPromises = new Map<ArenaThemeId, Promise<ReadonlyMap<PropName, THREE.Object3D>>>();
 
-const loadRobots = (loader: GLTFLoader) => {
-  robotsPromise ??= (async () => {
-    const entries = Object.entries(MODEL_URLS.robots) as [RobotClass, string][];
-    const scenes = await Promise.all(
-      entries.map(async ([kind, url]) => [kind, await loader.loadAsync(url)] as const),
-    );
-    const robots = new Map<RobotClass, RobotModel>();
-    for (const [kind, gltf] of scenes) robots.set(kind, parseRobot(kind, gltf.scene));
-    // Stealth is post-v1; until it has its own model it borrows the rifle chassis.
-    const rifle = robots.get("rifle");
-    if (rifle !== undefined) robots.set("stealth", { ...rifle, robotClass: "stealth" });
-    return robots;
-  })();
-  robotsPromise.catch(() => {
-    robotsPromise = null;
-  });
-  return robotsPromise;
+const loadRobots = (loader: GLTFLoader, family: RobotFamily) => {
+  let promise = robotsPromises.get(family);
+  if (promise === undefined) {
+    promise = (async () => {
+      const scenes = await Promise.all(
+        ROBOT_KINDS.map(
+          async (kind) => [kind, await loader.loadAsync(MODEL_URLS.robot(family, kind))] as const,
+        ),
+      );
+      const robots = new Map<RobotClass, RobotModel>();
+      for (const [kind, gltf] of scenes) robots.set(kind, parseRobot(kind, gltf.scene));
+      // Stealth is post-v1; until it has its own model it borrows the rifle chassis.
+      const rifle = robots.get("rifle");
+      if (rifle !== undefined) robots.set("stealth", { ...rifle, robotClass: "stealth" });
+      return robots;
+    })();
+    robotsPromises.set(family, promise);
+    promise.catch(() => robotsPromises.delete(family));
+  }
+  return promise;
 };
 
 const loadProps = (loader: GLTFLoader, theme: ArenaThemeId) => {
@@ -165,9 +187,12 @@ const loadProps = (loader: GLTFLoader, theme: ArenaThemeId) => {
 };
 
 /** Loads every model once per page; later movies reuse the parsed templates. */
-export const loadModelLibrary = async (theme: ArenaThemeId): Promise<ModelLibrary> => {
+export const loadModelLibrary = async (
+  theme: ArenaThemeId,
+  family: RobotFamily = DEFAULT_ROBOT_FAMILY,
+): Promise<ModelLibrary> => {
   const loader = new GLTFLoader();
-  const [robots, props] = await Promise.all([loadRobots(loader), loadProps(loader, theme)]);
+  const [robots, props] = await Promise.all([loadRobots(loader, family), loadProps(loader, theme)]);
   return { robots, props };
 };
 

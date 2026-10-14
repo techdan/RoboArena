@@ -294,9 +294,12 @@ export function MoviePlayer({
       const capture = query.has("capture");
       const { isArenaThemeId } = await import("../renderer3d/themes");
       const requestedTheme = query.get("theme");
+      const { isRobotFamily } = await import("../renderer3d/models");
+      const requestedFamily = query.get("bots");
       scene = await BattleScene3D.create(host, initialState, timeline, {
         manualClock: capture,
         ...(isArenaThemeId(requestedTheme) ? { theme: requestedTheme } : {}),
+        ...(isRobotFamily(requestedFamily) ? { robotFamily: requestedFamily } : {}),
       });
       if (disposed) {
         scene.dispose();

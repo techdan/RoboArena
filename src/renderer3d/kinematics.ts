@@ -67,7 +67,12 @@ export interface LegSolution {
  * clamped to the nearest reachable distance, so the leg points straight at
  * the target instead of producing NaNs.
  */
-export const solveLeg = (reach: number, drop: number, upper: number, lower: number): LegSolution => {
+export const solveLeg = (
+  reach: number,
+  drop: number,
+  upper: number,
+  lower: number,
+): LegSolution => {
   const rawDistance = Math.hypot(reach, drop);
   const minDistance = Math.abs(upper - lower) + 1e-4;
   const maxDistance = upper + lower - 1e-4;
@@ -159,12 +164,10 @@ export class Spring {
 }
 
 /** Seconds a bullet tracer takes to cross `tiles`; fast but readable. */
-export const tracerFlightSeconds = (tiles: number): number =>
-  Math.min(0.32, 0.06 + tiles * 0.018);
+export const tracerFlightSeconds = (tiles: number): number => Math.min(0.32, 0.06 + tiles * 0.018);
 
 /** Seconds a missile takes to reach its target; long enough to follow its trail. */
-export const missileFlightSeconds = (tiles: number): number =>
-  Math.min(1.1, 0.35 + tiles * 0.045);
+export const missileFlightSeconds = (tiles: number): number => Math.min(1.1, 0.35 + tiles * 0.045);
 
 /** Seconds a lobbed grenade spends in the air. */
 export const grenadeFlightSeconds = (tiles: number): number => Math.min(1.0, 0.4 + tiles * 0.05);

@@ -291,7 +291,7 @@ def hip_sockets(hull_z: float, positions: list[tuple[float, float]]) -> None:
         empty(f"Hip{i}", (x, y, hull_z))
 
 
-def build_robot(kind: str) -> None:
+def build_robot(kind: str, family: str = "walker") -> None:
     reset_scene()
     m = robot_materials()
 
@@ -467,6 +467,66 @@ def build_robot(kind: str) -> None:
     else:
         raise ValueError(kind)
 
+    # Family variants keep each class's body and weapon but swap how it moves.
+    half_w = max(abs(x) for x, _ in hips)
+    half_l = max(abs(y) for _, y in hips)
+    code = "s"
+    if family == "biped":
+        # Reverse-jointed two-legged walker: tall stance, chunky thighs.
+        code = "b"
+        legs = 2
+        upper, lower = 0.36 + 0.04 * (heavy - 1), 0.42 + 0.04 * (heavy - 1)
+        hull_z = 0.66 + 0.06 * (heavy - 1)
+        heavy *= 1.45
+        hx = half_w + 0.02
+        hips = [(hx, 0.02), (-hx, 0.02)]
+        for side in (1, -1):
+            hull.append(cyl(f"fam_hip{side}", 0.075, 0.07, (side * (hx - 0.03), 0.02, 0), m["metal"],
+                            rot=(0, math.pi / 2, 0), verts=18))
+            hull.append(box(f"fam_hipplate{side}", (0.012, 0.09, 0.09), (side * (hx + 0.01), 0.02, 0),
+                            m["paint"], bevel=0.01))
+        hull.append(box("fam_pelvis", (half_w * 0.8, 0.12, 0.05), (0, 0.02, -0.12), m["metal"],
+                        bevel=0.02))
+    elif family == "hover":
+        # Anti-gravity skimmer: four thruster pods with downward glow discs.
+        code = "h"
+        legs = 0
+        hull_z = 0.46
+        for i, (x, y) in enumerate(hips):
+            px, py = x * 1.12, y * 1.05
+            hull.append(cyl(f"fam_pod{i}", 0.075, 0.07, (px, py, -0.06), m["metal"], verts=20,
+                            radius2=0.06))
+            hull.append(cyl(f"fam_ring{i}", 0.082, 0.018, (px, py, -0.03), m["paint"], verts=20))
+            hull.append(cyl(f"fam_disc{i}", 0.055, 0.01, (px, py, -0.1), m["glow"], verts=20))
+            hull.append(box(f"fam_strut{i}", (abs(px) * 0.4, 0.018, 0.012),
+                            (px * 0.6, py, -0.02), m["metal"], bevel=0.004))
+        hull.append(box("fam_fin", (0.012, 0.09, 0.07), (0, 0.24, 0.1), m["paint"], bevel=0.008,
+                        taper=(1.0, 0.4)))
+    elif family == "treads":
+        # Tracked tank: two tread units with road wheels and a drive sprocket.
+        code = "t"
+        legs = 0
+        hull_z = 0.2
+        tx = half_w + 0.075
+        tl = max(half_l + 0.12, 0.28)
+        for side in (1, -1):
+            x = side * tx
+            hull.append(box(f"fam_track{side}", (0.06, tl, 0.075), (x, 0, -0.1), m["dark"],
+                            bevel=0.04))
+            hull.append(box(f"fam_fender{side}", (0.07, tl * 0.9, 0.012), (x, 0, -0.012),
+                            m["paint"], bevel=0.006))
+            for w in range(4):
+                wy = -tl * 0.7 + w * (tl * 1.4 / 3)
+                hull.append(cyl(f"fam_wheel{side}{w}", 0.05, 0.02, (x + side * 0.062, wy, -0.11),
+                                m["metal"], rot=(0, math.pi / 2, 0), verts=14))
+                hull.append(cyl(f"fam_hub{side}{w}", 0.02, 0.024, (x + side * 0.064, wy, -0.11),
+                                m["steel"], rot=(0, math.pi / 2, 0), verts=8))
+            for k in range(int(tl * 2 / 0.05)):
+                hull.append(box(f"fam_link{side}{k}", (0.062, 0.006, 0.006),
+                                (x, -tl + 0.03 + k * 0.05, -0.024), m["metal"], bevel=0))
+            hull.append(cyl(f"fam_sprocket{side}", 0.06, 0.03, (x + side * 0.06, -tl + 0.04, -0.09),
+                            m["hazard"], rot=(0, math.pi / 2, 0), verts=10))
+
     # Hull is authored around its pivot at the origin, then placed at hull height.
     hull_obj = join("Hull", hull)
     turret_obj = join("Turret", turret)
@@ -482,13 +542,16 @@ def build_robot(kind: str) -> None:
     # its origin (recoil slides it along its own forward axis).
     set_origin(barrel_obj, barrel_mount)
     barrel_obj.location = (0, 0, 0)
-    hip_sockets(0.0, hips)
+    hip_sockets(0.0, hips if legs else [])
 
     # Rig metrics travel as an extra-free empty name so the runtime needs no
     # hand-maintained table: Rig_<hullHeight>_<upper>_<lower> (millitiles).
-    empty(f"Rig_{int(hull_z * 1000)}_{int(upper * 1000)}_{int(lower * 1000)}", (0, 0, 0))
+    empty(f"Rig_{int(hull_z * 1000)}_{int(upper * 1000)}_{int(lower * 1000)}_{code}", (0, 0, 0))
     del hull_obj, turret_obj
-    export(os.path.join(OUT_DIR, "robots", f"{kind}.glb"))
+    folder = os.path.join(OUT_DIR, "robots") if family == "walker" else os.path.join(
+        OUT_DIR, "robots", family)
+    os.makedirs(folder, exist_ok=True)
+    export(os.path.join(folder, f"{kind}.glb"))
 
 
 # --------------------------------------------------------------------------
@@ -899,8 +962,9 @@ def build_arena_scrapyard() -> None:
 
 
 def main() -> None:
-    for kind in ("rifle", "burst", "auto", "missile"):
-        build_robot(kind)
+    for family in ("walker", "biped", "hover", "treads"):
+        for kind in ("rifle", "burst", "auto", "missile"):
+            build_robot(kind, family)
     build_arena()
     build_arena_neon()
     build_arena_scrapyard()

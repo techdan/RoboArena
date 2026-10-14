@@ -18,7 +18,8 @@ export const supportsWebGl2 = (): boolean => {
 export const preferredMovieRenderer = (): MovieRendererKind => {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "2d" || stored === "3d") return stored === "3d" && !supportsWebGl2() ? "2d" : stored;
+    if (stored === "2d" || stored === "3d")
+      return stored === "3d" && !supportsWebGl2() ? "2d" : stored;
   } catch {
     // Storage blocked: fall through to detection.
   }

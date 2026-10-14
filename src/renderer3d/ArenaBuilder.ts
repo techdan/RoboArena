@@ -130,10 +130,16 @@ const paintFloor = (
         const steps = 7;
         crack.moveTo(px, py + FLOOR_PX * 0.5);
         for (let n = 0; n <= steps; n += 1) {
-          crack.lineTo(px + (FLOOR_PX * n) / steps, py + FLOOR_PX * (0.12 + hash01(key, 800 + n) * 0.2));
+          crack.lineTo(
+            px + (FLOOR_PX * n) / steps,
+            py + FLOOR_PX * (0.12 + hash01(key, 800 + n) * 0.2),
+          );
         }
         for (let n = steps; n >= 0; n -= 1) {
-          crack.lineTo(px + (FLOOR_PX * n) / steps, py + FLOOR_PX * (0.68 + hash01(key, 900 + n) * 0.2));
+          crack.lineTo(
+            px + (FLOOR_PX * n) / steps,
+            py + FLOOR_PX * (0.68 + hash01(key, 900 + n) * 0.2),
+          );
         }
         crack.closePath();
         context.fillStyle = "#050404";
@@ -280,7 +286,10 @@ export const buildArena = (
       const quarter = Math.floor(hash01(key, 1) * 4) * (Math.PI / 2);
       switch (terrain) {
         case "wall":
-          placements.push({ prop: library.props.has("WallB") && hash01(key, 13) > 0.5 ? "WallB" : "Wall", matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }) });
+          placements.push({
+            prop: library.props.has("WallB") && hash01(key, 13) > 0.5 ? "WallB" : "Wall",
+            matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }),
+          });
           break;
         case "outer-wall":
           placements.push({ prop: "OuterWall", matrix: tileMatrix(cx, cz, 0) });
@@ -290,17 +299,26 @@ export const buildArena = (
           const horizontal =
             arena.tiles[y]?.[x - 1]?.terrain === "low-wall" ||
             arena.tiles[y]?.[x + 1]?.terrain === "low-wall";
-          placements.push({ prop: "LowWall", matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2) });
+          placements.push({
+            prop: "LowWall",
+            matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2),
+          });
           break;
         }
         case "bush": {
           const s = 0.9 + hash01(key, 3) * 0.3;
-          placements.push({ prop: "Bush", matrix: tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }) });
+          placements.push({
+            prop: "Bush",
+            matrix: tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }),
+          });
           break;
         }
         case "rough": {
           const variant = Math.floor(hash01(key, 5) * 3) as 0 | 1 | 2;
-          placements.push({ prop: `Rubble${variant}`, matrix: tileMatrix(cx, cz, hash01(key, 6) * Math.PI * 2) });
+          placements.push({
+            prop: `Rubble${variant}`,
+            matrix: tileMatrix(cx, cz, hash01(key, 6) * Math.PI * 2),
+          });
           break;
         }
         case "crevice":
@@ -310,7 +328,12 @@ export const buildArena = (
           if (hash01(key, 9) > 0.985) {
             placements.push({
               prop: "Crate",
-              matrix: tileMatrix(cx + (hash01(key, 10) - 0.5) * 0.4, cz + (hash01(key, 11) - 0.5) * 0.4, hash01(key, 12) * 3, { x: 0.8, y: 0.8, z: 0.8 }),
+              matrix: tileMatrix(
+                cx + (hash01(key, 10) - 0.5) * 0.4,
+                cz + (hash01(key, 11) - 0.5) * 0.4,
+                hash01(key, 12) * 3,
+                { x: 0.8, y: 0.8, z: 0.8 },
+              ),
             });
           }
       }
@@ -348,7 +371,10 @@ export const buildArena = (
     [w + margin - 0.5, h + margin - 0.5],
   ] as const) {
     const yaw = Math.atan2(w / 2 - fx, h / 2 - fz) + Math.PI;
-    placements.push({ prop: "FloodTower", matrix: tileMatrix(fx, fz, yaw, { x: 1.4, y: 1.6, z: 1.4 }) });
+    placements.push({
+      prop: "FloodTower",
+      matrix: tileMatrix(fx, fz, yaw, { x: 1.4, y: 1.6, z: 1.4 }),
+    });
     floodlights.push(new THREE.Vector3(fx, 6.6, fz));
   }
   instanceProps(library, placements, group);
@@ -357,9 +383,20 @@ export const buildArena = (
   if (crevices.length > 0) {
     const geometry = new THREE.PlaneGeometry(0.98, 0.5);
     geometry.rotateX(-Math.PI / 2);
-    const material = new THREE.MeshBasicMaterial({ color: theme.id === "neon" ? 0x5a0a48 : theme.id === "scrapyard" ? 0x000000 : 0x3a1206, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    const material = new THREE.MeshBasicMaterial({
+      color: theme.id === "neon" ? 0x5a0a48 : theme.id === "scrapyard" ? 0x000000 : 0x3a1206,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
     const glow = new THREE.InstancedMesh(geometry, material, crevices.length);
-    crevices.forEach((matrix, index) => glow.setMatrixAt(index, matrix.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.004, 0))));
+    crevices.forEach((matrix, index) =>
+      glow.setMatrixAt(
+        index,
+        matrix.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.004, 0)),
+      ),
+    );
     glow.instanceMatrix.needsUpdate = true;
     group.add(glow);
     disposables.push(geometry, material);

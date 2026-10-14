@@ -30,7 +30,12 @@ import {
   tileCenter,
   tracerFlightSeconds,
 } from "./kinematics";
-import { loadModelLibrary, type ModelLibrary } from "./models";
+import {
+  DEFAULT_ROBOT_FAMILY,
+  loadModelLibrary,
+  type ModelLibrary,
+  type RobotFamily,
+} from "./models";
 import { RobotRig } from "./RobotRig";
 import { ARENA_THEMES, DEFAULT_ARENA_THEME, type ArenaTheme, type ArenaThemeId } from "./themes";
 
@@ -128,6 +133,7 @@ export class BattleScene3D {
   onCameraModeChange: ((mode: CameraMode) => void) | null = null;
 
   private readonly theme: ArenaTheme;
+  private robotFamily: RobotFamily = DEFAULT_ROBOT_FAMILY;
   private motes: THREE.Points | null = null;
 
   private constructor(
@@ -188,7 +194,14 @@ export class BattleScene3D {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const span = Math.max(width, height) * 0.8;
-    Object.assign(this.sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 1, far: 90 });
+    Object.assign(this.sun.shadow.camera, {
+      left: -span,
+      right: span,
+      top: span,
+      bottom: -span,
+      near: 1,
+      far: 90,
+    });
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun, this.sun.target);
@@ -235,9 +248,14 @@ export class BattleScene3D {
     host: HTMLElement,
     state: MatchState,
     timeline: MovieTimeline,
-    options: { readonly manualClock?: boolean; readonly theme?: ArenaThemeId } = {},
+    options: {
+      readonly manualClock?: boolean;
+      readonly theme?: ArenaThemeId;
+      readonly robotFamily?: RobotFamily;
+    } = {},
   ): Promise<BattleScene3D> {
     const scene = new BattleScene3D(host, state, timeline, options.theme ?? DEFAULT_ARENA_THEME);
+    scene.robotFamily = options.robotFamily ?? DEFAULT_ROBOT_FAMILY;
     if (options.manualClock === true) scene.manualClock = true;
     try {
       await scene.initialize();
@@ -249,7 +267,7 @@ export class BattleScene3D {
   }
 
   private async initialize(): Promise<void> {
-    this.library = await loadModelLibrary(this.theme.id);
+    this.library = await loadModelLibrary(this.theme.id, this.robotFamily);
     if (this.disposed) return;
     this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme);
     this.scene.add(this.arena.group);
@@ -290,7 +308,14 @@ export class BattleScene3D {
       beam.rotateX(-Math.PI / 2);
       this.scene.add(beam);
       this.beams.push(beam);
-      const spot = new THREE.SpotLight(flood?.color ?? 0xfff0d8, flood?.intensity ?? 10, length * 1.6, 0.5, 0.9, 1.2);
+      const spot = new THREE.SpotLight(
+        flood?.color ?? 0xfff0d8,
+        flood?.intensity ?? 10,
+        length * 1.6,
+        0.5,
+        0.9,
+        1.2,
+      );
       spot.position.copy(light);
       spot.target.position.copy(center);
       this.scene.add(spot, spot.target);
@@ -335,7 +360,11 @@ export class BattleScene3D {
   dolly(factor: number): void {
     this.setCameraMode("free");
     const offset = this.camera.position.clone().sub(this.controls.target).multiplyScalar(factor);
-    const distance = THREE.MathUtils.clamp(offset.length(), this.controls.minDistance, this.controls.maxDistance);
+    const distance = THREE.MathUtils.clamp(
+      offset.length(),
+      this.controls.minDistance,
+      this.controls.maxDistance,
+    );
     this.camera.position.copy(this.controls.target).add(offset.setLength(distance));
   }
 
@@ -395,7 +424,8 @@ export class BattleScene3D {
     const snapshot = this.timeline.snapshots[index];
     if (snapshot === undefined || this.library === null) return;
     const advanced = this.renderedIndex !== null && index === this.renderedIndex + 1;
-    const previous = this.renderedIndex === null ? undefined : this.timeline.snapshots[this.renderedIndex];
+    const previous =
+      this.renderedIndex === null ? undefined : this.timeline.snapshots[this.renderedIndex];
     this.renderedIndex = index;
     this.speed = Math.max(0.01, options.speed);
     this.reducedMotion = options.reducedMotion;
@@ -422,9 +452,16 @@ export class BattleScene3D {
       rig.setScanYaw(headingYaw(robot.scanHeading), animate);
       const from = before?.position;
       const plan =
-        animate && from !== undefined && from !== "dock" ? planMovement(from, robot.position, this.speed) : null;
+        animate && from !== undefined && from !== "dock"
+          ? planMovement(from, robot.position, this.speed)
+          : null;
       if (plan !== null) {
-        rig.moveTo(robot.position, plan.durationMs / 1000, plan.kind === "double-straight", this.now);
+        rig.moveTo(
+          robot.position,
+          plan.durationMs / 1000,
+          plan.kind === "double-straight",
+          this.now,
+        );
         this.focus(this.worldOf(robot.position, 0), 0.4, secs(0.6));
       } else if (
         !animate ||
@@ -504,7 +541,12 @@ export class BattleScene3D {
               } else if (event.weapon === "grenade-launcher") {
                 this.effects.lobGrenade(muzzle, to.setY(0.1), flight, () => undefined);
               } else {
-                const color = event.weapon === "auto-rifle" ? 0xffb060 : event.weapon === "burst-gun" ? 0x9fe8ff : 0xffe3a0;
+                const color =
+                  event.weapon === "auto-rifle"
+                    ? 0xffb060
+                    : event.weapon === "burst-gun"
+                      ? 0x9fe8ff
+                      : 0xffe3a0;
                 this.effects.tracer(muzzle, to, flight, color);
               }
             });
@@ -528,7 +570,9 @@ export class BattleScene3D {
           if (event.reason === "out-of-range" || event.reason === "no-target") break;
           const delay = flightByShot.get(`${event.shooterId}#${event.shotIndex}`) ?? 0;
           const jitter = (hash01(`${event.shooterId}${event.tick}`, event.shotIndex) - 0.5) * 0.7;
-          const at = this.worldOf(event.target, 0.05).add(new THREE.Vector3(jitter, 0, -jitter * 0.6));
+          const at = this.worldOf(event.target, 0.05).add(
+            new THREE.Vector3(jitter, 0, -jitter * 0.6),
+          );
           if (animate) this.after(delay, () => this.effects.dust(at, 0.6));
           break;
         }
@@ -539,7 +583,8 @@ export class BattleScene3D {
           const delay = flightByShot.get(`${event.sourceId ?? "?"}#${event.shotIndex}`) ?? 0;
           if (!animate) break;
           this.after(delay, () => {
-            const from = source?.groundPosition() ?? rig.groundPosition().add(new THREE.Vector3(0, 0, -1));
+            const from =
+              source?.groundPosition() ?? rig.groundPosition().add(new THREE.Vector3(0, 0, -1));
             if (event.damageKind === "direct") this.effects.hitSparks(rig.chestWorld(), from);
             rig.flinch(from, Math.min(1.4, 0.4 + event.damage / 40));
             this.focus(rig.groundPosition(), 0.9, secs(1));
@@ -553,7 +598,10 @@ export class BattleScene3D {
           let delay = 0;
           for (const other of events) {
             if (other.kind === "damaged" && other.targetId === event.robotId) {
-              delay = Math.max(delay, flightByShot.get(`${other.sourceId ?? "?"}#${other.shotIndex}`) ?? 0);
+              delay = Math.max(
+                delay,
+                flightByShot.get(`${other.sourceId ?? "?"}#${other.shotIndex}`) ?? 0,
+              );
             }
           }
           if (!animate) {
@@ -571,7 +619,8 @@ export class BattleScene3D {
         }
         case "scan-target-acquired": {
           const target = rigOf(event.targetId);
-          if (target !== undefined && animate) this.effects.lockOn(target.groundPosition().setY(0.04));
+          if (target !== undefined && animate)
+            this.effects.lockOn(target.groundPosition().setY(0.04));
           break;
         }
         case "enemy-lost":
@@ -667,7 +716,8 @@ export class BattleScene3D {
       let spread = 0;
       if (weight > 0 && this.cameraMode === "director") {
         centroid.divideScalar(weight);
-        for (const focus of this.focuses) spread = Math.max(spread, focus.point.distanceTo(centroid));
+        for (const focus of this.focuses)
+          spread = Math.max(spread, focus.point.distanceTo(centroid));
         this.lookGoal.copy(centroid).lerp(arena.center, 0.08);
       } else {
         this.lookGoal.copy(arena.center);
@@ -710,7 +760,8 @@ export class BattleScene3D {
       positions.needsUpdate = true;
     }
     for (const beam of this.beams) {
-      (beam.material as THREE.MeshBasicMaterial).opacity = 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      (beam.material as THREE.MeshBasicMaterial).opacity =
+        0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
     }
   }
 
