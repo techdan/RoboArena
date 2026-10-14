@@ -3984,6 +3984,27 @@ a.planner-menu-item:focus-visible {
   background: rgb(190 242 100 / 16%);
   color: rgb(217 249 157);
 }
+.movie-view-select select {
+  appearance: none;
+  padding: 6px 26px 6px 12px;
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23d9f99d' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  color: rgb(217 249 157);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.movie-view-select select option {
+  background: #151816;
+  color: white;
+}
+.movie-view-select select:focus-visible {
+  outline: 2px solid rgb(190 242 100);
+  outline-offset: -2px;
+}
 .movie-view-button:focus-visible {
   outline: 2px solid rgb(190 242 100);
   outline-offset: -2px;

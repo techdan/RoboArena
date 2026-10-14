@@ -219,5 +219,13 @@ export const ARENA_THEMES: Readonly<Record<ArenaThemeId, ArenaTheme>> = {
 
 export const DEFAULT_ARENA_THEME: ArenaThemeId = "coliseum";
 
+/** Picker order: the default first, then the alternates. */
+export const ARENA_THEME_ORDER: readonly ArenaThemeId[] = [
+  "coliseum",
+  "factory",
+  "neon",
+  "scrapyard",
+];
+
 export const isArenaThemeId = (value: unknown): value is ArenaThemeId =>
   value === "coliseum" || value === "neon" || value === "scrapyard" || value === "factory";
