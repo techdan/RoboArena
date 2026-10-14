@@ -5,19 +5,8 @@ import type { Application, Texture } from "pixi.js";
 import { Box, Clapperboard, Map as MapIcon, Move3d, Square } from "lucide-react";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
 import type { BattleScene3D, CameraMode } from "../renderer3d/BattleScene3D";
-import {
-  preferredArenaTheme,
-  preferredMovieRenderer,
-  rememberArenaTheme,
-  type MovieRendererKind,
-} from "../renderer3d/support";
-import {
-  ARENA_THEME_ORDER,
-  ARENA_THEMES,
-  DEFAULT_ARENA_THEME,
-  isArenaThemeId,
-  type ArenaThemeId,
-} from "../renderer3d/themes";
+import { preferredMovieRenderer, type MovieRendererKind } from "../renderer3d/support";
+import { DEFAULT_ARENA_THEME, isArenaThemeId, type ArenaThemeId } from "../renderer3d/themes";
 import type { MatchState, Terrain, TileCoord } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import {
@@ -53,6 +42,8 @@ export interface MoviePlayerProps {
   readonly onTickChange?: (tick: number) => void;
   /** Overrides the remembered/auto-detected renderer (tests, debug routes). */
   readonly renderer?: MovieRendererKind;
+  /** The room's arena look for the 3D movie, chosen by the host in the lobby. */
+  readonly arenaTheme?: ArenaThemeId | undefined;
 }
 
 /** Zoom bounds shared by buttons, wheel, and pinch clamping. */
@@ -90,10 +81,11 @@ export function MoviePlayer({
   initialTick = 0,
   onTickChange,
   renderer: rendererOverride,
+  arenaTheme: roomArenaTheme,
 }: MoviePlayerProps) {
   const [rendererKind, setRendererKind] = useState<MovieRendererKind>(rendererOverride ?? "2d");
   const [cameraMode, setCameraMode] = useState<CameraMode>("director");
-  const [arenaTheme, setArenaTheme] = useState<ArenaThemeId>(DEFAULT_ARENA_THEME);
+  const [arenaTheme, setArenaTheme] = useState<ArenaThemeId>(roomArenaTheme ?? DEFAULT_ARENA_THEME);
   const sceneRef = useRef<BattleScene3D | null>(null);
   const is3d = rendererKind === "3d";
   const is3dRef = useRef(is3d);
@@ -102,14 +94,13 @@ export function MoviePlayer({
   // remembered per browser. Decided after mount so server HTML stays stable.
   useEffect(() => {
     if (rendererOverride === undefined) setRendererKind(preferredMovieRenderer());
-    // `?theme=` (art review links) wins over the remembered arena look.
-    const requested = new URLSearchParams(window.location.search).get("theme");
-    setArenaTheme(isArenaThemeId(requested) ? requested : preferredArenaTheme());
   }, [rendererOverride]);
-  const chooseArenaTheme = useCallback((theme: ArenaThemeId) => {
-    setArenaTheme(theme);
-    rememberArenaTheme(theme);
-  }, []);
+  // The room host picks the arena look in the lobby; `?theme=` lets art-review
+  // links on the debug movie routes preview the others.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("theme");
+    setArenaTheme(isArenaThemeId(requested) ? requested : (roomArenaTheme ?? DEFAULT_ARENA_THEME));
+  }, [roomArenaTheme]);
   const chooseRenderer = useCallback((kind: MovieRendererKind) => {
     setRendererKind(kind);
     try {
@@ -717,23 +708,6 @@ export function MoviePlayer({
                 Free
               </button>
             </div>
-          ) : null}
-          {is3d ? (
-            <label className="movie-view-group movie-view-select" title="Arena look">
-              <span className="sr-only">Arena</span>
-              <select
-                value={arenaTheme}
-                onChange={(event) => {
-                  if (isArenaThemeId(event.target.value)) chooseArenaTheme(event.target.value);
-                }}
-              >
-                {ARENA_THEME_ORDER.map((id) => (
-                  <option key={id} value={id}>
-                    {ARENA_THEMES[id].name}
-                  </option>
-                ))}
-              </select>
-            </label>
           ) : null}
         </div>
         {rendererStatus !== "ready" ? (

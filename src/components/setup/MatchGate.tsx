@@ -398,6 +398,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               events={turn.events}
               initialTick={turn.playbackTick}
               onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
+              arenaTheme={snapshot.arenaTheme}
             />
           </MatchSectionBoundary>
           <div className="match-movie-handoff">

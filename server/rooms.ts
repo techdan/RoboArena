@@ -307,6 +307,7 @@ export class RoomService {
       matchId: room.matchId!,
       playerId: player.id,
       match,
+      arenaTheme: room.config.arenaTheme,
     });
   }
 
@@ -330,6 +331,7 @@ export class RoomService {
       matchId: room.matchId!,
       playerId,
       match,
+      arenaTheme: room.config.arenaTheme,
     });
   }
 
@@ -352,6 +354,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -387,6 +390,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -410,6 +414,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -442,6 +447,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -466,6 +472,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }

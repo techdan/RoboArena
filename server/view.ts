@@ -209,6 +209,7 @@ export const participantMatchSnapshot = (input: {
   readonly matchId: string;
   readonly playerId: string;
   readonly match: AuthoritativeMatchRecord;
+  readonly arenaTheme?: MatchSnapshotMessage["arenaTheme"] | undefined;
 }): MatchSnapshotMessage => {
   const acknowledged = input.match.acknowledgedThrough[input.playerId] ?? 0;
   const status = participantStatus(input.match, input.playerId);
@@ -226,6 +227,7 @@ export const participantMatchSnapshot = (input: {
     ownOrders: input.match.drafts[input.playerId] ?? emptyOrders(input.match.state.turnNumber),
     locked: input.match.lockedPlayerIds.includes(input.playerId),
     lockedPlayerIds: [...input.match.lockedPlayerIds],
+    ...(input.arenaTheme === undefined ? {} : { arenaTheme: input.arenaTheme }),
     unseenTurns: input.match.turns
       .filter((turn) => turn.turnNumber > acknowledged)
       .map((turn) =>

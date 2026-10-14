@@ -3,7 +3,9 @@
  *  and post-processing, so one renderer can wear very different looks.
  */
 
-export type ArenaThemeId = "coliseum" | "neon" | "scrapyard" | "factory";
+import { ARENA_THEME_IDS } from "../lib/setup/validate";
+
+export type ArenaThemeId = (typeof ARENA_THEME_IDS)[number];
 
 export interface FloorPalette {
   readonly base: string;
@@ -228,4 +230,4 @@ export const ARENA_THEME_ORDER: readonly ArenaThemeId[] = [
 ];
 
 export const isArenaThemeId = (value: unknown): value is ArenaThemeId =>
-  value === "coliseum" || value === "neon" || value === "scrapyard" || value === "factory";
+  typeof value === "string" && (ARENA_THEME_IDS as readonly string[]).includes(value);

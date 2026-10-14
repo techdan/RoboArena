@@ -1,7 +1,4 @@
-/** Chooses between the cinematic 3D movie and the 2D tactical board, and
- *  remembers which arena look the player prefers. */
-
-import { DEFAULT_ARENA_THEME, isArenaThemeId, type ArenaThemeId } from "./themes";
+/** Chooses between the cinematic 3D movie and the 2D tactical board. */
 
 export type MovieRendererKind = "3d" | "2d";
 
@@ -27,25 +24,4 @@ export const preferredMovieRenderer = (): MovieRendererKind => {
     // Storage blocked: fall through to detection.
   }
   return supportsWebGl2() ? "3d" : "2d";
-};
-
-const THEME_STORAGE_KEY = "roboarena.arenaTheme";
-
-/** The player's remembered arena look, or the default Coliseum. */
-export const preferredArenaTheme = (): ArenaThemeId => {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (isArenaThemeId(stored)) return stored;
-  } catch {
-    // Storage blocked: use the default look.
-  }
-  return DEFAULT_ARENA_THEME;
-};
-
-export const rememberArenaTheme = (theme: ArenaThemeId): void => {
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    // Storage can be unavailable (private mode); the choice just isn't remembered.
-  }
 };
