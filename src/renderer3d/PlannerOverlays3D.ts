@@ -123,15 +123,65 @@ export interface HeatTile {
 
 export class PlannerOverlays3D {
   readonly group = new THREE.Group();
+  /** Hover cursor lives apart from the rest so moving it never rebuilds overlays. */
+  readonly cursorGroup = new THREE.Group();
+  private cursorMesh: THREE.Mesh | null = null;
   private readonly animated: THREE.ShaderMaterial[] = [];
   private readonly pulses: { mesh: THREE.Object3D; phase: number }[] = [];
 
   constructor() {
     this.group.name = "PlannerOverlays";
+    this.group.add(this.cursorGroup);
+  }
+
+  /** Square outline on the hovered tile; null hides it. */
+  setCursor(tile: TileCoord | null, color: string): void {
+    if (this.cursorMesh === null) {
+      const outer = new THREE.Shape();
+      outer
+        .moveTo(-0.5, -0.5)
+        .lineTo(0.5, -0.5)
+        .lineTo(0.5, 0.5)
+        .lineTo(-0.5, 0.5)
+        .lineTo(-0.5, -0.5);
+      const hole = new THREE.Path();
+      hole
+        .moveTo(-0.43, -0.43)
+        .lineTo(-0.43, 0.43)
+        .lineTo(0.43, 0.43)
+        .lineTo(0.43, -0.43)
+        .lineTo(-0.43, -0.43);
+      outer.holes.push(hole);
+      this.cursorMesh = flat(new THREE.ShapeGeometry(outer), additive(color, 0.95), 0);
+      this.cursorGroup.add(this.cursorMesh);
+    }
+    this.cursorMesh.visible = tile !== null;
+    if (tile === null) return;
+    (this.cursorMesh.material as THREE.MeshBasicMaterial).color.set(color);
+    const c = centre(tile);
+    this.cursorMesh.position.set(c.x, FLOOR + 0.02, c.y);
+  }
+
+  /** Faint team-coloured floor tint over a deployment area. */
+  homeArea(tiles: readonly TileCoord[], color: string): void {
+    if (tiles.length === 0) return;
+    const mesh = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(0.96, 0.96),
+      additive(color, 0.16),
+      tiles.length,
+    );
+    this.fillInstances(
+      mesh,
+      tiles.map((tile) => ({ tile, color: 0xffffff, alpha: 1, pattern: "none" as const })),
+      FLOOR,
+      false,
+    );
+    this.group.add(mesh);
   }
 
   clear(): void {
     for (const child of [...this.group.children]) {
+      if (child === this.cursorGroup) continue;
       this.group.remove(child);
       child.traverse((node) => {
         if (node instanceof THREE.Mesh || node instanceof THREE.Line) {

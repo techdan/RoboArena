@@ -25,3 +25,42 @@ export const preferredMovieRenderer = (): MovieRendererKind => {
   }
   return supportsWebGl2() ? "3d" : "2d";
 };
+
+export type PlannerView = "top" | "tilt" | "orbit";
+
+const PLANNER_BOARD_KEY = "roboarena.plannerBoard";
+const PLANNER_VIEW_KEY = "roboarena.plannerView";
+
+const read = (key: string): string | null => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const write = (key: string, value: string): void => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage blocked: the choice simply isn't remembered.
+  }
+};
+
+/** The planner board follows the same rule as the movie: 3D where it can run. */
+export const preferredPlannerBoard = (): MovieRendererKind => {
+  const stored = read(PLANNER_BOARD_KEY);
+  if (stored === "2d") return "2d";
+  return supportsWebGl2() ? "3d" : "2d";
+};
+
+export const rememberPlannerBoard = (kind: MovieRendererKind): void =>
+  write(PLANNER_BOARD_KEY, kind);
+
+/** Top-down is the planning default; tilted and orbit are opt-in. */
+export const preferredPlannerView = (): PlannerView => {
+  const stored = read(PLANNER_VIEW_KEY);
+  return stored === "tilt" || stored === "orbit" ? stored : "top";
+};
+
+export const rememberPlannerView = (view: PlannerView): void => write(PLANNER_VIEW_KEY, view);

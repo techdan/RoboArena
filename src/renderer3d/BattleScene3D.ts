@@ -16,7 +16,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { MatchState, Posture, RobotClass, TileCoord, WeaponId } from "../engine/types";
+import type { Heading, MatchState, Posture, RobotClass, TileCoord, WeaponId } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import type { MovieSnapshot, MovieTimeline } from "../renderer/animations";
 import { planMovement } from "../renderer/motion";
@@ -39,6 +39,16 @@ import {
 } from "./models";
 import { RobotRig } from "./RobotRig";
 import { ARENA_THEMES, DEFAULT_ARENA_THEME, type ArenaTheme, type ArenaThemeId } from "./themes";
+
+/** A robot pose for the planner board (see `syncRobots`). */
+export interface PlannedRobotPose {
+  readonly id: string;
+  readonly robotClass: RobotClass;
+  readonly color: string;
+  readonly position: TileCoord | "dock";
+  readonly posture: Posture;
+  readonly scanHeading: Heading;
+}
 
 export type CameraMode = "director" | "free" | "overview";
 
@@ -111,6 +121,7 @@ export class BattleScene3D {
   private readonly controls: OrbitControls;
   private readonly effects = new Effects3D();
   private readonly rigs = new Map<string, RobotRig>();
+  private readonly posed = new Map<string, TileCoord>();
   private readonly sun: THREE.DirectionalLight;
   private arena: ArenaBuild | null = null;
   private library: ModelLibrary | null = null;
@@ -137,6 +148,17 @@ export class BattleScene3D {
   private robotFamily: RobotFamily = DEFAULT_ROBOT_FAMILY;
   private motes: THREE.Points | null = null;
   private readonly ghosts: RobotRig[] = [];
+  private cameraTween: {
+    fromPos: THREE.Vector3;
+    fromTarget: THREE.Vector3;
+    toPos: THREE.Vector3;
+    toTarget: THREE.Vector3;
+    start: number;
+    duration: number;
+  } | null = null;
+  private readonly raycaster = new THREE.Raycaster();
+  private viewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  private readonly floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   /** Planner overlays (routes, heatmaps, wedges) projected onto the floor. */
   readonly overlays = new PlannerOverlays3D();
 
@@ -385,10 +407,24 @@ export class BattleScene3D {
     this.ao.setSize(width, height);
     this.bloom.resolution.set(width, height);
     this.camera.aspect = width / height;
+    const { top, right, bottom, left } = this.viewInsets;
+    // Shift the lens centre into the area not covered by overlaid UI.
+    if (top + right + bottom + left > 0)
+      this.camera.setViewOffset(width, height, (right - left) / 2, (bottom - top) / 2, width, height);
+    else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }
 
-  private rigFor(id: string, robot: MovieSnapshot["robots"][string]): RobotRig | undefined {
+  /** CSS pixels of the canvas hidden behind overlaid UI; framing avoids them. */
+  setViewInsets(insets: { top: number; right: number; bottom: number; left: number }): void {
+    this.viewInsets = { ...insets };
+    this.resize();
+  }
+
+  private rigFor(
+    id: string,
+    robot: Pick<MovieSnapshot["robots"][string], "robotClass" | "teamColor">,
+  ): RobotRig | undefined {
     const existing = this.rigs.get(id);
     if (existing !== undefined) return existing;
     const model = this.library?.robots.get(robot.robotClass);
@@ -705,6 +741,137 @@ export class BattleScene3D {
     this.ghosts.length = 0;
   }
 
+  /**
+   * Planner camera presets. "top" looks straight down through a narrow lens so
+   * the grid stays square; "tilt" leans back about 35 degrees to read cover.
+   * Both frame the whole arena; `quarter` rotates the board in 90 degree steps
+   * (0 = engine North at the top of the screen). Left-drag pans in both.
+   */
+  planView(view: "top" | "tilt" | "orbit", quarter = 0, animate = true): void {
+    this.setCameraMode("free");
+    const { width, height } = this.state.arena;
+    const controls = this.controls;
+    if (view === "orbit") {
+      controls.enableRotate = true;
+      controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+      controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+      this.setFov(38);
+      const yaw = (quarter * Math.PI) / 2;
+      const target = new THREE.Vector3(width / 2, 0, height / 2);
+      const offset = new THREE.Vector3(Math.sin(yaw), 0.95, Math.cos(yaw)).multiplyScalar(Math.max(width, height));
+      this.moveCamera(target.clone().add(offset), target, animate);
+      return;
+    }
+    controls.enableRotate = false;
+    controls.zoomToCursor = true;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+    controls.screenSpacePanning = true;
+    const fov = view === "top" ? 30 : 34;
+    this.setFov(fov);
+    const rect = this.host.getBoundingClientRect();
+    const insets = this.viewInsets;
+    const openWidth = Math.max(1, rect.width - insets.left - insets.right);
+    const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
+    const aspect = Math.max(0.3, openWidth / openHeight);
+    // The lens spans the full canvas height; only the open fraction may hold the arena.
+    const half = Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
+    const rotated = quarter % 2 === 1;
+    const spanX = (rotated ? height : width) + 1.5;
+    const spanZ = (rotated ? width : height) + 1.5;
+    const distance = Math.max(spanZ / 2 / half, spanX / 2 / (half * aspect)) * (view === "top" ? 1 : 1.08);
+    const polar = view === "top" ? 0.0005 : THREE.MathUtils.degToRad(35);
+    const yaw = (quarter * Math.PI) / 2;
+    const target = new THREE.Vector3(width / 2, 0, height / 2);
+    const position = new THREE.Vector3(
+      target.x + Math.sin(yaw) * Math.sin(polar) * distance,
+      Math.cos(polar) * distance,
+      target.z + Math.cos(yaw) * Math.sin(polar) * distance,
+    );
+    // Straight down, the tiny polar offset toward `yaw` keeps that edge at the
+    // bottom of the screen, so board North stays up for quarter 0.
+    this.moveCamera(position, target, animate);
+  }
+
+  private moveCamera(position: THREE.Vector3, target: THREE.Vector3, animate: boolean): void {
+    if (!animate || this.reducedMotion) {
+      this.cameraTween = null;
+      this.camera.position.copy(position);
+      this.controls.target.copy(target);
+      this.controls.update();
+      return;
+    }
+    this.cameraTween = {
+      fromPos: this.camera.position.clone(),
+      fromTarget: this.controls.target.clone(),
+      toPos: position,
+      toTarget: target,
+      start: this.now,
+      duration: 0.45,
+    };
+  }
+
+  private stepCameraTween(): void {
+    const tween = this.cameraTween;
+    if (tween === null) return;
+    const t = Math.min(1, (this.now - tween.start) / tween.duration);
+    const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    this.camera.position.lerpVectors(tween.fromPos, tween.toPos, e);
+    this.controls.target.lerpVectors(tween.fromTarget, tween.toTarget, e);
+    if (t >= 1) this.cameraTween = null;
+  }
+
+  /** Board tile under a client-space point, or null off the board. */
+  tileAtClient(clientX: number, clientY: number): TileCoord | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = this.raycaster.ray.intersectPlane(this.floorPlane, new THREE.Vector3());
+    if (hit === null) return null;
+    const tile = { x: Math.floor(hit.x), y: Math.floor(hit.z) };
+    const { width, height } = this.state.arena;
+    return tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height ? null : tile;
+  }
+
+  /**
+   * Shows exactly these robots, posed directly (planner board, not a movie).
+   * Robots absent from the list are hidden.
+   */
+  syncRobots(robots: readonly PlannedRobotPose[], animate: boolean): void {
+    const seen = new Set<string>();
+    for (const robot of robots) {
+      const rig = this.rigFor(robot.id, { robotClass: robot.robotClass, teamColor: robot.color });
+      if (rig === undefined) continue;
+      seen.add(robot.id);
+      rig.visible = robot.position !== "dock";
+      rig.root.visible = rig.visible;
+      if (robot.position === "dock") continue;
+      rig.setPosture(robot.posture, animate);
+      rig.setScanYaw(headingYaw(robot.scanHeading), animate);
+      const previous = this.posed.get(robot.id);
+      const moved =
+        previous === undefined ||
+        previous.x !== robot.position.x ||
+        previous.y !== robot.position.y;
+      if (moved) {
+        if (animate && previous !== undefined)
+          rig.moveTo(robot.position, 0.22, false, this.now);
+        else rig.place(robot.position, this.now);
+        this.posed.set(robot.id, robot.position);
+      }
+      if (!animate || previous === undefined) rig.faceYaw(headingYaw(robot.scanHeading), false);
+    }
+    for (const [id, rig] of this.rigs) {
+      if (seen.has(id)) continue;
+      rig.visible = false;
+      rig.root.visible = false;
+      this.posed.delete(id);
+    }
+  }
+
   /** Planning look: drops the floodlight haze and dust so the floor reads cleanly. */
   setPlanningLook(on: boolean): void {
     for (const beam of this.beams) beam.visible = !on;
@@ -752,6 +919,7 @@ export class BattleScene3D {
     for (const rig of this.rigs.values()) rig.update(this.now, dt, this.speed);
     for (const ghost of this.ghosts) ghost.update(this.now, dt, this.speed);
     this.overlays.update(this.now);
+    this.stepCameraTween();
     this.effects.update(dt * Math.min(2, Math.max(0.5, this.speed)));
     this.updateCamera(dt);
     if (draw) this.composer.render(dt);
