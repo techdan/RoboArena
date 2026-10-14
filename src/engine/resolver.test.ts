@@ -277,6 +277,36 @@ describe("resolveTurn", () => {
     expect(result.nextState.teams[0]?.robots[0]).toMatchObject({ position: { x: 0, y: 0 } });
   });
 
+  it("returns MalformedOrders for a deploy onto an impassable home-area tile", () => {
+    // Regression: real Home rectangles (e.g. Rubble Two NW) contain Wall tiles,
+    // and the resolver accepted a deploy that placed a robot inside a Wall.
+    const arena = makeOpenArena();
+    const tiles = arena.tiles.map((row) => row.slice());
+    const row = tiles[0]?.slice();
+    if (!row) throw new Error("fixture row missing");
+    row[0] = { terrain: "wall" };
+    row[1] = { terrain: "crevice" };
+    tiles[0] = row;
+    const robot = makeRobot("r1", "team-1", "rifle", "dock");
+    const state = makeMatch({ teamOneRobots: [robot], arena: { ...arena, tiles } });
+    for (const to of [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ]) {
+      const result = resolveTurn({
+        state,
+        seed: "deploy-into-wall",
+        orders: ordersFor(state, [{ robotId: "r1", segments: [{ kind: "deploy", to }] }]),
+      });
+      expect(result).toMatchObject({
+        outcome: "malformed-orders",
+        code: "illegal-command",
+        robotId: "r1",
+        commandIndex: 0,
+      });
+    }
+  });
+
   it("uses the non-compacting Home slot rather than the compacted teams array index", () => {
     const docked = makeRobot("r1", "team-1", "rifle", "dock");
     const base = makeMatch({ teamOneRobots: [docked] });

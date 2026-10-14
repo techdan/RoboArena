@@ -63,9 +63,12 @@ const eventIsAuthorized = (
     case "command-aborted":
       return authorizedRobotIds.has(event.robotId);
     case "scan-target-acquired":
-      // Gate on the scanner only: delivering this to the target's owner while
-      // the scanner is unseen would leak the hidden robot's id and exact range.
-      return authorizedRobotIds.has(event.shooterId);
+      // Never gate on the target alone: delivering this to the target's owner
+      // while the scanner is unseen would leak the hidden robot's id and exact
+      // range. In 3-4 Team games a visible enemy scanner may also acquire a
+      // third Team's robot this participant cannot see, so both ends must be
+      // authorized.
+      return authorizedRobotIds.has(event.shooterId) && authorizedRobotIds.has(event.targetId);
     case "fired":
     case "shot-missed":
       return authorizedRobotIds.has(event.shooterId);
