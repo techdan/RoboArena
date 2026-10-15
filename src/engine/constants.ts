@@ -127,13 +127,21 @@ export const ZAP_DAMAGE_ROLL = { base: 60, mask: 63 } as const;
 /** Place Bomb command record duration, descriptor row 23. */
 export const PLACE_BOMB_COST_TICKS = 60;
 
+/**
+ * Self Destruct, selector 78: a 20-tick command record whose blast lands 10
+ * ticks after the command starts (seg6:0x3541, impact `now + 10`).
+ */
+export const SELF_DESTRUCT_COST_TICKS = 20;
+export const SELF_DESTRUCT_IMPACT_DELAY_TICKS = 10;
+
 /** Zap and fuse dialogs accept 1..40 and 0..40 seconds (seg26:0x178C, seg26:0x18B2). */
 export const ZAP_MAX_SECONDS = 40;
 export const BOMB_MAX_FUSE_SECONDS = 40;
 
 /**
- * Time Bomb blast, category 2 at DGROUP 0x1606/0x1610: radius 0..4, the same
- * blast loop as missiles (seg6:0x5D73), hitting every Side.
+ * Time Bomb and Self Destruct blast, category 2 at DGROUP 0x1606/0x1610:
+ * radius 0..4, the same blast loop as missiles (seg6:0x5D73), hitting every
+ * Side. Self Destruct reaches it as a type-3 projectile (seg6:0x5675).
  */
 export const TIME_BOMB_BLAST = {
   radius: 4,

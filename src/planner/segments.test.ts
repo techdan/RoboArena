@@ -4,6 +4,7 @@ import type { Arena, TurnOrders } from "../engine/types";
 import {
   appendSegment,
   canProgramPlaceBomb,
+  canProgramSelfDestruct,
   canProgramZap,
   deleteSegment,
   planMovement,
@@ -263,5 +264,70 @@ describe("planner segments", () => {
     expect(
       validatedTimelinePrefix(arena, robot, 0, [{ kind: "zap", seconds: 41 }], { zapArmed: true }),
     ).toEqual({ segments: [], droppedCount: 1 });
+  });
+
+  it("offers Self Destruct only to a Team's last live deployed robot under rules revision 3", () => {
+    const robot = makeRobot("r1", "t1", "rifle", { x: 1, y: 1 });
+    const docked = makeRobot("r2", "t1", "rifle", "dock");
+    const lastStanding = { rulesRevision: 3, liveTeamRobots: 1 } as const;
+    expect(canProgramSelfDestruct(lastStanding, projectRobotAtTick(robot, []))).toBe(true);
+    expect(canProgramSelfDestruct(lastStanding, projectRobotAtTick(docked, []))).toBe(false);
+    expect(
+      canProgramSelfDestruct(
+        { rulesRevision: 3, liveTeamRobots: 2 },
+        projectRobotAtTick(robot, []),
+      ),
+    ).toBe(false);
+    expect(
+      canProgramSelfDestruct(
+        { rulesRevision: 2, liveTeamRobots: 1 },
+        projectRobotAtTick(robot, []),
+      ),
+    ).toBe(false);
+    expect(canProgramSelfDestruct({ liveTeamRobots: 1 }, projectRobotAtTick(robot, []))).toBe(
+      false,
+    );
+    expect(canProgramSelfDestruct(undefined, projectRobotAtTick(robot, []))).toBe(false);
+  });
+
+  it("times Self Destruct at 20 ticks and keeps it only while allowed", () => {
+    const arena = makeOpenArena(6, 6);
+    const robot = makeRobot("r1", "t1", "rifle", { x: 1, y: 1 });
+    const selfDestruct = { kind: "self-destruct" as const };
+    const face = { kind: "set-scan-direction" as const, heading: "E" as const };
+    const lastStanding = { rulesRevision: 3, liveTeamRobots: 1 } as const;
+    expect(timelineTiming(robot, [selfDestruct], 900)[0]).toMatchObject({
+      startTick: 0,
+      endTick: 20,
+      durationTicks: 20,
+    });
+    expect(validatedTimelinePrefix(arena, robot, 0, [face, selfDestruct], lastStanding)).toEqual({
+      segments: [face, selfDestruct],
+      droppedCount: 0,
+    });
+    // A robot that survives its own blast keeps its later orders, as in the original.
+    expect(validatedTimelinePrefix(arena, robot, 0, [selfDestruct, face], lastStanding)).toEqual({
+      segments: [selfDestruct, face],
+      droppedCount: 0,
+    });
+    // A teammate still alive, the earlier rules, or no rules drop it.
+    expect(
+      validatedTimelinePrefix(arena, robot, 0, [face, selfDestruct], {
+        rulesRevision: 3,
+        liveTeamRobots: 2,
+      }),
+    ).toEqual({ segments: [face], droppedCount: 1 });
+    expect(validatedTimelinePrefix(arena, robot, 0, [selfDestruct], { liveTeamRobots: 1 })).toEqual(
+      { segments: [], droppedCount: 1 },
+    );
+    expect(validatedTimelinePrefix(arena, robot, 0, [selfDestruct])).toEqual({
+      segments: [],
+      droppedCount: 1,
+    });
+    const docked = makeRobot("r2", "t1", "rifle", "dock");
+    expect(validatedTimelinePrefix(arena, docked, 0, [selfDestruct], lastStanding)).toEqual({
+      segments: [],
+      droppedCount: 1,
+    });
   });
 });

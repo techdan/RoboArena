@@ -428,6 +428,11 @@ grenades, Zap, Time Bomb and Show Enemy Positions (`src/engine/formations.ts`),
 and spotting runs on the original 5-tick simulation step. See `docs/spec.md`
 §2, §4 and §7.
 
+**2026-10-15 Self Destruct (rules revision 3, ✅ DRAFT COMPLETE)**: a Team's
+last robot standing can Self Destruct, a 20-tick command whose category 2 blast
+lands on its own tile 10 ticks after it starts (`seg21:0x076C`,
+`seg6:0x3541`). See `docs/spec.md` §4.
+
 These are bundled because both need scan-cone calculations against moving targets per tick. Splitting into two phases would duplicate the per-tick visibility-against-cone logic.
 
 **Dependencies**: Phase 3.

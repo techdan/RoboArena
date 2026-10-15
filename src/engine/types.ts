@@ -137,7 +137,9 @@ export type RobotCommandSegment =
   /** Prod/Zap, selector 3: hit enemies sharing this robot's tile (re-map/commands.md §3). */
   | { readonly kind: "zap"; readonly seconds: number }
   /** Place Bomb, selector 23: arm the carried Time Bomb on this tile (re-map/commands.md §4). */
-  | { readonly kind: "place-bomb"; readonly fuseSeconds: number };
+  | { readonly kind: "place-bomb"; readonly fuseSeconds: number }
+  /** Self Destruct, selector 78: only for a Team's last robot (seg21:0x076C). */
+  | { readonly kind: "self-destruct" };
 
 export interface CommandTimeline {
   readonly robotId: string;
@@ -268,6 +270,11 @@ export type ResolutionEvent = EventEnvelope &
         readonly at: TileCoord;
         /** Tick in this turn, or a later turn's frame when past turn end. */
         readonly detonatesAt: number;
+      }
+    | {
+        readonly kind: "self-destructed";
+        readonly robotId: string;
+        readonly at: TileCoord;
       }
     | {
         readonly kind: "bomb-exploded";

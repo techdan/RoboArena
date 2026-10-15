@@ -21,6 +21,7 @@ export const validatePrivateTimeline = (
   robot: RobotState,
   segments: readonly RobotCommandSegment[],
   config?: Pick<GameConfig, "rulesRevision" | "zapArmed">,
+  teamRobots: readonly RobotState[] = [robot],
 ): string | null => {
   const formationRules = (config?.rulesRevision ?? 0) >= 3;
   let timeBombs = robot.timeBombs ?? 0;
@@ -140,6 +141,11 @@ export const validatePrivateTimeline = (
         )
           return "Bomb fuse must be 0-40 seconds.";
         timeBombs -= 1;
+        break;
+      case "self-destruct":
+        // seg21:0x076C: offered only to a Team's last robot still standing.
+        if (!formationRules || teamRobots.filter((member) => member.hp > 0).length !== 1)
+          return "Only a Team's last robot can self-destruct.";
         break;
       default:
         return "Unsupported command.";

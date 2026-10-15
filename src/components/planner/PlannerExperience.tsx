@@ -30,7 +30,9 @@ import { loadPlannerDraft, savePlannerDraft } from "../../planner/draft";
 import { plannerReducer, createPlannerState } from "../../planner/state";
 import {
   canProgramPlaceBomb,
+  canProgramSelfDestruct,
   canProgramZap,
+  type PlannerRules,
   planMovement,
   previewParkingTick,
   projectRobotAtTick,
@@ -121,9 +123,16 @@ interface ScanDialogState {
 
 /** Zap duration or Place Bomb fuse being configured before it is added. */
 interface SpecialDialogState {
-  readonly kind: "zap" | "place-bomb";
+  readonly kind: "zap" | "place-bomb" | "self-destruct";
+  /** Unused by Self Destruct, which only asks for confirmation. */
   readonly seconds: number;
 }
+
+const SPECIAL_COMMAND_NAMES: Readonly<Record<SpecialDialogState["kind"], string>> = {
+  zap: "Zap",
+  "place-bomb": "Place Bomb",
+  "self-destruct": "Self Destruct",
+};
 
 /** Default Zap duration and bomb fuse, in seconds. */
 const DEFAULT_ZAP_SECONDS = 5;
@@ -376,8 +385,16 @@ export function PlannerExperience({
     grenadeAmmoValue !== "unlimited"
       ? grenadeAmmoValue
       : null;
-  const zapAllowed = canProgramZap(match.config, projected);
+  const plannerRules: PlannerRules = {
+    ...match.config,
+    liveTeamRobots: team.robots.filter((robot) => robot.hp > 0).length,
+  };
+  const zapAllowed = canProgramZap(plannerRules, projected);
   const bombAllowed = canProgramPlaceBomb(projected);
+  // Nothing can follow a Self Destruct, so a second one is never offered.
+  const selfDestructAllowed =
+    canProgramSelfDestruct(plannerRules, projected) &&
+    commandPrefix.at(-1)?.kind !== "self-destruct";
   const aimWeapon = aimDialog?.weapon ?? selectedWeapon;
   const aimAmmo = projectedWeaponAmmo(selectedRobot, commandPrefix, aimWeapon);
   const aimMaxShots = Math.max(
@@ -465,7 +482,7 @@ export function PlannerExperience({
       selectedRobot,
       team.homeSlot,
       timelineForRobot(candidate, selectedRobot.id).segments,
-      match.config,
+      plannerRules,
     );
     const next = replaceTimeline(orders, selectedRobot.id, validated.segments);
     edit(
@@ -490,7 +507,7 @@ export function PlannerExperience({
       robot,
       team.homeSlot,
       kept,
-      match.config,
+      plannerRules,
     );
     const removedCount = currentSegments.length - index;
     setSelectedRobotId(robotId);
@@ -674,16 +691,20 @@ export function PlannerExperience({
     setNotice("Configure Scan & Fire distance and duration.");
   };
   const startSpecial = (kind: SpecialDialogState["kind"]) => {
-    const name = kind === "zap" ? "Zap" : "Place Bomb";
+    const name = SPECIAL_COMMAND_NAMES[kind];
     if (specialDialog?.kind === kind) {
       cancelFire(`${name} canceled.`);
       return;
     }
-    if (kind === "zap" ? !zapAllowed : !bombAllowed) {
+    if (
+      kind === "zap" ? !zapAllowed : kind === "place-bomb" ? !bombAllowed : !selfDestructAllowed
+    ) {
       setNotice(
         kind === "zap"
           ? "Zap is unavailable — this formation does not arm it."
-          : "Place Bomb is unavailable — this robot carries no Time Bomb.",
+          : kind === "place-bomb"
+            ? "Place Bomb is unavailable — this robot carries no Time Bomb."
+            : "Self Destruct is unavailable — only a Team's last deployed robot can use it.",
       );
       return;
     }
@@ -698,9 +719,17 @@ export function PlannerExperience({
       seconds:
         kind === "zap"
           ? Math.max(1, Math.min(DEFAULT_ZAP_SECONDS, remainingSeconds))
-          : DEFAULT_BOMB_FUSE_SECONDS,
+          : kind === "place-bomb"
+            ? DEFAULT_BOMB_FUSE_SECONDS
+            : 0,
     });
-    setNotice(kind === "zap" ? "Set how long to Zap." : "Set the Time Bomb fuse, then add it.");
+    setNotice(
+      kind === "zap"
+        ? "Set how long to Zap."
+        : kind === "place-bomb"
+          ? "Set the Time Bomb fuse, then add it."
+          : "Confirm Self Destruct — this robot will blow itself up.",
+    );
   };
   const confirmSpecial = () => {
     if (specialDialog === null) return;
@@ -708,6 +737,11 @@ export function PlannerExperience({
       commitSegment(
         { kind: "zap", seconds: specialDialog.seconds },
         `Zap added · ${specialDialog.seconds} seconds.`,
+      );
+    } else if (specialDialog.kind === "self-destruct") {
+      commitSegment(
+        { kind: "self-destruct" },
+        "Self Destruct added · the robot explodes shortly after it starts.",
       );
     } else {
       commitSegment(
@@ -927,9 +961,7 @@ export function PlannerExperience({
         onSecondsChange={(seconds) =>
           setSpecialDialog((current) => (current === null ? null : { ...current, seconds }))
         }
-        onCancel={() =>
-          cancelFire(`${specialDialog.kind === "zap" ? "Zap" : "Place Bomb"} canceled.`)
-        }
+        onCancel={() => cancelFire(`${SPECIAL_COMMAND_NAMES[specialDialog.kind]} canceled.`)}
         onConfirm={confirmSpecial}
       />
     ) : aimTool || aimDialog !== null ? (
@@ -962,7 +994,7 @@ export function PlannerExperience({
       team.homeSlot,
       conflictOrders,
       match.turnNumber,
-      match.config,
+      plannerRules,
     );
     dispatch({ type: "recover-conflict", revision, orders: recovered });
     setNotice(
@@ -1023,6 +1055,7 @@ export function PlannerExperience({
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
+    selfDestruct: () => startSpecial("self-destruct"),
   });
   tacticalKeysRef.current = {
     aim: startAim,
@@ -1032,6 +1065,7 @@ export function PlannerExperience({
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
+    selfDestruct: () => startSpecial("self-destruct"),
   };
   const tacticalRef = useRef(false);
   tacticalRef.current = boardKind === "3d";
@@ -1076,7 +1110,9 @@ export function PlannerExperience({
                       ? tacticalKeysRef.current.zap
                       : key === "b"
                         ? tacticalKeysRef.current.bomb
-                        : null;
+                        : key === "x"
+                          ? tacticalKeysRef.current.selfDestruct
+                          : null;
         if (action !== null) {
           event.preventDefault();
           action();
@@ -1301,6 +1337,14 @@ export function PlannerExperience({
                     },
                   }
                 : {})}
+              {...(selfDestructAllowed
+                ? {
+                    onSelfDestruct: () => {
+                      setOrdersOpen(false);
+                      startSpecial("self-destruct");
+                    },
+                  }
+                : {})}
               onPosture={addPosture}
               onHeadingPreview={setHeadingPreview}
               onHeading={addHeading}
@@ -1413,17 +1457,19 @@ export function PlannerExperience({
         ) : specialDialog !== null ? (
           <aside
             className="tactical-card scan-card"
-            aria-label={specialDialog.kind === "zap" ? "Zap" : "Place bomb"}
+            aria-label={SPECIAL_COMMAND_NAMES[specialDialog.kind]}
           >
             <header>
               <p className="eyebrow">
-                {specialDialog.kind === "zap" ? "Zap" : "Place bomb"} · {selectedName}
+                {SPECIAL_COMMAND_NAMES[specialDialog.kind]} · {selectedName}
               </p>
             </header>
             <p className="shot-card-empty">
               {specialDialog.kind === "zap"
                 ? `${selectedName} zaps any enemy standing on its tile, up to once a second.`
-                : `${selectedName} arms its Time Bomb here. It blasts every robot within ${TIME_BOMB_BLAST.radius} tiles, yours too.`}
+                : specialDialog.kind === "place-bomb"
+                  ? `${selectedName} arms its Time Bomb here. It blasts every robot within ${TIME_BOMB_BLAST.radius} tiles, yours too.`
+                  : `${selectedName} explodes on its own tile, blasting every robot within ${TIME_BOMB_BLAST.radius} tiles — itself included. Nothing can follow it.`}
             </p>
             {fireControls}
           </aside>
@@ -1627,6 +1673,14 @@ export function PlannerExperience({
                 placeBomb: {
                   active: specialDialog?.kind === "place-bomb",
                   onStart: () => startSpecial("place-bomb"),
+                },
+              }
+            : {})}
+          {...(selfDestructAllowed || specialDialog?.kind === "self-destruct"
+            ? {
+                selfDestruct: {
+                  active: specialDialog?.kind === "self-destruct",
+                  onStart: () => startSpecial("self-destruct"),
                 },
               }
             : {})}

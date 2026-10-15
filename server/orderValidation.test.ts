@@ -101,4 +101,20 @@ describe("private order validation", () => {
     );
     expect(validatePrivateTimeline(arena, 0, missile, [bomb], standard)).toContain("no Time Bomb");
   });
+
+  it("allows Self Destruct only for a Team's last robot standing", () => {
+    const standard = { rulesRevision: 3, zapArmed: true } as const;
+    const boom: RobotCommandSegment = { kind: "self-destruct" };
+    const fallen = { ...missile, id: "fallen", hp: 0 };
+    const buddy = { ...missile, id: "buddy" };
+    expect(
+      validatePrivateTimeline(arena, 0, missile, [boom], standard, [missile, fallen]),
+    ).toBeNull();
+    expect(
+      validatePrivateTimeline(arena, 0, missile, [boom], standard, [missile, buddy]),
+    ).toContain("last robot");
+    expect(
+      validatePrivateTimeline(arena, 0, missile, [boom], { rulesRevision: 2 }, [missile]),
+    ).toContain("last robot");
+  });
 });

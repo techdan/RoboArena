@@ -258,3 +258,98 @@ describe("spotting under revision 3", () => {
     expect(computeVisibility(result.nextState, "team-2").visibleEnemies).toEqual(new Set(["r1"]));
   });
 });
+
+describe("Self Destruct (seg21:0x076C, seg6:0x3541)", () => {
+  const selfDestruct: TurnOrders = {
+    turnNumber: 1,
+    timelines: [{ robotId: "last", segments: [{ kind: "self-destruct" }] }],
+  };
+  const lastStanding = (extra: RobotState[] = []) =>
+    revision3(
+      makeMatch({
+        arena: makeOpenArena(12, 12),
+        teamOneRobots: [
+          makeRobot("last", "team-1", "rifle", { x: 5, y: 5 }),
+          { ...makeRobot("gone", "team-1", "rifle", { x: 1, y: 1 }), hp: 0 },
+          ...extra,
+        ],
+        teamTwoRobots: [
+          makeRobot("near", "team-2", "rifle", { x: 6, y: 5 }),
+          makeRobot("far", "team-2", "rifle", { x: 11, y: 11 }),
+        ],
+      }),
+    );
+
+  it("blasts the robot's own tile 10 ticks after it starts, hitting every Side", () => {
+    const result = resolved(lastStanding(), selfDestruct);
+    expect(ofKind(result.events, "self-destructed")).toMatchObject([
+      { tick: 10, robotId: "last", at: { x: 5, y: 5 } },
+    ]);
+    const hits = ofKind(result.events, "damaged");
+    expect(hits.map((hit) => [hit.tick, hit.targetId])).toEqual([
+      [10, "last"],
+      [10, "near"],
+    ]);
+    for (const hit of hits) {
+      if (hit.damageKind !== "blast") throw new Error("expected blast damage");
+      expect(hit.sourceId).toBe("last");
+      expect(hit.damage).toBeGreaterThanOrEqual(hit.radius === 0 ? 120 : 80);
+    }
+    expect(ofKind(result.events, "destroyed").map((event) => event.robotId)).toContain("last");
+  });
+
+  it("is refused while the Team has more than one robot standing", () => {
+    const state = lastStanding([makeRobot("buddy", "team-1", "rifle", { x: 2, y: 2 })]);
+    expect(resolveTurn({ state, orders: selfDestruct, seed: "x" })).toMatchObject({
+      outcome: "malformed-orders",
+      code: "illegal-command",
+    });
+  });
+
+  it("is unknown to rules revisions before 3", () => {
+    const base = lastStanding();
+    const state = { ...base, config: { ...base.config, rulesRevision: 2 as const } };
+    expect(resolveTurn({ state, orders: selfDestruct, seed: "x" })).toMatchObject({
+      outcome: "malformed-orders",
+      code: "unsupported-command",
+    });
+  });
+
+  it("still lands when started just before turn end, extending the movie", () => {
+    const state = lastStanding();
+    const turnTicks = state.config.turnLengthSeconds * 60;
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "last",
+          segments: [
+            // 840 + 5 × 10 + 5 = 895 ticks, then the blast lands at 905.
+            { kind: "zap", seconds: state.config.turnLengthSeconds - 1 },
+            { kind: "set-posture", posture: "ducking" },
+            { kind: "set-posture", posture: "upright" },
+            { kind: "set-posture", posture: "ducking" },
+            { kind: "set-posture", posture: "upright" },
+            { kind: "set-posture", posture: "ducking" },
+            { kind: "set-scan-direction", heading: "NE" },
+            { kind: "self-destruct" },
+          ],
+        },
+      ],
+    };
+    const result = resolved(state, orders);
+    const blast = ofKind(result.events, "self-destructed")[0]!;
+    expect(blast.tick).toBe(turnTicks + 5);
+    expect(ofKind(result.events, "turn-end")[0]!.tick).toBe(blast.tick);
+    const ticks = result.events.map((event) => event.tick);
+    expect(ticks).toEqual([...ticks].sort((a, b) => a - b));
+  });
+
+  it("verifies in a replay", () => {
+    const replay = createReplayLog({
+      initialState: lastStanding(),
+      turns: [{ seed: "a", orders: selfDestruct }],
+    });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});

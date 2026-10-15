@@ -8,6 +8,7 @@
 import {
   DEPLOY_COST_TICKS,
   PLACE_BOMB_COST_TICKS,
+  SELF_DESTRUCT_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   TICKS_PER_SECOND,
@@ -63,5 +64,7 @@ export const commandDurationTicks = (
       return command.seconds * TICKS_PER_SECOND;
     case "place-bomb":
       return PLACE_BOMB_COST_TICKS;
+    case "self-destruct":
+      return SELF_DESTRUCT_COST_TICKS;
   }
 };

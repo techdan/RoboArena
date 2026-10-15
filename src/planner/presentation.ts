@@ -172,6 +172,13 @@ export const commandPresentation = (
         detail: `Arm a Time Bomb here with a ${segment.fuseSeconds}-second fuse`,
         weapon: null,
       };
+    case "self-destruct":
+      return {
+        label: "Self Destruct",
+        compact: "Boom",
+        detail: "Explode on this tile, blasting every robot in range",
+        weapon: null,
+      };
   }
 };
 

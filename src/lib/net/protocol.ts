@@ -99,6 +99,7 @@ const commandSegmentSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("place-bomb"), fuseSeconds: z.number().int().min(0).max(40) })
     .strict(),
+  z.object({ kind: z.literal("self-destruct") }).strict(),
 ]);
 export const turnOrdersSchema = z
   .object({
@@ -567,6 +568,7 @@ const participantEventSchema = z.discriminatedUnion("kind", [
         "scan-and-fire",
         "zap",
         "place-bomb",
+        "self-destruct",
       ]),
     })
     .strict(),
@@ -704,6 +706,14 @@ const participantEventSchema = z.discriminatedUnion("kind", [
       bombId: z.string().min(1),
       at: tileCoordSchema,
       detonatesAt: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("self-destructed"),
+      robotId: z.string().min(1),
+      at: tileCoordSchema,
     })
     .strict(),
   z

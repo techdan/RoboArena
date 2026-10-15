@@ -83,6 +83,8 @@ const isSegment = (value: unknown): value is RobotCommandSegment => {
       return isInteger(value.seconds) && value.seconds >= 1 && value.seconds <= 40;
     case "place-bomb":
       return isInteger(value.fuseSeconds) && value.fuseSeconds >= 0 && value.fuseSeconds <= 40;
+    case "self-destruct":
+      return true;
     default:
       return false;
   }

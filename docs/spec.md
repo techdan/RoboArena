@@ -330,6 +330,16 @@ A bomb still armed at turn end carries over with its time reduced by the turn
 length, never below 5 (`seg28:0x0C1A`). Only the placing Team sees an armed
 bomb; everyone who can see the tile sees it explode. ✅
 
+### Self Destruct
+
+Self Destruct (selector 78) is offered only to a Team's last robot still
+standing (`seg21:0x076C`, `seg77:0x0208`) and not in the dock. It takes 20
+ticks; 10 ticks after it starts, a blast lands on the robot's own tile with the
+Time Bomb's category 2 table above, hitting every Side (`seg6:0x3541`,
+`seg6:0x5675`). The robot itself is at radius 0. A Self Destruct started in the
+last 10 ticks of a turn still lands, and the turn's movie runs on until it does
+(`seg6:0x6330`). Rules revision 3. ✅
+
 ---
 
 ## 5. Movement

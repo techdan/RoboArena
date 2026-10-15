@@ -64,6 +64,7 @@ const COMMAND_KINDS = [
   "scan-and-fire",
   "zap",
   "place-bomb",
+  "self-destruct",
 ] as const;
 const SPORT_TYPES = [
   "survival",
@@ -353,6 +354,8 @@ const assertCommandSegment = (value: unknown, path: string): void => {
       return;
     case "place-bomb":
       assertInteger(value.fuseSeconds, `${path}.fuseSeconds`, { min: 0 });
+      return;
+    case "self-destruct":
       return;
     default:
       throw new Error(`${path}.kind has an unsupported value.`);

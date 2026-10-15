@@ -111,6 +111,7 @@ describe("Phase 11.8.2 action strip", () => {
     );
     expect(without).not.toContain("> Zap");
     expect(without).not.toContain("> Bomb");
+    expect(without).not.toContain("Self Destruct");
 
     const withExtras = renderToStaticMarkup(
       <HelpProvider>
@@ -121,6 +122,7 @@ describe("Phase 11.8.2 action strip", () => {
           grenadeAmmo={3}
           zap={{ active: true, onStart: noop }}
           placeBomb={{ active: false, onStart: noop }}
+          selfDestruct={{ active: false, onStart: noop }}
         />
       </HelpProvider>,
     );
@@ -128,6 +130,7 @@ describe("Phase 11.8.2 action strip", () => {
     expect(withExtras).toContain("Bomb");
     expect(withExtras).toContain("Grenade Launcher · 3");
     expect(withExtras).toMatch(/aria-pressed="true"[^>]*title="Zap/);
+    expect(withExtras).toMatch(/aria-pressed="false"[^>]*title="Blow up this robot/);
   });
 });
 

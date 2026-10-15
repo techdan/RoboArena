@@ -112,9 +112,9 @@ planner (`seg74`/`seg80`) or AI emitter (`seg30`): all 13 `seg12:0x02A5` callers
 | Aspect | Value | Evidence | St |
 |---|---|---|---|
 | Menu | "Self Destruct..." id 733 (STR 824) → `seg74:0x0873`; confirm STR 2227; refused in dock | `seg74:0x08CA..0x08E4` | C |
-| Enabled when | `seg21:0x076C(team) != 1` (reads class table `0x0CA9`) | `seg77:0x0208..0x0223` | C (call) / U (meaning) |
+| Enabled when | The Team has **exactly one robot left alive**. `seg21:0x076C(team)` counts robots whose damage `+0x34` has not reached the class armor byte `0x0CA9 + class×4` and whose `+0x78` bit `0x10` is clear; `EnableMenuItem(733, count == 1 ? MF_ENABLED : MF_GRAYED)`. `+0x34` is accumulated damage (copied from `seg96:0x0231` at `seg95:0x0636`, clamped to armor in `seg6:0x5B09`). Bit `0x10` is set only when the sport type `+0x18` is 3 (`seg21:0x026D`), so it never applies in Survival. | `seg77:0x0208..0x0223`, `seg21:0x076C..0x07DB` | C |
 | Record | `[78]`, 20 ticks (desc row 78) | `seg74:0x08E2` | C |
-| Execute | `seg6:0x3541`: projectile **type 3** at own tile, impact now+10; type 3 → `seg6:0x5675` → blast `0x5D73` **category 2** at that tile (same table as Time Bomb). | `seg6:0x3579..0x35C3`, `seg6:0x5694..0x56A8` | C |
+| Execute | Called from the command-start switch (`seg6:0x4C7F`, `0x4E80`). `seg6:0x3541`: projectile **type 3** at own tile, impact now+10; type 3 → `seg6:0x5675` → blast `0x5D73` **category 2** at that tile (same table as Time Bomb). | `seg6:0x3579..0x35C3`, `seg6:0x5694..0x56A8` | C |
 | Self-damage | robot is at radius 0 → 120–151 before posture cut; usually fatal (armor ≤140) | blast loop includes all robots | I |
 
 ## 6. Sport verbs (STR 826-831) → selector 69
@@ -173,6 +173,5 @@ Menu build `seg79:0x1044..0x10B5` (jt `0x11B3`); WM_COMMAND routing `seg79:0x04C
 | Sels 40, 79 (rotating scan?) | Animation for 40 rotates heading every 5 ticks; 79 is outside every switch. No producer. |
 | Sels 65-68, 73, 75, 76, 77 | No producer/executor. 76's duration is p1×60 (special-cased in `seg13:0x08C5`), suggesting a "wait N s" verb never wired up. |
 | Initial `+58` bomb count and `+3A` / `+2C` option wiring | Fields confirmed; the setup code that copies DLG #46 checkboxes into them not traced. |
-| Self Destruct enable rule | `seg21:0x076C` not decoded. |
 | Sport item rules | Pickup/capture/scoring inside `seg28` (`0x0F0D`, `0x1140`, `0x11CA`, `0x1282`, `0x0C92`) not decoded. |
 | Icon art | Bitmap sets 110/111 glyph indices listed; images not dumped. |

@@ -38,6 +38,11 @@ describe("Phase 11.5 help content", () => {
       label: "Placing",
       value: "1.00s",
     });
+    expect(helpTopic("action:self-destruct").facts).toEqual([
+      { label: "Command", value: "0.33s" },
+      { label: "Blast", value: "0.17s after start" },
+      { label: "Blast radius", value: "4 tiles, every Side" },
+    ]);
     expect(helpTopicsForTab("formations").map((topic) => topic.id)).toEqual([
       "formation:beginner",
       "formation:standard",

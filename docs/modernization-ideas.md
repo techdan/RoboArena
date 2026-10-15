@@ -27,8 +27,6 @@ first and only then decide whether to modernize them.
   `seg6:0x2E04`).
 - The 5-tick bullet delay, projectile flight and scatter.
 - The Scan & Fire seven-shot cooldown.
-- Self Destruct (selector 78): which robots may use it is still unknown
-  (`seg21:0x076C`).
 - The periodic spotting refresh for commands other than Zap, and holding
   Scan & Fire checks to 5-tick steps (re-map README, "Still open").
 

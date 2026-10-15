@@ -107,6 +107,7 @@ describe("movie timeline", () => {
     expect(ANIMATION_CUES.zapped).toBe("zap");
     expect(ANIMATION_CUES["bomb-placed"]).toBe("bomb");
     expect(ANIMATION_CUES["bomb-exploded"]).toBe("explosion");
+    expect(ANIMATION_CUES["self-destructed"]).toBe("explosion");
   });
 
   it("keeps carried and placed bombs on the board until they explode", () => {

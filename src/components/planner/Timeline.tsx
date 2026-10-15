@@ -1,6 +1,6 @@
 "use client";
 
-import { Bomb, Crosshair, MapPin, Radar, Trash2, Zap } from "lucide-react";
+import { Bomb, Crosshair, MapPin, Radar, Skull, Trash2, Zap } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
@@ -67,6 +67,8 @@ const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) =>
           <i>{segment.fuseSeconds}</i>
         </span>
       );
+    case "self-destruct":
+      return <Skull size={15} aria-hidden="true" />;
   }
 };
 

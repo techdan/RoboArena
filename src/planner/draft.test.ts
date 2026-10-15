@@ -52,7 +52,7 @@ describe("planner draft persistence", () => {
     });
   });
 
-  it("restores Zap and Place Bomb commands and rejects out-of-range durations", () => {
+  it("restores Zap, Place Bomb and Self Destruct commands and rejects out-of-range durations", () => {
     const withCommands = (segments: readonly unknown[]) => ({
       turnNumber: 2,
       timelines: [{ robotId: "r1", segments }],
@@ -60,6 +60,7 @@ describe("planner draft persistence", () => {
     const valid = withCommands([
       { kind: "zap", seconds: 5 },
       { kind: "place-bomb", fuseSeconds: 0 },
+      { kind: "self-destruct" },
     ]);
     const storage = new MemoryStorage();
     storage.values.set(plannerDraftKey("match", "team"), JSON.stringify(valid));

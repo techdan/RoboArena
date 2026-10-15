@@ -12,6 +12,8 @@ import {
   MISSILE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
   PLACE_BOMB_COST_TICKS,
+  SELF_DESTRUCT_COST_TICKS,
+  SELF_DESTRUCT_IMPACT_DELAY_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   SIMULATION_STEP_TICKS,
@@ -62,6 +64,7 @@ const COMMAND_KINDS: readonly RobotCommandSegment["kind"][] = [
   "scan-and-fire",
   "zap",
   "place-bomb",
+  "self-destruct",
 ];
 const POSTURES: readonly RobotState["posture"][] = ["upright", "ducking", "crouching"];
 const HEADINGS: readonly RobotState["scanHeading"][] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -149,6 +152,13 @@ type PendingDamage =
       readonly targetId: string;
       readonly damage: number;
     };
+
+/** A Self Destruct blast (projectile type 3) waiting to land (seg6:0x3541). */
+interface PendingSelfDestruct {
+  readonly robotId: string;
+  readonly at: TileCoord;
+  readonly impactsAt: number;
+}
 
 /** A zap projectile (type 5) waiting to land (seg6:0x57CF). */
 interface PendingZap {
@@ -336,6 +346,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   /** Armed Time Bombs, in placement order (item slots 12..15, seg28:0x0D13). */
   let armedBombs: ArmedBomb[] = [...(state.armedBombs ?? [])];
   const pendingZaps: PendingZap[] = [];
+  const pendingSelfDestructs: PendingSelfDestruct[] = [];
+  /**
+   * seg21:0x076C enables Self Destruct only while a Team has exactly one robot
+   * whose damage has not reached its armor; judged from the planned position.
+   */
+  const lastStandingTeams = new Set(
+    state.teams
+      .filter((team) => team.robots.filter((robot) => robot.hp > 0).length === 1)
+      .map((team) => team.id),
+  );
 
   /**
    * Place Bomb (seg6:0x2B08 → seg28:0x0D13): arms the carried bomb on the
@@ -365,7 +385,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
     if (
       !COMMAND_KINDS.includes(command.kind) ||
-      ((command.kind === "zap" || command.kind === "place-bomb") && !formationRules)
+      ((command.kind === "zap" ||
+        command.kind === "place-bomb" ||
+        command.kind === "self-destruct") &&
+        !formationRules)
     ) {
       return malformed(
         "unsupported-command",
@@ -442,6 +465,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         );
       }
       completesAt = tick + PLACE_BOMB_COST_TICKS;
+    } else if (command.kind === "self-destruct") {
+      if (!isTileCoord(robot.position) || !lastStandingTeams.has(robot.teamId)) {
+        return malformed(
+          "illegal-command",
+          "Only a Team's last robot can self-destruct.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      completesAt = tick + SELF_DESTRUCT_COST_TICKS;
     } else if (command.kind === "move") {
       if (
         !Array.isArray(command.path) ||
@@ -635,6 +668,13 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     });
     if (command.kind === "place-bomb" && isTileCoord(robot.position)) {
       placeBomb(robot, robot.position, commandIndex, tick, command.fuseSeconds);
+    }
+    if (command.kind === "self-destruct" && isTileCoord(robot.position)) {
+      pendingSelfDestructs.push({
+        robotId: robot.id,
+        at: robot.position,
+        impactsAt: tick + SELF_DESTRUCT_IMPACT_DELAY_TICKS,
+      });
     }
     return null;
   };
@@ -1017,6 +1057,58 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
   };
 
+  /** Category 2 blast (seg6:0x5D73) shared by Time Bomb and Self Destruct; hits every Side. */
+  const resolveCategoryTwoBlast = (
+    at: TileCoord,
+    sourceId: string,
+    pendingDamage: PendingDamage[],
+  ): void => {
+    const potentialTargets = actors.flatMap((candidate) => {
+      const robot = robots.get(candidate.robotId);
+      if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
+      const cover = resolveCover({
+        from: at,
+        to: robot.position,
+        targetPosture: robot.posture,
+        arenaTileAt: (coord) => tileAt(state.arena, coord),
+      });
+      if (cover.outcome === "blocked") return [];
+      return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
+    });
+    for (const roll of resolveBlastProfile({
+      impact: at,
+      blast: TIME_BOMB_BLAST,
+      potentialTargets,
+      rng,
+    })) {
+      pendingDamage.push({
+        damageKind: "blast",
+        sourceId,
+        shotIndex: 0,
+        targetId: roll.robotId,
+        damage: roll.damage,
+        radius: roll.radius,
+      });
+    }
+  };
+
+  /**
+   * Self Destruct impact (seg6:0x3541 → seg6:0x5675): the type-3 projectile
+   * lands on the robot's tile 10 ticks after the command starts.
+   */
+  const resolveSelfDestructs = (tick: number, pendingDamage: PendingDamage[]): void => {
+    for (let index = 0; index < pendingSelfDestructs.length;) {
+      const blast = pendingSelfDestructs[index]!;
+      if (blast.impactsAt > tick) {
+        index += 1;
+        continue;
+      }
+      pendingSelfDestructs.splice(index, 1);
+      emit(tick, { kind: "self-destructed", robotId: blast.robotId, at: blast.at });
+      resolveCategoryTwoBlast(blast.at, blast.robotId, pendingDamage);
+    }
+  };
+
   /**
    * Time Bomb detonation scan (seg6:0x542E): a bomb whose time has come and is
    * still before turn end explodes through the shared blast loop, category 2,
@@ -1031,33 +1123,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         continue;
       }
       emit(tick, { kind: "bomb-exploded", bombId: bomb.id, ownerId: bomb.ownerId, at: bomb.at });
-      const potentialTargets = actors.flatMap((candidate) => {
-        const robot = robots.get(candidate.robotId);
-        if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
-        const cover = resolveCover({
-          from: bomb.at,
-          to: robot.position,
-          targetPosture: robot.posture,
-          arenaTileAt: (coord) => tileAt(state.arena, coord),
-        });
-        if (cover.outcome === "blocked") return [];
-        return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
-      });
-      for (const roll of resolveBlastProfile({
-        impact: bomb.at,
-        blast: TIME_BOMB_BLAST,
-        potentialTargets,
-        rng,
-      })) {
-        pendingDamage.push({
-          damageKind: "blast",
-          sourceId: bomb.ownerId,
-          shotIndex: 0,
-          targetId: roll.robotId,
-          damage: roll.damage,
-          radius: roll.radius,
-        });
-      }
+      resolveCategoryTwoBlast(bomb.at, bomb.ownerId, pendingDamage);
     }
     armedBombs = remaining;
   };
@@ -1373,12 +1439,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     resolveScanOpportunities(tick, pendingDamage);
     resolveZapImpacts(tick, pendingDamage);
     resolveBombDetonations(tick, pendingDamage);
+    resolveSelfDestructs(tick, pendingDamage);
 
     for (const { actor, active } of due) {
       if (
         active.command.kind !== "scan-and-fire" &&
         active.command.kind !== "zap" &&
-        active.command.kind !== "place-bomb"
+        active.command.kind !== "place-bomb" &&
+        active.command.kind !== "self-destruct"
       ) {
         continue;
       }
@@ -1408,6 +1476,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         new Map(due.map(({ actor, active }) => [actor.robotId, active.command.kind] as const)),
       );
     }
+  }
+
+  // seg6:0x6330 extends the movie so a blast launched near turn end still lands.
+  let endTick = turnDuration;
+  for (const blast of [...pendingSelfDestructs].sort((a, b) => a.impactsAt - b.impactsAt)) {
+    if (!pendingSelfDestructs.includes(blast)) continue;
+    const pendingDamage: PendingDamage[] = [];
+    resolveSelfDestructs(blast.impactsAt, pendingDamage);
+    applyPendingDamageAndDeaths(blast.impactsAt, pendingDamage);
+    if (pendingDamage.length > 0) updateVisibility(blast.impactsAt);
+    endTick = blast.impactsAt;
   }
 
   const finalTeams = state.teams.map((team) => ({
@@ -1447,12 +1526,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const enemy = robots.get(enemyId);
       if (!enemy || enemy.hp <= 0 || visibility?.visibleEnemies.has(enemyId)) continue;
       markerByEnemy.set(enemyId, { enemyId, at });
-      emit(turnDuration, { kind: "last-known-marker", teamId: team.id, enemyId, at });
+      emit(endTick, { kind: "last-known-marker", teamId: team.id, enemyId, at });
     }
     nextLastKnownMarkers.set(team.id, [...markerByEnemy.values()]);
   }
 
-  emit(turnDuration, { kind: "turn-end", turnNumber: state.turnNumber });
+  emit(endTick, { kind: "turn-end", turnNumber: state.turnNumber });
   // seg28:0x0C1A rebases bombs still armed onto the next turn's clock.
   const carriedBombs = armedBombs.map((bomb) => ({
     ...bomb,

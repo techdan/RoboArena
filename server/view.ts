@@ -104,6 +104,8 @@ const eventIsAuthorized = (
       return ownRobotIds.has(event.robotId);
     case "bomb-exploded":
       return ownRobotIds.has(event.ownerId) || targetIsVisible(event.at);
+    case "self-destructed":
+      return ownRobotIds.has(event.robotId) || targetIsVisible(event.at);
     case "damaged":
       return false;
   }
