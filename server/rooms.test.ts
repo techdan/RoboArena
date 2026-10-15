@@ -134,6 +134,32 @@ describe("authoritative rooms", () => {
     storage.close();
   });
 
+  it("carries the host's lobby arena look into every participant match snapshot", async () => {
+    const storage = new RoomStorage(":memory:");
+    const service = new RoomService(storage);
+    const host = service.createRoom("Red One", "red");
+    const guest = await service.joinRoom(host.room.code, "Blue Two", "blue");
+    const hostToken = requireToken(host.participantToken);
+    const guestToken = requireToken(guest.participantToken);
+    await expect(
+      service.updateConfig(host.room.code, guestToken, {
+        ...configForLength("melee"),
+        arenaTheme: "neon",
+      }),
+    ).rejects.toThrow();
+    const updated = await service.updateConfig(host.room.code, hostToken, {
+      ...configForLength("melee"),
+      arenaTheme: "factory",
+    });
+    expect(updated.room.config.arenaTheme).toBe("factory");
+    await service.setReady(host.room.code, hostToken, true);
+    await service.setReady(host.room.code, guestToken, true);
+    await service.startMatch(host.room.code, hostToken);
+    expect(service.getMatchSnapshot(host.room.code, hostToken, "s-1").arenaTheme).toBe("factory");
+    expect(service.getMatchSnapshot(host.room.code, guestToken, "s-2").arenaTheme).toBe("factory");
+    storage.close();
+  });
+
   it("rejects allied (duplicate Side or Home corner) seating before a match starts", () => {
     const seat = (
       id: string,

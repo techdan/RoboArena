@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Application, Texture } from "pixi.js";
+import { Box, Clapperboard, Map as MapIcon, Move3d, Square } from "lucide-react";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
+import type { BattleScene3D, CameraMode } from "../renderer3d/BattleScene3D";
+import { preferredMovieRenderer, type MovieRendererKind } from "../renderer3d/support";
+import { DEFAULT_ARENA_THEME, isArenaThemeId, type ArenaThemeId } from "../renderer3d/themes";
 import type { MatchState, Terrain, TileCoord } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
 import {
@@ -36,6 +40,10 @@ export interface MoviePlayerProps {
   readonly fps?: number;
   readonly initialTick?: number;
   readonly onTickChange?: (tick: number) => void;
+  /** Overrides the remembered/auto-detected renderer (tests, debug routes). */
+  readonly renderer?: MovieRendererKind;
+  /** The room's arena look for the 3D movie, chosen by the host in the lobby. */
+  readonly arenaTheme?: ArenaThemeId | undefined;
 }
 
 /** Zoom bounds shared by buttons, wheel, and pinch clamping. */
@@ -72,7 +80,35 @@ export function MoviePlayer({
   fps = 12,
   initialTick = 0,
   onTickChange,
+  renderer: rendererOverride,
+  arenaTheme: roomArenaTheme,
 }: MoviePlayerProps) {
+  const [rendererKind, setRendererKind] = useState<MovieRendererKind>(rendererOverride ?? "2d");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("director");
+  const [arenaTheme, setArenaTheme] = useState<ArenaThemeId>(roomArenaTheme ?? DEFAULT_ARENA_THEME);
+  const sceneRef = useRef<BattleScene3D | null>(null);
+  const is3d = rendererKind === "3d";
+  const is3dRef = useRef(is3d);
+  is3dRef.current = is3d;
+  // The 3D movie is the default wherever WebGL2 is available; the choice is
+  // remembered per browser. Decided after mount so server HTML stays stable.
+  useEffect(() => {
+    if (rendererOverride === undefined) setRendererKind(preferredMovieRenderer());
+  }, [rendererOverride]);
+  // The room host picks the arena look in the lobby; `?theme=` lets art-review
+  // links on the debug movie routes preview the others.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("theme");
+    setArenaTheme(isArenaThemeId(requested) ? requested : (roomArenaTheme ?? DEFAULT_ARENA_THEME));
+  }, [roomArenaTheme]);
+  const chooseRenderer = useCallback((kind: MovieRendererKind) => {
+    setRendererKind(kind);
+    try {
+      window.localStorage.setItem("roboarena.movieRenderer", kind);
+    } catch {
+      // Storage can be unavailable (private mode); the choice just isn't remembered.
+    }
+  }, []);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -222,6 +258,8 @@ export function MoviePlayer({
     const viewport = viewportRef.current;
     if (viewport === null) return;
     const onWheel = (event: WheelEvent) => {
+      // The 3D camera owns its own wheel dolly (OrbitControls).
+      if (is3dRef.current) return;
       event.preventDefault();
       const rect = viewport.getBoundingClientRect();
       const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -251,6 +289,75 @@ export function MoviePlayer({
   );
 
   useEffect(() => {
+    if (!is3d) return;
+    let disposed = false;
+    let scene: BattleScene3D | undefined;
+    setRendererStatus("loading");
+    setPlaying(false);
+    const host = hostRef.current;
+    if (host === null) return;
+    const initialize = async () => {
+      const { BattleScene3D } = await import("../renderer3d/BattleScene3D");
+      if (disposed) return;
+      // `?capture` freezes the render loop so automated visual checks can step
+      // scene time deterministically (software GL is too slow for real time).
+      const query = new URLSearchParams(window.location.search);
+      const capture = query.has("capture");
+      const { isRobotFamily } = await import("../renderer3d/models");
+      const requestedFamily = query.get("bots");
+      scene = await BattleScene3D.create(host, initialState, timeline, {
+        manualClock: capture,
+        theme: arenaTheme,
+        ...(isRobotFamily(requestedFamily) ? { robotFamily: requestedFamily } : {}),
+      });
+      if (disposed) {
+        scene.dispose();
+        return;
+      }
+      sceneRef.current = scene;
+      scene.onCameraModeChange = setCameraMode;
+      setCameraMode(scene.mode);
+      const observer = new ResizeObserver(() => scene?.resize());
+      observer.observe(host);
+      const created = scene;
+      renderSnapshotRef.current = (index, animate) =>
+        created.render(index, {
+          animate,
+          speed: speedRef.current,
+          reducedMotion: reducedMotionRef.current,
+        });
+      renderSnapshotRef.current(currentIndexRef.current, false);
+      if (capture) {
+        (window as unknown as { __movie3d?: unknown }).__movie3d = {
+          scene: created,
+          ticks: timeline.ticks,
+          show: (index: number, animate: boolean) => renderSnapshotRef.current(index, animate),
+        };
+      }
+      setRendererStatus("ready");
+      return () => observer.disconnect();
+    };
+    let cleanupObserver: (() => void) | undefined;
+    void initialize()
+      .then((cleanup) => {
+        cleanupObserver = cleanup;
+      })
+      .catch((error: unknown) => {
+        if (disposed) return;
+        console.error("Could not initialize the 3D movie renderer; using 2D.", error);
+        setRendererKind("2d");
+      });
+    return () => {
+      disposed = true;
+      cleanupObserver?.();
+      renderSnapshotRef.current = () => undefined;
+      sceneRef.current = null;
+      scene?.dispose();
+    };
+  }, [is3d, initialState, timeline, arenaTheme]);
+
+  useEffect(() => {
+    if (is3d) return;
     let disposed = false;
     let app: Application | undefined;
     setRendererStatus("loading");
@@ -395,7 +502,7 @@ export function MoviePlayer({
       appRef.current = null;
       app?.destroy(true);
     };
-  }, [initialIndex, initialState, timeline]);
+  }, [initialIndex, initialState, timeline, is3d]);
 
   // The CSS zoom transform stretches the finished canvas bitmap, so the
   // backing store must grow with zoom or the movie goes blocky. Follow the
@@ -404,7 +511,7 @@ export function MoviePlayer({
   // drawing buffer on every event.
   useEffect(() => {
     const app = appRef.current;
-    if (rendererStatus !== "ready" || app === null) return;
+    if (is3d || rendererStatus !== "ready" || app === null) return;
     const density = Math.min(window.devicePixelRatio, 2) * viewTransform.scale;
     const resolution = Math.min(4, Math.max(1, Math.ceil(density * 2) / 2));
     if (app.renderer.resolution === resolution) return;
@@ -413,7 +520,13 @@ export function MoviePlayer({
       initialState.arena.height * MOVIE_TILE_SIZE,
       resolution,
     );
-  }, [rendererStatus, viewTransform.scale, initialState.arena.width, initialState.arena.height]);
+  }, [
+    is3d,
+    rendererStatus,
+    viewTransform.scale,
+    initialState.arena.width,
+    initialState.arena.height,
+  ]);
 
   const tick = timeline.ticks[currentIndex] ?? 0;
   useEffect(() => onTickChange?.(tick), [onTickChange, tick]);
@@ -421,22 +534,29 @@ export function MoviePlayer({
     .map((event) => ANIMATION_CUES[event.kind])
     .filter((cue) => cue !== "none")
     .join(" ");
+  const cinemaWidth = Math.max(initialState.arena.width * MOVIE_TILE_SIZE, 900);
   return (
     <section
-      className="movie-shell"
+      className={is3d ? "movie-shell movie-shell-3d" : "movie-shell"}
       data-movie-ready={rendererStatus === "ready" ? "true" : "false"}
+      data-movie-renderer={rendererKind}
       data-animation-cues={animationCues}
     >
       <div
         ref={viewportRef}
         className="movie-viewport"
-        style={{
-          width: initialState.arena.width * MOVIE_TILE_SIZE,
-          height: initialState.arena.height * MOVIE_TILE_SIZE,
-          touchAction: "none",
-          cursor: grabbing ? "grabbing" : viewTransform.scale > 1 ? "grab" : "default",
-        }}
+        style={
+          is3d
+            ? { width: cinemaWidth, aspectRatio: "16 / 10", touchAction: "none" }
+            : {
+                width: initialState.arena.width * MOVIE_TILE_SIZE,
+                height: initialState.arena.height * MOVIE_TILE_SIZE,
+                touchAction: "none",
+                cursor: grabbing ? "grabbing" : viewTransform.scale > 1 ? "grab" : "default",
+              }
+        }
         onPointerDown={(event) => {
+          if (is3d) return;
           // Mouse: only the primary button drags. Touch/pen: always pan/pinch.
           if (event.pointerType === "mouse" && event.button !== 0) return;
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -467,7 +587,7 @@ export function MoviePlayer({
           }
         }}
         onPointerMove={(event) => {
-          if (!viewPointersRef.current.has(event.pointerId)) return;
+          if (is3d || !viewPointersRef.current.has(event.pointerId)) return;
           const point = { x: event.clientX, y: event.clientY };
           viewPointersRef.current.set(event.pointerId, point);
           const points = [...viewPointersRef.current.values()];
@@ -520,12 +640,75 @@ export function MoviePlayer({
         }}
       >
         <div
+          key={rendererKind}
           className="movie-canvas-content"
-          style={{
-            transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
-          }}
+          style={
+            is3d
+              ? undefined
+              : {
+                  transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
+                }
+          }
         >
           <div ref={hostRef} className="absolute inset-0" />
+        </div>
+        <div className="movie-view-toolbar" role="toolbar" aria-label="Movie view">
+          <div className="movie-view-group" role="group" aria-label="Renderer">
+            <button
+              type="button"
+              className="movie-view-button"
+              aria-pressed={is3d}
+              onClick={() => chooseRenderer("3d")}
+              title="Cinematic 3D arena"
+            >
+              <Box aria-hidden="true" className="size-3.5" />
+              3D
+            </button>
+            <button
+              type="button"
+              className="movie-view-button"
+              aria-pressed={!is3d}
+              onClick={() => chooseRenderer("2d")}
+              title="Top-down tactical board"
+            >
+              <Square aria-hidden="true" className="size-3.5" />
+              2D
+            </button>
+          </div>
+          {is3d ? (
+            <div className="movie-view-group" role="group" aria-label="Camera">
+              <button
+                type="button"
+                className="movie-view-button"
+                aria-pressed={cameraMode === "director"}
+                onClick={() => sceneRef.current?.setCameraMode("director")}
+                title="Director camera follows the action"
+              >
+                <Clapperboard aria-hidden="true" className="size-3.5" />
+                Director
+              </button>
+              <button
+                type="button"
+                className="movie-view-button"
+                aria-pressed={cameraMode === "overview"}
+                onClick={() => sceneRef.current?.setCameraMode("overview")}
+                title="Whole-arena overview"
+              >
+                <MapIcon aria-hidden="true" className="size-3.5" />
+                Overview
+              </button>
+              <button
+                type="button"
+                className="movie-view-button"
+                aria-pressed={cameraMode === "free"}
+                onClick={() => sceneRef.current?.setCameraMode("free")}
+                title="Free camera: drag to orbit, right-drag to pan, scroll to zoom"
+              >
+                <Move3d aria-hidden="true" className="size-3.5" />
+                Free
+              </button>
+            </div>
+          ) : null}
         </div>
         {rendererStatus !== "ready" ? (
           <div className="absolute inset-0 grid place-items-center bg-[#151816]/95">
@@ -543,9 +726,9 @@ export function MoviePlayer({
         tick={tick}
         speed={speed}
         compressIdle={compressIdle}
-        zoom={viewTransform.scale}
-        canZoomIn={viewTransform.scale < MAX_ZOOM}
-        canZoomOut={viewTransform.scale > MIN_ZOOM}
+        zoom={is3d ? 1 : viewTransform.scale}
+        canZoomIn={is3d || viewTransform.scale < MAX_ZOOM}
+        canZoomOut={is3d || viewTransform.scale > MIN_ZOOM}
         onTogglePlaying={() => setPlaying((value) => !value)}
         onStepBack={() => seek(currentIndex - 1)}
         onStepForward={() => seek(currentIndex + 1)}
@@ -553,9 +736,9 @@ export function MoviePlayer({
         onScrub={seek}
         onSpeedChange={setSpeed}
         onCompressIdleChange={setCompressIdle}
-        onZoomIn={() => zoomByStep(ZOOM_STEP)}
-        onZoomOut={() => zoomByStep(1 / ZOOM_STEP)}
-        onZoomReset={resetView}
+        onZoomIn={() => (is3d ? sceneRef.current?.dolly(1 / ZOOM_STEP) : zoomByStep(ZOOM_STEP))}
+        onZoomOut={() => (is3d ? sceneRef.current?.dolly(ZOOM_STEP) : zoomByStep(1 / ZOOM_STEP))}
+        onZoomReset={() => (is3d ? sceneRef.current?.setCameraMode("director") : resetView())}
       />
       <p className="sr-only" aria-live="polite">
         Movie at tick {tick}

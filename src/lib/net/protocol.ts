@@ -17,6 +17,8 @@ import {
   playerNameSchema,
   roomCodeSchema,
   roomConfigSchema,
+  arenaThemeSchema,
+  type ArenaThemeName,
   type HomeSlot,
   type PlayerColor,
   type RoomConfig,
@@ -291,6 +293,8 @@ export interface MatchSnapshotMessage {
   readonly locked: boolean;
   readonly lockedPlayerIds: readonly string[];
   readonly unseenTurns: readonly ParticipantTurnResult[];
+  /** The host's arena look for the 3D movie; absent for rooms made before looks existed. */
+  readonly arenaTheme?: ArenaThemeName;
   readonly outcome?: "won" | "draw";
   readonly winningSide?: 1 | 2 | 3 | 4;
   readonly ceremonyScores?: readonly {
@@ -712,6 +716,7 @@ const matchSnapshotSchema = z
         })
         .strict(),
     ),
+    arenaTheme: arenaThemeSchema.optional(),
     outcome: z.enum(["won", "draw"]).optional(),
     winningSide: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
     ceremonyScores: z
