@@ -21,13 +21,15 @@
     "test:watch": "vitest",
     "scenario": "tsx src/scenario/cli.ts",
     "typecheck": "tsc --noEmit --incremental false && tsc -p worker --noEmit --incremental false",
-    "dev:rooms": "wrangler dev",
-    "deploy:rooms": "wrangler deploy"
+    "dev:rooms": "wrangler dev -c worker/wrangler.jsonc",
+    "deploy:rooms": "wrangler deploy -c worker/wrangler.jsonc",
+    "preview:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "gsap": "^3.15.0",
     "lucide-react": "^1.24.0",
-    "next": "^16.2.10",
+    "next": "^16.3.8",
     "pixi.js": "^8.19.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -37,6 +39,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261015.1",
     "@eslint/js": "^10.0.1",
+    "@opennextjs/cloudflare": "^1.20.10",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.0.0",
