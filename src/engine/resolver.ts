@@ -1412,6 +1412,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         teams,
         spotted: showAllEnemies ? everyone : spotted,
         rollByte: () => rng.nextUint32() & 0xff,
+        recordSight: (firstId, secondId, sight) => {
+          sightCache.set(`${firstId}|${secondId}`, sight);
+          sightCache.set(`${secondId}|${firstId}`, sight);
+        },
       });
       spotted = showAllEnemies ? everyone : rolled;
     } else {
@@ -1472,6 +1476,13 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
    */
   const timingActivity = new Map<string, SpottingActivity>();
   const timingMoved = new Set<string>();
+
+  /**
+   * Pair sight cache `ctx+0x1B0`, zeroed when the movie starts
+   * (seg39:0x0354) and written by the spotting pass. Scan & Fire reads it
+   * during dispatch, so it holds the sight as of the previous step's pass.
+   */
+  const sightCache = new Map<string, number>();
 
   /**
    * Periodic refresh, seg6:0x4091: before turn length and once the timer is
@@ -1952,6 +1963,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     if (tick < program.cooldownUntil) return;
     const weapon = WEAPONS[active.command.weapon];
     if (shooter.ammo[weapon.id] === 0) return;
+    // seg18:0x072C through seg96:0x1FC5: only robots the shooter's Team saw
+    // in the last spotting pass are candidates, at the cached sight value.
+    const teamSees = spotted.get(shooter.teamId);
     const acquired = findScanAndFireTarget({
       arena: state.arena,
       shooter: { ...shooter, position: shooter.position },
@@ -1961,6 +1975,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return robot ? [{ side: candidate.side, robot }] : [];
       }),
       maxDistance: Math.min(active.command.maxDistance, weapon.maxRange),
+      sightOf: (target) =>
+        teamSees?.has(target.id) ? (sightCache.get(`${shooter.id}|${target.id}`) ?? 0) : 0,
     });
     if (!acquired) {
       // seg6:0x3EE6: an idle direct-fire step 20 or more ticks past the

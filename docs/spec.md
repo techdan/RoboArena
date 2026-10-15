@@ -788,6 +788,21 @@ The refresh draw comes at the robot's place in dispatch order, before any
 other draw its handler makes. With Show Enemy Positions the pass still runs
 and draws its rolls before every enemy is marked seen again (**inferred**).
 
+**Scan & Fire acquisition** (`seg18:0x072C`). Scan & Fire looks for a target
+only on its 5-tick steps, during dispatch, before that step's spotting pass:
+
+- a candidate must be an enemy its Team saw in the last spotting pass (every
+  enemy with Show Enemy Positions); others are skipped (`seg96:0x1FC5`);
+- its sight value is the spotting pass's cached pair value (`ctx+0x1B0`),
+  recomputed in the pass only for pairs where either robot moved
+  (`seg96:0x0900`), so a robot that switched tiles earlier in this step's
+  dispatch is ranked and scored with the sight of its old tile;
+- the cache is zeroed when the movie starts (`seg39:0x0354`), so nothing can
+  be acquired on tick 0; the earliest Scan & Fire shot is on tick 5.
+
+Range, cone, the +2 rank outside the inner arc and the sight tie-break are as
+in §6. The cached sight also feeds the hit score's sight penalty.
+
 **Projectiles.** Every shot is a queued projectile with an impact tick. The
 queue is sorted by impact tick and a new projectile goes before others due on
 the same tick, so equal impacts land newest first (`seg6:0x1AD3`). Because

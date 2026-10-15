@@ -13,6 +13,8 @@ import {
 } from "./originalTiming.js";
 import { createReplayLog, verifyReplay } from "./replay.js";
 import { resolveTurn, type TurnResult } from "./resolver.js";
+import { findScanAndFireTarget } from "./scanAndFire.js";
+import { updateSpotting } from "./spotting.js";
 import type {
   Arena,
   GameConfig,
@@ -916,6 +918,137 @@ describe("spotting refresh and activity flags (seg6:0x4091, seg6:0x4F34, seg96:0
       ],
     };
     const replay = createReplayLog({ initialState: state, turns: [{ seed: "f", orders }] });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});
+
+describe("step-only Scan & Fire on the spotted set and cached sight (seg18:0x072C, seg96:0x1FC5)", () => {
+  const scanOrders = (robotId: string): TurnOrders => ({
+    turnNumber: 1,
+    timelines: [
+      {
+        robotId,
+        segments: [{ kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 3 }],
+      },
+    ],
+  });
+  const withRevision = (state: MatchState, rulesRevision: 3 | 4): MatchState => ({
+    ...state,
+    config: { ...state.config, rulesRevision },
+  });
+
+  it("cannot acquire on tick 0, before any spotting pass filled the cache (seg39:0x0354)", () => {
+    const close = (rulesRevision: 3 | 4) =>
+      withRevision(
+        revision4(
+          makeMatch({
+            arena: makeOpenArena(12, 12),
+            teamOneRobots: [makeRobot("s", "team-1", "rifle", { x: 2, y: 5 })],
+            teamTwoRobots: [makeRobot("t", "team-2", "rifle", { x: 5, y: 5 })],
+          }),
+        ),
+        rulesRevision,
+      );
+    const firstShot = (rulesRevision: 3 | 4) =>
+      ofKind(resolved(close(rulesRevision), scanOrders("s")).events, "fired")[0]?.tick;
+    expect(firstShot(4)).toBe(5);
+    expect(firstShot(3)).toBe(0);
+  });
+
+  it("ignores an enemy its Team has not spotted", () => {
+    // t crouches on a Low Wall behind two Bushes, 16 tiles out: never spotted.
+    const hidden = (rulesRevision: 3 | 4) =>
+      withRevision(
+        revision4(
+          makeMatch({
+            arena: withTerrain(makeOpenArena(20, 12), [
+              [10, 5, "bush"],
+              [12, 5, "bush"],
+              [17, 5, "low-wall"],
+            ]),
+            teamOneRobots: [makeRobot("s", "team-1", "rifle", { x: 1, y: 5 })],
+            teamTwoRobots: [
+              makeRobot("t", "team-2", "rifle", { x: 17, y: 5 }, { posture: "crouching" }),
+            ],
+          }),
+        ),
+        rulesRevision,
+      );
+    const revision4Events = resolved(hidden(4), scanOrders("s")).events;
+    expect(ofKind(revision4Events, "enemy-spotted")).toEqual([]);
+    expect(ofKind(revision4Events, "fired")).toEqual([]);
+    expect(ofKind(resolved(hidden(3), scanOrders("s")).events, "fired").length).toBeGreaterThan(0);
+  });
+
+  it("records pair sight only where a robot moved (seg96:0x0900)", () => {
+    const arena = withTerrain(makeOpenArena(12, 12), [[4, 5, "bush"]]);
+    const robot = (id: string, x: number, moved: boolean) => ({
+      robot: { ...makeRobot(id, id, "rifle", { x, y: 5 }), position: { x, y: 5 } },
+      moved,
+      activity: 0 as const,
+    });
+    const recorded: [string, string, number][] = [];
+    updateSpotting({
+      arena,
+      teams: [
+        { id: "a", side: 1, robotIds: ["a"], robots: [robot("a", 2, false)], dirty: true },
+        {
+          id: "b",
+          side: 2,
+          robotIds: ["b", "c"],
+          robots: [robot("b", 6, true), robot("c", 8, false)],
+          dirty: true,
+        },
+      ],
+      spotted: new Map(),
+      rollByte: () => 0,
+      recordSight: (first, second, sight) => recorded.push([first, second, sight]),
+    });
+    expect(recorded).toEqual([["a", "b", 13]]);
+  });
+
+  it("acquires on the sight value it is given and skips a 0", () => {
+    const shooter = {
+      ...makeRobot("s", "team-1", "rifle", { x: 2, y: 5 }),
+      position: { x: 2, y: 5 },
+    };
+    const candidates = [
+      { side: 2, robot: makeRobot("near", "team-2", "rifle", { x: 4, y: 5 }) },
+      { side: 2, robot: makeRobot("far", "team-2", "rifle", { x: 6, y: 5 }) },
+    ];
+    const target = findScanAndFireTarget({
+      arena: makeOpenArena(12, 12),
+      shooter,
+      shooterSide: 1,
+      candidates,
+      maxDistance: 18,
+      sightOf: (robot) => (robot.id === "near" ? 0 : 9),
+    });
+    expect(target).toMatchObject({ robot: { id: "far" }, scanStrength: 9 });
+  });
+
+  it("verifies in a replay", () => {
+    const state = revision4(
+      makeMatch({
+        arena: withTerrain(makeOpenArena(12, 12), [[5, 4, "bush"]]),
+        teamOneRobots: [makeRobot("t", "team-1", "rifle", { x: 6, y: 5 }, { scanHeading: "S" })],
+        teamTwoRobots: [makeRobot("s", "team-2", "auto", { x: 2, y: 5 })],
+      }),
+    );
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "t",
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 6, y: 4 } }] }],
+        },
+        {
+          robotId: "s",
+          segments: [{ kind: "scan-and-fire", weapon: "auto-rifle", maxDistance: 18, seconds: 2 }],
+        },
+      ],
+    };
+    const replay = createReplayLog({ initialState: state, turns: [{ seed: "g", orders }] });
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });

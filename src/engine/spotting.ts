@@ -89,6 +89,12 @@ export const updateSpotting = (input: {
   readonly teams: readonly SpottingTeam[];
   readonly spotted: ReadonlyMap<string, ReadonlySet<string>>;
   readonly rollByte: () => number;
+  /**
+   * Rules revision 4: called with the sight value of every pair the pass
+   * evaluates where either robot moved, the cases where seg96:0x0900
+   * recomputes the cached value (written for both orders, seg96:0x0952).
+   */
+  readonly recordSight?: (firstId: string, secondId: string, sight: number) => void;
 }): Map<string, Set<string>> => {
   const { arena, teams, rollByte } = input;
   const next = new Map<string, Set<string>>();
@@ -140,6 +146,7 @@ export const updateSpotting = (input: {
       for (const a of teamA.robots) {
         for (const b of teamB.robots) {
           const sight = scanSightStrength(arena, a.robot.position, b.robot.position);
+          if (a.moved || b.moved) input.recordSight?.(a.robot.id, b.robot.id, sight);
           if (sight === 0) continue;
           const coverA = coverClassOf(arena, b.robot.position, a);
           const coverB = coverClassOf(arena, a.robot.position, b);
