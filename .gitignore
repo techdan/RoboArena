@@ -54,3 +54,8 @@ data/*.sqlite*
 # Throwaway graphics spike output — regenerate with
 #   node scripts/spike/generate-demo-terrain.mjs [arena]
 public/spike/
+
+# Cloudflare local state and build output
+.wrangler/
+.open-next/
+.dev.vars
