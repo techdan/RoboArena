@@ -713,3 +713,86 @@ describe("the movie tail after turn length (seg6:0x47DE, seg6:0x4A60, seg6:0x633
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });
+
+describe("Scan & Fire seven-shot pause and shared cooldown (seg6:0x3D79, seg6:0x3E33)", () => {
+  const gunner = (robotClass: "auto" | "rifle" | "missile") =>
+    revision4(
+      makeMatch({
+        arena: makeOpenArena(12, 12),
+        turnLengthSeconds: 8,
+        teamOneRobots: [makeRobot("g", "team-1", robotClass, { x: 2, y: 5 })],
+        // Enough armor in range to soak a dozen hits.
+        teamTwoRobots: [
+          { x: 6, y: 5 },
+          { x: 6, y: 4 },
+          { x: 6, y: 6 },
+          { x: 7, y: 5 },
+          { x: 8, y: 5 },
+        ].map((at, index) => makeRobot(`t${index}`, "team-2", "rifle", at)),
+      }),
+    );
+  const scan = (weapon: WeaponId, seconds: number) =>
+    ({ kind: "scan-and-fire", weapon, maxDistance: 18, seconds }) as const;
+  const fireTicks = (events: readonly ResolutionEvent[], weapon?: WeaponId) =>
+    ofKind(events, "fired")
+      .filter((event) => weapon === undefined || event.weapon === weapon)
+      .map((event) => event.tick);
+  const gaps = (ticks: readonly number[]) => ticks.slice(1).map((tick, i) => tick - ticks[i]!);
+
+  it("pauses an Auto Rifle 30 + 5·(r&3) extra after the seventh shot", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "g", segments: [scan("auto-rifle", 4)] }],
+    };
+    const ticks = fireTicks(resolved(gunner("auto"), orders).events);
+    const steps = gaps(ticks);
+    expect(steps.slice(0, 6)).toEqual([10, 10, 10, 10, 10, 10]);
+    expect([40, 45, 50, 55]).toContain(steps[6]);
+  });
+
+  it("pauses a Rifle 50 + 5·(r&7) extra after the seventh shot", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "g", segments: [scan("rifle", 7)] }],
+    };
+    const steps = gaps(fireTicks(resolved(gunner("rifle"), orders).events));
+    expect(steps.slice(0, 6)).toEqual([30, 30, 30, 30, 30, 30]);
+    expect(steps[6]).toBeGreaterThanOrEqual(80);
+    expect(steps[6]).toBeLessThanOrEqual(115);
+  });
+
+  it("carries the cooldown into the next command (shared +1A)", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "g", segments: [scan("missile-launcher", 1), scan("rifle", 1)] }],
+    };
+    const events = resolved(gunner("missile"), orders).events;
+    const [missile] = fireTicks(events, "missile-launcher");
+    const [rifle] = fireTicks(events, "rifle");
+    // The missile's 30 + 40 cooldown outlasts its 60-tick command.
+    expect(rifle).toBe(missile! + 70);
+    expect(rifle).toBeGreaterThan(60);
+  });
+
+  it("keeps revision 3 firing at the Aim interval with no pause", () => {
+    const base = gunner("auto");
+    const state = { ...base, config: { ...base.config, rulesRevision: 3 as const } };
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "g", segments: [scan("auto-rifle", 2)] }],
+    };
+    expect(new Set(gaps(fireTicks(resolved(state, orders).events)))).toEqual(new Set([10]));
+  });
+
+  it("verifies in a replay", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "g", segments: [scan("auto-rifle", 3), scan("auto-rifle", 2)] }],
+    };
+    const replay = createReplayLog({
+      initialState: gunner("auto"),
+      turns: [{ seed: "e", orders }],
+    });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});

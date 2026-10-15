@@ -11,6 +11,11 @@ import {
   BOMB_MAX_FUSE_SECONDS,
   BULLET_IMPACT_DELAY_TICKS,
   MOVIE_TAIL_TICKS,
+  SCAN_FIRE_DECAY_IDLE_TICKS,
+  SCAN_FIRE_PAUSE_AFTER_SHOTS,
+  SCAN_FIRE_PAUSES,
+  type ScanFirePause,
+  WEAPON_TIMING,
   MISSILE_SCAN_MIN_DISTANCE,
   EXPLOSIVE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
@@ -1414,6 +1419,21 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   // checks Time Bombs (seg6:0x50D3), then lands due projectiles
   // (seg6:0x556F), then runs the spotting pass (seg6:0x5898).
 
+  /**
+   * Program object fields that outlive a command within the turn: the shared
+   * fire and zap cooldown `+1A` and the Scan & Fire shot counter `+1C`. Both
+   * start at 0 each turn (seg12:0x0000, seg88:0x03CD).
+   */
+  const timingPrograms = new Map<string, { cooldownUntil: number; scanShots: number }>();
+  const timingProgramOf = (robotId: string): { cooldownUntil: number; scanShots: number } => {
+    let program = timingPrograms.get(robotId);
+    if (!program) {
+      program = { cooldownUntil: 0, scanShots: 0 };
+      timingPrograms.set(robotId, program);
+    }
+    return program;
+  };
+
   /** Commands that completed on the step being resolved, for the spotting pass. */
   const timingDueKinds = new Map<string, RobotCommandSegment["kind"]>();
 
@@ -1593,9 +1613,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     readonly fireMode: "aim" | "scan";
     readonly scanStrength?: number;
     readonly scanMaxDistance?: number;
-  }): void => {
+  }): boolean => {
     const shooter = robots.get(input.actor.robotId);
-    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return;
+    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return false;
     firedThisTick.add(shooter.id);
     emit(input.tick, {
       kind: "fired",
@@ -1664,6 +1684,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
             },
       );
     }
+    return true;
   };
 
   /**
@@ -1674,13 +1695,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
    * distance. Aim & Fire scatters around the aim tile, Scan & Fire around the
    * acquired robot's tile.
    */
-  const launchExplosive = (input: Parameters<typeof launchBullet>[0]): void => {
+  const launchExplosive = (input: Parameters<typeof launchBullet>[0]): boolean => {
     const shooter = robots.get(input.actor.robotId);
-    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return;
+    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return false;
     const weaponId = input.weapon.id;
-    if (weaponId !== "grenade-launcher" && weaponId !== "missile-launcher") return;
+    if (weaponId !== "grenade-launcher" && weaponId !== "missile-launcher") return false;
     const ammo = shooter.ammo[weaponId];
-    if (ammo === 0) return;
+    // seg6:0x218D, seg12:0x0466: with no shells left the record does nothing.
+    if (ammo === 0) return false;
     firedThisTick.add(shooter.id);
     emit(input.tick, {
       kind: "fired",
@@ -1735,12 +1757,31 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         at: landing,
       });
     }
+    return true;
   };
 
-  /** Fires one Aim or Scan action with the given weapon. */
+  /**
+   * Fires one Aim or Scan action with the given weapon, then sets the shared
+   * cooldown `+1A`. Direct fire uses the weapon's Aim duration (seg6:0x3D79)
+   * and Scan & Fire also counts the shot, pausing after the seventh
+   * (seg6:0x3E33); grenades and missiles wait 30, plus 50 or 40 after a scan
+   * shot (seg6:0x3F43, seg6:0x3FA4).
+   */
   const fireTimingWeapon = (input: Parameters<typeof launchBullet>[0]): void => {
-    if (input.weapon.blast) launchExplosive(input);
-    else launchBullet(input);
+    const fired = input.weapon.blast ? launchExplosive(input) : launchBullet(input);
+    if (!fired) return;
+    const program = timingProgramOf(input.actor.robotId);
+    const timing = WEAPON_TIMING[input.weapon.id];
+    program.cooldownUntil =
+      input.tick +
+      (input.fireMode === "scan" ? timing.scanFiringIntervalTicks : timing.firingIntervalTicks);
+    const pause = (SCAN_FIRE_PAUSES as Partial<Record<WeaponId, ScanFirePause>>)[input.weapon.id];
+    if (input.fireMode !== "scan" || pause === undefined) return;
+    program.scanShots += 1;
+    if (program.scanShots > SCAN_FIRE_PAUSE_AFTER_SHOTS) {
+      program.cooldownUntil += pause.base + SIMULATION_STEP_TICKS * (rng.nextUint32() & pause.mask);
+      program.scanShots = rng.nextUint32() & pause.resetMask;
+    }
   };
 
   /** Command-end path, seg6:0x4A29..0x4A8F: apply the finished record and advance. */
@@ -1837,13 +1878,15 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       !active ||
       active.command.kind !== "scan-and-fire" ||
       tick >= turnDuration ||
-      active.nextScanAt === null ||
-      tick < active.nextScanAt
+      active.nextScanAt === null
     ) {
       return;
     }
     const shooter = robots.get(actor.robotId);
     if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return;
+    // Shared cooldown gate `now >= +1A` (seg6:0x1FE3, 0x2424, 0x28F9).
+    const program = timingProgramOf(shooter.id);
+    if (tick < program.cooldownUntil) return;
     const weapon = WEAPONS[active.command.weapon];
     if (shooter.ammo[weapon.id] === 0) return;
     const acquired = findScanAndFireTarget({
@@ -1856,12 +1899,21 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       }),
       maxDistance: Math.min(active.command.maxDistance, weapon.maxRange),
     });
-    // Grenade (seg6:0x24FA) and missile (seg6:0x29CF) Scan & Fire hold fire
-    // while the target is closer than 2 and look again on the next step.
-    if (!acquired || (weapon.blast && acquired.distance < EXPLOSIVE_SCAN_MIN_DISTANCE)) {
-      cursor.active = { ...active, nextScanAt: tick + SIMULATION_STEP_TICKS };
+    if (!acquired) {
+      // seg6:0x3EE6: an idle direct-fire step 20 or more ticks past the
+      // cooldown takes one off the shot counter.
+      if (
+        !weapon.blast &&
+        tick - program.cooldownUntil >= SCAN_FIRE_DECAY_IDLE_TICKS &&
+        program.scanShots > 0
+      ) {
+        program.scanShots -= 1;
+      }
       return;
     }
+    // Grenade (seg6:0x24FA) and missile (seg6:0x29CF) Scan & Fire hold fire
+    // while the target is closer than 2 and look again on the next step.
+    if (weapon.blast && acquired.distance < EXPLOSIVE_SCAN_MIN_DISTANCE) return;
     emit(tick, {
       kind: "scan-target-acquired",
       shooterId: shooter.id,
@@ -1879,25 +1931,18 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       scanStrength: acquired.scanStrength,
       scanMaxDistance: active.command.maxDistance,
     });
-    if (cursor.active === active) {
-      cursor.active = { ...active, nextScanAt: tick + weapon.scanFiringIntervalTicks };
-    }
   };
 
   /** Zap on one step (seg6:0x2BD9). */
   const runTimingZap = (actor: Actor, cursor: Cursor, tick: number): void => {
     const active = cursor.active;
-    if (
-      !active ||
-      active.command.kind !== "zap" ||
-      tick >= turnDuration ||
-      active.nextZapAt === undefined ||
-      tick < active.nextZapAt
-    ) {
+    if (!active || active.command.kind !== "zap" || tick >= turnDuration) {
       return;
     }
     const zapper = robots.get(actor.robotId);
     if (!zapper || zapper.hp <= 0 || !isTileCoord(zapper.position)) return;
+    const program = timingProgramOf(zapper.id);
+    if (tick < program.cooldownUntil) return;
     if (tick >= (active.nextRefreshAt ?? tick)) {
       refreshedThisStep.add(zapper.id);
       cursor.active = {
@@ -1916,7 +1961,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     extendMovie(tick + ZAP_IMPACT_DELAY_TICKS);
     firedThisTick.add(zapper.id);
     emit(tick, { kind: "zapped", shooterId: zapper.id, at: zapper.position });
-    cursor.active = { ...cursor.active!, nextZapAt: tick + ZAP_COOLDOWN_TICKS };
+    // seg6:0x4005: dur(3) with parameter 0 is 0, plus 60.
+    program.cooldownUntil = tick + ZAP_COOLDOWN_TICKS;
   };
 
   /** One robot's turn in the step, seg6:0x4998. */

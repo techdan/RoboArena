@@ -128,6 +128,36 @@ export const BULLET_IMPACT_DELAY_TICKS = 5;
 export const MOVIE_TAIL_TICKS = 150;
 
 /**
+ * Revision 4 Scan & Fire pause, seg6:0x3E33. Each direct-fire Scan & Fire
+ * shot counts on the robot's program (`+1C`); the seventh in a row adds a
+ * pause of `base + 5·(rand & mask)` ticks to the cooldown, then the counter
+ * restarts at `rand & resetMask` (pause drawn first). DGROUP 0x14BA, the
+ * negotiated protocol level, is 2 in any same-version game, so the
+ * per-weapon rows apply.
+ */
+export interface ScanFirePause {
+  readonly base: number;
+  readonly mask: number;
+  readonly resetMask: number;
+}
+export const SCAN_FIRE_PAUSES: Readonly<
+  Record<"rifle" | "burst-gun" | "auto-rifle", ScanFirePause>
+> = {
+  "auto-rifle": { base: 30, mask: 3, resetMask: 1 },
+  "burst-gun": { base: 40, mask: 3, resetMask: 3 },
+  rifle: { base: 50, mask: 7, resetMask: 3 },
+};
+
+/** The pause comes when the shot counter passes 6, on the seventh shot (seg6:0x3E33). */
+export const SCAN_FIRE_PAUSE_AFTER_SHOTS = 6;
+
+/**
+ * seg6:0x3EE6: a direct-fire Scan & Fire step with no target, 20 or more
+ * ticks after the cooldown ran out, takes one off the shot counter.
+ */
+export const SCAN_FIRE_DECAY_IDLE_TICKS = 20;
+
+/**
  * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
  * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
  * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the

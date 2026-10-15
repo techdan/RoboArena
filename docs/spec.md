@@ -797,6 +797,22 @@ impacts land.
     `5·(d >> 1) + 10`, with d the floored distance to the landing tile.
   - Grenade and missile Scan & Fire both hold fire while the target is closer
     than 2 tiles (`seg6:0x24FA`, `seg6:0x29CF`).
+- **One cooldown per robot.** Every shot and zap sets the robot's cooldown
+  (program `+1A`), which lasts for the rest of the turn across commands:
+  direct fire the weapon's Aim duration (`seg6:0x3D79`), a grenade 30 (+50
+  after a scan shot, `seg6:0x3F43`), a missile 30 (+40, `seg6:0x3FA4`), a zap
+  60 (`seg6:0x4005`). Scan & Fire and Zap check it every step and act only
+  once it has run out. Aim & Fire fires when its record starts and does not
+  check it.
+- **Seven-shot pause** (`seg6:0x3E33`). Each direct-fire Scan & Fire shot
+  adds one to the robot's shot counter. On the seventh the cooldown gets an
+  extra `30 + 5·(r&3)` (Auto Rifle), `40 + 5·(r&3)` (Burst Gun) or
+  `50 + 5·(r&7)` (Rifle), then the counter restarts at `r&1` (Auto) or `r&3`
+  (Burst, Rifle). A Scan & Fire step with no target, 20 or more ticks after
+  the cooldown ran out, takes one off the counter (`seg6:0x3EE6`). The
+  counter and cooldown start at 0 each turn. Explosive scans have no counter.
+  The original also resets both when a weapon-select record runs
+  (`seg6:0x4D07`); RoboArena has no such records.
 - **Damage is cut to the armor the target has left** (`seg6:0x5B09`). A robot
   already destroyed takes nothing from later impacts; the shooter's own death
   does not stop a shot in flight.
