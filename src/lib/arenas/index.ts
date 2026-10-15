@@ -1,98 +1,106 @@
-/** Validated, source-locked v1 arena library (`docs/spec.md` §9). */
+/** Validated, source-locked arena library: all 24 original maps (`docs/spec.md` §9). */
 
 import { createHomeAreas } from "../../engine/arena";
-import type { Arena, ArenaTile, ArenaType, GameLength, Terrain } from "../../engine/types";
-import rubbleThree from "./rubble-three.json";
-import rubbleTwo from "./rubble-two.json";
+import type { Arena, ArenaTile, ArenaType, Terrain } from "../../engine/types";
+import { ARENA_NAMES, type ArenaName } from "./catalog";
+import originalArenas from "./original-arenas.json";
 
-export const ARENA_NAMES = ["rubble-two", "rubble-three"] as const;
-export type ArenaName = (typeof ARENA_NAMES)[number];
+export { ARENA_CATALOG, ARENA_NAMES, ARENA_TOWNS, arenaCatalogEntry } from "./catalog";
+export type { ArenaCatalogEntry, ArenaName } from "./catalog";
 
-interface ArenaData {
+/** One character per MAP cell, as written by `tools/re/export_data.py`. */
+const TERRAIN_BY_CHAR: Readonly<Record<string, Terrain>> = {
+  ".": "open",
+  R: "rough",
+  B: "bush",
+  L: "low-wall",
+  W: "wall",
+  C: "crevice",
+  O: "outer-wall",
+};
+
+interface CompactArena {
+  readonly slug: string;
   readonly name: string;
-  readonly type: ArenaType;
-  readonly size: GameLength;
+  readonly town: ArenaType;
+  readonly mapId: number;
   readonly width: number;
   readonly height: number;
-  readonly tiles: ReadonlyArray<ReadonlyArray<ArenaTile>>;
-  readonly metadata: {
-    readonly source: string;
-    readonly mapId: number;
-    readonly unknownTiles: readonly { readonly x: number; readonly y: number }[];
-    readonly sourceSha256: string;
-  };
+  readonly rows: readonly string[];
 }
 
-const TERRAIN = new Set<Terrain>([
-  "open",
-  "rough",
-  "low-wall",
-  "wall",
-  "bush",
-  "crevice",
-  "outer-wall",
-]);
+export interface ArenaProvenance {
+  readonly source: string;
+  readonly mapId: number;
+  readonly sourceSha256: string;
+}
+
+const TOWNS = new Set<string>(["rubble", "suburbs", "computer"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isArenaTile = (value: unknown): value is ArenaTile =>
-  isRecord(value) && typeof value.terrain === "string" && TERRAIN.has(value.terrain as Terrain);
-
-export function validateArenaData(value: unknown): asserts value is ArenaData {
+export function validateCompactArena(value: unknown): asserts value is CompactArena {
   if (!isRecord(value)) throw new Error("Arena data must be an object.");
-  if (typeof value.name !== "string" || value.type !== "rubble") {
+  if (typeof value.slug !== "string" || typeof value.name !== "string") {
     throw new Error("Arena identity is invalid.");
   }
-  if (value.size !== "melee" && value.size !== "battle") {
-    throw new Error(`Arena ${value.name} has an unsupported main-game size.`);
+  if (typeof value.town !== "string" || !TOWNS.has(value.town)) {
+    throw new Error(`Arena ${value.name} has an unknown town.`);
+  }
+  if (typeof value.mapId !== "number" || !Number.isInteger(value.mapId)) {
+    throw new Error(`Arena ${value.name} map id is invalid.`);
   }
   if (!Number.isInteger(value.width) || !Number.isInteger(value.height)) {
     throw new Error(`Arena ${value.name} dimensions must be integers.`);
   }
   const width = value.width as number;
   const height = value.height as number;
-  if (width <= 0 || height <= 0 || !Array.isArray(value.tiles) || value.tiles.length !== height) {
+  if (width <= 0 || height <= 0 || !Array.isArray(value.rows) || value.rows.length !== height) {
     throw new Error(`Arena ${value.name} row count does not match its height.`);
   }
-  for (const [rowIndex, row] of value.tiles.entries()) {
-    if (!Array.isArray(row) || row.length !== width || !row.every(isArenaTile)) {
+  for (const [rowIndex, row] of value.rows.entries()) {
+    if (
+      typeof row !== "string" ||
+      row.length !== width ||
+      ![...row].every((char) => char in TERRAIN_BY_CHAR)
+    ) {
       throw new Error(`Arena ${value.name} row ${rowIndex} is invalid.`);
     }
   }
-  if (!isRecord(value.metadata)) throw new Error(`Arena ${value.name} metadata is missing.`);
-  if (
-    typeof value.metadata.source !== "string" ||
-    typeof value.metadata.mapId !== "number" ||
-    !Array.isArray(value.metadata.unknownTiles) ||
-    value.metadata.unknownTiles.length !== 0 ||
-    typeof value.metadata.sourceSha256 !== "string" ||
-    !/^[0-9a-f]{64}$/.test(value.metadata.sourceSha256)
-  ) {
-    throw new Error(`Arena ${value.name} provenance metadata is invalid.`);
-  }
 }
 
-const RAW_ARENAS: Readonly<Record<ArenaName, unknown>> = {
-  "rubble-two": rubbleTwo,
-  "rubble-three": rubbleThree,
+const arenaData = (name: ArenaName): CompactArena => {
+  const data: unknown = originalArenas.arenas.find((arena) => arena.slug === name);
+  if (data === undefined) throw new Error(`Unknown arena ${name}.`);
+  validateCompactArena(data);
+  return data;
 };
 
+const expandRows = (rows: readonly string[]): ArenaTile[][] =>
+  rows.map((row) => [...row].map((char) => ({ terrain: TERRAIN_BY_CHAR[char] as Terrain })));
+
+export const isArenaName = (value: unknown): value is ArenaName =>
+  typeof value === "string" && (ARENA_NAMES as readonly string[]).includes(value);
+
 export const loadArena = async (name: ArenaName): Promise<Arena> => {
-  const data = RAW_ARENAS[name];
-  validateArenaData(data);
+  const data = arenaData(name);
   return {
-    type: data.type,
+    type: data.town,
     sizeName: data.name,
     width: data.width,
     height: data.height,
-    tiles: data.tiles,
+    tiles: expandRows(data.rows),
     homeAreas: createHomeAreas(data.width, data.height),
   };
 };
 
-export const arenaProvenance = (name: ArenaName): ArenaData["metadata"] => {
-  const data = RAW_ARENAS[name];
-  validateArenaData(data);
-  return data.metadata;
+export const arenaProvenance = (name: ArenaName): ArenaProvenance => {
+  const data = arenaData(name);
+  const town = originalArenas.towns[data.town];
+  return {
+    source: `version-locked ${town.file} MAP export`,
+    mapId: data.mapId,
+    sourceSha256: town.sha256,
+  };
 };

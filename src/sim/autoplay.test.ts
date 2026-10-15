@@ -26,7 +26,7 @@ import type {
   RobotState,
   TileCoord,
 } from "../engine/types";
-import { loadArena } from "../lib/arenas";
+import { ARENA_NAMES, loadArena } from "../lib/arenas";
 import { projectMatchState, projectTurnResult } from "../../server/view";
 import type { CanonicalTurnRecord } from "../../server/matches";
 import {
@@ -545,6 +545,21 @@ describe("autoplay fuzz", () => {
       expect(totals[kind] ?? 0, kind).toBeGreaterThan(0);
     }
   }, 60_000);
+
+  it("plays a short match on every original arena without invariant violations", async () => {
+    const problems: string[] = [];
+    for (const [index, arena] of ARENA_NAMES.entries()) {
+      const options: AutoplayOptions = {
+        ...fuzzOptions(index * 3, `arena-${arena}`),
+        arena,
+        maxTurns: 2,
+      };
+      const result = await runAndCheck(options, (turnNumber) => turnNumber === 1);
+      problems.push(...result.problems.map((problem) => `${arena}: ${problem}`));
+      expect(result.match.turns.length, arena).toBeGreaterThan(0);
+    }
+    expect(problems).toEqual([]);
+  }, 120_000);
 
   it("re-running a seed yields byte-identical replays", async () => {
     const options = fuzzOptions(4, "determinism");

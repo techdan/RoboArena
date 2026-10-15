@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import type { HomeSlot } from "../../engine/types";
+import { ARENA_NAMES, type ArenaName } from "../arenas/catalog";
 
 export const PLAYER_COLORS = ["red", "blue", "green", "yellow"] as const;
 export const playerColorSchema = z.enum(PLAYER_COLORS);
@@ -50,23 +51,13 @@ export const DEFAULT_ARENA_THEME_ID: ArenaThemeName = "coliseum";
 export const roomConfigSchema = z
   .object({
     gameLength: z.enum(["melee", "battle"]),
-    arenaName: z.enum(["rubble-two", "rubble-three"]),
+    arenaName: z.enum(ARENA_NAMES),
     formation: z.literal("beginner"),
     turnLengthSeconds: z.number().int().min(1).max(40),
     // Optional so rooms saved before arena looks existed still load.
     arenaTheme: arenaThemeSchema.optional(),
   })
-  .strict()
-  .superRefine((config, context) => {
-    const expectedArena = config.gameLength === "melee" ? "rubble-two" : "rubble-three";
-    if (config.arenaName !== expectedArena) {
-      context.addIssue({
-        code: "custom",
-        path: ["arenaName"],
-        message: `${config.gameLength} uses the verified ${expectedArena} arena.`,
-      });
-    }
-  });
+  .strict();
 
 export type RoomConfig = z.infer<typeof roomConfigSchema>;
 
@@ -78,8 +69,14 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   arenaTheme: DEFAULT_ARENA_THEME_ID,
 };
 
+/** Any of the 24 original maps can host either game length; this is the classic pairing. */
+export const DEFAULT_ARENA_FOR_LENGTH: Readonly<Record<RoomConfig["gameLength"], ArenaName>> = {
+  melee: "rubble-two",
+  battle: "rubble-three",
+};
+
 export const configForLength = (gameLength: RoomConfig["gameLength"]): RoomConfig => ({
   ...DEFAULT_ROOM_CONFIG,
   gameLength,
-  arenaName: gameLength === "melee" ? "rubble-two" : "rubble-three",
+  arenaName: DEFAULT_ARENA_FOR_LENGTH[gameLength],
 });

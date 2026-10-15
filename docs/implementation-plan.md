@@ -123,7 +123,7 @@ RoboArena/
 │   ├── planner/            turn-programming logic (Phase 9-10)
 │   ├── ai/                 (deferred — AI = post-v1)
 │   ├── lib/
-│   │   ├── arenas/         generated row-major Rubble Two/Three arena data
+│   │   ├── arenas/         generated row-major data for all 24 original arenas
 │   │   ├── net/            v1 WebSocket room client + shared protocol
 │   │   └── replay/         save/load helpers for browser
 │   ├── app/                Next.js 16 routes
