@@ -4951,3 +4951,789 @@ a.planner-menu-item:focus-visible {
 .boot-camp-prompt-close:hover {
   color: white;
 }
+
+/* ============================================================
+   3D cinematic movie (src/renderer3d)
+   ============================================================ */
+.movie-shell-3d {
+  max-width: 100%;
+}
+.movie-shell-3d .movie-viewport {
+  max-width: 100%;
+  background: #0b0f16;
+}
+.movie-view-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.movie-view-group {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(8 11 14 / 72%);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+.movie-view-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  color: rgb(255 255 255 / 62%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.movie-view-button:hover {
+  color: white;
+}
+.movie-view-button[aria-pressed="true"] {
+  background: rgb(190 242 100 / 16%);
+  color: rgb(217 249 157);
+}
+.movie-view-button:focus-visible {
+  outline: 2px solid rgb(190 242 100);
+  outline-offset: -2px;
+}
+
+/* 3D planner board: camera presets, rotate/zoom and the 2D/3D switch. */
+.planner-board-3d {
+  cursor: crosshair;
+  touch-action: none;
+  background: #06080b;
+}
+.planner-view-controls {
+  gap: 0.4rem;
+}
+.planner-view-segment {
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  background: rgb(6 8 11 / 82%);
+  backdrop-filter: blur(6px);
+}
+.planner-view-segment button {
+  min-width: 2.25rem;
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  color: rgb(255 255 255 / 70%);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.planner-view-segment button:hover:not(:disabled) {
+  color: white;
+  background: rgb(255 255 255 / 8%);
+}
+.planner-view-segment button[aria-pressed="true"] {
+  color: #0b0d11;
+  background: white;
+}
+.planner-view-segment button:focus-visible {
+  outline: 2px solid #bef264;
+  outline-offset: 1px;
+}
+.planner-view-segment button:disabled {
+  opacity: 0.4;
+}
+.planner-board-switch {
+  position: absolute;
+  z-index: 12;
+  left: 0.65rem;
+  bottom: 0.65rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(6 8 11 / 82%);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+@media (pointer: coarse) {
+  .planner-view-segment button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+/* ── Tactical planner: full-screen 3D board with overlaid chrome ── */
+.tactical-planner {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #06080b;
+  color: white;
+}
+.tactical-planner > .planner-canvas-shell {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #06080b;
+  box-shadow: none;
+}
+.tactical-planner .planner-canvas {
+  border: 0;
+  border-radius: 0;
+}
+.tactical-planner .planner-camera-controls {
+  top: 5.2rem;
+  right: 1rem;
+  bottom: auto;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.tactical-planner .planner-coord-chip {
+  top: auto;
+  right: 1rem;
+  bottom: calc(var(--tactical-track-h, 14rem) + 0.75rem);
+}
+.tactical-bar {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem 1.6rem;
+  background: linear-gradient(to bottom, rgb(4 6 9 / 88%), rgb(4 6 9 / 0%));
+  pointer-events: none;
+}
+.tactical-bar > * {
+  pointer-events: auto;
+}
+.tactical-bar-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.tactical-bar h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+.tactical-bar .eyebrow {
+  margin: 0;
+}
+.tactical-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.tactical-progress {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 40%);
+  color: rgb(255 255 255 / 62%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+}
+.tactical-rail {
+  position: absolute;
+  z-index: 18;
+  top: 5.2rem;
+  left: 1rem;
+  display: flex;
+  width: 14.5rem;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.squad-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.squad-card {
+  position: relative;
+}
+.squad-card-select {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 0.8rem;
+  background: rgb(6 8 11 / 72%);
+  color: white;
+  text-align: left;
+  backdrop-filter: blur(8px);
+}
+.squad-card-select:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 24%);
+}
+.squad-card[data-selected="true"] .squad-card-select {
+  border-color: rgb(190 242 100 / 70%);
+  background: rgb(22 28 18 / 82%);
+  box-shadow: 0 0 22px rgb(190 242 100 / 18%);
+}
+.squad-card[data-destroyed="true"] .squad-card-select {
+  opacity: 0.45;
+}
+.squad-card-key {
+  grid-row: span 2;
+  align-self: center;
+  color: rgb(255 255 255 / 35%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.65rem;
+}
+.squad-card-name {
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+.squad-card-class {
+  color: rgb(255 255 255 / 48%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+.squad-card-bars {
+  display: grid;
+  grid-column: 2;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+}
+.squad-card-bar {
+  display: block;
+  height: 0.28rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+.squad-card-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.squad-card-bar[data-kind="hp"] i {
+  background: #4ade80;
+}
+.squad-card-bar[data-kind="time"] i {
+  background: #bef264;
+}
+.squad-card-bar[data-kind="time"][data-over="true"] i {
+  background: #f87171;
+}
+.squad-card-time {
+  grid-column: 2;
+  color: rgb(255 255 255 / 55%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.6rem;
+}
+.squad-card-clear {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: rgb(255 255 255 / 60%);
+}
+.squad-card-clear:hover {
+  color: white;
+  background: rgb(255 255 255 / 10%);
+}
+.tactical-history {
+  display: flex;
+  gap: 0.35rem;
+}
+.tactical-history button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.5rem;
+  place-items: center;
+  cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.65rem;
+  background: rgb(6 8 11 / 72%);
+  color: white;
+}
+.tactical-history button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+.tactical-hint {
+  position: absolute;
+  z-index: 16;
+  top: 5.4rem;
+  left: 50%;
+  padding: 0.45rem 0.9rem;
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(6 8 11 / 72%);
+  color: rgb(255 255 255 / 72%);
+  font-size: 0.75rem;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+.tactical-hint strong {
+  color: white;
+}
+.tactical-notice {
+  top: auto;
+  bottom: calc(var(--tactical-track-h, 14rem) + 0.9rem);
+}
+.tactical-planner .planner-conflict {
+  position: absolute;
+  z-index: 25;
+  top: 5.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.tactical-card {
+  position: absolute;
+  z-index: 18;
+  top: 12rem;
+  right: 1rem;
+  width: 16.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgb(253 230 138 / 26%);
+  border-radius: 1rem;
+  background: rgb(6 8 11 / 84%);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 45%);
+  backdrop-filter: blur(10px);
+}
+.tactical-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tactical-card header .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: rgb(253 230 138 / 80%);
+}
+.tactical-card header button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.5rem;
+  color: rgb(255 255 255 / 60%);
+}
+.scan-card {
+  border-color: rgb(103 232 249 / 30%);
+}
+.scan-card header .eyebrow {
+  color: rgb(165 243 252 / 85%);
+}
+.scan-card .fire-inline {
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+.shot-card-weapons {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+.shot-card-weapons button {
+  flex: 1;
+  min-height: 2rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.5rem;
+  color: rgb(255 255 255 / 65%);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.shot-card-weapons button[aria-pressed="true"] {
+  border-color: #fcd34d;
+  color: #fde68a;
+}
+.shot-card-empty {
+  margin: 0.6rem 0 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.shot-card-target {
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.shot-card-target span {
+  color: rgb(255 255 255 / 50%);
+  font-weight: 500;
+}
+.shot-card-big {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+.shot-card-big strong {
+  color: #fde68a;
+  font-size: 2.9rem;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+.shot-card-big span {
+  color: rgb(255 255 255 / 55%);
+  font-size: 0.75rem;
+}
+.shot-card-blocked {
+  margin: 0.5rem 0 0;
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+.shot-card-facts {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.7rem 0 0;
+  font-size: 0.76rem;
+}
+.shot-card-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.shot-card-facts dt {
+  color: rgb(255 255 255 / 48%);
+}
+.shot-card-facts dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+.shot-card footer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.shot-card-stepper {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.6rem;
+}
+.shot-card-stepper button {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+}
+.shot-card-stepper button:disabled {
+  opacity: 0.3;
+}
+.shot-card-stepper output {
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.shot-card-confirm {
+  padding: 0 1rem;
+  border-radius: 0.6rem;
+  background: #fcd34d;
+  color: #111;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+.shot-card-confirm:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+.tactical-track {
+  position: absolute;
+  z-index: 18;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+}
+.turn-track {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem 0.8rem 0.75rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 1rem;
+  background: rgb(8 10 14 / 86%);
+  backdrop-filter: blur(10px);
+}
+.turn-track-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.turn-track-rehearse {
+  display: inline-flex;
+  min-height: 2.2rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+.turn-track-rehearse[aria-pressed="true"] {
+  border-color: #a5f3fc;
+  color: #a5f3fc;
+}
+.turn-track-caption {
+  color: rgb(255 255 255 / 40%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.turn-track-body {
+  --ap-name: 7.5rem;
+  overflow: visible;
+}
+.turn-track-name {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.turn-track-name small {
+  color: rgb(255 255 255 / 40%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.52rem;
+  font-weight: 600;
+}
+.turn-track-name[data-over="true"] small {
+  color: #fca5a5;
+}
+@media (pointer: fine) {
+  /* Mouse users get a shorter track so more of the board stays visible. */
+  .turn-track .all-programs-row,
+  .turn-track .turn-track-name,
+  .turn-track .timeline-command {
+    min-height: 2.1rem;
+  }
+}
+.turn-track .all-programs-axis span[data-major="false"] {
+  border-left-color: rgb(255 255 255 / 4%);
+}
+.planner-board-anchor {
+  position: absolute;
+  z-index: 15;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.radial-orders {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.radial-orders-ring {
+  position: absolute;
+  top: -3.6rem;
+  left: -3.6rem;
+  width: 7.2rem;
+  height: 7.2rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(0 0 0 / 0%) 55%, rgb(0 0 0 / 28%));
+}
+.radial-orders-item,
+.radial-orders-close {
+  position: absolute;
+  display: inline-flex;
+  min-height: 2.4rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.8rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(6 8 11 / 86%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+.radial-orders-item:hover,
+.radial-orders-item:focus-visible,
+.radial-orders-close:hover {
+  border-color: rgb(255 255 255 / 55%);
+  outline: none;
+}
+.radial-orders-item[data-primary="true"] {
+  border-color: #bef264;
+  background: #bef264;
+  color: #0b0d11;
+}
+.radial-orders-item[data-active="true"] {
+  border-color: #bef264;
+  color: #d9f99d;
+}
+.radial-orders-close {
+  width: 2.4rem;
+  justify-content: center;
+  padding: 0;
+}
+.radial-orders kbd {
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  background: rgb(0 0 0 / 22%);
+  font-family: ui-monospace, monospace;
+  font-size: 0.55rem;
+  opacity: 0.7;
+}
+.radial-orders[data-ring="face"] .radial-orders-item {
+  min-width: 2.6rem;
+  justify-content: center;
+  padding: 0 0.5rem;
+}
+@media (pointer: coarse) {
+  .radial-orders-item,
+  .radial-orders-close {
+    min-height: 2.75rem;
+  }
+  .radial-orders-close {
+    width: 2.75rem;
+  }
+}
+
+/* First-turn guide */
+.first-turn-coach {
+  /* Beside the board, above the coordinate chip: never over the tiles the
+     player is being asked to tap, and clear of the aim card at the top right. */
+  position: absolute;
+  z-index: 19;
+  right: 1rem;
+  bottom: calc(var(--tactical-track-h, 14rem) + 2.75rem);
+  width: min(18rem, calc(100vw - 2rem));
+  padding: 0.8rem 0.95rem 0.85rem;
+  border: 1px solid rgb(253 224 71 / 35%);
+  border-radius: 1rem;
+  background: rgb(10 12 16 / 92%);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 40%),
+    0 18px 40px rgb(0 0 0 / 45%);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+.first-turn-coach header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.first-turn-coach .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fde047;
+}
+.first-turn-coach header button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 999px;
+  color: rgb(255 255 255 / 55%);
+}
+.first-turn-coach header button:hover {
+  background: rgb(255 255 255 / 8%);
+  color: white;
+}
+.first-turn-coach h2 {
+  margin-top: 0.3rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.first-turn-coach p:not(.eyebrow) {
+  margin-top: 0.25rem;
+  color: rgb(255 255 255 / 72%);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.first-turn-coach-dots {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.65rem;
+}
+.first-turn-coach-dots li {
+  height: 0.22rem;
+  flex: 1;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+}
+.first-turn-coach-dots li[data-state="done"] {
+  background: rgb(253 224 71 / 55%);
+}
+.first-turn-coach-dots li[data-state="now"] {
+  background: #fde047;
+}
+.first-turn-coach footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+.first-turn-coach footer button {
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  color: rgb(255 255 255 / 80%);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.first-turn-coach footer .first-turn-coach-primary {
+  border-color: transparent;
+  background: #fde047;
+  color: #111;
+}
+@media (pointer: coarse) {
+  .first-turn-coach header button,
+  .first-turn-coach footer button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+@keyframes coach-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(253 224 71 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgb(253 224 71 / 55%);
+  }
+}
+.tactical-planner[data-coach="squad"] .squad-card,
+.tactical-planner[data-coach="rehearse"] .turn-track-rehearse,
+.tactical-planner[data-coach="lock"] .planner-lock-action,
+.tactical-planner[data-coach="aim"] .radial-orders-item:nth-of-type(2) {
+  animation: coach-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tactical-planner[data-coach] * {
+    animation: none !important;
+  }
+}

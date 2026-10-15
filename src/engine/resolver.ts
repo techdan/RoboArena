@@ -355,6 +355,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           commandIndex,
         );
       }
+      // Home rectangles are derived from arena size and can contain Walls and
+      // Crevices; the planner already refuses those, so the authority must too.
+      const destinationTile = tileAt(state.arena, command.to);
+      if (destinationTile === undefined || !canTraverseTile(robot.posture, destinationTile)) {
+        return malformed(
+          "illegal-command",
+          "Deploy destination must be traversable terrain.",
+          robot.id,
+          commandIndex,
+        );
+      }
       completesAt = tick + (commandDurationTicks(command, robot) ?? 0);
     } else if (command.kind === "set-posture") {
       if (!POSTURES.includes(command.posture)) {

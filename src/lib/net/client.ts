@@ -15,8 +15,22 @@ const RECENT_ROOMS_KEY = "roboarena.recent-rooms";
 const MATCH_ROOM_PREFIX = "roboarena.match-room.";
 const PLANNER_DRAFT_PREFIX = "roboarena.planner-draft";
 
-export const roomServerUrl = (): string =>
-  process.env.NEXT_PUBLIC_ROOM_WS_URL ?? DEFAULT_ROOM_SERVER;
+/**
+ * Each room is served at its own path so the deployed service can route it to
+ * that room's Durable Object; the local Node server accepts any path. A
+ * CreateRoom connects before its code exists, so it routes by request id.
+ */
+export const roomServerUrl = (route: RoomRoute): string => {
+  const base = (process.env.NEXT_PUBLIC_ROOM_WS_URL ?? DEFAULT_ROOM_SERVER).replace(/\/+$/, "");
+  return "code" in route
+    ? `${base}/rooms/${encodeURIComponent(route.code)}`
+    : `${base}/rooms/new/${encodeURIComponent(route.createRequestId)}`;
+};
+
+export type RoomRoute = { readonly code: string } | { readonly createRequestId: string };
+
+const routeFor = (message: ClientMessage): RoomRoute =>
+  "code" in message ? { code: message.code } : { createRequestId: message.requestId };
 
 export const requestId = (): string => crypto.randomUUID();
 
@@ -97,11 +111,16 @@ export class ServerProtocolError extends Error {
 }
 
 export class RoomSocket {
+  readonly #route: RoomRoute;
   #socket: WebSocket | undefined;
   #openPromise: Promise<void> | undefined;
   #listeners = new Set<(message: ServerMessage) => void>();
   #connectionListeners = new Set<(connected: boolean) => void>();
   #protocolErrorListeners = new Set<(error: ServerProtocolError) => void>();
+
+  constructor(route: RoomRoute) {
+    this.#route = route;
+  }
 
   #emitConnection(connected: boolean): void {
     for (const listener of this.#connectionListeners) listener(connected);
@@ -111,7 +130,7 @@ export class RoomSocket {
     if (this.#socket?.readyState === WebSocket.OPEN) return Promise.resolve();
     if (this.#openPromise !== undefined) return this.#openPromise;
     this.#openPromise = new Promise((resolve, reject) => {
-      const socket = new WebSocket(roomServerUrl());
+      const socket = new WebSocket(roomServerUrl(this.#route));
       this.#socket = socket;
       let opened = false;
       socket.addEventListener("open", () => {
@@ -194,7 +213,7 @@ export function requestOnce(
 export async function requestOnce(
   message: ClientMessage,
 ): Promise<RoomSnapshotMessage | MatchSnapshotMessage> {
-  const socket = new RoomSocket();
+  const socket = new RoomSocket(routeFor(message));
   const expectsMatchSnapshot = isMatchMessage(message);
   try {
     return await new Promise<RoomSnapshotMessage | MatchSnapshotMessage>((resolve, reject) => {

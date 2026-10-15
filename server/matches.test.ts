@@ -201,6 +201,47 @@ describe("authoritative match lifecycle", () => {
     expect(projected.events[1]).toMatchObject({ tick: 30, shooterId: "r2" });
   });
 
+  it("never reveals a hidden third-team robot acquired by a visible enemy scanner", () => {
+    // Regression from the autoplay fuzz suite (seed fuzz-8, turn 2): team-1 can
+    // see team-2's scanner, but not the team-3 robot it acquires.
+    const state = makeFfaMatch([
+      {
+        id: "team-1",
+        robots: [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 }, { scanHeading: "E" })],
+      },
+      { id: "team-2", robots: [makeRobot("r2", "team-2", "rifle", { x: 4, y: 1 })] },
+      { id: "team-3", robots: [makeRobot("r3", "team-3", "rifle", "dock")] },
+    ]);
+    const events: readonly ResolutionEvent[] = [
+      {
+        tick: 10,
+        seq: 0,
+        kind: "scan-target-acquired",
+        shooterId: "r2",
+        targetId: "r3",
+        distance: 4,
+      },
+    ];
+    const turn: CanonicalTurnRecord = {
+      turnNumber: 1,
+      seed: "third-team-scan-seed",
+      resolutionNonce: "third-team-scan-nonce",
+      orders: emptyOrders(1),
+      participantOrders: {},
+      initialState: state,
+      events,
+      eventDigest: "unused",
+      nextStateDigest: "unused",
+    };
+
+    expect(
+      projectMatchState(state, "team-1").teams.flatMap((team) => team.robots.map((r) => r.id)),
+    ).toEqual(["r1", "r2"]);
+    const projected = projectTurnResult(turn, "team-1");
+    expect(projected.events).toEqual([]);
+    expect(JSON.stringify(projected)).not.toContain('"r3"');
+  });
+
   it("rejects a divergent stored replay before appending another turn", () => {
     const state = makeMatch();
     const match = createAuthoritativeMatch(state, ["team-1", "team-2"]);

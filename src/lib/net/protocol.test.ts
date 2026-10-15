@@ -39,6 +39,16 @@ describe("room protocol schemas", () => {
     ).toBe(false);
   });
 
+  it("accepts an optional room-wide arena look and rejects unknown looks", () => {
+    const melee = configForLength("melee");
+    expect(roomConfigSchema.safeParse(melee).success).toBe(true);
+    const legacy: Record<string, unknown> = { ...melee };
+    delete legacy.arenaTheme;
+    expect(roomConfigSchema.safeParse(legacy).success).toBe(true);
+    expect(roomConfigSchema.safeParse({ ...melee, arenaTheme: "factory" }).success).toBe(true);
+    expect(roomConfigSchema.safeParse({ ...melee, arenaTheme: "moonbase" }).success).toBe(false);
+  });
+
   it("requires a participant token for canonical planner snapshots", () => {
     const valid = {
       version: 1,

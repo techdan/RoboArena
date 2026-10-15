@@ -14,12 +14,15 @@ import {
   RoomSocket,
 } from "../../lib/net/client";
 import {
+  arenaThemeSchema,
   configForLength,
+  DEFAULT_ARENA_THEME_ID,
   HOME_CORNER_LABELS,
   HOME_SLOTS,
   PLAYER_COLORS,
   type PlayerColor,
 } from "../../lib/setup/validate";
+import { ARENA_THEME_ORDER, ARENA_THEMES } from "../../renderer3d/themes";
 import { TeamRow } from "./TeamRow";
 import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
 import { FieldGuideButton } from "../help/HelpProvider";
@@ -73,7 +76,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
   );
 
   useEffect(() => {
-    const socket = new RoomSocket();
+    const socket = new RoomSocket({ code });
     socketRef.current = socket;
     const unsubscribe = socket.subscribe(handleMessage);
     let disposed = false;
@@ -470,7 +473,10 @@ export function RoomSetup({ code }: { readonly code: string }) {
                       kind: "UpdateConfig",
                       code,
                       token,
-                      config: configForLength(event.currentTarget.value as "melee" | "battle"),
+                      config: {
+                        ...configForLength(event.currentTarget.value as "melee" | "battle"),
+                        arenaTheme: room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID,
+                      },
                     })
                   }
                 >
@@ -478,9 +484,38 @@ export function RoomSetup({ code }: { readonly code: string }) {
                   <option value="battle">Battle · Rubble Three</option>
                 </select>
               </label>
+              <label className="setup-label mt-4">
+                Arena look
+                <select
+                  className="setup-input"
+                  value={room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID}
+                  disabled={!isHost}
+                  onChange={(event) => {
+                    const arenaTheme = arenaThemeSchema.safeParse(event.currentTarget.value);
+                    if (!arenaTheme.success) return;
+                    send({
+                      version: PROTOCOL_VERSION,
+                      requestId: requestId(),
+                      kind: "UpdateConfig",
+                      code,
+                      token,
+                      config: { ...room.config, arenaTheme: arenaTheme.data },
+                    });
+                  }}
+                >
+                  {ARENA_THEME_ORDER.map((id) => (
+                    <option key={id} value={id}>
+                      {ARENA_THEMES[id].name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1.5 block text-[11px] font-normal normal-case tracking-normal text-white/40">
+                  {ARENA_THEMES[room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID].tagline}
+                </span>
+              </label>
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                 <div className="setup-stat">
-                  <span>Arena</span>
+                  <span>Map</span>
                   <strong>
                     {room.config.arenaName === "rubble-two" ? "Rubble Two" : "Rubble Three"}
                   </strong>

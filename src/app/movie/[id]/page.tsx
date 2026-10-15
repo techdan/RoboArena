@@ -4,6 +4,7 @@ import { FieldGuideButton } from "../../../components/help/HelpProvider";
 import { LobbyBreadcrumb } from "../../../components/LobbyBreadcrumb";
 import { MovieExperience } from "../../../components/MovieExperience";
 import { createCannedMovie } from "../../../lib/replays/cannedMovie";
+import { createLineupMovie, createShowcaseMovie } from "../../../lib/replays/showcaseMovie";
 
 interface MoviePageProps {
   readonly params: Promise<{ readonly id: string }>;
@@ -11,10 +12,13 @@ interface MoviePageProps {
 }
 
 export default async function MoviePage({ params, searchParams }: MoviePageProps) {
-  const [{ id }, query, movie] = await Promise.all([params, searchParams, createCannedMovie()]);
-  if (id !== "demo") notFound();
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  if (id !== "demo" && id !== "showcase" && id !== "lineup") notFound();
   const requestedTick = Number(query.t ?? 0);
   const initialTick = Number.isFinite(requestedTick) ? Math.max(0, requestedTick) : 0;
+  if (id === "showcase") return <ShowcasePage initialTick={initialTick} />;
+  if (id === "lineup") return <ShowcasePage initialTick={0} lineup />;
+  const movie = await createCannedMovie();
 
   return (
     <main className="desktop-viewport-gate min-h-screen overflow-hidden bg-[#0d100e] text-white">
@@ -85,6 +89,56 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
           <span>PixiJS + GSAP / Phase 7</span>
           <span>Demo replay · Rubble Two</span>
         </footer>
+      </div>
+    </main>
+  );
+}
+
+async function ShowcasePage({
+  initialTick,
+  lineup = false,
+}: {
+  readonly initialTick: number;
+  readonly lineup?: boolean;
+}) {
+  const movie = lineup ? createLineupMovie() : createShowcaseMovie();
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-[#070a0d] text-white">
+      <div className="ambient-grid" aria-hidden="true" />
+      <div className="relative mx-auto max-w-[1240px] px-4 py-8 sm:px-8">
+        <LobbyBreadcrumb />
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-white/8 pb-6">
+          <div>
+            <div className="mb-3 flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl border border-lime-300/20 bg-lime-300/10">
+                <Film aria-hidden="true" className="size-5 text-lime-300" />
+              </span>
+              <span className="eyebrow">RoboArena / Arena showcase</span>
+            </div>
+            <h1 className="text-4xl font-black tracking-[-0.055em]">Four-team melee</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
+              Turn {movie.turnNumber} of a seeded autoplay match on {movie.arenaName}, resolved by
+              the real engine. Sixteen robots, every class, one turn.
+            </p>
+          </div>
+          <div className="flex items-center gap-5">
+            <FieldGuideButton />
+            <div className="flex gap-7 font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
+              <span>
+                <strong className="block text-base text-white">{movie.hits}</strong>Hits
+              </span>
+              <span>
+                <strong className="block text-base text-red-300">{movie.destroyed}</strong>
+                Destroyed
+              </span>
+            </div>
+          </div>
+        </header>
+        <MovieExperience
+          initialState={movie.initialState}
+          events={movie.events}
+          initialTick={initialTick}
+        />
       </div>
     </main>
   );
