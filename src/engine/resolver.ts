@@ -11,6 +11,9 @@ import {
   BOMB_MAX_FUSE_SECONDS,
   MISSILE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
+  ORIGINAL_TIMING_RULES_REVISION,
+  MOVE_TILE_SWITCH_TICKS,
+  MOVE_DOUBLE_DESTINATION_SWITCH_TICKS,
   PLACE_BOMB_COST_TICKS,
   SELF_DESTRUCT_COST_TICKS,
   SELF_DESTRUCT_IMPACT_DELAY_TICKS,
@@ -121,7 +124,29 @@ interface ActiveCommand {
   readonly nextZapAt?: number;
   /** Zap's periodic spotting refresh, program `+0x18` (seg6:0x4091). */
   readonly nextRefreshAt?: number;
+  /** Revision 4: occupied-tile changes still due in the current move step. */
+  readonly tileSwitches?: readonly TileSwitch[];
 }
+
+interface TileSwitch {
+  readonly at: number;
+  readonly to: TileCoord;
+}
+
+/**
+ * Revision 4 occupied-tile switches for one move step starting at `start`
+ * (seg6:0x2D59 single, seg6:0x2E04 double; `sar` floors the midpoint).
+ */
+const moveTileSwitches = (from: TileCoord, to: TileCoord, start: number): TileSwitch[] =>
+  Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)) === 2
+    ? [
+        {
+          at: start + MOVE_TILE_SWITCH_TICKS,
+          to: { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2) },
+        },
+        { at: start + MOVE_DOUBLE_DESTINATION_SWITCH_TICKS, to },
+      ]
+    : [{ at: start + MOVE_TILE_SWITCH_TICKS, to }];
 
 interface Cursor {
   readonly timeline: CommandTimeline;
@@ -313,6 +338,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const originalRules = revision >= 2;
   /** Revision 3: formation weapons, Show Enemy Positions and 5-tick spotting steps. */
   const formationRules = revision >= ORIGINAL_FORMATIONS_RULES_REVISION;
+  /** Revision 4: the original combat timing (mid-move tile switch and the rest). */
+  const timingRules = revision >= ORIGINAL_TIMING_RULES_REVISION;
   const showAllEnemies = formationRules && state.config.showEnemyPositions === true;
   const isStepTick = (tick: number): boolean => tick % SIMULATION_STEP_TICKS === 0;
   const rng = createRng(input.seed);
@@ -420,6 +447,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     let nextScanAt: number | null = null;
     let orientationSteps: readonly Posture[] | readonly Heading[] | undefined;
     let nextZapAt: number | undefined;
+    let tileSwitches: TileSwitch[] | undefined;
     if (command.kind === "zap") {
       if (state.config.zapArmed !== true) {
         return malformed(
@@ -504,6 +532,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         return malformed("illegal-command", "Move step size is invalid.", robot.id, commandIndex);
       }
       completesAt = tick + duration;
+      if (timingRules) tileSwitches = moveTileSwitches(robot.position, first.to, tick);
     } else if (command.kind === "deploy") {
       const home = state.arena.homeAreas[actor.homeSlot];
       if (
@@ -659,6 +688,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       aimPending,
       nextScanAt,
       ...(nextZapAt === undefined ? {} : { nextZapAt, nextRefreshAt: nextZapAt }),
+      ...(tileSwitches === undefined ? {} : { tileSwitches }),
     };
     emit(tick, {
       kind: "command-start",
@@ -1321,6 +1351,22 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   if (originalRules) runSpotting(0, true, new Map());
 
   for (let tick = 1; tick <= turnDuration; tick += 1) {
+    // Revision 4: a moving robot occupies its next tile partway through the step.
+    let switchedTiles = false;
+    for (const actor of actors) {
+      const cursor = cursors.get(actor.robotId);
+      const active = cursor?.active;
+      const next = active?.tileSwitches?.[0];
+      if (!cursor || !active || next?.at !== tick) continue;
+      cursor.active = { ...active, tileSwitches: active.tileSwitches!.slice(1) };
+      const robot = robots.get(actor.robotId);
+      if (!robot || robot.hp <= 0) continue;
+      robots.set(robot.id, { ...robot, position: next.to });
+      emit(tick, { kind: "move-step", robotId: robot.id, to: next.to });
+      switchedTiles = true;
+    }
+    if (switchedTiles) updateVisibility(tick);
+
     const due = actors.flatMap((actor) => {
       const active = cursors.get(actor.robotId)?.active;
       return active?.completesAt === tick ? [{ actor, active }] : [];
@@ -1353,7 +1399,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         position: step.to,
       };
       robots.set(robot.id, moved);
-      emit(tick, { kind: "move-step", robotId: robot.id, to: step.to });
+      // Revision 4 already moved the robot into `step.to` partway through.
+      if (!timingRules) emit(tick, { kind: "move-step", robotId: robot.id, to: step.to });
 
       const nextMoveIndex = active.moveIndex + 1;
       const nextStep = active.command.path[nextMoveIndex];
@@ -1381,6 +1428,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           ...active,
           moveIndex: nextMoveIndex,
           completesAt: tick + duration,
+          ...(timingRules ? { tileSwitches: moveTileSwitches(step.to, nextStep.to, tick) } : {}),
         };
       }
     }

@@ -93,6 +93,21 @@ export const ORIGINAL_SPOTTING_RULES_REVISION = 2;
  */
 export const ORIGINAL_FORMATIONS_RULES_REVISION = 3;
 
+/**
+ * Rules revision 4 keeps revision 3 and adds the original combat timing:
+ * robots occupy their next tile partway through a move (seg6:0x2D59,
+ * seg6:0x2E04) and the remaining timing rules in docs/spec.md §4.
+ */
+export const ORIGINAL_TIMING_RULES_REVISION = 4;
+
+/**
+ * A 1-tile move occupies its destination 15 ticks in; a 2-tile move occupies
+ * the floored midpoint at 15 and the destination at 25 (seg6:0x2D8E,
+ * seg6:0x2E41..0x2EA9).
+ */
+export const MOVE_TILE_SWITCH_TICKS = 15;
+export const MOVE_DOUBLE_DESTINATION_SWITCH_TICKS = 25;
+
 /** The original simulation advances in 5-tick steps (seg6:0x4838..0x483E). */
 export const SIMULATION_STEP_TICKS = 5;
 
