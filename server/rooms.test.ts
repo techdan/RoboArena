@@ -18,7 +18,9 @@ import {
   MAX_CLIENT_MESSAGE_BYTES,
   MESSAGE_RATE_LIMIT,
 } from "./index";
-import { canonicalReplay } from "./matches";
+import { canonicalReplay, createAuthoritativeMatch } from "./matches";
+import { makeFfaMatch, makeOpenArena, makeRobot } from "../src/engine/__fixtures__/match.js";
+import type { TurnOrders } from "../src/engine/types.js";
 import { assertUniqueV1Seating, RoomError, RoomService, type PlayerRecord } from "./rooms";
 import { RoomStorage } from "./storage";
 
@@ -395,6 +397,152 @@ describe("authoritative rooms", () => {
     secondStorage.close();
   });
 
+  it("rejects conditional ammo overcommit before locking and resolves accepted orders after restart", async () => {
+    const path = resolve(`test-results/audit-ammo-restart-${crypto.randomUUID()}.sqlite`);
+    const storage = new RoomStorage(path);
+    const setup = new RoomService(storage);
+    const host = setup.createRoom("Missile", "red");
+    const guest = await setup.joinRoom(host.room.code, "Moving target", "blue");
+    const hostToken = requireToken(host.participantToken);
+    const guestToken = requireToken(guest.participantToken);
+    await setup.setReady(host.room.code, hostToken, true);
+    await setup.setReady(host.room.code, guestToken, true);
+    const started = await setup.startMatch(host.room.code, hostToken);
+    const matchId = started.room.matchId!;
+    const room = storage.loadRoom(host.room.code)!;
+    const missile = makeRobot("missile", host.selfPlayerId, "missile", { x: 1, y: 1 });
+    const state = makeFfaMatch(
+      [
+        {
+          id: host.selfPlayerId,
+          robots: [{ ...missile, ammo: { ...missile.ammo, "missile-launcher": 1 } }],
+        },
+        {
+          id: guest.selfPlayerId,
+          robots: [makeRobot("target", guest.selfPlayerId, "rifle", { x: 7, y: 1 })],
+        },
+      ],
+      { arena: makeOpenArena(10, 8), turnLengthSeconds: 3 },
+    );
+    room.match = createAuthoritativeMatch(state, [host.selfPlayerId, guest.selfPlayerId]);
+    room.matchState = state;
+    storage.saveRoom(room);
+    let service = new RoomService(storage);
+    const scan = {
+      kind: "scan-and-fire",
+      weapon: "missile-launcher",
+      maxDistance: 5,
+      seconds: 1,
+    } as const;
+    const invalid: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "missile",
+          segments: [
+            scan,
+            {
+              kind: "aim-and-fire",
+              weapon: "missile-launcher",
+              target: { x: 8, y: 1 },
+              repeat: false,
+            },
+          ],
+        },
+      ],
+    };
+    await expect(
+      service.lockOrders(host.room.code, hostToken, matchId, invalid, "invalid-lock"),
+    ).rejects.toMatchObject({ code: "INVALID_ORDERS" });
+    expect(storage.loadRoom(host.room.code)!.match).toMatchObject({
+      phase: "planning",
+      lockedPlayerIds: [],
+    });
+    // Emulate a pending turn persisted by the old validator. Loading it must
+    // preserve the private draft and reopen planning, rather than retry forever.
+    const legacy = storage.loadRoom(host.room.code)!;
+    const movement: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "target",
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 6, y: 1 } }] }],
+        },
+      ],
+    };
+    legacy.match!.drafts = { [host.selfPlayerId]: invalid, [guest.selfPlayerId]: movement };
+    legacy.match!.lockedPlayerIds = [host.selfPlayerId, guest.selfPlayerId];
+    legacy.match!.phase = "resolving";
+    legacy.match!.pendingResolution = {
+      turnNumber: 1,
+      seed: "legacy-seed",
+      resolutionNonce: "legacy-nonce",
+      orders: { turnNumber: 1, timelines: [...invalid.timelines, ...movement.timelines] },
+    };
+    storage.saveRoom(legacy);
+    service = new RoomService(storage);
+    const recovered = service.getMatchSnapshot(host.room.code, hostToken, "recovered");
+    expect(recovered).toMatchObject({
+      status: "planning",
+      needsOrderReview: true,
+      ownOrders: invalid,
+    });
+    expect(storage.loadRoom(host.room.code)!.match!.pendingResolution).toBeUndefined();
+    await expect(
+      service.lockOrders(host.room.code, hostToken, matchId, invalid, "retry-invalid-lock"),
+    ).rejects.toMatchObject({ code: "INVALID_ORDERS" });
+    await service.lockOrders(
+      host.room.code,
+      guestToken,
+      matchId,
+      {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: "target",
+            segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 6, y: 1 } }] }],
+          },
+        ],
+      },
+      "guest-lock",
+    );
+    storage.close();
+
+    const reopened = new RoomStorage(path);
+    try {
+      const resumed = new RoomService(reopened);
+      const valid: TurnOrders = {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: "missile",
+            segments: [
+              scan,
+              { kind: "aim-and-fire", weapon: "rifle", target: { x: 8, y: 1 }, repeat: false },
+            ],
+          },
+        ],
+      };
+      const result = await resumed.lockOrders(
+        host.room.code,
+        hostToken,
+        matchId,
+        valid,
+        "host-lock",
+      );
+      expect(result.status).toBe("turn-ready");
+      const persisted = reopened.loadRoom(host.room.code)!.match!;
+      expect(persisted.pendingResolution).toBeUndefined();
+      expect(persisted.turns).toHaveLength(1);
+      expect(persisted.turns[0]!.events).toContainEqual(
+        expect.objectContaining({ kind: "scan-target-acquired", tick: 30 }),
+      );
+      expect(verifyReplay(canonicalReplay(persisted))).toEqual({ ok: true });
+    } finally {
+      reopened.close();
+    }
+  });
+
   it("ends a match through the service when a player resigns", async () => {
     const storage = new RoomStorage(":memory:");
     const service = new RoomService(storage);
@@ -527,6 +675,7 @@ describe("WebSocket room integration", () => {
       const retriedStart = await sendRequest(sockets[0]!, startMessage);
       expect(retriedStart.room.matchId).toBe(started.room.matchId);
       expect(retriedStart.matchStatus).toEqual(started.matchStatus);
+      const cacheWrite = vi.spyOn(server.storage, "saveRequestResult");
       const snapshot = await sendMatchRequest(sockets[0]!, {
         version: PROTOCOL_VERSION,
         requestId: "planner-state",
@@ -537,6 +686,18 @@ describe("WebSocket room integration", () => {
       expect(snapshot.matchId).toBe(started.room.matchId);
       expect(snapshot.match.teams).toHaveLength(4);
       expect(snapshot.match.lastKnownMarkers).toEqual([]);
+      for (let poll = 0; poll < 5; poll += 1) {
+        const next = await sendMatchRequest(sockets[0]!, {
+          version: PROTOCOL_VERSION,
+          requestId: `poll-${poll}`,
+          kind: "GetMatchState",
+          code: host.room.code,
+          token: requireToken(host.participantToken),
+        });
+        expect(next.matchId).toBe(snapshot.matchId);
+      }
+      expect(cacheWrite).not.toHaveBeenCalled();
+      cacheWrite.mockRestore();
     } finally {
       for (const socket of sockets) socket.close();
       await server.close();
@@ -671,7 +832,7 @@ const sendRequest = <Message extends ClientMessage>(
       if (response.requestId !== message.requestId) return;
       socket.off("message", onMessage);
       if (response.kind === "ProtocolError")
-        reject(new Error(`${response.code}: ${response.message}`));
+        reject(new Error(`${response.code} (${message.requestId}): ${response.message}`));
       else if (response.kind === "RoomSnapshot") resolveResponse(response);
       else reject(new Error(`Unexpected ${response.kind} response.`));
     };

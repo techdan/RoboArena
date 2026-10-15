@@ -40,10 +40,18 @@ Phase 12.5 changes production transport/storage and runs two-network deployment
 acceptance. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
+**2026-10-01 audit follow-up**: `docs/audit-2026-10-01.md` A01–A02 (the
+human hit-score formula) were corrected by the 2026-10-15 engine binary audit
+(PR #9). A03–A08 are fixed: hidden-target event leakage, conditional
+ammo validation and stuck-turn recovery, eliminated-seat gating, false draft
+conflicts on save, polling storage growth, and vulnerable dependencies. Tests,
+typecheck, lint, formatting, production build and a two-session browser smoke
+pass; the full Phase 12.2 manual acceptance gates remain open.
+
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 346 tests)
+npm test               # Run all unit tests (currently 501 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans

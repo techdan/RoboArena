@@ -135,6 +135,7 @@ export interface PlannerExperienceProps {
   readonly arenaTheme?: ArenaThemeId | undefined;
   readonly serverOrders?: TurnOrders;
   readonly serverRevision?: string;
+  readonly saveAcknowledgement?: { readonly revision: string; readonly orders: TurnOrders } | null;
   readonly syncing?: boolean;
   readonly onSaveOrders?: (orders: TurnOrders) => void;
   readonly onLockOrders?: (orders: TurnOrders) => void;
@@ -148,6 +149,7 @@ export function PlannerExperience({
   match,
   serverOrders,
   serverRevision,
+  saveAcknowledgement,
   syncing = false,
   onSaveOrders,
   onLockOrders,
@@ -397,15 +399,22 @@ export function PlannerExperience({
   }, [matchId, orders, state.authoritativeRevision, state.conflictOrders, team.id]);
 
   const lastRevision = useRef(revision);
+  const lastSaveAcknowledgement = useRef(saveAcknowledgement);
   useEffect(() => {
-    if (lastRevision.current === revision) return;
+    if (
+      lastRevision.current === revision &&
+      lastSaveAcknowledgement.current === saveAcknowledgement
+    )
+      return;
     lastRevision.current = revision;
+    lastSaveAcknowledgement.current = saveAcknowledgement;
     dispatch({
-      type: "authoritative-refresh",
+      type:
+        saveAcknowledgement?.revision === revision ? "save-acknowledged" : "authoritative-refresh",
       revision,
       orders: authoritativeOrders,
     });
-  }, [authoritativeOrders, revision]);
+  }, [authoritativeOrders, revision, saveAcknowledgement]);
 
   const edit = (next: TurnOrders, message: string, parkTick?: number) => {
     dispatch({ type: "edit", orders: next });

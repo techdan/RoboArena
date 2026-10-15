@@ -1,7 +1,7 @@
 /** Participant-specific state and event projection. Hidden enemy state never crosses this boundary. */
 
-import { computeVisibility } from "../src/engine/visibility.js";
-import type { MatchState, ResolutionEvent, RobotState } from "../src/engine/types.js";
+import { computeVisibility, robotCanSeeTile } from "../src/engine/visibility.js";
+import type { MatchState, ResolutionEvent, RobotState, TileCoord } from "../src/engine/types.js";
 import {
   serializeMatchState,
   type MatchSnapshotMessage,
@@ -10,6 +10,7 @@ import {
   type ParticipantTurnResult,
 } from "../src/lib/net/protocol.js";
 import {
+  activePlayerIds,
   ceremonyScores,
   emptyOrders,
   participantStatus,
@@ -39,8 +40,10 @@ const eventIsAuthorized = (
   event: ResolutionEvent,
   playerId: string,
   authorizedRobotIds: ReadonlySet<string>,
-  authorizedProjectileIds: Set<string>,
+  authorizedProjectileIds: Map<string, boolean>,
   hiddenMoveBoundaries: ReadonlySet<string>,
+  ownRobotIds: ReadonlySet<string>,
+  targetIsVisible: (target: TileCoord) => boolean,
 ): boolean => {
   switch (event.kind) {
     case "turn-start":
@@ -71,13 +74,23 @@ const eventIsAuthorized = (
       return authorizedRobotIds.has(event.shooterId) && authorizedRobotIds.has(event.targetId);
     case "fired":
     case "shot-missed":
-      return authorizedRobotIds.has(event.shooterId);
+      return (
+        authorizedRobotIds.has(event.shooterId) &&
+        (ownRobotIds.has(event.shooterId) || targetIsVisible(event.target))
+      );
     case "projectile-launched":
-      if (!authorizedRobotIds.has(event.shooterId)) return false;
-      authorizedProjectileIds.add(event.projectileId);
+      if (
+        !authorizedRobotIds.has(event.shooterId) ||
+        (!ownRobotIds.has(event.shooterId) && !targetIsVisible(event.target))
+      )
+        return false;
+      authorizedProjectileIds.set(event.projectileId, ownRobotIds.has(event.shooterId));
       return true;
     case "projectile-impacted":
-      return authorizedProjectileIds.has(event.projectileId);
+      return (
+        authorizedProjectileIds.has(event.projectileId) &&
+        (authorizedProjectileIds.get(event.projectileId) === true || targetIsVisible(event.target))
+      );
     case "damaged":
       return false;
   }
@@ -139,7 +152,12 @@ export const projectTurnResult = (
   const authorizedRobotIds = new Set(
     initialView.teams.flatMap((team) => team.robots.map((robot) => robot.id)),
   );
-  const authorizedProjectileIds = new Set<string>();
+  // Our own fire coordinates are known from our orders; an observed enemy's
+  // target is only public while that tile is independently visible to us.
+  const ownRobotIds = new Set(
+    initialView.teams.find((team) => team.id === playerId)!.robots.map((robot) => robot.id),
+  );
+  const authorizedProjectileIds = new Map<string, boolean>();
   const hiddenMoveBoundaries = new Set(
     turn.events.flatMap((event) =>
       event.kind === "enemy-lost" && event.teamId === playerId
@@ -153,6 +171,15 @@ export const projectTurnResult = (
     ),
   );
   const teamColors = new Map(turn.initialState.teams.map((team) => [team.id, team.color] as const));
+  const targetIsVisible = (target: TileCoord): boolean =>
+    [...ownRobotIds].some((id) => {
+      const observer = robots.get(id);
+      return (
+        observer !== undefined &&
+        observer.hp > 0 &&
+        robotCanSeeTile(turn.initialState.arena, observer, target)
+      );
+    });
   const events: ParticipantResolutionEvent[] = [];
   for (const event of turn.events) {
     updateRobotState(robots, event);
@@ -181,6 +208,8 @@ export const projectTurnResult = (
         authorizedRobotIds,
         authorizedProjectileIds,
         hiddenMoveBoundaries,
+        ownRobotIds,
+        targetIsVisible,
       )
     ) {
       if (event.kind === "enemy-spotted" && event.teamId === playerId) {
@@ -198,7 +227,9 @@ export const projectTurnResult = (
   return {
     turnNumber: turn.turnNumber,
     initialState: serializeMatchState(initialView),
-    events,
+    // Global sequence gaps reveal how many hidden events occurred. Participant
+    // events retain their relative order without publishing those counts.
+    events: events.map((event, seq) => ({ ...event, seq })),
     playbackTick,
   };
 };
@@ -228,6 +259,8 @@ export const participantMatchSnapshot = (input: {
     locked: input.match.lockedPlayerIds.includes(input.playerId),
     lockedPlayerIds: [...input.match.lockedPlayerIds],
     ...(input.arenaTheme === undefined ? {} : { arenaTheme: input.arenaTheme }),
+    requiredPlayerIds: activePlayerIds(input.match),
+    ...(input.match.needsOrderReview ? { needsOrderReview: true } : {}),
     unseenTurns: input.match.turns
       .filter((turn) => turn.turnNumber > acknowledged)
       .map((turn) =>

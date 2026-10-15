@@ -292,6 +292,9 @@ export interface MatchSnapshotMessage {
   readonly ownOrders: TurnOrders;
   readonly locked: boolean;
   readonly lockedPlayerIds: readonly string[];
+  /** Public participation/readiness; never derived from visibility-filtered robots. */
+  readonly requiredPlayerIds?: readonly string[];
+  readonly needsOrderReview?: boolean;
   readonly unseenTurns: readonly ParticipantTurnResult[];
   /** The host's arena look for the 3D movie; absent for rooms made before looks existed. */
   readonly arenaTheme?: ArenaThemeName;
@@ -706,6 +709,8 @@ const matchSnapshotSchema = z
     ownOrders: turnOrdersSchema,
     locked: z.boolean(),
     lockedPlayerIds: z.array(z.string().min(1)).max(4),
+    requiredPlayerIds: z.array(z.string().min(1)).max(4).optional(),
+    needsOrderReview: z.boolean().optional(),
     unseenTurns: z.array(
       z
         .object({

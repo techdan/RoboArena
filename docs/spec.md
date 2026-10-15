@@ -62,7 +62,11 @@ Deferred deliberately:
 
 ### Closed audit boundary and deferred content
 
-No unresolved original-game business rule blocks the 2-4 Team Survival build.
+The 2026-10-01 audit reopened two human live-fire interpretations: the alleged
+target-terrain adjustment is an AI branch, and the human accuracy-add table is
+indexed by Aim/selected Scan distance rather than weapon selector. Both were
+corrected in the engine by the 2026-10-15 binary audit (PR #9); see
+[`audit-2026-10-01.md`](./audit-2026-10-01.md), A01–A02.
 The focused trace closed same-Side combat, visibility, ceremony scoring, Home
 slots, and canonical Team order. v1 deliberately uses only the free-for-all
 subset: one Team and one unique Side per connected player. Alliance and hot-seat
@@ -111,6 +115,25 @@ boundaries are explicit product/data choices:
 - The server validates every order, waits until all active players lock, runs
   the deterministic resolver once, stores the canonical result, and sends each
   participant only the state/events they are authorized to observe.
+- Active players have a non-resigned Team with at least one surviving robot.
+  Eliminated players may watch and acknowledge their movies independently but
+  never gate later turns. Required participation is public readiness metadata;
+  it must be computed from authoritative state, not projected enemy contacts.
+- Order validation uses only the submitting participant's robots and public
+  map, checks the whole program, and reserves conditional finite ammunition.
+  It never simulates hidden opponents to decide whether submission is valid.
+  Legacy invalid pending orders reopen planning durably with private drafts
+  preserved, locks cleared, and an explicit review notice. Replay corruption
+  remains an error and must not be silently accepted.
+- Observing a shooter does not authorize its hidden target. Acquisition events
+  require both contacts; enemy shot/projectile coordinates require independent
+  visibility of their destination. Own fire retains the participant's known
+  target coordinates. Participant event sequences are contiguous so gaps do
+  not reveal the number of hidden events.
+- Successful saves acknowledge the submitted draft without reporting an
+  external conflict. Newer edits made while a save is in flight remain dirty
+  and retain their undo history. Read-only polling is not durably cached in the
+  mutation-idempotency table.
 - A per-room rejoin token restores the same player slot after closing the tab,
   changing devices by explicitly transferring the token/link, or disconnecting.
   Accounts are not required. A submitted turn remains locked on the server, so
@@ -162,7 +185,7 @@ v1 ships **Rubble Town only** (Two and Three sizes; Suburbs and Computer Town ca
 - Beginner default: **15.0 seconds = 900 ticks**. ✅
 - Other formations: configurable 1-40 seconds (Turn Length dialog in original). ✅
 - The planner permits commands extending past the budget; commands beyond 15.0 s are greyed out and not executed. ✅
-- Planner validation decrements finite ammo for fixed Aim & Fire shots. Repeat
+- Planner and authoritative server validation decrement finite ammo for fixed Aim & Fire shots. Repeat
   Aim & Fire and Scan & Fire conservatively reserve all remaining finite ammo,
   so hidden runtime acquisition cannot make a later finite-weapon command
   resolver-invalid.
@@ -238,11 +261,11 @@ no-regeneration policy is PROPOSED and enforced by the durable `MatchState`.
 Each direct-fire hit rolls `base + (random & mask)`, then applies cover and
 distance adjustments. The roll families and labels are exact.
 
-| Weapon     | Base roll per bullet                                     |
-| ---------- | -------------------------------------------------------- |
-| Rifle      | `10 + (random & 7)` → 10–17 ✅                           |
-| Burst Gun  | `8 + (random & 15)` → 8–23, one roll per burst ✅          |
-| Auto Rifle | `6 + (random & 15)` → 6–21 ✅                            |
+| Weapon     | Base roll per bullet                              |
+| ---------- | ------------------------------------------------- |
+| Rifle      | `10 + (random & 7)` → 10–17 ✅                    |
+| Burst Gun  | `8 + (random & 15)` → 8–23, one roll per burst ✅ |
+| Auto Rifle | `6 + (random & 15)` → 6–21 ✅                     |
 
 Damage adjustment: cover class 1/2/3/4 adds `-4/0/0/+4`; distance `<5` adds
 4 and distance `>12` subtracts 4. Clamp final damage to at least 0. ✅
