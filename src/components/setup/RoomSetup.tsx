@@ -13,10 +13,14 @@ import {
   roomToken,
   RoomSocket,
 } from "../../lib/net/client";
+import { ROBOTS_PER_TEAM_BY_LENGTH } from "../../engine/constants";
+import { ARENA_CATALOG, ARENA_TOWNS, arenaCatalogEntry } from "../../lib/arenas/catalog";
 import {
   arenaThemeSchema,
   configForLength,
+  DEFAULT_ARENA_FOR_LENGTH,
   DEFAULT_ARENA_THEME_ID,
+  roomConfigSchema,
   HOME_CORNER_LABELS,
   HOME_SLOTS,
   PLAYER_COLORS,
@@ -466,7 +470,12 @@ export function RoomSetup({ code }: { readonly code: string }) {
                   className="setup-input"
                   value={room.config.gameLength}
                   disabled={!isHost}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const gameLength = event.currentTarget.value as "melee" | "battle";
+                    // Keep a map the host picked; follow the classic pairing otherwise.
+                    const keepArena =
+                      room.config.arenaName !== DEFAULT_ARENA_FOR_LENGTH[room.config.gameLength];
+                    const next = configForLength(gameLength);
                     send({
                       version: PROTOCOL_VERSION,
                       requestId: requestId(),
@@ -474,14 +483,52 @@ export function RoomSetup({ code }: { readonly code: string }) {
                       code,
                       token,
                       config: {
-                        ...configForLength(event.currentTarget.value as "melee" | "battle"),
+                        ...next,
+                        arenaName: keepArena ? room.config.arenaName : next.arenaName,
                         arenaTheme: room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID,
                       },
-                    })
-                  }
+                    });
+                  }}
                 >
-                  <option value="melee">Melee · Rubble Two</option>
-                  <option value="battle">Battle · Rubble Three</option>
+                  <option value="melee">
+                    Melee · {ROBOTS_PER_TEAM_BY_LENGTH.melee} robots each
+                  </option>
+                  <option value="battle">
+                    Battle · {ROBOTS_PER_TEAM_BY_LENGTH.battle} robots each
+                  </option>
+                </select>
+              </label>
+              <label className="setup-label mt-4">
+                Map
+                <select
+                  className="setup-input"
+                  value={room.config.arenaName}
+                  disabled={!isHost}
+                  onChange={(event) => {
+                    const config = roomConfigSchema.safeParse({
+                      ...room.config,
+                      arenaName: event.currentTarget.value,
+                    });
+                    if (!config.success) return;
+                    send({
+                      version: PROTOCOL_VERSION,
+                      requestId: requestId(),
+                      kind: "UpdateConfig",
+                      code,
+                      token,
+                      config: config.data,
+                    });
+                  }}
+                >
+                  {ARENA_TOWNS.map(({ town, label }) => (
+                    <optgroup key={town} label={label}>
+                      {ARENA_CATALOG.filter((entry) => entry.town === town).map((entry) => (
+                        <option key={entry.slug} value={entry.slug}>
+                          {entry.name} · {entry.width}×{entry.height}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </label>
               <label className="setup-label mt-4">
@@ -516,9 +563,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                 <div className="setup-stat">
                   <span>Map</span>
-                  <strong>
-                    {room.config.arenaName === "rubble-two" ? "Rubble Two" : "Rubble Three"}
-                  </strong>
+                  <strong>{arenaCatalogEntry(room.config.arenaName).name}</strong>
                 </div>
                 <div className="setup-stat">
                   <span>Formation</span>

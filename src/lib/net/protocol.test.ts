@@ -30,12 +30,16 @@ describe("room protocol schemas", () => {
     expect(clientMessageSchema.safeParse(create({ color: "purple" })).success).toBe(false);
   });
 
-  it("locks Melee and Battle to the verified arena defaults", () => {
+  it("defaults each length to its classic arena but accepts any original map", () => {
     expect(configForLength("melee").arenaName).toBe("rubble-two");
     expect(configForLength("battle").arenaName).toBe("rubble-three");
+    for (const arenaName of ["rubble-three", "suburb-five", "computer-eight"]) {
+      expect(roomConfigSchema.safeParse({ ...configForLength("melee"), arenaName }).success).toBe(
+        true,
+      );
+    }
     expect(
-      roomConfigSchema.safeParse({ ...configForLength("melee"), arenaName: "rubble-three" })
-        .success,
+      roomConfigSchema.safeParse({ ...configForLength("melee"), arenaName: "rubble-nine" }).success,
     ).toBe(false);
   });
 

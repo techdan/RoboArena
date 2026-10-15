@@ -80,7 +80,7 @@ byte-level event/state verification, deterministic digests, and a checked-in
 v1 golden replay.
 
 **Phase 6 (draft-complete)** — Next.js/React/Tailwind shell, client-only PixiJS
-terrain renderer, source-locked Rubble Two/Three arena library, and production
+terrain renderer, source-locked library of all 24 original arenas, and production
 visual regression smoke test.
 
 **Phase 7 (draft-complete)** — pure deterministic movie snapshots, PixiJS/GSAP

@@ -647,6 +647,15 @@ SW; empty boxes do not compact that assignment. Dock is outside the playing
 field and is represented as the robot's `"dock"` state; it needs no terrain
 coordinate. ✅ original and clone engine model
 
+### Arena library
+
+All 24 original maps are playable: eight each from `RUBBLE.TWN`,
+`SUBURBS.TWN` and `COMPUTER.TWN`, exported by `tools/re/export_data.py` to
+`src/lib/arenas/original-arenas.json` (one character per MAP cell). The room
+host picks any map for either game length. Melee defaults to Rubble Two and
+Battle to Rubble Three. Sizes range from 16×16 to 52×44, including long,
+thin maps such as Suburb Five (52×20) and Suburb Seven (20×48). ✅
+
 ### Survival completion and ceremony score
 
 - A side wins when it is the last side with any surviving robot. Teams sharing

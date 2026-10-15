@@ -11,6 +11,7 @@
  * engine `createRng` seeded by a string.
  */
 
+import type { ArenaName } from "../lib/arenas/catalog";
 import { TICKS_PER_SECOND } from "../engine/constants";
 import { floorEuclideanDistance } from "../engine/geometry";
 import { resolveTurn } from "../engine/resolver";
@@ -50,7 +51,7 @@ import {
 
 export interface AutoplayOptions {
   seed: string;
-  arena: "rubble-two" | "rubble-three";
+  arena: ArenaName;
   teams: { id: string; color: string; robots: RobotClass[] }[];
   maxTurns?: number;
   turnLengthSeconds?: number;
