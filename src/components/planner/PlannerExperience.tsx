@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { TICKS_PER_SECOND, WEAPON_TIMING } from "../../engine/constants";
+import { TICKS_PER_SECOND, TIME_BOMB_BLAST, WEAPON_TIMING } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
   Heading,
@@ -29,6 +29,8 @@ import type {
 import { loadPlannerDraft, savePlannerDraft } from "../../planner/draft";
 import { plannerReducer, createPlannerState } from "../../planner/state";
 import {
+  canProgramPlaceBomb,
+  canProgramZap,
   planMovement,
   previewParkingTick,
   projectRobotAtTick,
@@ -58,12 +60,13 @@ import { AimAndFireDialog } from "./AimAndFireDialog";
 import { AllProgramsOverlay } from "./AllProgramsOverlay";
 import {
   ArenaCanvas,
+  type PlannerBombView,
   type PlannerContactView,
   type PlannerGhostView,
   type PlannerRobotView,
   type PlannerTargetingOverlay,
 } from "./ArenaCanvas";
-import { AimFireControls, ScanFireControls } from "./FireControlStrip";
+import { AimFireControls, ScanFireControls, SpecialCommandControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
 import { FirstTurnCoach } from "./FirstTurnCoach";
@@ -115,6 +118,16 @@ interface ScanDialogState {
   readonly maxDistance: number;
   readonly seconds: number;
 }
+
+/** Zap duration or Place Bomb fuse being configured before it is added. */
+interface SpecialDialogState {
+  readonly kind: "zap" | "place-bomb";
+  readonly seconds: number;
+}
+
+/** Default Zap duration and bomb fuse, in seconds. */
+const DEFAULT_ZAP_SECONDS = 5;
+const DEFAULT_BOMB_FUSE_SECONDS = 5;
 
 type PlannerTargetingBase = Omit<PlannerTargetingOverlay, "target">;
 
@@ -234,6 +247,7 @@ export function PlannerExperience({
   const [aimShots, setAimShots] = useState(1);
   const [aimReviewOpen, setAimReviewOpen] = useState(false);
   const [scanDialog, setScanDialog] = useState<ScanDialogState | null>(null);
+  const [specialDialog, setSpecialDialog] = useState<SpecialDialogState | null>(null);
   const [targetingPosture, setTargetingPosture] = useState<Posture>("upright");
   const [headingPreview, setHeadingPreview] = useState<Heading | null>(null);
   const [weaponChoiceByRobot, setWeaponChoiceByRobot] = useState<
@@ -356,6 +370,14 @@ export function PlannerExperience({
     selectedRobot.definition.class === "missile" && missileAmmoValue !== "unlimited"
       ? missileAmmoValue
       : null;
+  const grenadeAmmoValue = projectedWeaponAmmo(selectedRobot, commandPrefix, "grenade-launcher");
+  const grenadeAmmo =
+    selectedRobot.definition.secondaryWeapons?.includes("grenade-launcher") === true &&
+    grenadeAmmoValue !== "unlimited"
+      ? grenadeAmmoValue
+      : null;
+  const zapAllowed = canProgramZap(match.config, projected);
+  const bombAllowed = canProgramPlaceBomb(projected);
   const aimWeapon = aimDialog?.weapon ?? selectedWeapon;
   const aimAmmo = projectedWeaponAmmo(selectedRobot, commandPrefix, aimWeapon);
   const aimMaxShots = Math.max(
@@ -423,6 +445,7 @@ export function PlannerExperience({
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
+    setSpecialDialog(null);
     setNotice(message);
     setPreviewTick(
       parkTick ??
@@ -442,6 +465,7 @@ export function PlannerExperience({
       selectedRobot,
       team.homeSlot,
       timelineForRobot(candidate, selectedRobot.id).segments,
+      match.config,
     );
     const next = replaceTimeline(orders, selectedRobot.id, validated.segments);
     edit(
@@ -461,7 +485,13 @@ export function PlannerExperience({
     // Drop this action and everything after it; validation keeps the prefix
     // legal (it already was) and re-parks the preview at the new program end.
     const kept = currentSegments.slice(0, index);
-    const validated = validatedTimelinePrefix(match.arena, robot, team.homeSlot, kept);
+    const validated = validatedTimelinePrefix(
+      match.arena,
+      robot,
+      team.homeSlot,
+      kept,
+      match.config,
+    );
     const removedCount = currentSegments.length - index;
     setSelectedRobotId(robotId);
     edit(
@@ -481,6 +511,7 @@ export function PlannerExperience({
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
+    setSpecialDialog(null);
     setHeadingPreview(null);
     setPreviewTick(
       previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
@@ -515,6 +546,7 @@ export function PlannerExperience({
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
+    setSpecialDialog(null);
     setAimTool(false);
     setPreviewTick(
       previewParkingTick(
@@ -552,7 +584,7 @@ export function PlannerExperience({
       setNotice(`Aim & Fire target moved to ${tile.x},${tile.y}.`);
       return;
     }
-    if (scanDialog !== null) {
+    if (scanDialog !== null || specialDialog !== null) {
       return;
     }
     if ((modifiers.ctrl && modifiers.shift) || aimTool) {
@@ -608,6 +640,7 @@ export function PlannerExperience({
     setAimShots(1);
     setAimReviewOpen(false);
     setScanDialog(null);
+    setSpecialDialog(null);
     setNotice(message);
   };
   const startAim = () => {
@@ -617,6 +650,7 @@ export function PlannerExperience({
     }
     setAimTool(true);
     setScanDialog(null);
+    setSpecialDialog(null);
     setAimShots(1);
     setAimReviewOpen(false);
     setNotice("Aim & Fire active — choose a target tile.");
@@ -631,12 +665,56 @@ export function PlannerExperience({
     setAimDialog(null);
     setAimShots(1);
     setAimReviewOpen(false);
+    setSpecialDialog(null);
     setScanDialog({
       weapon: selectedWeapon,
       maxDistance: defaults.maxDistance,
       seconds: defaults.seconds,
     });
     setNotice("Configure Scan & Fire distance and duration.");
+  };
+  const startSpecial = (kind: SpecialDialogState["kind"]) => {
+    const name = kind === "zap" ? "Zap" : "Place Bomb";
+    if (specialDialog?.kind === kind) {
+      cancelFire(`${name} canceled.`);
+      return;
+    }
+    if (kind === "zap" ? !zapAllowed : !bombAllowed) {
+      setNotice(
+        kind === "zap"
+          ? "Zap is unavailable — this formation does not arm it."
+          : "Place Bomb is unavailable — this robot carries no Time Bomb.",
+      );
+      return;
+    }
+    setAimTool(false);
+    setAimDialog(null);
+    setAimShots(1);
+    setAimReviewOpen(false);
+    setScanDialog(null);
+    const remainingSeconds = Math.floor((budgetTicks - selectedEndTick) / TICKS_PER_SECOND);
+    setSpecialDialog({
+      kind,
+      seconds:
+        kind === "zap"
+          ? Math.max(1, Math.min(DEFAULT_ZAP_SECONDS, remainingSeconds))
+          : DEFAULT_BOMB_FUSE_SECONDS,
+    });
+    setNotice(kind === "zap" ? "Set how long to Zap." : "Set the Time Bomb fuse, then add it.");
+  };
+  const confirmSpecial = () => {
+    if (specialDialog === null) return;
+    if (specialDialog.kind === "zap") {
+      commitSegment(
+        { kind: "zap", seconds: specialDialog.seconds },
+        `Zap added · ${specialDialog.seconds} seconds.`,
+      );
+    } else {
+      commitSegment(
+        { kind: "place-bomb", fuseSeconds: specialDialog.seconds },
+        `Time Bomb placed · goes off ${specialDialog.seconds} seconds after it is armed.`,
+      );
+    }
   };
 
   useEffect(() => {
@@ -706,6 +784,18 @@ export function PlannerExperience({
       .filter((marker) => !visibleIds.has(marker.enemyId))
       .map((marker) => ({ at: marker.at, label: "Last seen" }));
   }, [contactViews, match.lastKnownMarkers, selfPlayerId]);
+  // The player's own armed Time Bombs (the server sends only this Team's),
+  // labelled with the time left from the start of this turn.
+  const bombViews = useMemo<readonly PlannerBombView[]>(
+    () =>
+      (match.armedBombs ?? [])
+        .filter((bomb) => bomb.teamId === team.id)
+        .map((bomb) => ({
+          at: bomb.at,
+          label: `Bomb ${Math.ceil(bomb.detonatesAt / TICKS_PER_SECOND)}s`,
+        })),
+    [match.armedBombs, team.id],
+  );
   const targetingBase = useMemo<PlannerTargetingBase | null>(() => {
     const previewOnly =
       headingPreview !== null && !aimTool && aimDialog === null && scanDialog === null;
@@ -815,6 +905,7 @@ export function PlannerExperience({
         }
         onCancel={() => {
           setScanDialog(null);
+          setSpecialDialog(null);
           setNotice("Scan & Fire canceled.");
         }}
         onConfirm={() =>
@@ -828,6 +919,18 @@ export function PlannerExperience({
             `Scan & Fire added · ${scanDialog.maxDistance} tiles for ${scanDialog.seconds} seconds.`,
           )
         }
+      />
+    ) : specialDialog !== null ? (
+      <SpecialCommandControls
+        kind={specialDialog.kind}
+        seconds={specialDialog.seconds}
+        onSecondsChange={(seconds) =>
+          setSpecialDialog((current) => (current === null ? null : { ...current, seconds }))
+        }
+        onCancel={() =>
+          cancelFire(`${specialDialog.kind === "zap" ? "Zap" : "Place Bomb"} canceled.`)
+        }
+        onConfirm={confirmSpecial}
       />
     ) : aimTool || aimDialog !== null ? (
       <AimFireControls
@@ -859,6 +962,7 @@ export function PlannerExperience({
       team.homeSlot,
       conflictOrders,
       match.turnNumber,
+      match.config,
     );
     dispatch({ type: "recover-conflict", revision, orders: recovered });
     setNotice(
@@ -917,6 +1021,8 @@ export function PlannerExperience({
     posture: cyclePosture,
     orders: () => setOrdersOpen(true),
     rehearse: toggleRehearse,
+    zap: () => startSpecial("zap"),
+    bomb: () => startSpecial("place-bomb"),
   });
   tacticalKeysRef.current = {
     aim: startAim,
@@ -924,19 +1030,25 @@ export function PlannerExperience({
     posture: cyclePosture,
     orders: () => setOrdersOpen(true),
     rehearse: toggleRehearse,
+    zap: () => startSpecial("zap"),
+    bomb: () => startSpecial("place-bomb"),
   };
   const tacticalRef = useRef(false);
   tacticalRef.current = boardKind === "3d";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && (aimTool || aimDialog !== null || scanDialog !== null)) {
+      if (
+        event.key === "Escape" &&
+        (aimTool || aimDialog !== null || scanDialog !== null || specialDialog !== null)
+      ) {
         event.preventDefault();
         setAimTool(false);
         setAimDialog(null);
         setAimShots(1);
         setAimReviewOpen(false);
         setScanDialog(null);
+        setSpecialDialog(null);
         setNotice("Firing action canceled.");
         return;
       }
@@ -944,7 +1056,7 @@ export function PlannerExperience({
       const typing =
         target instanceof HTMLElement &&
         target.closest("input, select, textarea, [contenteditable='true']") !== null;
-      if (aimDialog !== null || scanDialog !== null || typing) {
+      if (aimDialog !== null || scanDialog !== null || specialDialog !== null || typing) {
         return;
       }
       if (!(event.ctrlKey || event.metaKey || event.altKey) && tacticalRef.current) {
@@ -960,7 +1072,11 @@ export function PlannerExperience({
                   ? tacticalKeysRef.current.orders
                   : key === "r"
                     ? tacticalKeysRef.current.rehearse
-                    : null;
+                    : key === "z"
+                      ? tacticalKeysRef.current.zap
+                      : key === "b"
+                        ? tacticalKeysRef.current.bomb
+                        : null;
         if (action !== null) {
           event.preventDefault();
           action();
@@ -993,7 +1109,7 @@ export function PlannerExperience({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aimDialog, aimTool, scanDialog, selectedRobot.id, team.robots]);
+  }, [aimDialog, aimTool, scanDialog, specialDialog, selectedRobot.id, team.robots]);
 
   const confirmAim = () => {
     if (aimDialog === null) return;
@@ -1026,7 +1142,7 @@ export function PlannerExperience({
           },
     );
   };
-  const fireActive = aimTool || aimDialog !== null || scanDialog !== null;
+  const fireActive = aimTool || aimDialog !== null || scanDialog !== null || specialDialog !== null;
   const conflictBanner =
     state.conflictRevision !== null && state.conflictOrders !== null ? (
       <div className="planner-conflict" role="alert">
@@ -1134,6 +1250,7 @@ export function PlannerExperience({
           robots={robotViews}
           contacts={contactViews}
           ghosts={ghostViews}
+          bombs={bombViews}
           previewProgress={Math.min(1, previewTick / Math.max(1, budgetTicks))}
           homeAreas={homeAreaOverlays}
           route={selectedRoute}
@@ -1168,6 +1285,22 @@ export function PlannerExperience({
                 setOrdersOpen(false);
                 startScan();
               }}
+              {...(zapAllowed
+                ? {
+                    onZap: () => {
+                      setOrdersOpen(false);
+                      startSpecial("zap");
+                    },
+                  }
+                : {})}
+              {...(bombAllowed
+                ? {
+                    onPlaceBomb: () => {
+                      setOrdersOpen(false);
+                      startSpecial("place-bomb");
+                    },
+                  }
+                : {})}
               onPosture={addPosture}
               onHeadingPreview={setHeadingPreview}
               onHeading={addHeading}
@@ -1274,6 +1407,23 @@ export function PlannerExperience({
             </header>
             <p className="shot-card-empty">
               {selectedName} fires at any enemy that enters the lit arc within range.
+            </p>
+            {fireControls}
+          </aside>
+        ) : specialDialog !== null ? (
+          <aside
+            className="tactical-card scan-card"
+            aria-label={specialDialog.kind === "zap" ? "Zap" : "Place bomb"}
+          >
+            <header>
+              <p className="eyebrow">
+                {specialDialog.kind === "zap" ? "Zap" : "Place bomb"} · {selectedName}
+              </p>
+            </header>
+            <p className="shot-card-empty">
+              {specialDialog.kind === "zap"
+                ? `${selectedName} zaps any enemy standing on its tile, up to once a second.`
+                : `${selectedName} arms its Time Bomb here. It blasts every robot within ${TIME_BOMB_BLAST.radius} tiles, yours too.`}
             </p>
             {fireControls}
           </aside>
@@ -1424,6 +1574,7 @@ export function PlannerExperience({
           weapons={weapons}
           selectedWeapon={selectedWeapon}
           missileAmmo={missileAmmo}
+          grenadeAmmo={grenadeAmmo}
           disabled={projected.position === "dock"}
           aimActive={aimTool || aimDialog !== null}
           scanActive={scanDialog !== null}
@@ -1468,6 +1619,17 @@ export function PlannerExperience({
           }}
           onAim={startAim}
           onScan={startScan}
+          {...(zapAllowed
+            ? { zap: { active: specialDialog?.kind === "zap", onStart: () => startSpecial("zap") } }
+            : {})}
+          {...(bombAllowed || specialDialog?.kind === "place-bomb"
+            ? {
+                placeBomb: {
+                  active: specialDialog?.kind === "place-bomb",
+                  onStart: () => startSpecial("place-bomb"),
+                },
+              }
+            : {})}
         />
         <div className="planner-arena-region">
           <ArenaCanvas
@@ -1475,13 +1637,14 @@ export function PlannerExperience({
             robots={robotViews}
             contacts={contactViews}
             ghosts={ghostViews}
+            bombs={bombViews}
             previewProgress={Math.min(1, previewTick / Math.max(1, budgetTicks))}
             homeAreas={homeAreaOverlays}
             route={selectedRoute}
             cursor={cursor}
             cursorState={cursorState}
             targetingOverlay={targetingOverlay}
-            firingInteractionActive={aimTool || aimDialog !== null || scanDialog !== null}
+            firingInteractionActive={fireActive}
             onAssumedPosture={setTargetingPosture}
             onCursor={setCursor}
             onChooseTile={chooseTile}

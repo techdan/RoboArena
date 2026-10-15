@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Bot, Footprints, Map } from "lucide-react";
+import { BookOpen, Bot, Footprints, Map, Users } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { helpTopicsForTab, type HelpTab, type HelpTopicId } from "../../lib/help/content";
 import { BootCampLink } from "./BootCampPrompt";
@@ -11,6 +11,7 @@ const TABS: readonly { readonly id: HelpTab; readonly label: string; readonly ic
     { id: "robots", label: "Robots", icon: Bot },
     { id: "terrain", label: "Terrain", icon: Map },
     { id: "actions", label: "Actions", icon: Footprints },
+    { id: "formations", label: "Formations", icon: Users },
   ];
 
 export function FieldGuideDialog({

@@ -7,14 +7,23 @@
  */
 
 import {
+  BOMB_CARRY_MINIMUM_TICKS,
+  BOMB_MAX_FUSE_SECONDS,
   MISSILE_SCAN_MIN_DISTANCE,
-  ORIGINAL_SPOTTING_RULES_REVISION,
+  ORIGINAL_FORMATIONS_RULES_REVISION,
+  PLACE_BOMB_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
+  SIMULATION_STEP_TICKS,
   TICKS_PER_SECOND,
+  TIME_BOMB_BLAST,
+  ZAP_COOLDOWN_TICKS,
+  ZAP_DAMAGE_ROLL,
+  ZAP_IMPACT_DELAY_TICKS,
+  ZAP_MAX_SECONDS,
 } from "./constants.js";
 import { WEAPONS } from "./catalog.js";
-import { resolveBlast } from "./blast.js";
+import { resolveBlast, resolveBlastProfile } from "./blast.js";
 import { commandDurationTicks, moveStepDurationTicks, moveStepSize } from "./commandInterpreter.js";
 import { resolveCover } from "./cover.js";
 import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
@@ -27,6 +36,7 @@ import { updateSpotting, type SpottingActivity, type SpottingTeam } from "./spot
 import { computeVisibility, spottedEnemyIds, visibilityTileKey } from "./visibility.js";
 import type {
   Arena,
+  ArmedBomb,
   CommandTimeline,
   Heading,
   LastKnownMarker,
@@ -50,6 +60,8 @@ const COMMAND_KINDS: readonly RobotCommandSegment["kind"][] = [
   "set-scan-direction",
   "aim-and-fire",
   "scan-and-fire",
+  "zap",
+  "place-bomb",
 ];
 const POSTURES: readonly RobotState["posture"][] = ["upright", "ducking", "crouching"];
 const HEADINGS: readonly RobotState["scanHeading"][] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -102,6 +114,10 @@ interface ActiveCommand {
   /** Aim & Fire shoots on the command's first tick (seg6:0x4C7F dispatch). */
   readonly aimPending: boolean;
   readonly nextScanAt: number | null;
+  /** Zap cooldown, program `+0x1A` (seg6:0x4005). */
+  readonly nextZapAt?: number;
+  /** Zap's periodic spotting refresh, program `+0x18` (seg6:0x4091). */
+  readonly nextRefreshAt?: number;
 }
 
 interface Cursor {
@@ -126,7 +142,21 @@ type PendingDamage =
       readonly targetId: string;
       readonly damage: number;
       readonly radius: number;
+    }
+  | {
+      readonly damageKind: "zap";
+      readonly sourceId: string;
+      readonly targetId: string;
+      readonly damage: number;
     };
+
+/** A zap projectile (type 5) waiting to land (seg6:0x57CF). */
+interface PendingZap {
+  readonly shooterId: string;
+  readonly side: number;
+  readonly at: TileCoord;
+  readonly impactsAt: number;
+}
 
 type EventPayload = ResolutionEvent extends infer Event
   ? Event extends ResolutionEvent
@@ -269,7 +299,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     });
   }
 
-  const originalRules = state.config.rulesRevision === ORIGINAL_SPOTTING_RULES_REVISION;
+  const revision = state.config.rulesRevision ?? 0;
+  const originalRules = revision >= 2;
+  /** Revision 3: formation weapons, Show Enemy Positions and 5-tick spotting steps. */
+  const formationRules = revision >= ORIGINAL_FORMATIONS_RULES_REVISION;
+  const showAllEnemies = formationRules && state.config.showEnemyPositions === true;
+  const isStepTick = (tick: number): boolean => tick % SIMULATION_STEP_TICKS === 0;
   const rng = createRng(input.seed);
   const events: ResolutionEvent[] = [];
   let seq = 0;
@@ -279,6 +314,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
   /** Robots that fired on the tick being resolved (activity code 3, seg6:0x20B6). */
   const firedThisTick = new Set<string>();
+  /** Zappers given activity code 2 by the periodic refresh (seg6:0x40F5). */
+  const refreshedThisStep = new Set<string>();
 
   const findTargetAt = (shooter: Actor, target: TileCoord): string | null => {
     for (const candidate of actors) {
@@ -296,6 +333,28 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     return null;
   };
 
+  /** Armed Time Bombs, in placement order (item slots 12..15, seg28:0x0D13). */
+  let armedBombs: ArmedBomb[] = [...(state.armedBombs ?? [])];
+  const pendingZaps: PendingZap[] = [];
+
+  /**
+   * Place Bomb (seg6:0x2B08 → seg28:0x0D13): arms the carried bomb on the
+   * robot's tile to go off `fuse × 60 + 60` ticks after the command starts.
+   */
+  const placeBomb = (
+    robot: RobotState,
+    at: TileCoord,
+    commandIndex: number,
+    tick: number,
+    fuseSeconds: number,
+  ): void => {
+    const bombId = `${state.turnNumber}:${robot.id}:${commandIndex}`;
+    const detonatesAt = tick + fuseSeconds * TICKS_PER_SECOND + PLACE_BOMB_COST_TICKS;
+    robots.set(robot.id, { ...robot, timeBombs: (robot.timeBombs ?? 0) - 1 });
+    armedBombs.push({ id: bombId, ownerId: robot.id, teamId: robot.teamId, at, detonatesAt });
+    emit(tick, { kind: "bomb-placed", robotId: robot.id, bombId, at, detonatesAt });
+  };
+
   const startCommand = (actor: Actor, tick: number): MalformedOrders | null => {
     const robot = robots.get(actor.robotId);
     const cursor = cursors.get(actor.robotId);
@@ -304,7 +363,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     if (!command) return null;
     const commandIndex = cursor.nextIndex;
 
-    if (!COMMAND_KINDS.includes(command.kind)) {
+    if (
+      !COMMAND_KINDS.includes(command.kind) ||
+      ((command.kind === "zap" || command.kind === "place-bomb") && !formationRules)
+    ) {
       return malformed(
         "unsupported-command",
         `Unknown command kind ${String(command.kind)}.`,
@@ -334,7 +396,53 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     let aimPending = false;
     let nextScanAt: number | null = null;
     let orientationSteps: readonly Posture[] | readonly Heading[] | undefined;
-    if (command.kind === "move") {
+    let nextZapAt: number | undefined;
+    if (command.kind === "zap") {
+      if (state.config.zapArmed !== true) {
+        return malformed(
+          "illegal-command",
+          "Zap is not armed in this formation.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      if (
+        !Number.isInteger(command.seconds) ||
+        command.seconds < 1 ||
+        command.seconds > ZAP_MAX_SECONDS
+      ) {
+        return malformed(
+          "illegal-command",
+          "Zap duration must be 1-40 seconds.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      completesAt = tick + command.seconds * TICKS_PER_SECOND;
+      nextZapAt = tick;
+    } else if (command.kind === "place-bomb") {
+      if (
+        !Number.isInteger(command.fuseSeconds) ||
+        command.fuseSeconds < 0 ||
+        command.fuseSeconds > BOMB_MAX_FUSE_SECONDS
+      ) {
+        return malformed(
+          "illegal-command",
+          "Bomb fuse must be 0-40 seconds.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      if ((robot.timeBombs ?? 0) <= 0 || !isTileCoord(robot.position)) {
+        return malformed(
+          "illegal-command",
+          "Only a robot carrying a Time Bomb can place one.",
+          robot.id,
+          commandIndex,
+        );
+      }
+      completesAt = tick + PLACE_BOMB_COST_TICKS;
+    } else if (command.kind === "move") {
       if (
         !Array.isArray(command.path) ||
         command.path.length === 0 ||
@@ -517,6 +625,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       ...(orientationSteps === undefined ? {} : { orientationSteps }),
       aimPending,
       nextScanAt,
+      ...(nextZapAt === undefined ? {} : { nextZapAt, nextRefreshAt: nextZapAt }),
     };
     emit(tick, {
       kind: "command-start",
@@ -524,6 +633,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       commandIndex,
       commandKind: command.kind,
     });
+    if (command.kind === "place-bomb" && isTileCoord(robot.position)) {
+      placeBomb(robot, robot.position, commandIndex, tick, command.fuseSeconds);
+    }
     return null;
   };
 
@@ -834,6 +946,122 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
   };
 
+  /**
+   * Zap (seg6:0x2BD9): on each simulation step while the command lasts and the
+   * cooldown has passed, a live enemy-Side robot on the zapper's own tile
+   * (seg18:0x05F3) triggers a type 5 projectile that lands 5 ticks later.
+   */
+  const resolveZapChecks = (tick: number): void => {
+    if (!isStepTick(tick)) return;
+    for (const actor of actors) {
+      const cursor = cursors.get(actor.robotId);
+      const active = cursor?.active;
+      if (
+        !cursor ||
+        !active ||
+        active.command.kind !== "zap" ||
+        active.nextZapAt === undefined ||
+        tick < active.nextZapAt ||
+        tick >= active.completesAt
+      ) {
+        continue;
+      }
+      const zapper = robots.get(actor.robotId);
+      if (!zapper || zapper.hp <= 0 || !isTileCoord(zapper.position)) continue;
+      // seg6:0x4091: every 30 + 5·(rand & 15) ticks the zapper counts as active
+      // (activity 2) for the spotting pass.
+      if (tick >= (active.nextRefreshAt ?? tick)) {
+        refreshedThisStep.add(zapper.id);
+        cursor.active = {
+          ...active,
+          nextRefreshAt: tick + 30 + SIMULATION_STEP_TICKS * (rng.nextUint32() & 15),
+        };
+      }
+      if (findTargetAt(actor, zapper.position) === null) continue;
+      pendingZaps.push({
+        shooterId: zapper.id,
+        side: actor.side,
+        at: zapper.position,
+        impactsAt: tick + ZAP_IMPACT_DELAY_TICKS,
+      });
+      firedThisTick.add(zapper.id);
+      emit(tick, { kind: "zapped", shooterId: zapper.id, at: zapper.position });
+      cursor.active = { ...cursor.active!, nextZapAt: tick + ZAP_COOLDOWN_TICKS };
+    }
+  };
+
+  /**
+   * Zap impact (seg6:0x57CF → seg6:0x602B): every live enemy-Side robot on the
+   * tile takes 60 + (rand & 63) with no cover or posture cut.
+   */
+  const resolveZapImpacts = (tick: number, pendingDamage: PendingDamage[]): void => {
+    for (let index = 0; index < pendingZaps.length;) {
+      const zap = pendingZaps[index]!;
+      if (zap.impactsAt > tick) {
+        index += 1;
+        continue;
+      }
+      pendingZaps.splice(index, 1);
+      for (const candidate of actors) {
+        if (candidate.side === zap.side) continue;
+        const robot = robots.get(candidate.robotId);
+        if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) continue;
+        if (!sameTile(robot.position, zap.at)) continue;
+        pendingDamage.push({
+          damageKind: "zap",
+          sourceId: zap.shooterId,
+          targetId: robot.id,
+          damage: ZAP_DAMAGE_ROLL.base + (rng.nextUint32() & ZAP_DAMAGE_ROLL.mask),
+        });
+      }
+    }
+  };
+
+  /**
+   * Time Bomb detonation scan (seg6:0x542E): a bomb whose time has come and is
+   * still before turn end explodes through the shared blast loop, category 2,
+   * hitting every Side; the carrier is credited (seg6:0x5D34).
+   */
+  const resolveBombDetonations = (tick: number, pendingDamage: PendingDamage[]): void => {
+    if (!isStepTick(tick)) return;
+    const remaining: ArmedBomb[] = [];
+    for (const bomb of armedBombs) {
+      if (bomb.detonatesAt > tick || bomb.detonatesAt >= turnDuration) {
+        remaining.push(bomb);
+        continue;
+      }
+      emit(tick, { kind: "bomb-exploded", bombId: bomb.id, ownerId: bomb.ownerId, at: bomb.at });
+      const potentialTargets = actors.flatMap((candidate) => {
+        const robot = robots.get(candidate.robotId);
+        if (!robot || robot.hp <= 0 || !isTileCoord(robot.position)) return [];
+        const cover = resolveCover({
+          from: bomb.at,
+          to: robot.position,
+          targetPosture: robot.posture,
+          arenaTileAt: (coord) => tileAt(state.arena, coord),
+        });
+        if (cover.outcome === "blocked") return [];
+        return [{ robotId: robot.id, tile: robot.position, coverClass: cover.coverClass }];
+      });
+      for (const roll of resolveBlastProfile({
+        impact: bomb.at,
+        blast: TIME_BOMB_BLAST,
+        potentialTargets,
+        rng,
+      })) {
+        pendingDamage.push({
+          damageKind: "blast",
+          sourceId: bomb.ownerId,
+          shotIndex: 0,
+          targetId: roll.robotId,
+          damage: roll.damage,
+          radius: roll.radius,
+        });
+      }
+    }
+    armedBombs = remaining;
+  };
+
   const applyPendingDamageAndDeaths = (tick: number, pendingDamage: PendingDamage[]): void => {
     const damagedIds = new Set<string>();
     for (const damage of pendingDamage) {
@@ -922,6 +1150,14 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     state.teams.map((team) => [team.id, new Set(spottedEnemyIds(state, team.id))]),
   );
 
+  /** Show Enemy Positions: every robot on another Side (seg5:0x082F sets the mask to 0x0F). */
+  const allEnemiesOf = (team: TeamState): Set<string> =>
+    new Set(
+      state.teams
+        .filter((other) => other.side !== team.side)
+        .flatMap((other) => other.robots.map((robot) => robot.id)),
+    );
+
   /** Enemies a Team sees: spotted, alive and on the arena. */
   const liveSpotted = (teamId: string): Set<string> =>
     new Set(
@@ -949,13 +1185,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           (kind): kind is RobotCommandSegment["kind"] => kind !== undefined,
         );
         // Per-tick table seg6:0x4F34: moves and deploys set the moved flag;
-        // every command except Scan & Fire sets activity 1; firing sets 3.
+        // every command except Scan & Fire and Zap sets activity 1; Zap's
+        // refresh sets 2 (seg6:0x40F5) and firing or zapping sets 3.
         const moved = turnStart || kinds.some((kind) => kind === "move" || kind === "deploy");
         const activity: SpottingActivity = firedThisTick.has(id)
           ? 3
-          : kinds.some((kind) => kind !== "scan-and-fire")
+          : kinds.some((kind) => kind !== "scan-and-fire" && kind !== "zap")
             ? 1
-            : 0;
+            : refreshedThisStep.has(id)
+              ? 2
+              : 0;
         if (moved || activity !== 0) dirty = true;
         if (robot && robot.hp > 0 && isTileCoord(robot.position)) {
           live.push({ robot: { ...robot, position: robot.position }, moved, activity });
@@ -969,14 +1208,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         dirty,
       };
     });
-    spotted = updateSpotting({
-      arena: state.arena,
-      teams,
-      spotted,
-      rollByte: () => rng.nextUint32() & 0xff,
-    });
+    spotted = showAllEnemies
+      ? new Map(state.teams.map((team) => [team.id, allEnemiesOf(team)]))
+      : updateSpotting({
+          arena: state.arena,
+          teams,
+          spotted,
+          rollByte: () => rng.nextUint32() & 0xff,
+        });
     for (const team of state.teams) applyVisibleEnemies(tick, team.id, liveSpotted(team.id));
     firedThisTick.clear();
+    refreshedThisStep.clear();
   };
 
   const finishActive = (cursor: Cursor): void => {
@@ -1006,6 +1248,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   }
   const lateStartDamage: PendingDamage[] = [];
   resolveAimStarts(0, lateStartDamage);
+  resolveZapChecks(0);
+  resolveBombDetonations(0, lateStartDamage);
   applyPendingDamageAndDeaths(0, lateStartDamage);
   if (lateStartDamage.length > 0) updateVisibility(0);
   if (originalRules) runSpotting(0, true, new Map());
@@ -1127,9 +1371,17 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
 
     resolveScanOpportunities(tick, pendingDamage);
+    resolveZapImpacts(tick, pendingDamage);
+    resolveBombDetonations(tick, pendingDamage);
 
     for (const { actor, active } of due) {
-      if (active.command.kind !== "scan-and-fire") continue;
+      if (
+        active.command.kind !== "scan-and-fire" &&
+        active.command.kind !== "zap" &&
+        active.command.kind !== "place-bomb"
+      ) {
+        continue;
+      }
       const cursor = cursors.get(actor.robotId);
       if (cursor?.active === active) finishActive(cursor);
     }
@@ -1145,10 +1397,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const postStartScanDamage: PendingDamage[] = [];
       resolveAimStarts(tick, postStartScanDamage);
       resolveScanOpportunities(tick, postStartScanDamage);
+      resolveZapChecks(tick);
       applyPendingDamageAndDeaths(tick, postStartScanDamage);
       if (postStartScanDamage.length > 0) updateVisibility(tick);
     }
-    if (originalRules) {
+    if (originalRules && (!formationRules || isStepTick(tick))) {
       runSpotting(
         tick,
         false,
@@ -1200,12 +1453,18 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   }
 
   emit(turnDuration, { kind: "turn-end", turnNumber: state.turnNumber });
+  // seg28:0x0C1A rebases bombs still armed onto the next turn's clock.
+  const carriedBombs = armedBombs.map((bomb) => ({
+    ...bomb,
+    detonatesAt: Math.max(BOMB_CARRY_MINIMUM_TICKS, bomb.detonatesAt - turnDuration),
+  }));
   const nextState: MatchState = {
     ...state,
     turnNumber: state.turnNumber + 1,
     teams: finalTeams,
     lastKnownMarkers: nextLastKnownMarkers,
     ...(spottedEnemies === undefined ? {} : { spottedEnemies }),
+    ...(formationRules ? { armedBombs: carriedBombs } : {}),
   };
   return { outcome: "resolved", nextState, events };
 };

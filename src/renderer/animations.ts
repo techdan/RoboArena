@@ -24,9 +24,18 @@ export interface MovieRobotSnapshot {
   readonly destroyed: boolean;
 }
 
+/** A Time Bomb armed on the board at a snapshot (the viewer's own bombs only). */
+export interface MovieBombSnapshot {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly at: TileCoord;
+}
+
 export interface MovieSnapshot {
   readonly tick: number;
   readonly robots: Readonly<Record<string, MovieRobotSnapshot>>;
+  /** Armed bombs: carried in from earlier turns, placed, and not yet exploded. */
+  readonly bombs: readonly MovieBombSnapshot[];
 }
 
 export interface MovieTimeline {
@@ -47,7 +56,10 @@ export type AnimationCue =
   | "impact"
   | "miss"
   | "hit"
-  | "destroyed";
+  | "destroyed"
+  | "zap"
+  | "bomb"
+  | "explosion";
 
 /** Exhaustive presentation mapping; non-visual events intentionally map to `none`. */
 export const ANIMATION_CUES: Readonly<Record<ResolutionEvent["kind"], AnimationCue>> = {
@@ -68,6 +80,9 @@ export const ANIMATION_CUES: Readonly<Record<ResolutionEvent["kind"], AnimationC
   destroyed: "destroyed",
   "last-known-marker": "last-known",
   "command-aborted": "none",
+  zapped: "zap",
+  "bomb-placed": "bomb",
+  "bomb-exploded": "explosion",
   "turn-end": "none",
 };
 
@@ -140,6 +155,20 @@ export const applyMovieEvent = (
   }
 };
 
+export const applyBombEvent = (
+  bombs: readonly MovieBombSnapshot[],
+  event: ParticipantResolutionEvent,
+): readonly MovieBombSnapshot[] => {
+  if (event.kind === "bomb-placed") {
+    return [
+      ...bombs.filter((bomb) => bomb.id !== event.bombId),
+      { id: event.bombId, ownerId: event.robotId, at: event.at },
+    ];
+  }
+  if (event.kind === "bomb-exploded") return bombs.filter((bomb) => bomb.id !== event.bombId);
+  return bombs;
+};
+
 export const buildMovieTimeline = (
   initialState: MatchState,
   events: readonly ParticipantResolutionEvent[],
@@ -154,9 +183,17 @@ export const buildMovieTimeline = (
 
   const ticks = [...new Set([0, ...sorted.map((event) => event.tick)])].sort((a, b) => a - b);
   let robots: Readonly<Record<string, MovieRobotSnapshot>> = initialRobots(initialState);
+  let bombs: readonly MovieBombSnapshot[] = (initialState.armedBombs ?? []).map((bomb) => ({
+    id: bomb.id,
+    ownerId: bomb.ownerId,
+    at: bomb.at,
+  }));
   const snapshots = ticks.map((tick) => {
-    for (const event of eventsByTick.get(tick) ?? []) robots = applyMovieEvent(robots, event);
-    return { tick, robots } satisfies MovieSnapshot;
+    for (const event of eventsByTick.get(tick) ?? []) {
+      robots = applyMovieEvent(robots, event);
+      bombs = applyBombEvent(bombs, event);
+    }
+    return { tick, robots, bombs } satisfies MovieSnapshot;
   });
   return { ticks, snapshots, eventsByTick };
 };

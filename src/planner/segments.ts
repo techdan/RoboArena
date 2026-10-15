@@ -4,10 +4,13 @@ import {
   DEPLOY_COST_TICKS,
   MOVE_DOUBLE_COST_TICKS,
   MOVE_SINGLE_COST_TICKS,
+  BOMB_MAX_FUSE_SECONDS,
+  PLACE_BOMB_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   TICKS_PER_SECOND,
   WEAPON_TIMING,
+  ZAP_MAX_SECONDS,
 } from "../engine/constants";
 import { chunkMovementPath } from "../engine/movementChunking";
 import { headingTurnSteps, postureChangeSteps } from "../engine/orientation";
@@ -15,6 +18,7 @@ import { canTraverse } from "../engine/traversal";
 import type {
   Arena,
   CommandTimeline,
+  GameConfig,
   Heading,
   HomeSlot,
   MovementStep,
@@ -32,7 +36,12 @@ export interface ProjectedRobot {
   readonly posture: Posture;
   readonly scanHeading: Heading;
   readonly tick: number;
+  /** Time Bombs still carried once earlier Place Bomb commands have run. */
+  readonly timeBombs: number;
 }
+
+/** Match rules the planner needs to decide which commands a robot may program. */
+export type PlannerRules = Pick<GameConfig, "zapArmed">;
 
 export interface SegmentTiming {
   readonly index: number;
@@ -74,6 +83,10 @@ export const segmentDuration = (
       return WEAPON_TIMING[segment.weapon].firingIntervalTicks;
     case "scan-and-fire":
       return segment.seconds * TICKS_PER_SECOND;
+    case "zap":
+      return segment.seconds * TICKS_PER_SECOND;
+    case "place-bomb":
+      return PLACE_BOMB_COST_TICKS;
   }
 };
 
@@ -93,7 +106,10 @@ const applySegment = (
       return { ...state, scanHeading: segment.heading, tick: endTick };
     case "aim-and-fire":
     case "scan-and-fire":
+    case "zap":
       return { ...state, tick: endTick };
+    case "place-bomb":
+      return { ...state, timeBombs: Math.max(0, state.timeBombs - 1), tick: endTick };
   }
 };
 
@@ -102,7 +118,18 @@ const initialProjection = (robot: RobotState): ProjectedRobot => ({
   posture: robot.posture,
   scanHeading: robot.scanHeading,
   tick: 0,
+  timeBombs: robot.timeBombs ?? 0,
 });
+
+/** Zap needs a formation that arms it and a robot standing on the board. */
+export const canProgramZap = (
+  rules: PlannerRules | undefined,
+  projected: ProjectedRobot,
+): boolean => rules?.zapArmed === true && projected.position !== "dock";
+
+/** Place Bomb needs a carried bomb not already spent by an earlier command. */
+export const canProgramPlaceBomb = (projected: ProjectedRobot): boolean =>
+  projected.timeBombs > 0 && projected.position !== "dock";
 
 export const timelineTiming = (
   robot: RobotState,
@@ -268,6 +295,7 @@ export const validatedTimelinePrefix = (
   robot: RobotState,
   homeSlot: HomeSlot,
   segments: readonly RobotCommandSegment[],
+  rules?: PlannerRules,
 ): ValidatedTimeline => {
   let projected = initialProjection(robot);
   const valid: RobotCommandSegment[] = [];
@@ -336,6 +364,24 @@ export const validatedTimelinePrefix = (
     ) {
       break;
     }
+    if (
+      segment.kind === "zap" &&
+      (!canProgramZap(rules, projected) ||
+        !Number.isInteger(segment.seconds) ||
+        segment.seconds < 1 ||
+        segment.seconds > ZAP_MAX_SECONDS)
+    ) {
+      break;
+    }
+    if (
+      segment.kind === "place-bomb" &&
+      (!canProgramPlaceBomb(projected) ||
+        !Number.isInteger(segment.fuseSeconds) ||
+        segment.fuseSeconds < 0 ||
+        segment.fuseSeconds > BOMB_MAX_FUSE_SECONDS)
+    ) {
+      break;
+    }
     const endTick = projected.tick + segmentDuration(segment, projected);
     projected = applySegment(projected, segment, endTick);
     valid.push(segment);
@@ -350,13 +396,14 @@ export const rebaseTurnOrders = (
   homeSlot: HomeSlot,
   orders: TurnOrders,
   turnNumber: number,
+  rules?: PlannerRules,
 ): TurnOrders => {
   const robotById = new Map(robots.map((robot) => [robot.id, robot]));
   const timelines: CommandTimeline[] = [];
   for (const timeline of orders.timelines) {
     const robot = robotById.get(timeline.robotId);
     if (robot === undefined) continue;
-    const validated = validatedTimelinePrefix(arena, robot, homeSlot, timeline.segments);
+    const validated = validatedTimelinePrefix(arena, robot, homeSlot, timeline.segments, rules);
     if (validated.segments.length > 0) {
       timelines.push({ robotId: robot.id, segments: validated.segments });
     }

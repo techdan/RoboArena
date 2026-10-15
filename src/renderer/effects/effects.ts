@@ -95,6 +95,34 @@ const explosion = (layer: Container, at: { x: number; y: number }, big: boolean,
   }
 };
 
+/** A Time Bomb: the large blast plus a ring that reaches its four-tile radius. */
+const bombBlast = (layer: Container, at: { x: number; y: number }, secs: Clock) => {
+  explosion(layer, at, true, secs);
+  const core = spawn(layer, EFFECT_ASSETS.explosionLarge, at, MOVIE_TILE_SIZE * 3.4);
+  if (core !== undefined) {
+    pop(core, 0.25, 1.2, secs(0.6));
+    removeAfter(core, secs(0.8));
+  }
+  const ring = spawn(layer, EFFECT_ASSETS.blastRing, at, MOVIE_TILE_SIZE * 9);
+  if (ring !== undefined) {
+    ring.alpha = 0.7;
+    pop(ring, 0.15, 1, secs(0.55));
+    removeAfter(ring, secs(0.7));
+  }
+};
+
+/** Zap: two crossed blue-white crackles on the zapper's tile. */
+const zapCrackle = (layer: Container, at: { x: number; y: number }, secs: Clock) => {
+  for (const [index, rotation] of [0, Math.PI / 3].entries()) {
+    const spark = spawn(layer, EFFECT_ASSETS.hitSpark, at, MOVIE_TILE_SIZE * (1.1 - index * 0.2));
+    if (spark === undefined) continue;
+    spark.tint = 0x8fe9ff;
+    spark.rotation = rotation;
+    pop(spark, 0.5, 1.2, secs(0.2));
+    removeAfter(spark, secs(0.3 + index * 0.1));
+  }
+};
+
 const clearLayer = (layer: Container) => {
   layer.removeChildren().forEach((child) => {
     gsap.killTweensOf([child, child.scale, child.position]);
@@ -201,6 +229,10 @@ export const renderMovieEffects = (
     if (event.kind === "damaged") {
       const at = tileOf(event.targetId);
       if (at === undefined) continue;
+      if (event.damageKind === "zap") {
+        zapCrackle(layer, at, secs);
+        continue;
+      }
       if (event.damageKind === "direct") {
         const spark = spawn(layer, EFFECT_ASSETS.hitSpark, at, MOVIE_TILE_SIZE * 0.9);
         if (spark !== undefined) {
@@ -210,6 +242,8 @@ export const renderMovieEffects = (
       }
       explosion(layer, at, false, secs);
     }
+    if (event.kind === "zapped") zapCrackle(layer, center(event.at), secs);
+    if (event.kind === "bomb-exploded") bombBlast(layer, center(event.at), secs);
     if (event.kind === "destroyed") {
       const at = tileOf(event.robotId);
       if (at !== undefined) explosion(layer, at, true, secs);

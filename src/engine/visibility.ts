@@ -3,7 +3,9 @@
  *
  * Implements `docs/spec.md` §7. Under rules revision 2 the enemies a Team sees
  * come from the carried spotting state (`spotting.ts`); visible tiles stay the
- * geometric cone, line-of-sight and range view.
+ * geometric cone, line-of-sight and range view. With the Beginner formation's
+ * Show Enemy Positions flag every live enemy on the arena is visible
+ * (re-map/setup.md §4, options `+0x1A` bit 0x01).
  */
 
 import { WEAPON_MAX_RANGE } from "./constants.js";
@@ -46,7 +48,9 @@ export const computeVisibility = (state: MatchState, observingTeamId: string): V
     }
   }
 
-  const spotted = state.config.rulesRevision === 2 ? spottedEnemyIds(state, observingTeamId) : null;
+  const showAll = state.config.showEnemyPositions === true;
+  const spotted =
+    state.config.rulesRevision !== undefined ? spottedEnemyIds(state, observingTeamId) : null;
   const visibleEnemies = new Set<string>();
   for (const team of state.teams) {
     for (const robot of team.robots) {
@@ -54,9 +58,10 @@ export const computeVisibility = (state: MatchState, observingTeamId: string): V
       if (team.side === observingTeam.side) {
         visibleTiles.add(visibilityTileKey(robot.position));
       } else if (
-        spotted === null
+        showAll ||
+        (spotted === null
           ? visibleTiles.has(visibilityTileKey(robot.position))
-          : spotted.has(robot.id)
+          : spotted.has(robot.id))
       ) {
         visibleEnemies.add(robot.id);
       }

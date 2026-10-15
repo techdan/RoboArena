@@ -346,6 +346,9 @@ export class Effects3D {
   private readonly grenadeTemplate: THREE.Object3D;
   private readonly thrown: Thrown[] = [];
   private readonly burners: { at: () => THREE.Vector3; until: number; strength: number }[] = [];
+  /** Armed Time Bombs on the board, keyed by bomb id (see `syncBombs`). */
+  private readonly bombs = new Map<string, THREE.Object3D>();
+  private readonly bombTemplate: THREE.Object3D;
   /** Accumulated screen shake; the camera director reads and decays it. */
   shake = 0;
   private time = 0;
@@ -418,6 +421,20 @@ export class Effects3D {
       new THREE.MeshStandardMaterial({ color: 0x3d4a2a, metalness: 0.4, roughness: 0.5 }),
     );
     this.grenadeTemplate = grenade;
+    const bomb = new THREE.Group();
+    const shell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0x1d1f22, metalness: 0.5, roughness: 0.45 }),
+    );
+    shell.position.y = 0.13;
+    shell.castShadow = true;
+    const fuse = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff4d3d }),
+    );
+    fuse.position.set(0.06, 0.28, 0);
+    bomb.add(shell, fuse);
+    this.bombTemplate = bomb;
   }
 
   get particleCount(): number {
@@ -790,6 +807,55 @@ export class Effects3D {
     this.shockwave(at.clone().setY(0.03), 0.45, 0.9, 0x9a9aff, true);
   }
 
+  /** Electric crackle of a Zap on the zapper's tile. */
+  zapArc(at: THREE.Vector3): void {
+    this.flash(at.clone().setY(at.y + 0.3), 0x7fdcff, 14, 16, 3);
+    this.glow.spawn({
+      position: at,
+      life: 0.12,
+      size: [0.3, 0.6],
+      color: [0xffffff, 0x7fdcff],
+      alpha: [1, 0],
+    });
+    for (let i = 0; i < 22; i += 1) {
+      const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() * 0.8,
+        Math.random() - 0.5,
+      ).normalize();
+      this.glow.spawn({
+        position: at,
+        velocity: dir.multiplyScalar(2 + Math.random() * 3),
+        life: 0.15 + Math.random() * 0.25,
+        size: [0.03, 0.01],
+        color: [0xe8fbff, 0x4fa8ff],
+        alpha: [1, 0.1],
+        drag: 4,
+        stretch: 0.05,
+      });
+    }
+    this.shockwave(at.clone().setY(0.03), 0.5, 0.25, 0x7fdcff, true);
+  }
+
+  /** Shows exactly the given armed bombs, adding and removing markers as needed. */
+  syncBombs(bombs: readonly { readonly id: string; readonly at: THREE.Vector3 }[]): void {
+    const wanted = new Set(bombs.map((bomb) => bomb.id));
+    for (const [id, object] of this.bombs) {
+      if (wanted.has(id)) continue;
+      object.removeFromParent();
+      this.bombs.delete(id);
+    }
+    for (const bomb of bombs) {
+      let object = this.bombs.get(bomb.id);
+      if (object === undefined) {
+        object = this.bombTemplate.clone();
+        this.bombs.set(bomb.id, object);
+        this.group.add(object);
+      }
+      object.position.set(bomb.at.x, 0, bomb.at.z);
+    }
+  }
+
   /** Keeps a wreck smouldering until `until` (scene seconds). */
   burn(at: () => THREE.Vector3, until: number, strength = 1): void {
     this.burners.push({ at, until, strength });
@@ -1071,6 +1137,13 @@ export class Effects3D {
   dispose(): void {
     this.clear();
     this.clearDecals();
+    this.syncBombs([]);
+    this.bombTemplate.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    });
     this.glow.dispose();
     this.smoke.dispose();
     this.glowTexture.dispose();

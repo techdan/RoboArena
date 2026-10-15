@@ -98,7 +98,9 @@ export const explainEvent = (event: ParticipantResolutionEvent): ExplainedEvent 
       const cause =
         event.damageKind === "direct"
           ? `${source} dealt ${event.damage} direct damage${event.score === undefined ? "" : ` at score ${event.score}`}.`
-          : `${source} dealt ${event.damage} blast damage${event.radius === undefined ? "" : ` at radius ${event.radius}`}.`;
+          : event.damageKind === "zap"
+            ? `${source} zapped it for ${event.damage} damage.`
+            : `${source} dealt ${event.damage} blast damage${event.radius === undefined ? "" : ` at radius ${event.radius}`}.`;
       return {
         ...base,
         category: "combat",
@@ -106,6 +108,27 @@ export const explainEvent = (event: ParticipantResolutionEvent): ExplainedEvent 
         detail: `${event.targetId}: ${cause}`,
       };
     }
+    case "zapped":
+      return {
+        ...base,
+        category: "combat",
+        title: "Zap",
+        detail: `${event.shooterId} zapped its tile ${event.at.x},${event.at.y}.`,
+      };
+    case "bomb-placed":
+      return {
+        ...base,
+        category: "combat",
+        title: "Time Bomb placed",
+        detail: `${event.robotId} armed a Time Bomb at ${event.at.x},${event.at.y}.`,
+      };
+    case "bomb-exploded":
+      return {
+        ...base,
+        category: "combat",
+        title: "Time Bomb exploded",
+        detail: `${event.ownerId}'s Time Bomb went off at ${event.at.x},${event.at.y}, blasting every robot within 4 tiles.`,
+      };
     case "destroyed":
       return {
         ...base,

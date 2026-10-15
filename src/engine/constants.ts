@@ -84,6 +84,18 @@ export const SCAN_DIRECTION_COST_TICKS = 5;
  */
 export const ORIGINAL_SPOTTING_RULES_REVISION = 2;
 
+/**
+ * Rules revision 3 keeps revision 2 and adds the original formation setups
+ * (Zap, Time Bomb, grenades, Show Enemy Positions) and runs the spotting pass
+ * on the original 5-tick simulation step instead of every tick: the movie loop
+ * advances `now` by 5 per iteration and calls the pass once (seg6:0x4832,
+ * seg6:0x483E).
+ */
+export const ORIGINAL_FORMATIONS_RULES_REVISION = 3;
+
+/** The original simulation advances in 5-tick steps (seg6:0x4838..0x483E). */
+export const SIMULATION_STEP_TICKS = 5;
+
 // ──────────────────────────────────────────────────────────────────────────
 // Spotting (re-map/stealth-fence-ceremony-ai-formats.md §1)
 
@@ -99,6 +111,46 @@ export const SPOTTING_COVER_BASE: Readonly<Record<1 | 2 | 3 | 4, number>> = {
   3: 6,
   4: 10,
 };
+
+// ──────────────────────────────────────────────────────────────────────────
+// Zap and Time Bomb (re-map/commands.md §3-4)
+
+/** A zap's projectile (type 5) lands 5 ticks after it is created (seg6:0x1A08). */
+export const ZAP_IMPACT_DELAY_TICKS = 5;
+
+/** At most one zap per 60 ticks while the command lasts (seg6:0x4005). */
+export const ZAP_COOLDOWN_TICKS = 60;
+
+/** Zap damage 60 + (rand & 63), no cover, posture or distance terms (seg6:0x60EE). */
+export const ZAP_DAMAGE_ROLL = { base: 60, mask: 63 } as const;
+
+/** Place Bomb command record duration, descriptor row 23. */
+export const PLACE_BOMB_COST_TICKS = 60;
+
+/** Zap and fuse dialogs accept 1..40 and 0..40 seconds (seg26:0x178C, seg26:0x18B2). */
+export const ZAP_MAX_SECONDS = 40;
+export const BOMB_MAX_FUSE_SECONDS = 40;
+
+/**
+ * Time Bomb blast, category 2 at DGROUP 0x1606/0x1610: radius 0..4, the same
+ * blast loop as missiles (seg6:0x5D73), hitting every Side.
+ */
+export const TIME_BOMB_BLAST = {
+  radius: 4,
+  damageAtRadius: [
+    { base: 120, mask: 31 },
+    { base: 80, mask: 31 },
+    { base: 40, mask: 31 },
+    { base: 20, mask: 15 },
+    { base: 10, mask: 7 },
+  ],
+} as const;
+
+/**
+ * An armed bomb that has not gone off by turn end carries over with its time
+ * reduced by the turn length, never below 5 (seg28:0x0C1A).
+ */
+export const BOMB_CARRY_MINIMUM_TICKS = 5;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Survival ceremony

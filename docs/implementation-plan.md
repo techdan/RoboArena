@@ -422,6 +422,12 @@ changes per level via Ducking (`seg80:0x0422`, `seg80:0x0352`). Matches created
 earlier keep the legacy rules so stored replays verify. See `docs/spec.md` §7
 and `docs/modernization-ideas.md`.
 
+**2026-10-15 formations update (rules revision 3, ✅ DRAFT COMPLETE)**: the
+lobby offers the original Beginner and Standard formations with their rosters,
+grenades, Zap, Time Bomb and Show Enemy Positions (`src/engine/formations.ts`),
+and spotting runs on the original 5-tick simulation step. See `docs/spec.md`
+§2, §4 and §7.
+
 These are bundled because both need scan-cone calculations against moving targets per tick. Splitting into two phases would duplicate the per-tick visibility-against-cone logic.
 
 **Dependencies**: Phase 3.

@@ -62,6 +62,8 @@ const COMMAND_KINDS = [
   "set-scan-direction",
   "aim-and-fire",
   "scan-and-fire",
+  "zap",
+  "place-bomb",
 ] as const;
 const SPORT_TYPES = [
   "survival",
@@ -157,6 +159,8 @@ const assertRobot = (value: unknown, path: string, teamId: string): string => {
     const ammo = value.ammo[weapon];
     if (ammo !== "unlimited") assertInteger(ammo, `${path}.ammo.${weapon}`, { min: 0 });
   }
+  if (value.timeBombs !== undefined)
+    assertInteger(value.timeBombs, `${path}.timeBombs`, { min: 0 });
   return value.id;
 };
 
@@ -168,8 +172,13 @@ const assertConfig = (value: unknown, path: string): void => {
   assertOneOf(value.arenaType, ARENA_TYPES, `${path}.arenaType`);
   assertString(value.arenaSizeName, `${path}.arenaSizeName`);
   assertInteger(value.turnLengthSeconds, `${path}.turnLengthSeconds`, { min: 1, max: 40 });
-  if (value.rulesRevision !== undefined && value.rulesRevision !== 2) {
-    throw new Error(`${path}.rulesRevision must be 2 when present.`);
+  if (value.rulesRevision !== undefined && value.rulesRevision !== 2 && value.rulesRevision !== 3) {
+    throw new Error(`${path}.rulesRevision must be 2 or 3 when present.`);
+  }
+  for (const flag of ["showEnemyPositions", "zapArmed"] as const) {
+    if (value[flag] !== undefined && value[flag] !== true) {
+      throw new Error(`${path}.${flag} must be true when present.`);
+    }
   }
 };
 
@@ -338,6 +347,12 @@ const assertCommandSegment = (value: unknown, path: string): void => {
       assertOneOf(value.weapon, WEAPON_IDS, `${path}.weapon`);
       assertInteger(value.maxDistance, `${path}.maxDistance`, { min: 0 });
       assertInteger(value.seconds, `${path}.seconds`, { min: 1 });
+      return;
+    case "zap":
+      assertInteger(value.seconds, `${path}.seconds`, { min: 1 });
+      return;
+    case "place-bomb":
+      assertInteger(value.fuseSeconds, `${path}.fuseSeconds`, { min: 0 });
       return;
     default:
       throw new Error(`${path}.kind has an unsupported value.`);

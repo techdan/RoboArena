@@ -162,13 +162,27 @@ boundaries are explicit product/data choices:
 | -------- | ----------: | ------------------------------------------------------- | ----------------------------------------- |
 | Skirmish |           2 | 16×16 source map available; not selectable in main game | post-main preset                          |
 | Melee    |           4 | 24×24 (Rubble Two) ✅                                   | 1 Rifle / 1 Burst / 1 Auto / 1 Missile ✅ |
-| Battle   |           6 | 32×32 (Rubble Three) ✅                                 | 2 Rifle / 2 Burst / 1 Auto / 1 Missile ✅ |
-| Campaign |           8 | 40×40 source map available; not selectable in main game | 3 Rifle / 2 Burst / 2 Auto / 1 Missile ✅ |
+| Battle   |           6 | 32×32 (Rubble Three) ✅                                 | Beginner 2/2/1/1, Standard 2/1/2/1 ✅     |
+| Campaign |           8 | 40×40 source map available; not selectable in main game | Beginner 3/2/2/1, Standard 2/2/2/2 ✅     |
+
+Rosters are Rifle / Burst / Auto / Missile counts from the formation × length
+table at DGROUP `0x162A` (`src/engine/formations.ts`).
 
 ### Formations
 
 5 formations: Beginner / Standard / Fire Fight / Missile Fest / Beat the Clock. ✅
-v1 ships **Beginner** only; others deferred (they affect roster composition and turn-time bounds).
+The lobby offers **Beginner** and **Standard** (default); the rest are deferred.
+Matches created with rules revision 3 apply the formation's original setup
+(`seg61:0x02A7..0x03A3`, re-map `setup.md` §1.3):
+
+| Formation | Grenades/robot | Missiles | Zap | Time Bomb       | Enemy positions |
+| --------- | -------------: | -------: | --- | --------------- | --------------- |
+| Beginner  |              0 |        3 | off | off             | shown (no fog)  |
+| Standard  |              3 |        3 | on  | one per Team ✅ | hidden          |
+
+Every class carries the grenade launcher (weapon mask bit `0x10`), so Standard
+grenades go to every robot. The Time Bomb goes to each Team's first robot
+(`seg21:0x01E5`). Show Enemy Damage is on in both.
 
 ### Sport modes
 
@@ -243,7 +257,7 @@ before rules revision 2 keep the legacy flat 10-tick cost.
 | Burst Gun        |      **1** ✅ | 15 ticks (0.25 s) ✅   |     18 ✅ | unlimited                                  |
 | Auto Rifle       |             1 | 10 ticks (0.17 s) ✅   |     18 ✅ | unlimited                                  |
 | Missile Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | 3                                          |
-| Grenade Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | custom grant 0–9; not granted in main game |
+| Grenade Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | formation: Beginner 0, Standard 3          |
 
 Scan & Fire re-fire delays are Rifle/Burst/Auto/Missile/Grenade =
 `30/15/10/70/80` ticks: the weapon's Aim duration, plus 40 for missiles and 50
@@ -290,6 +304,31 @@ created by the named Grenade handlers and dispatches to blast category 0. ✅
 
 Cover class 1/2/3/4 reduces blast damage to `1/2`, `3/4`, `7/8`, or full using
 integer shifts/truncation. ✅
+
+### Zap (Standard)
+
+Zap (selector 3, `seg6:0x2BD9`) runs for 1–40 s. On each 5-tick simulation step
+while it runs, once at least 60 ticks have passed since its last zap, it zaps if
+a live enemy-Side robot stands on the zapper's own tile. The zap lands 5 ticks
+later and every live enemy-Side robot on that tile takes `60 + (random & 63)` =
+60–123, with no cover, posture or distance terms (`seg6:0x602B`). Zapping
+reveals the zapper like firing; between zaps the command refreshes spotting
+activity every `30 + 5·(random & 15)` ticks (`seg6:0x4091`). ✅
+
+### Time Bomb (Standard)
+
+Place Bomb (selector 23, `seg6:0x2B08`) takes 60 ticks and arms the carried
+bomb on the robot's tile with a 0–40 s fuse. It goes off `fuse × 60 + 60` ticks
+after the command starts (`seg28:0x0D13`), through the shared blast loop with
+category 2, hitting every Side (`seg6:0x542E`, `seg6:0x5D73`):
+
+| Radius | 0       | 1      | 2     | 3     | 4     |
+| ------ | ------- | ------ | ----- | ----- | ----- |
+| Damage | 120–151 | 80–111 | 40–71 | 20–35 | 10–17 |
+
+A bomb still armed at turn end carries over with its time reduced by the turn
+length, never below 5 (`seg28:0x0C1A`). Only the placing Team sees an armed
+bomb; everyone who can see the tile sees it explode. ✅
 
 ---
 
@@ -559,11 +598,13 @@ A team sees:
 - Tiles within any of its own robots' scan cone × range with unobstructed LoS
 - Enemy robots it has **spotted** (rules revision 2, below)
 
-### Spotting roll (rules revision 2) ✅
+### Spotting roll (rules revisions 2 and 3) ✅
 
-New matches use `GameConfig.rulesRevision: 2`, which matches the original's
-per-tick spotting (`src/engine/spotting.ts`; re-map
-`stealth-fence-ceremony-ai-formats.md` §1). After every tick, for each pair of
+Rules revision 2 introduced the original's spotting (`src/engine/spotting.ts`;
+re-map `stealth-fence-ceremony-ai-formats.md` §1). New matches use revision 3,
+which runs the pass once per 5-tick simulation step, as the original movie loop
+does (`seg6:0x4832`, `now += 5` at `seg6:0x483E`); revision 2 ran it every tick
+and is kept only so its replays verify. On each pass, for each pair of
 Teams on different Sides where either Team moved or acted (`seg6:0x5898`,
 `seg96:0x03E0`), every pair of live robots with sight strength > 0 and cover on
 both ends (`seg96:0x060D`) is checked in both directions. A target inside the
@@ -585,8 +626,9 @@ that retention applies. At turn start every robot counts as moved
 the authoritative turn RNG. Matches without the revision keep the legacy rule:
 every enemy in a visible tile is seen.
 
-The original's Beginner formation also turns Show Enemy Positions on, which
-removes fog entirely. RoboArena keeps fog; see `docs/modernization-ideas.md`.
+The Beginner formation turns Show Enemy Positions on, which removes fog
+entirely: every Team sees every live enemy on the arena (options `+0x1A` bit
+`0x01`). Standard keeps fog.
 
 Enemy sensor contacts are **not pooled across allied Teams**. The original
 initializes each observing Team's visible-robot mask with all same-Side robots

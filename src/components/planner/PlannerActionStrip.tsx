@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, Radar } from "lucide-react";
+import { Bomb, Crosshair, Radar, Zap } from "lucide-react";
 import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import type { Heading, Posture, WeaponId } from "../../engine/types";
 import { HEADINGS, headingFromVector, rotateHeading } from "../../planner/presentation";
@@ -26,6 +26,8 @@ export interface PlannerActionStripProps {
   readonly weapons: readonly WeaponId[];
   readonly selectedWeapon: WeaponId;
   readonly missileAmmo: number | null;
+  /** Grenades left after programmed throws; null hides the count. */
+  readonly grenadeAmmo?: number | null;
   readonly disabled: boolean;
   readonly aimActive: boolean;
   readonly scanActive: boolean;
@@ -45,6 +47,15 @@ export interface PlannerActionStripProps {
   readonly onWeapon: (weapon: WeaponId) => void;
   readonly onAim: () => void;
   readonly onScan: () => void;
+  /** Zap entry button; omitted when the formation does not arm Zap. */
+  readonly zap?: SpecialCommandEntry;
+  /** Place Bomb entry button; omitted when the robot carries no Time Bomb. */
+  readonly placeBomb?: SpecialCommandEntry;
+}
+
+export interface SpecialCommandEntry {
+  readonly active: boolean;
+  readonly onStart: () => void;
 }
 
 export function PlannerActionStrip({
@@ -53,6 +64,7 @@ export function PlannerActionStrip({
   weapons,
   selectedWeapon,
   missileAmmo,
+  grenadeAmmo = null,
   disabled,
   aimActive,
   scanActive,
@@ -64,6 +76,8 @@ export function PlannerActionStrip({
   onWeapon,
   onAim,
   onScan,
+  zap,
+  placeBomb,
 }: PlannerActionStripProps) {
   const [keyboardHeading, setKeyboardHeading] = useState(heading);
   useEffect(() => setKeyboardHeading(heading), [heading]);
@@ -234,6 +248,7 @@ export function PlannerActionStrip({
               <option key={weapon} value={weapon}>
                 {WEAPON_LABELS[weapon]}
                 {weapon === "missile-launcher" && missileAmmo !== null ? ` · ${missileAmmo}` : ""}
+                {weapon === "grenade-launcher" && grenadeAmmo !== null ? ` · ${grenadeAmmo}` : ""}
               </option>
             ))}
           </select>
@@ -261,6 +276,32 @@ export function PlannerActionStrip({
             >
               <Radar size={17} aria-hidden="true" /> Scan &amp; Fire
             </button>
+            {zap === undefined ? null : (
+              <button
+                type="button"
+                className="cursor-pointer"
+                aria-pressed={zap.active}
+                data-active={zap.active}
+                disabled={disabled}
+                title="Zap enemies sharing this robot's tile"
+                onClick={zap.onStart}
+              >
+                <Zap size={17} aria-hidden="true" /> Zap
+              </button>
+            )}
+            {placeBomb === undefined ? null : (
+              <button
+                type="button"
+                className="cursor-pointer"
+                aria-pressed={placeBomb.active}
+                data-active={placeBomb.active}
+                disabled={disabled}
+                title="Arm this robot's Time Bomb on its tile"
+                onClick={placeBomb.onStart}
+              >
+                <Bomb size={17} aria-hidden="true" /> Bomb
+              </button>
+            )}
           </>
         )}
       </div>

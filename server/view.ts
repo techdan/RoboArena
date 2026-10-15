@@ -26,8 +26,12 @@ export const projectMatchState = (state: MatchState, playerId: string): MatchSta
   // Spotting masks are authority-only; the filtered robots already carry them.
   const publicState: MatchState = { ...state };
   delete (publicState as { spottedEnemies?: unknown }).spottedEnemies;
+  // Only the Team that placed a Time Bomb knows where it is.
+  const ownBombs = state.armedBombs?.filter((bomb) => bomb.teamId === playerId);
+  delete (publicState as { armedBombs?: unknown }).armedBombs;
   return {
     ...publicState,
+    ...(ownBombs === undefined ? {} : { armedBombs: ownBombs }),
     teams: state.teams.map((team) => ({
       ...team,
       robots:
@@ -94,6 +98,12 @@ const eventIsAuthorized = (
         authorizedProjectileIds.has(event.projectileId) &&
         (authorizedProjectileIds.get(event.projectileId) === true || targetIsVisible(event.target))
       );
+    case "zapped":
+      return authorizedRobotIds.has(event.shooterId);
+    case "bomb-placed":
+      return ownRobotIds.has(event.robotId);
+    case "bomb-exploded":
+      return ownRobotIds.has(event.ownerId) || targetIsVisible(event.at);
     case "damaged":
       return false;
   }

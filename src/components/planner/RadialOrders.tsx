@@ -1,6 +1,16 @@
 "use client";
 
-import { ArrowLeft, Compass, Crosshair, Footprints, PersonStanding, Radar, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Bomb,
+  Compass,
+  Crosshair,
+  Footprints,
+  PersonStanding,
+  Radar,
+  X,
+  Zap,
+} from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { Heading, Posture } from "../../engine/types";
 import { HEADINGS } from "../../planner/presentation";
@@ -12,6 +22,10 @@ export interface RadialOrdersProps {
   readonly onMove: () => void;
   readonly onAim: () => void;
   readonly onScan: () => void;
+  /** Present only when this robot may program Zap. */
+  readonly onZap?: () => void;
+  /** Present only when this robot still carries a Time Bomb. */
+  readonly onPlaceBomb?: () => void;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeadingPreview: (heading: Heading | null) => void;
   readonly onHeading: (heading: Heading) => void;
@@ -36,6 +50,74 @@ interface Item {
   readonly onClick: () => void;
   readonly onHover?: (on: boolean) => void;
 }
+
+/**
+ * Root ring: Move, Aim, Scan & fire, Posture, Face, then Zap and Bomb when the
+ * robot may program them. Items share the circle evenly with the close button,
+ * which keeps the original 60-degree layout when only the five base orders show.
+ */
+const rootItems = (
+  props: RadialOrdersProps,
+  openPosture: () => void,
+  openFace: () => void,
+): readonly Item[] => {
+  const entries: Omit<Item, "angle">[] = [
+    {
+      key: "move",
+      label: "Move",
+      hint: "tap floor",
+      icon: <Footprints size={14} aria-hidden="true" />,
+      primary: true,
+      onClick: props.onMove,
+    },
+    {
+      key: "aim",
+      label: "Aim",
+      hint: "A",
+      icon: <Crosshair size={14} aria-hidden="true" />,
+      onClick: props.onAim,
+    },
+    {
+      key: "scan",
+      label: "Scan & fire",
+      hint: "S",
+      icon: <Radar size={14} aria-hidden="true" />,
+      onClick: props.onScan,
+    },
+    {
+      key: "posture",
+      label: POSTURE_LABELS[props.posture],
+      hint: "D",
+      icon: <PersonStanding size={14} aria-hidden="true" />,
+      onClick: openPosture,
+    },
+    {
+      key: "face",
+      label: `Face ${props.heading}`,
+      hint: "F",
+      icon: <Compass size={14} aria-hidden="true" />,
+      onClick: openFace,
+    },
+  ];
+  if (props.onZap !== undefined)
+    entries.push({
+      key: "zap",
+      label: "Zap",
+      hint: "Z",
+      icon: <Zap size={14} aria-hidden="true" />,
+      onClick: props.onZap,
+    });
+  if (props.onPlaceBomb !== undefined)
+    entries.push({
+      key: "bomb",
+      label: "Bomb",
+      hint: "B",
+      icon: <Bomb size={14} aria-hidden="true" />,
+      onClick: props.onPlaceBomb,
+    });
+  const step = 360 / (entries.length + 1);
+  return entries.map((entry, index) => ({ ...entry, angle: -90 + index * step }));
+};
 
 /**
  * Orders open around the selected robot, where the player is already looking.
@@ -73,49 +155,12 @@ export function RadialOrders(props: RadialOrdersProps) {
             },
             onHover: (on: boolean) => props.onHeadingPreview(on ? heading : null),
           }))
-        : [
-            {
-              key: "move",
-              label: "Move",
-              hint: "tap floor",
-              icon: <Footprints size={14} aria-hidden="true" />,
-              angle: -90,
-              primary: true,
-              onClick: props.onMove,
-            },
-            {
-              key: "aim",
-              label: "Aim",
-              hint: "A",
-              icon: <Crosshair size={14} aria-hidden="true" />,
-              angle: -30,
-              onClick: props.onAim,
-            },
-            {
-              key: "scan",
-              label: "Scan & fire",
-              hint: "S",
-              icon: <Radar size={14} aria-hidden="true" />,
-              angle: 30,
-              onClick: props.onScan,
-            },
-            {
-              key: "posture",
-              label: POSTURE_LABELS[props.posture],
-              hint: "D",
-              icon: <PersonStanding size={14} aria-hidden="true" />,
-              angle: 90,
-              onClick: () => setRing("posture"),
-            },
-            {
-              key: "face",
-              label: `Face ${props.heading}`,
-              hint: "F",
-              icon: <Compass size={14} aria-hidden="true" />,
-              angle: 150,
-              onClick: () => setRing("face"),
-            },
-          ];
+        : rootItems(
+            props,
+            () => setRing("posture"),
+            () => setRing("face"),
+          );
+  const closeAngle = ring === "root" ? -90 + (360 / (items.length + 1)) * items.length : 210;
   return (
     <div
       className="radial-orders"
@@ -155,8 +200,8 @@ export function RadialOrders(props: RadialOrdersProps) {
         className="radial-orders-close cursor-pointer"
         aria-label={ring === "root" ? "Close orders" : "Back"}
         style={{
-          left: Math.cos((210 * Math.PI) / 180) * RADIUS,
-          top: Math.sin((210 * Math.PI) / 180) * RADIUS,
+          left: Math.cos((closeAngle * Math.PI) / 180) * RADIUS,
+          top: Math.sin((closeAngle * Math.PI) / 180) * RADIUS,
         }}
         onClick={ring === "root" ? props.onClose : back}
       >

@@ -149,6 +149,43 @@ describe("authoritative match lifecycle", () => {
     expect(JSON.stringify(projected.events)).not.toContain('"x":2');
   });
 
+  it("keeps a Time Bomb's placement and position private to its Team", () => {
+    const base = makeMatch({
+      teamOneRobots: [{ ...makeRobot("b", "team-1", "rifle", { x: 1, y: 1 }), timeBombs: 1 }],
+      teamTwoRobots: [makeRobot("e", "team-2", "rifle", { x: 6, y: 6 }, { scanHeading: "W" })],
+    });
+    const state = {
+      ...base,
+      config: { ...base.config, rulesRevision: 3 as const, zapArmed: true as const },
+    };
+    const result = resolveTurn({
+      state,
+      seed: "bomb-privacy",
+      orders: {
+        turnNumber: 1,
+        timelines: [{ robotId: "b", segments: [{ kind: "place-bomb", fuseSeconds: 30 }] }],
+      },
+    });
+    if (result.outcome !== "resolved") throw new Error(result.message);
+    expect(projectMatchState(result.nextState, "team-1").armedBombs).toHaveLength(1);
+    expect(projectMatchState(result.nextState, "team-2").armedBombs).toEqual([]);
+    const turn: CanonicalTurnRecord = {
+      turnNumber: 1,
+      seed: "bomb-privacy",
+      resolutionNonce: "nonce",
+      orders: emptyOrders(1),
+      participantOrders: {},
+      initialState: state,
+      events: result.events,
+      eventDigest: "unused",
+      nextStateDigest: "unused",
+    };
+    const kinds = (playerId: string) =>
+      projectTurnResult(turn, playerId).events.map((event) => event.kind);
+    expect(kinds("team-1")).toContain("bomb-placed");
+    expect(kinds("team-2")).not.toContain("bomb-placed");
+  });
+
   it("never reveals an unseen scanner to its target", () => {
     const state = makeMatch({
       teamOneRobots: [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 }, { scanHeading: "N" })],

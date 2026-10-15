@@ -4667,6 +4667,18 @@ a.planner-menu-item:focus-visible {
   color: rgb(255 255 255 / 50%);
   font-size: 0.68rem;
 }
+/* Formation extras: short paragraphs read better left-aligned. */
+.bc-bands.bc-extras li {
+  justify-items: start;
+  gap: 0.2rem;
+  text-align: left;
+}
+.bc-bands.bc-extras strong {
+  font-size: 0.9rem;
+}
+.bc-bands.bc-extras span {
+  line-height: 1.45;
+}
 .bc-bands li[data-sign="1"] strong {
   color: #bef264;
 }

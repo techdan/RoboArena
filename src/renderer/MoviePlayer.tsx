@@ -19,6 +19,7 @@ import {
 import { ANIMATION_CUES, buildMovieTimeline, presentationDelayMs } from "./animations";
 import { clampContentOffset } from "../lib/fitTransform";
 import { renderMovieEffects } from "./effects/effects";
+import { drawBombMarker } from "./effects/bombMarker";
 import { applyRobotReactions, resetRobotReactions } from "./reactions";
 import {
   movedBeyondGestureThreshold,
@@ -365,7 +366,7 @@ export function MoviePlayer({
     setCurrentIndex(initialIndex);
 
     const initialize = async () => {
-      const { Application, Assets, Container, Sprite } = await import("pixi.js");
+      const { Application, Assets, Container, Graphics, Sprite } = await import("pixi.js");
       if (disposed) return;
       app = new Application();
       await app.init({
@@ -414,9 +415,10 @@ export function MoviePlayer({
         }
       }
 
+      const bombLayer = new Container();
       const robotLayer = new Container();
       const effectsLayer = new Container();
-      app.stage.addChild(robotLayer, effectsLayer);
+      app.stage.addChild(bombLayer, robotLayer, effectsLayer);
       const visuals = new Map<string, RobotVisual>();
       const firstSnapshot = timeline.snapshots[0];
       if (firstSnapshot === undefined) throw new Error("Movie has no initial snapshot.");
@@ -463,6 +465,18 @@ export function MoviePlayer({
             animate: animate && !reducedMotionRef.current,
             speed: speedRef.current,
           });
+        }
+        // Armed bombs sit under the robots until their own explosion event.
+        bombLayer.removeChildren().forEach((child) => child.destroy());
+        for (const bomb of snapshot.bombs) {
+          bombLayer.addChild(
+            drawBombMarker(
+              new Graphics(),
+              bomb.at.x * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2,
+              bomb.at.y * MOVIE_TILE_SIZE + MOVIE_TILE_SIZE / 2,
+              MOVIE_TILE_SIZE,
+            ),
+          );
         }
         const tickEvents = timeline.eventsByTick.get(snapshot.tick) ?? [];
         renderMovieEffects(effectsLayer, tickEvents, robotPositions, {

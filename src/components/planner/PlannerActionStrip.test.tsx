@@ -102,6 +102,33 @@ describe("Phase 11.8.2 action strip", () => {
     expect(takenOver).not.toContain("Aim &amp; Fire");
     expect(takenOver).not.toContain("Scan &amp; Fire");
   });
+
+  it("offers Zap and Bomb only when the planner passes them in", () => {
+    const without = renderToStaticMarkup(
+      <HelpProvider>
+        <PlannerActionStrip {...stripShared} weapons={["rifle"]} selectedWeapon="rifle" />
+      </HelpProvider>,
+    );
+    expect(without).not.toContain("> Zap");
+    expect(without).not.toContain("> Bomb");
+
+    const withExtras = renderToStaticMarkup(
+      <HelpProvider>
+        <PlannerActionStrip
+          {...stripShared}
+          weapons={["rifle", "grenade-launcher"]}
+          selectedWeapon="rifle"
+          grenadeAmmo={3}
+          zap={{ active: true, onStart: noop }}
+          placeBomb={{ active: false, onStart: noop }}
+        />
+      </HelpProvider>,
+    );
+    expect(withExtras).toContain("Zap");
+    expect(withExtras).toContain("Bomb");
+    expect(withExtras).toContain("Grenade Launcher · 3");
+    expect(withExtras).toMatch(/aria-pressed="true"[^>]*title="Zap/);
+  });
 });
 
 describe("Phase 11.8.2 selector + summary band", () => {

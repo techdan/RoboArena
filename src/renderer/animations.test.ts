@@ -104,6 +104,45 @@ describe("movie timeline", () => {
     expect(ANIMATION_CUES["enemy-lost"]).toBe("last-known");
     expect(ANIMATION_CUES["last-known-marker"]).toBe("last-known");
     expect(ANIMATION_CUES["shot-missed"]).toBe("miss");
+    expect(ANIMATION_CUES.zapped).toBe("zap");
+    expect(ANIMATION_CUES["bomb-placed"]).toBe("bomb");
+    expect(ANIMATION_CUES["bomb-exploded"]).toBe("explosion");
+  });
+
+  it("keeps carried and placed bombs on the board until they explode", () => {
+    const carried = {
+      ...state,
+      armedBombs: [
+        { id: "b0", ownerId: "r1", teamId: "team-1", at: { x: 5, y: 5 }, detonatesAt: 40 },
+      ],
+    };
+    const events: readonly ParticipantResolutionEvent[] = [
+      {
+        tick: 20,
+        seq: 0,
+        kind: "bomb-placed",
+        robotId: "r1",
+        bombId: "b1",
+        at: { x: 1, y: 1 },
+        detonatesAt: 380,
+      },
+      { tick: 40, seq: 1, kind: "bomb-exploded", bombId: "b0", ownerId: "r1", at: { x: 5, y: 5 } },
+      {
+        tick: 50,
+        seq: 2,
+        kind: "damaged",
+        damageKind: "zap",
+        sourceId: "r1",
+        targetId: "r1",
+        damage: 70,
+      },
+    ];
+    const timeline = buildMovieTimeline(carried, events);
+
+    expect(snapshotAtTick(timeline, 0).bombs.map((bomb) => bomb.id)).toEqual(["b0"]);
+    expect(snapshotAtTick(timeline, 20).bombs.map((bomb) => bomb.id)).toEqual(["b0", "b1"]);
+    expect(snapshotAtTick(timeline, 40).bombs.map((bomb) => bomb.id)).toEqual(["b1"]);
+    expect(snapshotAtTick(timeline, 50).robots.r1?.hp).toBe(state.teams[0]!.robots[0]!.hp - 70);
   });
 
   it("materializes, damages, and removes a participant contact", () => {

@@ -95,6 +95,10 @@ const commandSegmentSchema = z.discriminatedUnion("kind", [
       seconds: z.number().int().min(1).max(40),
     })
     .strict(),
+  z.object({ kind: z.literal("zap"), seconds: z.number().int().min(1).max(40) }).strict(),
+  z
+    .object({ kind: z.literal("place-bomb"), fuseSeconds: z.number().int().min(0).max(40) })
+    .strict(),
 ]);
 export const turnOrdersSchema = z
   .object({
@@ -329,7 +333,7 @@ export interface ParticipantDamageEvent {
   readonly tick: number;
   readonly seq: number;
   readonly kind: "damaged";
-  readonly damageKind: "direct" | "blast";
+  readonly damageKind: "direct" | "blast" | "zap";
   readonly targetId: string;
   readonly damage: number;
   /** Source details are present only when that source is authorized for this participant. */
@@ -444,6 +448,7 @@ const robotStateSchema = z
     scanHeading: headingSchema,
     damageStaggerActionsRemaining: z.number().int().nonnegative(),
     ammo: ammoSchema,
+    timeBombs: z.number().int().nonnegative().optional(),
   })
   .strict()
   .refine((robot) => robot.hp <= robot.definition.armor, "Robot HP cannot exceed armor.");
@@ -469,7 +474,9 @@ const serializedMatchStateSchema = z
         arenaType: z.enum(["rubble", "suburbs", "computer"]),
         arenaSizeName: z.string().min(1),
         turnLengthSeconds: z.number().int().min(1).max(40),
-        rulesRevision: z.literal(2).optional(),
+        rulesRevision: z.union([z.literal(2), z.literal(3)]).optional(),
+        showEnemyPositions: z.literal(true).optional(),
+        zapArmed: z.literal(true).optional(),
       })
       .strict(),
     turnNumber: z.number().int().min(1),
@@ -502,6 +509,20 @@ const serializedMatchStateSchema = z
         })
         .strict(),
     ),
+    armedBombs: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            ownerId: z.string().min(1),
+            teamId: z.string().min(1),
+            at: tileCoordSchema,
+            detonatesAt: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .max(16)
+      .optional(),
   })
   .strict();
 
@@ -544,6 +565,8 @@ const participantEventSchema = z.discriminatedUnion("kind", [
         "set-scan-direction",
         "aim-and-fire",
         "scan-and-fire",
+        "zap",
+        "place-bomb",
       ]),
     })
     .strict(),
@@ -655,7 +678,7 @@ const participantEventSchema = z.discriminatedUnion("kind", [
     .object({
       ...eventEnvelope,
       kind: z.literal("damaged"),
-      damageKind: z.enum(["direct", "blast"]),
+      damageKind: z.enum(["direct", "blast", "zap"]),
       targetId: z.string().min(1),
       damage: z.number().int().nonnegative(),
       sourceId: z.string().min(1).optional(),
@@ -665,6 +688,33 @@ const participantEventSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ ...eventEnvelope, kind: z.literal("destroyed"), robotId: z.string().min(1) }).strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("zapped"),
+      shooterId: z.string().min(1),
+      at: tileCoordSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("bomb-placed"),
+      robotId: z.string().min(1),
+      bombId: z.string().min(1),
+      at: tileCoordSchema,
+      detonatesAt: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      ...eventEnvelope,
+      kind: z.literal("bomb-exploded"),
+      bombId: z.string().min(1),
+      ownerId: z.string().min(1),
+      at: tileCoordSchema,
+    })
+    .strict(),
   z
     .object({
       ...eventEnvelope,

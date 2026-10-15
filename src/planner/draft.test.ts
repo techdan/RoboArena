@@ -52,6 +52,32 @@ describe("planner draft persistence", () => {
     });
   });
 
+  it("restores Zap and Place Bomb commands and rejects out-of-range durations", () => {
+    const withCommands = (segments: readonly unknown[]) => ({
+      turnNumber: 2,
+      timelines: [{ robotId: "r1", segments }],
+    });
+    const valid = withCommands([
+      { kind: "zap", seconds: 5 },
+      { kind: "place-bomb", fuseSeconds: 0 },
+    ]);
+    const storage = new MemoryStorage();
+    storage.values.set(plannerDraftKey("match", "team"), JSON.stringify(valid));
+    expect(loadPlannerDraft(storage, "match", "team", "rev")).toMatchObject({
+      kind: "restored",
+      envelope: { orders: valid },
+    });
+    for (const bad of [
+      { kind: "zap", seconds: 0 },
+      { kind: "zap", seconds: 41 },
+      { kind: "place-bomb", fuseSeconds: -1 },
+      { kind: "place-bomb", fuseSeconds: 2.5 },
+    ]) {
+      storage.values.set(plannerDraftKey("match", "team"), JSON.stringify(withCommands([bad])));
+      expect(loadPlannerDraft(storage, "match", "team", "rev")).toEqual({ kind: "corrupt" });
+    }
+  });
+
   it("distinguishes malformed data from unavailable storage and contains write failures", () => {
     const corrupt = new MemoryStorage();
     corrupt.values.set(plannerDraftKey("match", "team"), "not json");

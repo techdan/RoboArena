@@ -74,6 +74,8 @@ export interface RobotState {
   readonly damageStaggerActionsRemaining: number;
   /** Per-weapon ammo counter for explosives. Bullets are unlimited. */
   readonly ammo: Readonly<Record<WeaponId, number | "unlimited">>;
+  /** Time Bombs carried (robot +0x58); Standard gives one to each Team's first robot. */
+  readonly timeBombs?: number;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -131,7 +133,11 @@ export type RobotCommandSegment =
       readonly maxDistance: number;
       /** Player-set duration to stay in scan-and-fire mode. */
       readonly seconds: number;
-    };
+    }
+  /** Prod/Zap, selector 3: hit enemies sharing this robot's tile (re-map/commands.md §3). */
+  | { readonly kind: "zap"; readonly seconds: number }
+  /** Place Bomb, selector 23: arm the carried Time Bomb on this tile (re-map/commands.md §4). */
+  | { readonly kind: "place-bomb"; readonly fuseSeconds: number };
 
 export interface CommandTimeline {
   readonly robotId: string;
@@ -251,6 +257,32 @@ export type ResolutionEvent = EventEnvelope &
         readonly score: number;
       }
     | {
+        readonly kind: "zapped";
+        readonly shooterId: string;
+        readonly at: TileCoord;
+      }
+    | {
+        readonly kind: "bomb-placed";
+        readonly robotId: string;
+        readonly bombId: string;
+        readonly at: TileCoord;
+        /** Tick in this turn, or a later turn's frame when past turn end. */
+        readonly detonatesAt: number;
+      }
+    | {
+        readonly kind: "bomb-exploded";
+        readonly bombId: string;
+        readonly ownerId: string;
+        readonly at: TileCoord;
+      }
+    | {
+        readonly kind: "damaged";
+        readonly damageKind: "zap";
+        readonly sourceId: string;
+        readonly targetId: string;
+        readonly damage: number;
+      }
+    | {
         readonly kind: "damaged";
         readonly damageKind: "blast";
         readonly sourceId: string;
@@ -300,7 +332,11 @@ export interface GameConfig {
    * 2 = original spotting roll and per-step turn/posture costs. Absent means
    * the earlier rules, kept so matches created before them still verify.
    */
-  readonly rulesRevision?: 2;
+  readonly rulesRevision?: 2 | 3;
+  /** Formation flag `+0x1A` bit 0x01 (Beginner): every Team sees every enemy. */
+  readonly showEnemyPositions?: true;
+  /** Formation byte `+0x2C`: Zap is available to every robot. */
+  readonly zapArmed?: true;
 }
 
 export interface TeamState {
@@ -327,6 +363,16 @@ export interface MatchState {
    * the way the original saves and restores its masks (seg95:0x0AEE/0x0A51).
    */
   readonly spottedEnemies?: readonly SpottedEnemies[];
+  /** Placed Time Bombs that have not gone off, timed in the next turn's ticks. */
+  readonly armedBombs?: readonly ArmedBomb[];
+}
+
+export interface ArmedBomb {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly teamId: string;
+  readonly at: TileCoord;
+  readonly detonatesAt: number;
 }
 
 export interface SpottedEnemies {

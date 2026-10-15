@@ -55,6 +55,9 @@ const eventKinds = [
   "destroyed",
   "last-known-marker",
   "command-aborted",
+  "zapped",
+  "bomb-placed",
+  "bomb-exploded",
   "turn-end",
 ] as const satisfies readonly ResolutionEvent["kind"][];
 // Validate field/event combinations so an accidental robotId on a damaged event
@@ -79,6 +82,9 @@ const eventFilterFields: {
   destroyed: ["robotId"],
   "last-known-marker": ["teamId", "enemyId"],
   "command-aborted": ["robotId", "reason"],
+  zapped: ["shooterId"],
+  "bomb-placed": ["robotId"],
+  "bomb-exploded": ["ownerId"],
   "turn-end": [],
 };
 const eventFilter = z
@@ -91,7 +97,8 @@ const eventFilter = z
     targetId: id.optional(),
     teamId: id.optional(),
     enemyId: id.optional(),
-    damageKind: z.enum(["direct", "blast"]).optional(),
+    ownerId: id.optional(),
+    damageKind: z.enum(["direct", "blast", "zap"]).optional(),
     reason: z
       .enum([
         "out-of-range",

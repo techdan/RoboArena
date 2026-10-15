@@ -42,12 +42,23 @@ export const resolveBlast = ({
   if (!weapon.blast) {
     throw new Error(`resolveBlast requires an explosive weapon; received ${weapon.id}`);
   }
+  return resolveBlastProfile({ impact, blast: weapon.blast, potentialTargets, rng });
+};
 
+/** The shared blast loop (seg6:0x5D73) for any category, including the Time Bomb's. */
+export const resolveBlastProfile = ({
+  impact,
+  blast,
+  potentialTargets,
+  rng,
+}: Omit<BlastContext, "weapon"> & {
+  readonly blast: NonNullable<WeaponDefinition["blast"]>;
+}): BlastDamageRoll[] => {
   const rolls: BlastDamageRoll[] = [];
   for (const target of potentialTargets) {
     const radius = floorEuclideanDistance(impact, target.tile);
-    const damageRoll = weapon.blast.damageAtRadius[radius];
-    if (radius > weapon.blast.radius || !damageRoll) continue;
+    const damageRoll = blast.damageAtRadius[radius];
+    if (radius > blast.radius || !damageRoll) continue;
     const raw = damageRoll.base + (rng.nextUint32() & damageRoll.mask);
     rolls.push({
       robotId: target.robotId,

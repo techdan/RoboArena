@@ -21,6 +21,7 @@ import {
 import { tooltipLines } from "../../planner/overlayLabels";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
 import { createRobotSprite } from "../../renderer/RobotSprite";
+import { drawBombMarker } from "../../renderer/effects/bombMarker";
 import { loadRobotTextures, robotTextureKey } from "../../renderer/robotTextures";
 import { useHelp } from "../help/HelpProvider";
 import { CameraControls } from "../CameraControls";
@@ -90,6 +91,12 @@ export interface PlannerGhostView {
   readonly label: string;
 }
 
+/** One of the player's own armed Time Bombs, with its time left in the label. */
+export interface PlannerBombView {
+  readonly at: TileCoord;
+  readonly label: string;
+}
+
 export interface HomeAreaOverlay {
   readonly tiles: readonly TileCoord[];
   readonly color: string;
@@ -116,6 +123,7 @@ export interface ArenaCanvasProps {
   readonly robots: readonly PlannerRobotView[];
   readonly contacts: readonly PlannerContactView[];
   readonly ghosts: readonly PlannerGhostView[];
+  readonly bombs?: readonly PlannerBombView[];
   /** Preview scrub position as a 0..1 fraction of the turn; fades live enemy
    *  contacts as the previewed time advances (their real position is only known
    *  at the turn boundary, tick 0). */
@@ -135,11 +143,14 @@ export interface ArenaCanvasProps {
   readonly onChooseRobot: (robotId: string) => void;
 }
 
+const NO_BOMBS: readonly PlannerBombView[] = [];
+
 export function ArenaCanvas({
   arena,
   robots,
   contacts,
   ghosts,
+  bombs = NO_BOMBS,
   previewProgress,
   homeAreas,
   route,
@@ -768,6 +779,24 @@ export function ArenaCanvas({
         label.alpha = 0.7;
         overlay.addChild(label);
       }
+      // The player's own armed Time Bombs, labelled with their time left.
+      for (const bomb of bombs) {
+        const centerX = bomb.at.x * TILE_SIZE + TILE_SIZE / 2;
+        const centerY = bomb.at.y * TILE_SIZE + TILE_SIZE / 2;
+        overlay.addChild(drawBombMarker(new Graphics(), centerX, centerY, TILE_SIZE));
+        const label = new Text({
+          text: bomb.label,
+          style: {
+            fill: 0xffd8a8,
+            fontSize: 7,
+            fontWeight: "700",
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        label.anchor.set(0.5, 0);
+        label.position.set(centerX, centerY + 9);
+        overlay.addChild(label);
+      }
       app.render();
     })().catch((error: unknown) => {
       console.error("Planner overlays could not render.", error);
@@ -780,6 +809,7 @@ export function ArenaCanvas({
     arena.width,
     contacts,
     ghosts,
+    bombs,
     previewProgress,
     homeAreas,
     robots,

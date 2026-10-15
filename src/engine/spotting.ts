@@ -1,8 +1,8 @@
 /**
- * The original per-tick spotting roll (rules revision 2).
+ * The original spotting roll (rules revisions 2 and 3).
  *
- * Implements re-map/stealth-fence-ceremony-ai-formats.md §1. Each movie tick
- * the original walks every pair of Teams on different Sides where either Team
+ * Implements re-map/stealth-fence-ceremony-ai-formats.md §1. Each 5-tick
+ * simulation step (revision 2 ran it every tick) the original walks every pair of Teams on different Sides where either Team
  * did something (seg6:0x5898 → seg96:0x03E0). For each pair of live robots it
  * needs scan-grid sight and cover on both ends (seg96:0x060D); then, for each
  * robot whose scan cone holds the other, the other robot is seen outright when
@@ -19,13 +19,13 @@ import { floorEuclideanDistance, isWithinScanCone, scanSightStrength } from "./g
 import type { Arena, CoverClass, RobotState, TileCoord } from "./types.js";
 
 /** Per-tick activity code, robot slot `ctx+0x29C` (seg96:0x0366). */
-export type SpottingActivity = 0 | 1 | 3;
+export type SpottingActivity = 0 | 1 | 2 | 3;
 
 export interface SpottingRobot {
   readonly robot: RobotState & { readonly position: TileCoord };
   /** Moved flag `ctx+0x27C`: set every tick of a move or deploy, and for all robots at turn start. */
   readonly moved: boolean;
-  /** 1 while running any command except Scan & Fire; 3 on a tick it fires. */
+  /** 1 while running most commands; 2 on a Zap refresh; 3 on a tick it fires or zaps. */
   readonly activity: SpottingActivity;
 }
 

@@ -85,4 +85,20 @@ describe("private order validation", () => {
       "unreserved ammunition",
     );
   });
+
+  it("allows Zap only when armed and one bomb placement per carried bomb", () => {
+    const standard = { rulesRevision: 3, zapArmed: true } as const;
+    const zap: RobotCommandSegment = { kind: "zap", seconds: 5 };
+    const bomb: RobotCommandSegment = { kind: "place-bomb", fuseSeconds: 3 };
+    const carrier = { ...missile, timeBombs: 1 };
+    expect(validatePrivateTimeline(arena, 0, missile, [zap], standard)).toBeNull();
+    expect(validatePrivateTimeline(arena, 0, missile, [zap], { rulesRevision: 3 })).toContain(
+      "not armed",
+    );
+    expect(validatePrivateTimeline(arena, 0, carrier, [bomb], standard)).toBeNull();
+    expect(validatePrivateTimeline(arena, 0, carrier, [bomb, bomb], standard)).toContain(
+      "no Time Bomb",
+    );
+    expect(validatePrivateTimeline(arena, 0, missile, [bomb], standard)).toContain("no Time Bomb");
+  });
 });
