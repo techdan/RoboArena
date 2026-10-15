@@ -235,10 +235,11 @@ export function WeaponsStep() {
               <Radar aria-hidden="true" /> Aim & Fire vs Scan & Fire
             </h3>
             <p>
-              <strong>Aim</strong> shoots a tile now — if the target walks off it, the shot is far
-              less likely to land. <strong>Scan</strong> waits and fires at the nearest enemy that
-              enters your scan arc. Chance to hit a ducking robot behind a low wall,{" "}
-              {FIRE_COMPARE_DISTANCE} tiles away:
+              <strong>Aim</strong> fires at a tile the moment its command starts; if nobody is
+              there, the shot is wasted. <strong>Scan</strong> waits and fires at the nearest enemy
+              that enters your scan arc, and a shorter Maximum Distance aims better. Chance to hit a
+              ducking robot behind a low wall, {FIRE_COMPARE_DISTANCE} tiles away (Scan with its
+              Maximum Distance set to {FIRE_COMPARE_DISTANCE}):
             </p>
           </div>
           <table className="bc-table">
