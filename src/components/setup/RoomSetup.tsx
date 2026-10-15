@@ -71,7 +71,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
   );
 
   useEffect(() => {
-    const socket = new RoomSocket();
+    const socket = new RoomSocket({ code });
     socketRef.current = socket;
     const unsubscribe = socket.subscribe(handleMessage);
     let disposed = false;

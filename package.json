@@ -2,7 +2,7 @@
   "name": "roboarena",
   "version": "0.0.1",
   "private": true,
-  "description": "RoboArena — a deterministic online robot tactics game built with Next.js and PixiJS.",
+  "description": "RoboArena \u2014 a deterministic online robot tactics game built with Next.js and PixiJS.",
   "type": "module",
   "engines": {
     "node": ">=22.5"
@@ -13,14 +13,16 @@
     "build": "next build",
     "start": "next start",
     "start:server": "tsx server/index.ts",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"worker/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"server/**/*.ts\" \"worker/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.mjs\" \"*.{json,mjs,ts}\" \".github/**/*.yml\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "scenario": "tsx src/scenario/cli.ts",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "tsc --noEmit --incremental false && tsc -p worker --noEmit --incremental false",
+    "dev:rooms": "wrangler dev",
+    "deploy:rooms": "wrangler deploy"
   },
   "dependencies": {
     "gsap": "^3.15.0",
@@ -33,6 +35,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.3",
@@ -47,6 +50,7 @@
     "tsx": "^4.23.1",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.63.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.150.0"
   }
 }
