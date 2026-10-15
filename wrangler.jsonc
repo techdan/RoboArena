@@ -1,0 +1,12 @@
+// The Next.js site on Cloudflare Workers via OpenNext (`npm run deploy`).
+// Rooms are a separate Worker: see worker/wrangler.jsonc.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "roboarena",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "roboarena" }],
+  "observability": { "enabled": true }
+}
