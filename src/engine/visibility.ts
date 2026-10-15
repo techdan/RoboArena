@@ -5,7 +5,7 @@
  */
 
 import { WEAPON_MAX_RANGE } from "./constants.js";
-import { floorEuclideanDistance, isWithinScanCone, tilesAlongLineExclusive } from "./geometry.js";
+import { floorEuclideanDistance, isWithinScanCone, sightWalkTiles } from "./geometry.js";
 import type { Arena, MatchState, RobotState, TileCoord, VisibilityState } from "./types.js";
 
 export const visibilityTileKey = (tile: TileCoord): string => `${tile.x},${tile.y}`;
@@ -17,15 +17,17 @@ const tileAt = (arena: Arena, tile: TileCoord) => arena.tiles[tile.y]?.[tile.x];
 /**
  * Exact scan-grid sight value from `seg87:0x19E3`.
  *
- * Clear sight starts at 16. Every Low Wall or Bush sample removes 3; Walls and
- * Outer Walls immediately return 0. Crevices and ordinary ground do not cut
- * the value. The original path includes both endpoints.
+ * Clear sight starts at 16. The tiles come from the original sight walker
+ * (`sightWalkTiles`): the shooter's own tile is not sampled, the target tile
+ * is. Every Low Wall or Bush sample removes 3; Walls, Outer Walls and
+ * off-arena tiles return 0. Crevices and ordinary ground do not cut the value.
  */
 export const scanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord): number => {
+  if (tileAt(arena, from) === undefined || tileAt(arena, to) === undefined) return 0;
   if (from.x === to.x && from.y === to.y) return 16;
 
   let strength = 16;
-  for (const tile of [from, ...tilesAlongLineExclusive(from, to), to]) {
+  for (const tile of sightWalkTiles(from, to)) {
     const terrain = tileAt(arena, tile)?.terrain;
     if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") return 0;
     if (terrain === "low-wall" || terrain === "bush") {

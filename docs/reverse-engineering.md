@@ -80,6 +80,34 @@ The MAP payload orientation is resolved: raw cells are `body[y*width+x]`, with
 no transpose or flip. The runtime display adds an 8-tile border. The earlier
 playtest mismatch was a coordinate/probe mismatch, not a file transform (§12).
 
+### 0b. 2026-10-15 re-audit corrections (supersede the text below where they disagree)
+
+A second pass re-disassembled every combat claim in this document. These
+findings replaced earlier readings; the sections below are patched to match,
+and the engine follows them.
+
+| Claim as previously written | Binary truth | Evidence |
+|---|---|---|
+| `+0x28` Side, `+0x2E` "terrain under robot", `+0x1E` stagger, `+0x5C` effect id are **robot** fields | Robot `+0` is the **Team** handle and `+0x5C` the **program** (command list) handle. `+0x28` Side and `+0x2E` **Brain** (0 Human, 1 Stupid, 2 Ferocious, 3 Crafty, 4 Paranoid) are **Team** fields. `+0x1E` is a byte on the **program** object. Robot `+0x42` scan heading, `+0x44/46` logical tile, `+0x48/4A` occupied tile, `+0x50` posture. | GlobalLock (reloc 1/2/18) chains in `seg6:0x35D1` and the command handlers |
+| Hit score adds `{1:+2,2:-1,3:-3}[target terrain]`, else a per-weapon add from `0x1596` | That switch is on the shooter's **Team Brain** (AI teams only). Human teams add the **fire-control** table `0x1596` (19 words `4,7,6,5,4,3,2,1,0,0,-1,-1,-2,-2,-3,-3,-4,-5,-6`) indexed by the command's first parameter: Aim & Fire passes 0 (+4), Scan & Fire passes its Maximum Distance. Weapon and target terrain do not enter the score. | `seg6:0x3790` |
+| Halving at `0x380A` = "target left the aimed tile" | `seg21:0x0F0A(shooterTile, heading, target)` is a **closed ±45° front-arc** test (same tile counts as inside). A target inside the 180° fire gate but outside the 90° front arc is shot at half score. | `seg21:0x0F0A` body |
+| Damage stagger halves the next 1–4 shots | The stagger byte lives on the program object and is **cleared at every command dispatch** before any fire handler reads it, so it never halves a shot in practice. Worth a DOSBox confirmation. | `seg6:0x4CDA` |
+| Aim & Fire resolves at the end of its interval | The shot fires on the **first tick** of the command, then the selector duration elapses. It hits whichever enemy occupies the aimed tile at that moment; none there wastes the shot. | `seg6:0x49F8..0x4AE2 → 0x4C7F → 0x1DCE`, `seg18:0x03C0` |
+| A Burst action rolls 3 independent bullets | One firing action = **one** hit roll, one damage roll, one projectile for every weapon. | `seg6:0x1DCE → 0x35D1 → 0x1A08` |
+| Scan & Fire re-fire delay is the descriptor's scan column (Burst 20, Missile 20, Grenade 20) | After a Scan shot the next waits the weapon's **Aim** duration (Rifle 30, Burst 15, Auto 10); Missile waits 30+40 = 70 and Grenade 30+50 = 80. | `seg6:0x3D79`, `0x3FA4`, `0x3F43` |
+| Exact cone boundary adds +2 to Scan rank distance | The +2 applies to every candidate **outside the ±45° front arc** (and to a same-tile candidate). | `seg18:0x0854` with `seg21:0x0CCF` |
+| (not documented) | Missile Scan & Fire **holds fire** while its acquired target is closer than 2 tiles. | `seg6:0x29CF` |
+| Sight strength samples an endpoint-inclusive Bresenham line | `seg56:0x0360` walks Bresenham on **5× sub-tile centres** (`5c+2`), x-major only when dx > dy, and reports each newly entered tile. The shooter tile is not sampled; the target tile is. A bug compares tiles with the *scaled* end point, so an intermediate tile equal to `(5x₂+2, 5y₂+2)` is skipped. The same walk gates line of sight for firing. | `seg56:0x0360`, `seg87:0x19E3` |
+| `isqrt` returns floor | `seg9:0x0530` returns one less for **even perfect squares** (isqrt(100)=9), so six Pythagorean table entries read low, e.g. (6,8) → 9. | `seg9:0x0530` |
+| Firing gates: range, cone, sight | Validator order is **cone, sight, range**. | `seg76:0x0775..0x081C` |
+
+Confirmed but not yet modelled in the engine: mid-move occupied-tile switch
+(15/25 ticks), the 5-tick bullet impact delay, missile/grenade flight delay,
+scatter and the `0x2B36` path stop, the Scan & Fire 7-shot cooldown (gated by
+the unidentified global `[14BA]`), cached scan-grid staleness, and the 10/5
+tick cost the binary charges for a posture or scan command that sets the
+current value.
+
 ---
 
 ## 1. The binary and its layout
@@ -196,7 +224,9 @@ Function **`seg56:0x02A0`** `dist(x1,y1,x2,y2)`:
 
 The table is built once at startup in **`seg9:0x0485`**: a `GlobalAlloc(1024)`
 then a double loop storing `isqrt((i+1)² + (j+1)²)` symmetrically. `isqrt`
-(binary search, `seg9:0x0530`) returns **floor**.
+(binary search, `seg9:0x0530`) returns **floor**, except that its final fix-up
+returns one less for even perfect squares, so (6,8) and its multiples read one
+low (§0b).
 
 **Consequence:** the “distance” the UI shows and the range check both use floored
 Euclidean. Examples: (dx13,dy13) → `floor(√338)=18` (in range); (dx18,dy18) →
@@ -255,11 +285,11 @@ Partial, but enough to navigate. These are *heap struct* offsets (the game
 | `+0x08` | HP / armor current — read for compares (likely) |
 | `+0x14` | robot count in a team list (context-dependent) |
 | `+0x1A`, `+0x1C` | pixel/subtile position x, y (confirmed; movement scatter writes these) |
-| `+0x1E` | damage-stagger firing count: damage sets 1–4; firing consumes one and halves hit score while nonzero |
-| `+0x28` | **zero-based Side/alliance index (0..3)** — counted into a four-word Side array by `seg42:0x0A5E`, and compared by direct fire, Scan & Fire, blast attribution, visibility, and ceremony aggregation |
+| `+0x1E` | **program-object** byte (not robot): damage sets 1–4, but command dispatch clears it before fire reads it (§0b) |
+| `+0x28` | (**Team** struct, reached via robot `+0`) **zero-based Side/alliance index (0..3)** — counted into a four-word Side array by `seg42:0x0A5E`, and compared by direct fire, Scan & Fire, blast attribution, visibility, and ceremony aggregation |
 | `+0x2A`, `+0x2C` | tile row, col (confirmed — the targeting validator reads these) |
-| `+0x2E` | terrain type under the robot (1/2/3), used in the accuracy score (confirmed) |
-| `+0x5C` | sound/effect id (passed to `seg6:0x4060` after a hit) — *not* the weapon selector (earlier draft was wrong) |
+| `+0x2E` | (**Team** struct) **Brain**: 0 Human, 1 Stupid, 2 Ferocious, 3 Crafty, 4 Paranoid; selects the AI accuracy add (§0b). Earlier "terrain under robot" reading was wrong |
+| `+0x5C` | **program** (command list) handle; `seg6:0x4060` locks it to write the stagger byte (§0b) |
 | `+0x66`, `+0x68`, `+0x6C` | per-turn stat counters (shots fired / hit / damage) incremented at impact |
 
 The equipped-weapon damage selector is *not* a single robot field; it flows
@@ -425,10 +455,10 @@ sprite lands.** When a fire command executes during movie playback, the game:
 Consequence for us (our Gate A, refined): the outcome is locked when the fire
 command **resolves** (at its tick in the movie), and the flying projectile is
 just a visual — so there's no *in-flight* dodging. **But** the resolver checks
-whether the target is on the exact aimed tile *at that moment* and **halves the
-hit chance if not** (§15). So moving *does* matter — you dodge by not being where
-the shot was aimed, not by outrunning the bullet. Match this (it's both faithful
-and tactically rich); no separate projectile-collision system needed.
+which enemy is on the aimed tile when the command **starts** (§0b): the shot
+fires on the command's first tick. Moving still matters because a robot that
+has left the tile is not shot at all. The separate halving is a front-arc test
+on the shooter's heading (§15), not a moved-target test.
 
 ### Call/offset map (for the reviewer)
 
@@ -441,7 +471,7 @@ and tactically rich); no separate projectile-collision system needed.
 | Live-fire **hit table** (score→prob) | DGROUP `0x156E` |
 | **Weapon-damage** jump table | code `seg6:0x38C5` |
 | **Posture** damage-adjust jump table | code `seg6:0x38BD` |
-| **Weapon accuracy** add table | DGROUP `0x1596` = `[4,7,6,5,4,3,2,1]` |
+| **Fire-control** accuracy add table | DGROUP `0x1596`, 19 words `[4,7,6,5,4,3,2,1,0,0,-1,-1,-2,-2,-3,-3,-4,-5,-6]`, indexed by command parameter (§0b) |
 
 ### Hit roll (live fire)
 
@@ -468,18 +498,21 @@ if dist > 12:      score += base/2 - 4
 elif dist >= 7:    score += base - 2
 elif dist >= 3:    score += base/2 + (6 - dist)
 else:              score += base + 2*(3 - dist) + 2      # point-blank bonus
-# target-terrain add by the tile the target stands on (field +0x2E = terrain type 1/2/3):
-score += { 1:+2, 2:-1, 3:-3 }[terrainType]    # else (open) adds weaponAccTable[weapon] from 0x1596
+# fire-control add (seg6:0x3790); the switch is on the shooter's Team Brain (+0x2E):
+score += { 1:+2, 2:-1, 3:-3 }[brain]          # AI teams; Human teams instead add
+                                              # fireControl_0x1596[param], param = 0 for Aim,
+                                              # Maximum Distance for Scan & Fire
 score -= (scanSightPenalty)                   # <=4: -4, <=8: -2, else 0; Aim passes 16
 score = clamp(score, 0, 19)
-if damageStaggerCount: score >>= 1             # damage assigned 1–4 future actions
-if targetLeftAimedTile: score >>= 1
+if staggerByte: score >>= 1                   # always 0 in practice: cleared at dispatch (seg6:0x4CDA)
+if !inFrontArc(shooter, heading, target): score >>= 1   # seg21:0x0F0A, closed ±45°
 ```
 
 Everything in that block is exact from the disassembly and both halving inputs
 are now named from their producers. The important, hard facts: **closer = much
-higher score** (a big point-blank bonus), **rough ground on the target adds +2**
-(vulnerable, matches the help text), and the score saturates at 19 → 94%.
+higher score** (a big point-blank bonus), a **tight Scan & Fire Maximum
+Distance aims better**, and the score saturates at 19 → 94%. (An earlier reading
+of the `+0x2E` switch as target terrain was wrong; see §0b.)
 
 ### Damage roll (live fire, on a hit)
 
@@ -734,9 +767,10 @@ reviewer. Each item is independently checkable.
 13. ✅ **Posture values + final cover table — DONE.** `seg87:0x1CE0` reads
     robot `+0x50` as Upright/Duck/Crouch = 1/2/3 and maps those values with
     sampled obstruction height to cover classes (§15).
-14. ✅ **Hit-score halvings — DONE.** `0x380A` is target no longer on the aimed
-    tile. `0x37F4` is damage stagger: `seg6:0x4060` assigns `(gameRng&3)+1`
-    after damage; later firing consumes the counter and halves hit score.
+14. ✅ **Hit-score halvings — REVISED 2026-10-15 (§0b).** `0x380A` is the
+    closed ±45° front-arc test `seg21:0x0F0A`. `0x37F4` reads the program
+    stagger byte that `seg6:0x4060` sets to `(gameRng&3)+1`, but command
+    dispatch (`seg6:0x4CDA`) clears it first, so it never halves a shot.
 15. **Formation roster table** (§17): dump the per-formation Quick Start roster
     counts (the data behind "%d Rifle Robot" etc.). Needed only for faithful
     presets; Custom Game already covers all 5 bots.
@@ -879,29 +913,26 @@ Independently of the path, the target's own tile adds to the hit score
 vulnerable"*; `−1`/`−3` on cover tiles). Rough ground is a **damage/hit
 liability**, not cover.
 
-### Movement and damage stagger — both hit-score halvings confirmed
+### Front arc and damage stagger — the two hit-score halvings (revised 2026-10-15)
 
 The hit-score has **two optional halvings** (`seg6:0x35D1` at `0x37F4` and
-`0x380A`). One is now **confirmed**: the flag at `0x380A` comes from
-`seg21:0x0F0A(target, aimedTile)`, which returns **1 iff the target is still on
-the exact tile you aimed at**. When it's *not* (the target has moved off that
-tile by the time the fire command resolves), the shooter's score is **halved** —
-so a moving target is materially harder to hit. This is the mechanism behind the
-COMPUTE! "target speed" remark and our Gate A: the original doesn't let a robot
-dodge a bullet *in flight*, but firing at a tile the target has **vacated cuts
-accuracy in half** (and if it fully leaves LoS, it's a clean miss). The second
-halving input (`0x37F4`, resolver arg `[bp+10h]`) is traced to equipped command
-object `+0x1E`, which the fire handlers decrement after firing.
+`0x380A`). The flag at `0x380A` comes from `seg21:0x0F0A(shooterTile,
+heading, target)`, a **closed ±45° front-arc** test (same tile counts as
+inside). Firing is legal anywhere in the 180° gate, but a target outside the
+90° front arc is shot at **half score**, so facing matters.
 
-`seg6:0x4060` writes `(game RNG & 3)+1` to that field after successful damage.
-Thus damage assigns **1–4 future firing actions at half hit score**. Each direct
-fire action consumes one count; a burst shares the action's penalty across its
-bullets. This is damage stagger/flinch, not missile ammunition.
+The `0x37F4` input is the stagger byte at program-object `+0x1E`.
+`seg6:0x4060` writes `(game RNG & 3)+1` to it after damage, but command
+dispatch at `seg6:0x4CDA` clears it before any fire handler reads it. In
+practice it never halves a shot. This is the one finding most worth confirming
+in DOSBox.
 
-**Design consequence:** movement *is* a defense, and **Aim & Fire leads are
-punished** — you want to aim where the target will be, and mispredicting halves
-you. This makes the plan-then-resolve loop tactical without needing in-flight
-dodging.
+An earlier version of this section read `0x380A` as "the target left the aimed
+tile". Aim & Fire actually resolves on the command's first tick against
+whoever is on the aimed tile then (§0b).
+
+**Design consequence:** heading is a real accuracy dial. Point the scan
+heading at the threat to avoid the half-score penalty.
 
 ### Armor
 
@@ -913,14 +944,15 @@ to the Dock ("arrggghhh"). There is no armor-vs-damage-type interaction.
 ### Full per-shot pipeline (build to this)
 
 ```
-1. Range gate:      dist = floorEuclid(shooter, targetTile);  if dist > 18 → "out of range"
-2. Angle gate:      target must be within the scan cone → else "angle blocked"
-3. LoS/cover:       walk path (seg87) → coverClass 1..4 (terrain sample + posture enum)
-                    if a Wall fully blocks → no hit
-4. Hit roll:        score = coverInit[coverClass] + distanceBonus + targetTerrainAdd
-                            + weaponAccAdd - scanSightPenalty ; clamp 0..19
-                    if damage-staggered: score >>= 1
-                    if target left aimed tile: score >>= 1
+1. Angle gate:      target must be within the 180° scan gate → else "angle blocked"
+2. Sight gate:      seg56:0x0360 sub-tile walk; a Wall, or sight 16 cut to 0 by
+                    Bush/Low Wall (−3 each) → "sight blocked"
+3. Range gate:      dist = floorEuclid(shooter, targetTile);  if dist > 18 → "out of range"
+   Cover:           endpoint cover (seg87:0x1BF8) → coverClass 1..4
+4. Hit roll:        score = coverInit[coverClass] + distanceBonus
+                            + fireControl[param] - scanSightPenalty ; clamp 0..19
+                    (stagger halving: never active, cleared at dispatch)
+                    if target outside ±45° front arc: score >>= 1
                     hit = (rand&0xFF) < hitTable_0x156E[score]
 5. Damage (on hit): dmg = weaponRoll[slot] + postureAdjust[coverClass] + distanceAdjust
                     dmg = max(0, dmg)
@@ -1003,21 +1035,25 @@ Out of v1 scope but documented so the enum is known.
 
 ### The three firing gates (in the validator `seg76`, statuses in §6)
 
-A shot is legal only if all three pass, checked in order:
-1. **Range** — `floorEuclid ≤ 18` (else "out of range").
+A shot is legal only if all three pass, checked in order cone, sight, range
+(`seg76:0x0775..0x081C`):
+1. **Range** — `floorEuclid ≤ 18` (else "out of range"), checked last.
 2. **Scan cone (angle)** — `seg76:0x0775` calls `seg21:0x0CCF` before LoS
    and range. The predicate is the **closed forward semicircle**: exact ±90°
    boundary rays and same-tile are accepted; a negative heading dot product is
    rejected as "angle blocked". This is exactly
-   `dot(headingVector, target-shooter) >= 0` for all eight headings. The exact
-   boundary also adds 2 to Scan & Fire candidate rank distance.
+   `dot(headingVector, target-shooter) >= 0` for all eight headings. Scan &
+   Fire adds 2 to the rank distance of every candidate outside the ±45° front
+   arc, not just the boundary (§0b).
 3. **Line of sight** — a clear line must exist (else "sight blocked").
 
-### Scan-grid sight strength = endpoint-inclusive Bresenham
+### Scan-grid sight strength = sub-tile sight walk (revised 2026-10-15)
 
 `seg87:0x19E3` traces shooter→target through `seg56:0x0360` and returns an
-integer sight strength. Same-tile and clear sight return 16. The sampled path
-includes both endpoints:
+integer sight strength. Same-tile and clear sight return 16. The walker runs
+Bresenham on 5× sub-tile centres (`5c+2`) and samples each newly entered tile:
+the shooter tile is excluded, the target tile included, and an intermediate
+tile equal to the scaled end point is skipped (original bug, §0b):
 - **Wall / Outer Wall** (`TIL b2=2`) returns 0 immediately.
 - Every **Low Wall / Bush** (`TIL b2=1`) subtracts 3, clamped at 0.
 - **Crevice / Rough / Open** (`TIL b2=0`) do not reduce the value.
@@ -1111,11 +1147,16 @@ selectors **5..12**, not rows 0..7.
 
 | selectors | command | Aim duration / Scan repeat |
 |---|---|---:|
-| 5 / 6 | Rifle Aim / Scan | 30 / 30 |
-| 8 / 9 | Burst Aim / Scan | 15 / 20 |
-| 11 / 12 | Automatic Aim / Scan | 10 / 10 |
-| 15 / 16 | Missile Aim / Scan | 30 / 20 |
-| 19 / 20 | Grenade Aim / Scan | 30 / 20 |
+| 5 / 6 | Rifle Aim / Scan re-fire | 30 / 30 |
+| 8 / 9 | Burst Aim / Scan re-fire | 15 / 15 |
+| 11 / 12 | Automatic Aim / Scan re-fire | 10 / 10 |
+| 15 / 16 | Missile Aim / Scan re-fire | 30 / 70 |
+| 19 / 20 | Grenade Aim / Scan re-fire | 30 / 80 |
+
+Revised 2026-10-15: the scan column of the descriptor is not the re-fire
+delay. After a Scan & Fire shot the handler waits the weapon's Aim duration
+(`seg6:0x3D79`); missiles add 40 (`0x3FA4`) and grenades 50 (`0x3F43`). An
+Aim & Fire shot fires on the command's first tick and the duration follows.
 
 The named map is proved by `seg14:0x07B4` plus weapon strings 605–611, and the
 handlers by `seg6:0x4CF2`. Scan commands remain active for the player's
@@ -1159,7 +1200,7 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 1 | **Weapon → damage-slot labels** | Rifle `10–17`, Burst `8–23`, Automatic `6–21` | `seg14:0x07B4`; strings 605–611; `seg6:0x4CF2` | 🟩 | P2 |
-| 2 | **First hit-score halving input** `[bp+10h]` | damage assigns 1–4 staggered firing actions; each firing consumes one | `seg6:0x4060`; `0x1DCE/0x1F74` → `0x35D1` | 🟩 | P1 |
+| 2 | **First hit-score halving input** `[bp+10h]` | program-object stagger byte set 1–4 by damage, cleared at dispatch before fire reads it, so inert (§0b) | `seg6:0x4060`, `seg6:0x4CDA`; `0x1DCE/0x1F74` → `0x35D1` | 🟨 confirm in DOSBox | P1 |
 | 3 | **Diagonal/adjacent cover path sampling** | endpoint + major neighbor + near-diagonal corner; y-major ties | `seg87:0x1BF8/0x1CE0` | 🟩 | P2 |
 | 4 | **Explosive cover cut** | resolved by cover class: 1/2/3/4 → ×0.5/0.75/0.875/1 | `seg87:0x1BF8` → `seg6:0x5FFD` | 🟩 | P2 |
 | 5 | **Live vs preview hit table** | `0x156E` live; `0x213A` only planner/AI callers | caller graph for `seg96:0x09AF` | 🟩 | P1 |

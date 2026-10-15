@@ -14,7 +14,7 @@ const preview = (overrides: Partial<TargetingTilePreview>): TargetingTilePreview
   resolution: "direct-hit-roll",
   fireMode: "aim",
   scanStrength: 16,
-  onConeBoundary: false,
+  scanRankPenalized: false,
   estimates: [],
   chancePercent: 72,
   chanceBand: "good",
@@ -34,13 +34,12 @@ describe("tooltipLines", () => {
       fireMode: "aim",
       coverAdjustment: 18,
       distanceAccuracyAdjustment: -5,
-      weaponTerrainAdjustment: 4,
+      fireControlAdjustment: 4,
       scanStrength: 16,
       damageStaggered: false,
-      targetOnAimedTile: true,
+      targetInFrontArc: true,
       hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
     }),
-    offTileBreakdown: null,
     damageRange: {
       rawMinimum: 10,
       rawMaximum: 17,
@@ -52,12 +51,12 @@ describe("tooltipLines", () => {
     },
   } as const;
 
-  it("explains chance, damage, posture, cover, terrain, and Aim cover scope", () => {
+  it("explains chance, damage, posture, cover, fire control, and Aim cover scope", () => {
     expect(tooltipLines(preview({ chancePercent: 81, estimates: [estimate] }), 18)).toEqual([
       "81% hit · 5 tiles",
       "10–17 dmg",
       "Cover: exposed (score 18) · upright assumed",
-      "Open tile · weapon +4 · range −5",
+      "Fire control +4 · range −5",
       "Aim: only target and adjacent cover count",
     ]);
   });
@@ -71,10 +70,10 @@ describe("tooltipLines", () => {
         fireMode: "aim",
         coverAdjustment: 12,
         distanceAccuracyAdjustment: 5,
-        weaponTerrainAdjustment: 4,
+        fireControlAdjustment: 4,
         scanStrength: 16,
         damageStaggered: false,
-        targetOnAimedTile: true,
+        targetInFrontArc: true,
         hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
       }),
     };
@@ -90,15 +89,14 @@ describe("tooltipLines", () => {
     const scan = {
       ...estimate,
       coverSource: "adjacent-bush" as const,
-      targetTerrain: "rough" as const,
       breakdown: calculateLiveFireBreakdownFromFactors({
         fireMode: "scan",
         coverAdjustment: 18,
         distanceAccuracyAdjustment: -5,
-        weaponTerrainAdjustment: 2,
+        fireControlAdjustment: 2,
         scanStrength: 7,
         damageStaggered: false,
-        targetOnAimedTile: true,
+        targetInFrontArc: true,
         hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
       }),
     };
@@ -117,7 +115,7 @@ describe("tooltipLines", () => {
       18,
     );
     expect(lines).toContain("Cover: exposed (score 18) · adjacent bush · upright observed");
-    expect(lines).toContain("Rough terrain +2 · range −5");
+    expect(lines).toContain("Fire control +2 · range −5");
     expect(lines).toContain("Scan sight 7/16 · −2 score");
   });
 
@@ -131,11 +129,13 @@ describe("tooltipLines", () => {
     );
   });
 
-  it("explains the cone-edge +2 acquisition distance in scan mode only", () => {
-    const scanEdge = preview({ fireMode: "scan", onConeBoundary: true, estimates: [estimate] });
-    expect(tooltipLines(scanEdge, 12).at(-1)).toBe("Cone edge — counts as 7 tiles for acquisition");
-    const aimEdge = preview({ fireMode: "aim", onConeBoundary: true, estimates: [estimate] });
-    expect(tooltipLines(aimEdge, 12).at(-1)).not.toMatch(/Cone edge/);
+  it("explains the outside-front-arc +2 Scan ranking distance in scan mode only", () => {
+    const scanEdge = preview({ fireMode: "scan", scanRankPenalized: true, estimates: [estimate] });
+    expect(tooltipLines(scanEdge, 12).at(-1)).toBe(
+      "Outside front arc — ranked as 7 tiles when picking a Scan target",
+    );
+    const aimEdge = preview({ fireMode: "aim", scanRankPenalized: true, estimates: [estimate] });
+    expect(tooltipLines(aimEdge, 12).at(-1)).not.toMatch(/front arc/);
   });
 
   it("shows a single plain-language line for blocked tiles", () => {

@@ -20,7 +20,12 @@ export const MOVIE_FPS_OPTIONS = [20, 15, 12, 10, 6, 5, 4, 3] as const;
 /** Original default (choice index 2); independent from engine simulation ticks. */
 export const MOVIE_FPS = 12;
 
-/** Confirmed Aim/Scan firing cadence (RE §19; docs/spec.md §4). */
+/**
+ * Aim duration and Scan & Fire re-fire delay (RE §19). After a Scan & Fire
+ * shot the next shot waits the weapon's Aim duration (seg6:0x3D79), or 30+40
+ * for missiles (0x3FA4) and 30+50 for grenades (0x3F43); the descriptor's
+ * scan column is not the re-fire delay.
+ */
 export const WEAPON_TIMING: Readonly<
   Record<
     WeaponId,
@@ -28,11 +33,14 @@ export const WEAPON_TIMING: Readonly<
   >
 > = {
   rifle: { firingIntervalTicks: 30, scanFiringIntervalTicks: 30 },
-  "burst-gun": { firingIntervalTicks: 15, scanFiringIntervalTicks: 20 },
+  "burst-gun": { firingIntervalTicks: 15, scanFiringIntervalTicks: 15 },
   "auto-rifle": { firingIntervalTicks: 10, scanFiringIntervalTicks: 10 },
-  "missile-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 20 },
-  "grenade-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 20 },
+  "missile-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 70 },
+  "grenade-launcher": { firingIntervalTicks: 30, scanFiringIntervalTicks: 80 },
 };
+
+/** Missile Scan & Fire holds fire while its acquired target is closer than this (seg6:0x29CF). */
+export const MISSILE_SCAN_MIN_DISTANCE = 2;
 
 export const TURN_DURATION_SECONDS_DEFAULT = 15;
 export const TURN_DURATION_TICKS_DEFAULT = TURN_DURATION_SECONDS_DEFAULT * TICKS_PER_SECOND;
@@ -95,8 +103,15 @@ export const COVER_CLASS_BULLET_DAMAGE_ADJUST: Readonly<Record<1 | 2 | 3 | 4, nu
   4: 4,
 };
 
-/** Weapon-property accuracy-add table at DGROUP 0x1596 (RE §7b). */
-export const WEAPON_ACCURACY_ADDS = [4, 7, 6, 5, 4, 3, 2, 1] as const;
+/**
+ * Fire-control accuracy add, DGROUP 0x1596 (19 words), indexed by the command's
+ * first parameter (RE §7b). Aim & Fire passes 0; Scan & Fire passes its
+ * Maximum Distance, so a tighter engagement radius aims better. AI-brain teams
+ * use a fixed add instead, which RoboArena does not need.
+ */
+export const FIRE_CONTROL_ACCURACY_ADDS = [
+  4, 7, 6, 5, 4, 3, 2, 1, 0, 0, -1, -1, -2, -2, -3, -3, -4, -5, -6,
+] as const;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Arena

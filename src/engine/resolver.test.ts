@@ -416,7 +416,7 @@ describe("resolveTurn", () => {
     });
   });
 
-  it("resolves stationary Aim & Fire at the catalog interval", () => {
+  it("fires stationary Aim & Fire when the command starts (seg6:0x4C7F)", () => {
     const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { scanHeading: "W" });
     const state = makeMatch({ teamTwoRobots: [target] });
     const result = requireResolved(
@@ -434,7 +434,7 @@ describe("resolveTurn", () => {
       }),
     );
     expect(eventsOf(result.events, "fired")).toMatchObject([
-      { tick: 30, shooterId: "r1", weapon: "rifle", target: { x: 2, y: 1 } },
+      { tick: 0, shooterId: "r1", weapon: "rifle", target: { x: 2, y: 1 } },
     ]);
     expect(
       eventsOf(result.events, "damaged").length + eventsOf(result.events, "shot-missed").length,
@@ -471,11 +471,11 @@ describe("resolveTurn", () => {
         ]),
       }),
     );
-    const allyShot = eventsOf(result.events, "shot-missed").find((event) => event.tick === 30);
+    const allyShot = eventsOf(result.events, "shot-missed").find((event) => event.tick === 0);
     expect(allyShot).toMatchObject({ shooterId: "a1", reason: "no-target" });
     expect(result.nextState.teams[1]?.robots[0]?.hp).toBe(ally.definition.armor);
     const enemyResolution = result.events.find(
-      (event) => event.tick === 60 && (event.kind === "damaged" || event.kind === "shot-missed"),
+      (event) => event.tick === 30 && (event.kind === "damaged" || event.kind === "shot-missed"),
     );
     expect(enemyResolution).not.toMatchObject({ kind: "shot-missed", reason: "no-target" });
   });
@@ -510,7 +510,7 @@ describe("resolveTurn", () => {
     ]);
   });
 
-  it("settles same-boundary movement before applying the off-aimed-tile score halving", () => {
+  it("fires at command start, before a target leaves the aimed tile", () => {
     const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { scanHeading: "W" });
     const state = makeMatch({ teamTwoRobots: [target] });
     const result = requireResolved(
@@ -534,10 +534,33 @@ describe("resolveTurn", () => {
     expect(eventsOf(result.events, "move-step")[0]?.tick).toBe(30);
     const combatEvent =
       eventsOf(result.events, "damaged")[0] ?? eventsOf(result.events, "shot-missed")[0];
+    expect(combatEvent?.tick).toBe(0);
+    expect(combatEvent && "score" in combatEvent ? combatEvent.score : undefined).toBe(19);
+  });
+
+  it("halves the score for a target outside the 90-degree front arc (seg21:0x0F0A)", () => {
+    const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 3 });
+    const state = makeMatch({ teamTwoRobots: [target] });
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "front-arc",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              { kind: "aim-and-fire", target: { x: 2, y: 3 }, weapon: "rifle", repeat: false },
+            ],
+          },
+        ]),
+      }),
+    );
+    const combatEvent =
+      eventsOf(result.events, "damaged")[0] ?? eventsOf(result.events, "shot-missed")[0];
     expect(combatEvent && "score" in combatEvent ? combatEvent.score : undefined).toBe(9);
   });
 
-  it("consumes one damage-stagger count per firing action", () => {
+  it("does not halve the hit score for damage stagger (seg6:0x4CDA clears it first)", () => {
     const shooter = makeRobot(
       "r1",
       "team-1",
@@ -569,7 +592,7 @@ describe("resolveTurn", () => {
         ? [event.score]
         : [],
     );
-    expect(scores).toEqual([9, 9, 19]);
+    expect(scores).toEqual([19, 19, 19]);
     expect(result.nextState.teams[0]?.robots[0]?.damageStaggerActionsRemaining).toBe(0);
   });
 
@@ -610,34 +633,30 @@ describe("resolveTurn", () => {
     expect(eventsOf(result?.events ?? [], "command-aborted")).toHaveLength(2);
   });
 
-  it("applies every pre-collected burst hit before death cleanup", () => {
+  it("resolves a Burst action as one hit roll", () => {
     const shooter = makeRobot("r1", "team-1", "burst", { x: 1, y: 1 });
-    const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 }, { hp: 1 });
+    const target = makeRobot("r2", "team-2", "rifle", { x: 2, y: 1 });
     const state = makeMatch({ teamOneRobots: [shooter], teamTwoRobots: [target] });
-    const orders = ordersFor(state, [
-      {
-        robotId: "r1",
-        segments: [
-          { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "burst-gun", repeat: false },
-        ],
-      },
-    ]);
-
-    let result: TurnResult | undefined;
-    for (let seed = 0; seed < 100 && !result; seed += 1) {
-      const candidate = requireResolved(
-        resolveTurn({ state, orders, seed: `burst-batch-${seed}` }),
-      );
-      if (eventsOf(candidate.events, "damaged").length === 3) result = candidate;
-    }
-    expect(result).toBeDefined();
-    expect(eventsOf(result?.events ?? [], "damaged").map((event) => event.shotIndex)).toEqual([
-      0, 1, 2,
-    ]);
-    expect(eventsOf(result?.events ?? [], "destroyed")).toHaveLength(1);
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "burst-single-roll",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              { kind: "aim-and-fire", target: { x: 2, y: 1 }, weapon: "burst-gun", repeat: false },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(
+      eventsOf(result.events, "damaged").length + eventsOf(result.events, "shot-missed").length,
+    ).toBe(1);
   });
 
-  it("executes a repeat shot completing exactly at tick 900 and starts nothing there", () => {
+  it("fires the last repeat at its tick-870 start and starts nothing at tick 900", () => {
     const state = makeMatch();
     const result = requireResolved(
       resolveTurn({
@@ -654,7 +673,7 @@ describe("resolveTurn", () => {
       }),
     );
     expect(eventsOf(result.events, "fired")).toHaveLength(30);
-    expect(eventsOf(result.events, "fired").at(-1)?.tick).toBe(900);
+    expect(eventsOf(result.events, "fired").at(-1)?.tick).toBe(870);
     expect(eventsOf(result.events, "command-start").at(-1)?.tick).toBe(870);
     expect(eventsOf(result.events, "turn-end")[0]?.tick).toBe(900);
   });

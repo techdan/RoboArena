@@ -19,16 +19,6 @@ const COVER_SOURCE_LABELS = {
   "adjacent-low-wall": "adjacent low wall",
 } as const;
 
-const TERRAIN_LABELS = {
-  open: "Open tile",
-  rough: "Rough terrain",
-  "low-wall": "Low-wall terrain",
-  wall: "Wall terrain",
-  bush: "Bush terrain",
-  crevice: "Crevice tile",
-  "outer-wall": "Outer-wall terrain",
-} as const;
-
 const signed = (value: number): string => (value >= 0 ? `+${value}` : `−${Math.abs(value)}`);
 
 /**
@@ -52,8 +42,8 @@ export const targetingStatusLabel = (
 };
 
 /**
- * Compact cursor-tooltip lines for the hovered tile, including the cone-edge
- * `+2` acquisition-distance rule.
+ * Compact cursor-tooltip lines for the hovered tile, including the Scan & Fire
+ * `+2` ranking penalty outside the front arc.
  */
 export const tooltipLines = (
   tile: TargetingTilePreview,
@@ -80,13 +70,9 @@ export const tooltipLines = (
       } · ${estimate.posture} ${postureState}`,
     );
     lines.push(
-      `${TERRAIN_LABELS[estimate.targetTerrain]} ${
-        estimate.targetTerrain === "rough" ||
-        estimate.targetTerrain === "bush" ||
-        estimate.targetTerrain === "low-wall"
-          ? signed(estimate.breakdown.weaponTerrainAdjustment)
-          : `· weapon ${signed(estimate.breakdown.weaponTerrainAdjustment)}`
-      } · range ${signed(estimate.breakdown.distanceAccuracyAdjustment)}`,
+      `Fire control ${signed(estimate.breakdown.fireControlAdjustment)} · range ${signed(
+        estimate.breakdown.distanceAccuracyAdjustment,
+      )}${estimate.breakdown.targetInFrontArc ? "" : " · outside front arc, halved"}`,
     );
     if (tile.fireMode === "scan")
       lines.push(
@@ -104,7 +90,9 @@ export const tooltipLines = (
         }${estimate.breakdown.preClampSubtotal > 19 ? " · 94% max" : ""}`,
       );
   }
-  if (tile.fireMode === "scan" && tile.onConeBoundary)
-    lines.push(`Cone edge — counts as ${tile.distance + 2} tiles for acquisition`);
+  if (tile.fireMode === "scan" && tile.scanRankPenalized)
+    lines.push(
+      `Outside front arc — ranked as ${tile.distance + 2} tiles when picking a Scan target`,
+    );
   return lines;
 };

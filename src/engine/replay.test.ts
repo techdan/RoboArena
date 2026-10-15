@@ -73,7 +73,7 @@ describe("Phase 5 replay format", () => {
       ...replay,
       turns: [{ ...turn, seed: "phase5-corrupted" }],
     };
-    expect(verifyReplay(corrupted)).toEqual({ ok: false, firstDivergenceTick: 30 });
+    expect(verifyReplay(corrupted)).toEqual({ ok: false, firstDivergenceTick: 0 });
   });
 
   it("detects recorded event and state-digest corruption", () => {
@@ -128,7 +128,7 @@ describe("Phase 5 replay format", () => {
         ...replay,
         turns: [recordedFirstTurn, { ...secondTurn, seed: "phase5-corrupted-second-turn" }],
       }),
-    ).toEqual({ ok: false, firstDivergenceTick: 930 });
+    ).toEqual({ ok: false, firstDivergenceTick: 900 });
   });
 
   it("rejects invalid JSON, malformed payloads, and unknown versions", () => {

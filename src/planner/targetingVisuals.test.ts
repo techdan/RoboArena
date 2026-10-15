@@ -18,7 +18,7 @@ const preview = (overrides: Partial<TargetingTilePreview>): TargetingTilePreview
   resolution: "direct-hit-roll",
   fireMode: "aim",
   scanStrength: 16,
-  onConeBoundary: false,
+  scanRankPenalized: false,
   estimates: [],
   chancePercent: 50,
   chanceBand: "good",

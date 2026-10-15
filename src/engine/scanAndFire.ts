@@ -1,11 +1,12 @@
 /**
  * Deterministic Scan & Fire target acquisition (`docs/spec.md` §§6-7).
  *
- * Callers supply candidates in canonical Home-slot/roster order. Equal adjusted
- * distances prefer the larger scan-grid sight value, then retain canonical order.
+ * Callers supply candidates in canonical Home-slot/roster order. Rank distance
+ * is the distance plus 2 outside the ±45° inner cone; equal ranks prefer the
+ * larger scan-grid sight value, then retain canonical order (seg18:0x072C).
  */
 
-import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
+import { floorEuclideanDistance, isWithinFrontArc, isWithinScanCone } from "./geometry.js";
 import { scanSightStrength } from "./visibility.js";
 import type { Arena, RobotState, TileCoord } from "./types.js";
 
@@ -23,29 +24,21 @@ export interface ScanTarget {
 
 const isOnArena = (position: RobotState["position"]): position is TileCoord => position !== "dock";
 
-const HEADING_OFFSETS: Readonly<Record<RobotState["scanHeading"], TileCoord>> = {
-  N: { x: 0, y: -1 },
-  NE: { x: 1, y: -1 },
-  E: { x: 1, y: 0 },
-  SE: { x: 1, y: 1 },
-  S: { x: 0, y: 1 },
-  SW: { x: -1, y: 1 },
-  W: { x: -1, y: 0 },
-  NW: { x: -1, y: -1 },
-};
-
-/** Exact inclusive cone boundary used by `seg18:0x0854`'s +2 rank adjustment. */
-export const isOnScanConeBoundary = (
+/**
+ * `seg18:0x0854` adds two to a candidate's rank distance unless seg21:0x0CCF
+ * flagged it inside the closed ±45° inner cone. A same-tile candidate is never
+ * flagged inner and so also takes the +2.
+ */
+export const scanRankPenalty = (
   from: TileCoord,
   heading: RobotState["scanHeading"],
   target: TileCoord,
-): boolean => {
-  if (from.x === target.x && from.y === target.y) return false;
-  const direction = HEADING_OFFSETS[heading];
-  const targetX = target.x - from.x;
-  const targetY = target.y - from.y;
-  return direction.x * targetX + direction.y * targetY === 0;
-};
+): 0 | 2 =>
+  from.x !== target.x || from.y !== target.y
+    ? isWithinFrontArc(from, heading, target)
+      ? 0
+      : 2
+    : 2;
 
 export const findScanAndFireTarget = (input: {
   readonly arena: Arena;
@@ -73,12 +66,8 @@ export const findScanAndFireTarget = (input: {
     if (scanStrength === 0) {
       continue;
     }
-    // seg18:0x0854 adds two only for the exact inclusive cone boundary.
     const adjustedDistance =
-      distance +
-      (isOnScanConeBoundary(input.shooter.position, input.shooter.scanHeading, robot.position)
-        ? 2
-        : 0);
+      distance + scanRankPenalty(input.shooter.position, input.shooter.scanHeading, robot.position);
     if (
       selected === null ||
       adjustedDistance < selected.adjustedDistance ||

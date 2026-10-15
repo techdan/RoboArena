@@ -17,9 +17,9 @@ import {
 describe("authorized firing previews", () => {
   it("uses each weapon's real aim and scan opportunity cadence", () => {
     expect(targetingOpportunityTicks("burst-gun", "aim")).toBe(15);
-    expect(targetingOpportunityTicks("burst-gun", "scan")).toBe(20);
+    expect(targetingOpportunityTicks("burst-gun", "scan")).toBe(15);
     expect(targetingOpportunityTicks("missile-launcher", "aim")).toBe(30);
-    expect(targetingOpportunityTicks("missile-launcher", "scan")).toBe(20);
+    expect(targetingOpportunityTicks("missile-launcher", "scan")).toBe(70);
   });
 
   it("surfaces angle, range, and line-of-sight gates without rolling", () => {
@@ -82,9 +82,7 @@ describe("authorized firing previews", () => {
       accuracy: shooter.definition.accuracy,
       distance: 5,
       coverClass: cover.coverClass,
-      targetTerrain: "open",
-      weapon: WEAPONS.rifle,
-      targetOnAimedTile: true,
+      targetInFrontArc: true,
     });
     expect(anonymous.estimates[0]).toMatchObject({
       posture: "upright",
@@ -202,7 +200,7 @@ describe("authorized firing previews", () => {
     }
   });
 
-  it("builds Scan overlays from exact sight strength and the inclusive boundary", () => {
+  it("builds Scan overlays from exact sight strength and the front-arc rank penalty", () => {
     const open = makeOpenArena(7, 7);
     const tiles = open.tiles.map((row) => [...row]);
     tiles[3]![4] = { terrain: "bush" };
@@ -221,7 +219,7 @@ describe("authorized firing previews", () => {
     const boundary = previews.find((entry) => entry.tile.x === 5 && entry.tile.y === 3);
     expect(boundary).toMatchObject({
       status: "eligible",
-      onConeBoundary: true,
+      scanRankPenalized: true,
       scanStrength: 10,
       fireMode: "scan",
     });
@@ -243,11 +241,10 @@ describe("authorized firing previews", () => {
         accuracy: shooter.definition.accuracy,
         distance: 2,
         coverClass: cover.coverClass,
-        targetTerrain: "bush",
-        weapon: WEAPONS.rifle,
-        targetOnAimedTile: true,
+        targetInFrontArc: false,
         fireMode: "scan",
         scanStrength: 10,
+        scanMaxDistance: 4,
       }),
     );
   });

@@ -47,7 +47,7 @@ describe("compact fire controls", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Review<\/button>/);
   });
 
-  it("labels Burst fire time as bursts and bullets instead of generic shots", () => {
+  it("labels Burst fire time as bursts instead of generic shots", () => {
     const html = renderToStaticMarkup(
       <AimFireControls
         weapon="burst-gun"
@@ -62,7 +62,7 @@ describe("compact fire controls", () => {
       />,
     );
     expect(html).toContain("3 bursts");
-    expect(html).toContain("9 bullets");
+    expect(html).not.toContain("bullets");
   });
 });
 

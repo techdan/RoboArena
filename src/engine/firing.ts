@@ -1,18 +1,19 @@
 /**
  * Direct-fire resolution from RoboSport's live resolver (RE §7b/§15).
  *
- * Hit and damage are rolled at fire time. Projectile travel may delay applying
- * the pre-rolled result, but it never rerolls or enables in-flight dodging.
+ * Hit and damage are rolled once per firing action at fire time (a Burst Gun
+ * action is one roll, seg6:0x1DCE → 0x35D1 → one projectile). Projectile
+ * travel may delay applying the result, but it never rerolls.
  */
 
 import {
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
+  FIRE_CONTROL_ACCURACY_ADDS,
   LIVE_FIRE_HIT_THRESHOLDS,
-  WEAPON_ACCURACY_ADDS,
 } from "./constants.js";
 import { resolveCover } from "./cover.js";
-import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
+import { floorEuclideanDistance, isWithinFrontArc, isWithinScanCone } from "./geometry.js";
 import {
   calculateDirectDamageRangeFromFactors,
   calculateLiveFireBreakdownFromFactors,
@@ -53,9 +54,10 @@ export interface FireContext {
   readonly shooterTile: TileCoord;
   readonly shooterHeading: Heading;
   readonly shooterAccuracy: AccuracyTier;
-  /** Fixed tile selected by Aim & Fire. */
-  readonly aimedTile: TileCoord;
-  /** Target robot's actual tile when the command resolves. */
+  /**
+   * Tile the shot resolves against. Aim & Fire only resolves against a robot
+   * standing on its aimed tile; Scan & Fire uses the acquired robot's tile.
+   */
   readonly targetTile: TileCoord;
   readonly targetPosture: Posture;
   readonly weapon: WeaponDefinition;
@@ -63,41 +65,42 @@ export interface FireContext {
   readonly rng: Rng;
   /** Damage stagger is active for this firing action (original field +0x1E). */
   readonly damageStaggered?: boolean;
-  /** Selects the named accuracy table column and scan-strength penalty. Defaults to Aim & Fire. */
+  /** Selects the fire-control add and scan-strength penalty. Defaults to Aim & Fire. */
   readonly fireMode?: "aim" | "scan";
   /** Scan-grid sight value (0..16); Aim & Fire always passes 16. */
   readonly scanStrength?: number;
+  /** Scan & Fire Maximum Distance (command parameter 1); indexes 0x1596. */
+  readonly scanMaxDistance?: number;
 }
 
 export interface LiveFireScoreInput {
   readonly accuracy: AccuracyTier;
   readonly distance: number;
   readonly coverClass: CoverClass;
-  readonly targetTerrain: ArenaTile["terrain"] | undefined;
-  readonly weapon: WeaponDefinition;
-  readonly targetOnAimedTile: boolean;
+  /** Target is on the shooter's tile or inside its closed ±45° front arc. */
+  readonly targetInFrontArc: boolean;
   readonly damageStaggered?: boolean;
   readonly fireMode?: "aim" | "scan";
   readonly scanStrength?: number;
+  readonly scanMaxDistance?: number;
 }
 
 /** Exact, presentation-safe explanation of the live-fire score lookup. */
 export { distanceScoreAdjustment } from "./liveFireMath.js";
 export type { DirectDamageRange, LiveFireScoreBreakdown } from "./liveFireMath.js";
 
-const terrainScoreAdjustment = (
-  terrain: ArenaTile["terrain"] | undefined,
-  weapon: WeaponDefinition,
+/**
+ * Human-team fire-control add (seg6:0x3790): Aim & Fire passes parameter 0
+ * (+4); Scan & Fire passes its Maximum Distance. Weapon and target terrain do
+ * not enter this term.
+ */
+export const fireControlAccuracyAdjustment = (
   fireMode: "aim" | "scan",
+  scanMaxDistance?: number,
 ): number => {
-  if (terrain === "rough") return 2;
-  if (terrain === "bush") return -1;
-  if (terrain === "low-wall") return -3;
-  const index =
-    fireMode === "scan"
-      ? (weapon.scanAccuracyAddIndex ?? weapon.accuracyAddIndex ?? 0)
-      : (weapon.accuracyAddIndex ?? 0);
-  return WEAPON_ACCURACY_ADDS[index];
+  if (fireMode === "aim") return FIRE_CONTROL_ACCURACY_ADDS[0];
+  const index = Math.max(0, Math.min(FIRE_CONTROL_ACCURACY_ADDS.length - 1, scanMaxDistance ?? 18));
+  return FIRE_CONTROL_ACCURACY_ADDS[index] ?? 0;
 };
 
 export const calculateLiveFireScoreBreakdown = (
@@ -108,20 +111,16 @@ export const calculateLiveFireScoreBreakdown = (
   const scanStrength = fireMode === "scan" ? (input.scanStrength ?? 16) : 16;
   const coverAdjustment = COVER_CLASS_HIT_SCORE[input.coverClass];
   const distanceAccuracyAdjustment = distanceScoreAdjustment(input.distance, accuracyBase);
-  const weaponTerrainAdjustment = terrainScoreAdjustment(
-    input.targetTerrain,
-    input.weapon,
-    fireMode,
-  );
+  const fireControlAdjustment = fireControlAccuracyAdjustment(fireMode, input.scanMaxDistance);
   const damageStaggered = input.damageStaggered === true;
   return calculateLiveFireBreakdownFromFactors({
     fireMode,
     coverAdjustment,
     distanceAccuracyAdjustment,
-    weaponTerrainAdjustment,
+    fireControlAdjustment,
     scanStrength,
     damageStaggered,
-    targetOnAimedTile: input.targetOnAimedTile,
+    targetInFrontArc: input.targetInFrontArc,
     hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
   });
 };
@@ -165,35 +164,33 @@ const rollDirectDamage = (
 };
 
 export const resolveFire = (ctx: FireContext): FireResolution => {
-  const distance = floorEuclideanDistance(ctx.shooterTile, ctx.aimedTile);
-  if (distance > ctx.weapon.maxRange) {
-    return { outcome: "out-of-range", distance };
-  }
-  if (!isWithinScanCone(ctx.shooterTile, ctx.shooterHeading, ctx.aimedTile)) {
+  // The original validator order is cone, sight, then range (seg76:0x0775..0x081C).
+  if (!isWithinScanCone(ctx.shooterTile, ctx.shooterHeading, ctx.targetTile)) {
     return { outcome: "angle-blocked" };
   }
-
   const cover = resolveCover({
     from: ctx.shooterTile,
-    to: ctx.aimedTile,
+    to: ctx.targetTile,
     targetPosture: ctx.targetPosture,
     arenaTileAt: ctx.arenaTileAt,
   });
   if (cover.outcome === "blocked") {
     return { outcome: "sight-blocked", stoppedAt: cover.stoppedAt };
   }
+  const distance = floorEuclideanDistance(ctx.shooterTile, ctx.targetTile);
+  if (distance > ctx.weapon.maxRange) {
+    return { outcome: "out-of-range", distance };
+  }
 
-  const targetTerrain = ctx.arenaTileAt(ctx.targetTile)?.terrain;
   const score = calculateLiveFireScore({
     accuracy: ctx.shooterAccuracy,
     distance,
     coverClass: cover.coverClass,
-    targetTerrain,
-    weapon: ctx.weapon,
-    targetOnAimedTile: ctx.aimedTile.x === ctx.targetTile.x && ctx.aimedTile.y === ctx.targetTile.y,
+    targetInFrontArc: isWithinFrontArc(ctx.shooterTile, ctx.shooterHeading, ctx.targetTile),
     ...(ctx.damageStaggered === undefined ? {} : { damageStaggered: ctx.damageStaggered }),
     ...(ctx.fireMode === undefined ? {} : { fireMode: ctx.fireMode }),
     ...(ctx.scanStrength === undefined ? {} : { scanStrength: ctx.scanStrength }),
+    ...(ctx.scanMaxDistance === undefined ? {} : { scanMaxDistance: ctx.scanMaxDistance }),
   });
   const threshold = LIVE_FIRE_HIT_THRESHOLDS[score] ?? 0;
   const roll = ctx.rng.nextUint32() & 0xff;

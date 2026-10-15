@@ -48,6 +48,11 @@ def read_values(data: bytes, base: int, claim: dict[str, object]) -> list[int]:
             struct.unpack_from("<H", data, base + offset + index * 2)[0]
             for index in range(len(expected))
         ]
+    if encoding == "i16le":
+        return [
+            struct.unpack_from("<h", data, base + offset + index * 2)[0]
+            for index in range(len(expected))
+        ]
     fail(f"unsupported claim encoding: {encoding}")
     return []
 

@@ -93,8 +93,9 @@ describe("Phase 4 resolver integration", () => {
       }),
     );
 
-    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([0, 20, 40]);
+    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([0, 15, 30, 45]);
     expect(eventsOf(result.events, "scan-target-acquired").map((event) => event.targetId)).toEqual([
+      target.id,
       target.id,
       target.id,
       target.id,
@@ -173,13 +174,39 @@ describe("Phase 4 resolver integration", () => {
       }),
     );
 
-    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([0, 20, 40]);
+    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([0, 70, 140]);
     expect(result.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(0);
     expect(eventsOf(result.events, "command-start")).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ tick: 40, robotId: scanner.id, commandIndex: 1 }),
+        expect.objectContaining({ tick: 140, robotId: scanner.id, commandIndex: 1 }),
       ]),
     );
+  });
+
+  it("holds missile Scan fire while the acquired target is closer than 2 tiles (seg6:0x29CF)", () => {
+    const scanner = makeRobot("m1", "team-1", "missile", { x: 3, y: 3 });
+    const close = makeRobot("r2", "team-2", "rifle", { x: 4, y: 3 });
+    const state = makeMatch({
+      arena: makeOpenArena(12, 8),
+      teamOneRobots: [scanner],
+      teamTwoRobots: [close],
+    });
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "missile-min-distance",
+        orders: ordersFor(state, [
+          {
+            robotId: scanner.id,
+            segments: [
+              { kind: "scan-and-fire", weapon: "missile-launcher", maxDistance: 18, seconds: 1 },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "fired")).toEqual([]);
+    expect(result.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(3);
   });
 
   it("terminates at seconds × 60 without firing and starts the next command", () => {
