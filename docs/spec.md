@@ -725,7 +725,7 @@ Neither model rerolls at impact or lets the renderer decide anything.
 Rules revision 4 (`ORIGINAL_TIMING_RULES_REVISION`) keeps revision 3 and
 replays the original movie loop (`seg6:0x47DE..0x4853`). The findings, with
 addresses and confidence tags, are in `docs/re-map/timing.md`. New matches
-still start on revision 3.
+start on revision 4.
 
 **The step loop.** Time advances in 5-tick steps from tick 0. Each step:
 
