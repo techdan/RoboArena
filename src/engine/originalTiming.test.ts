@@ -3,9 +3,26 @@
 import { describe, expect, it } from "vitest";
 
 import { makeMatch, makeOpenArena, makeRobot } from "./__fixtures__/match.js";
+import {
+  explosiveFlightTicks,
+  explosiveLanding,
+  explosivePathAttempt,
+  explosivePathTiles,
+  scatterGrenade,
+  scatterMissile,
+} from "./originalTiming.js";
 import { createReplayLog, verifyReplay } from "./replay.js";
 import { resolveTurn, type TurnResult } from "./resolver.js";
-import type { GameConfig, MatchState, ResolutionEvent, TurnOrders, WeaponId } from "./types.js";
+import type {
+  Arena,
+  GameConfig,
+  MatchState,
+  ResolutionEvent,
+  RobotState,
+  Terrain,
+  TurnOrders,
+  WeaponId,
+} from "./types.js";
 
 const revision4 = (state: MatchState, config: Partial<GameConfig> = {}): MatchState => ({
   ...state,
@@ -251,6 +268,340 @@ describe("delayed bullet impact (seg6:0x3CAE, seg6:0x556F)", () => {
       ],
     };
     const replay = createReplayLog({ initialState: duel(30), turns: [{ seed: "b", orders }] });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});
+
+/** A scripted RNG stream that fails the test when more draws are taken. */
+const script = (...values: number[]) => {
+  let index = 0;
+  const draw = (): number => {
+    const value = values[index];
+    if (value === undefined) throw new Error(`unexpected draw ${index}`);
+    index += 1;
+    return value;
+  };
+  return Object.assign(draw, { used: () => index });
+};
+
+const withTerrain = (
+  arena: Arena,
+  tiles: readonly (readonly [number, number, Terrain])[],
+): Arena => ({
+  ...arena,
+  tiles: arena.tiles.map((row, y) =>
+    row.map((tile, x) => {
+      const match = tiles.find(([tx, ty]) => tx === x && ty === y);
+      return match ? { terrain: match[2] } : tile;
+    }),
+  ),
+});
+
+/** Formation grenades: every robot carries them as a secondary weapon (re-map/setup.md §5.1). */
+const armed = (robot: RobotState, weapon: WeaponId, ammo: number): RobotState => ({
+  ...robot,
+  definition: {
+    ...robot.definition,
+    secondaryWeapons: [...(robot.definition.secondaryWeapons ?? []), weapon],
+  },
+  ammo: { ...robot.ammo, [weapon]: ammo },
+});
+
+describe("explosive scatter (seg6:0x39C7, seg6:0x3BA6)", () => {
+  const origin = { x: 0, y: 0 };
+
+  it("throws a grenade exactly within 4 tiles in the front arc, with no draws", () => {
+    const draw = script();
+    expect(scatterGrenade({ shooter: origin, heading: "E", target: { x: 4, y: 0 }, draw })).toEqual(
+      { x: 4, y: 0 },
+    );
+    expect(draw.used()).toBe(0);
+  });
+
+  it("jitters a grenade by T[r&3] up to 8 tiles in the front arc", () => {
+    const draw = script(1, 3);
+    expect(scatterGrenade({ shooter: origin, heading: "E", target: { x: 6, y: 0 }, draw })).toEqual(
+      { x: 6, y: 1 },
+    );
+  });
+
+  it("scales a long grenade throw by ((r&7)+(r&3)+10)/16, truncating toward zero", () => {
+    // f = 3 + 1 + 10 = 14; 13·14·16/256 = 11.375 → 11; jitter T[4] = -2, T[5] = -1.
+    const draw = script(3, 1, 4, 5);
+    expect(
+      scatterGrenade({ shooter: origin, heading: "E", target: { x: 13, y: 0 }, draw }),
+    ).toEqual({ x: 9, y: -1 });
+  });
+
+  it("uses T[r&3] outside the front arc up to 12 tiles", () => {
+    // f = 13 + 7 = 20; −5·20·16/256 = −6.25 → −6; jitter T[3] = 1, T[0] = −1.
+    const draw = script(7, 3, 0);
+    expect(
+      scatterGrenade({ shooter: { x: 5, y: 5 }, heading: "E", target: { x: 0, y: 5 }, draw }),
+    ).toEqual({ x: 0, y: 4 });
+    expect(draw.used()).toBe(3);
+  });
+
+  it("keeps a missile on target within 12 tiles in the front arc", () => {
+    const draw = script();
+    expect(
+      scatterMissile({ shooter: origin, heading: "E", target: { x: 12, y: 0 }, draw }),
+    ).toEqual({ x: 12, y: 0 });
+  });
+
+  it("jitters a missile by T[r&3] near and T[r&7] far outside the arc", () => {
+    expect(
+      scatterMissile({
+        shooter: { x: 10, y: 0 },
+        heading: "E",
+        target: { x: 2, y: 0 },
+        draw: script(3, 2),
+      }),
+    ).toEqual({ x: 3, y: 0 });
+    expect(
+      scatterMissile({
+        shooter: { x: 10, y: 0 },
+        heading: "E",
+        target: { x: 1, y: 0 },
+        draw: script(7, 4),
+      }),
+    ).toEqual({ x: 3, y: -2 });
+  });
+});
+
+describe("explosive path stop (seg87:0x2B36, seg87:0x2B77, seg56:0x0509)", () => {
+  const open = makeOpenArena(12, 12);
+
+  it("walks a tile Bresenham that excludes the start and includes the end", () => {
+    expect(explosivePathTiles({ x: 0, y: 0 }, { x: 3, y: 1 })).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 1 },
+      { x: 3, y: 1 },
+    ]);
+    // Ties are y-major.
+    expect(explosivePathTiles({ x: 0, y: 0 }, { x: 2, y: 2 })).toEqual([
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
+  it("lands on the tile before a Wall", () => {
+    const arena = withTerrain(open, [[4, 0, "wall"]]);
+    expect(
+      explosivePathAttempt({ arena, from: { x: 0, y: 0 }, to: { x: 8, y: 0 }, draw: script() }),
+    ).toEqual({ ok: true, landing: { x: 3, y: 0 } });
+  });
+
+  it("rolls once per Low Wall, stopping on (r & 0xFF) >= the path threshold", () => {
+    // Index 1 passes at 256 (still one draw); index 3 stops at 248 or more.
+    const arena = withTerrain(open, [
+      [2, 0, "low-wall"],
+      [4, 0, "low-wall"],
+    ]);
+    const draw = script(255, 248);
+    expect(explosivePathAttempt({ arena, from: { x: 0, y: 0 }, to: { x: 8, y: 0 }, draw })).toEqual(
+      { ok: true, landing: { x: 3, y: 0 } },
+    );
+    expect(draw.used()).toBe(2);
+  });
+
+  it("fails an attempt that passes under 2 tiles, or under 4 beyond 10", () => {
+    expect(
+      explosivePathAttempt({
+        arena: open,
+        from: { x: 0, y: 0 },
+        to: { x: 1, y: 0 },
+        draw: script(),
+      }).ok,
+    ).toBe(false);
+    const walled = withTerrain(open, [[4, 0, "wall"]]);
+    expect(
+      explosivePathAttempt({
+        arena: walled,
+        from: { x: 0, y: 0 },
+        to: { x: 11, y: 0 },
+        draw: script(),
+      }),
+    ).toEqual({ ok: false, landing: { x: 3, y: 0 } });
+  });
+
+  it("throws again at the exact aim point when the scattered attempt fails", () => {
+    expect(
+      explosiveLanding({
+        arena: open,
+        from: { x: 0, y: 0 },
+        scattered: { x: 1, y: 0 },
+        aim: { x: 5, y: 0 },
+        draw: script(),
+      }),
+    ).toEqual({ x: 5, y: 0 });
+    // Off-arena points are clamped first.
+    expect(
+      explosivePathAttempt({
+        arena: open,
+        from: { x: 9, y: 0 },
+        to: { x: 14, y: 0 },
+        draw: script(),
+      }),
+    ).toEqual({ ok: true, landing: { x: 11, y: 0 } });
+  });
+
+  it("flies 5·d + 20 ticks for a grenade and 5·(d >> 1) + 10 for a missile", () => {
+    expect(explosiveFlightTicks("grenade-launcher", { x: 0, y: 0 }, { x: 4, y: 3 })).toBe(45);
+    expect(explosiveFlightTicks("missile-launcher", { x: 0, y: 0 }, { x: 4, y: 3 })).toBe(20);
+    expect(explosiveFlightTicks("missile-launcher", { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(10);
+  });
+});
+
+describe("explosive flight in the resolver (seg6:0x218D, seg6:0x266F, seg6:0x556F)", () => {
+  const range = (input: { shooterHeading?: "E" | "W"; arena?: Arena; targetHp?: number } = {}) =>
+    revision4(
+      makeMatch({
+        arena: input.arena ?? makeOpenArena(14, 12),
+        teamOneRobots: [
+          armed(
+            makeRobot(
+              "m",
+              "team-1",
+              "missile",
+              { x: 2, y: 5 },
+              {
+                scanHeading: input.shooterHeading ?? "E",
+              },
+            ),
+            "grenade-launcher",
+            3,
+          ),
+        ],
+        teamTwoRobots: [
+          makeRobot("t", "team-2", "rifle", { x: 8, y: 5 }, { hp: input.targetHp ?? 400 }),
+        ],
+      }),
+    );
+
+  it("lands a missile 5·(d >> 1) + 10 ticks after it fires and blasts then", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "m", segments: [aim({ x: 8, y: 5 }, "missile-launcher")] }],
+    };
+    const events = resolved(range(), orders).events;
+    expect(
+      ofKind(events, "projectile-launched").map((event) => [event.tick, event.target]),
+    ).toEqual([[0, { x: 8, y: 5 }]]);
+    expect(
+      ofKind(events, "projectile-impacted").map((event) => [event.tick, event.outcome]),
+    ).toEqual([[25, "blast"]]);
+    expect(ofKind(events, "damaged").map((event) => [event.tick, event.targetId])).toEqual([
+      [25, "t"],
+    ]);
+  });
+
+  it("rolls the blast against where robots are when it lands (seg6:0x5D73)", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        { robotId: "m", segments: [aim({ x: 8, y: 5 }, "missile-launcher")] },
+        {
+          robotId: "t",
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 8, y: 4 } }] }],
+        },
+      ],
+    };
+    const events = resolved(range(), orders).events;
+    const damaged = ofKind(events, "damaged");
+    expect(damaged.map((event) => event.tick)).toEqual([25]);
+    expect(damaged[0]).toMatchObject({ targetId: "t", damageKind: "blast", radius: 1 });
+  });
+
+  it("lands a grenade 5·d + 20 ticks after it fires (seg6:0x230C)", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "m", segments: [aim({ x: 6, y: 5 }, "grenade-launcher")] }],
+    };
+    const events = resolved(range(), orders).events;
+    expect(
+      ofKind(events, "projectile-impacted").map((event) => [event.tick, event.target]),
+    ).toEqual([[40, { x: 6, y: 5 }]]);
+  });
+
+  it("stops a grenade before a Wall instead of missing", () => {
+    const arena = withTerrain(
+      makeOpenArena(14, 12),
+      Array.from({ length: 12 }, (_, y) => [5, y, "wall"] as const),
+    );
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "m", segments: [aim({ x: 7, y: 5 }, "grenade-launcher")] }],
+    };
+    const events = resolved(range({ arena }), orders).events;
+    const [impact] = ofKind(events, "projectile-impacted");
+    expect(impact).toMatchObject({ tick: 30, outcome: "blast", target: { x: 4 } });
+    expect(ofKind(events, "shot-missed")).toEqual([]);
+  });
+
+  it("launches outside the scan cone with no range or sight check", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "m", segments: [aim({ x: 6, y: 5 }, "grenade-launcher")] }],
+    };
+    const events = resolved(range({ shooterHeading: "W" }), orders).events;
+    expect(ofKind(events, "projectile-impacted").map((event) => event.outcome)).toEqual(["blast"]);
+    expect(ofKind(events, "shot-missed")).toEqual([]);
+  });
+
+  it("holds grenade Scan & Fire while the target is closer than 2 (seg6:0x24FA)", () => {
+    const close = (rulesRevision: 3 | 4) => {
+      const base = revision4(
+        makeMatch({
+          arena: makeOpenArena(12, 12),
+          teamOneRobots: [
+            armed(makeRobot("g", "team-1", "rifle", { x: 2, y: 5 }), "grenade-launcher", 3),
+          ],
+          teamTwoRobots: [makeRobot("t", "team-2", "rifle", { x: 3, y: 5 })],
+        }),
+      );
+      return { ...base, config: { ...base.config, rulesRevision } };
+    };
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "g",
+          segments: [
+            { kind: "scan-and-fire", weapon: "grenade-launcher", maxDistance: 18, seconds: 2 },
+          ],
+        },
+      ],
+    };
+    expect(ofKind(resolved(close(4), orders).events, "fired")).toEqual([]);
+    expect(ofKind(resolved(close(3), orders).events, "fired").length).toBeGreaterThan(0);
+  });
+
+  it("verifies in a replay", () => {
+    const arena = withTerrain(makeOpenArena(14, 12), [
+      [4, 5, "low-wall"],
+      [6, 4, "wall"],
+    ]);
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "m",
+          segments: [
+            aim({ x: 12, y: 3 }, "grenade-launcher"),
+            aim({ x: 8, y: 5 }, "missile-launcher"),
+          ],
+        },
+        {
+          robotId: "t",
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 9, y: 5 } }] }],
+        },
+      ],
+    };
+    const replay = createReplayLog({
+      initialState: range({ arena }),
+      turns: [{ seed: "c", orders }],
+    });
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });

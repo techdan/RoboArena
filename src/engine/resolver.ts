@@ -11,6 +11,7 @@ import {
   BOMB_MAX_FUSE_SECONDS,
   BULLET_IMPACT_DELAY_TICKS,
   MISSILE_SCAN_MIN_DISTANCE,
+  EXPLOSIVE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
   ORIGINAL_TIMING_RULES_REVISION,
   MOVE_TILE_SWITCH_TICKS,
@@ -40,7 +41,14 @@ import { resolveFire } from "./firing.js";
 import { findScanAndFireTarget } from "./scanAndFire.js";
 import { updateSpotting, type SpottingActivity, type SpottingTeam } from "./spotting.js";
 import { computeVisibility, spottedEnemyIds, visibilityTileKey } from "./visibility.js";
-import { insertImpact, takeDueImpacts } from "./originalTiming.js";
+import {
+  explosiveFlightTicks,
+  explosiveLanding,
+  insertImpact,
+  scatterGrenade,
+  scatterMissile,
+  takeDueImpacts,
+} from "./originalTiming.js";
 import type {
   Arena,
   ArmedBomb,
@@ -233,6 +241,16 @@ type TimingProjectile =
       readonly impactsAt: number;
       readonly shooterId: string;
       readonly side: number;
+      readonly at: TileCoord;
+    }
+  | {
+      /** Type 1 grenade or type 2 missile: the blast is rolled when it lands (seg6:0x5629, 0x565D). */
+      readonly type: "explosive";
+      readonly impactsAt: number;
+      readonly projectileId: string;
+      readonly shooterId: string;
+      readonly shotIndex: number;
+      readonly weapon: "grenade-launcher" | "missile-launcher";
       readonly at: TileCoord;
     }
   | {
@@ -1519,6 +1537,22 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
           });
           drawStagger();
         }
+      } else if (impact.type === "explosive") {
+        // seg6:0x5629 / 0x565D → seg6:0x5D73: the blast hits whoever is near now.
+        emit(tick, {
+          kind: "projectile-impacted",
+          projectileId: impact.projectileId,
+          weapon: impact.weapon,
+          target: impact.at,
+          outcome: "blast",
+        });
+        timingBlast({
+          tick,
+          at: impact.at,
+          blast: WEAPONS[impact.weapon].blast!,
+          sourceId: impact.shooterId,
+          shotIndex: impact.shotIndex,
+        });
       } else {
         // seg6:0x5675: category 2 blast on the robot's own tile.
         emit(tick, { kind: "self-destructed", robotId: impact.robotId, at: impact.at });
@@ -1621,15 +1655,79 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
   };
 
+  /**
+   * Grenade and missile fire, seg6:0x218D / 0x23A1 (grenade) and seg6:0x266F /
+   * 0x2876 (missile). There is no range, cone or sight check: the shell is
+   * scattered (seg6:0x39C7, 0x3BA6), stopped by Walls and Low Walls on its
+   * path (seg87:0x2B36), and lands after a flight that grows with the
+   * distance. Aim & Fire scatters around the aim tile, Scan & Fire around the
+   * acquired robot's tile.
+   */
+  const launchExplosive = (input: Parameters<typeof launchBullet>[0]): void => {
+    const shooter = robots.get(input.actor.robotId);
+    if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return;
+    const weaponId = input.weapon.id;
+    if (weaponId !== "grenade-launcher" && weaponId !== "missile-launcher") return;
+    const ammo = shooter.ammo[weaponId];
+    if (ammo === 0) return;
+    firedThisTick.add(shooter.id);
+    emit(input.tick, {
+      kind: "fired",
+      shooterId: shooter.id,
+      commandIndex: input.commandIndex,
+      weapon: weaponId,
+      target: input.targetTile,
+      fireMode: input.fireMode,
+    });
+    if (ammo !== "unlimited") {
+      robots.set(shooter.id, {
+        ...shooter,
+        ammo: { ...shooter.ammo, [weaponId]: Math.max(0, ammo - 1) },
+      });
+    }
+    const draw = (): number => rng.nextUint32();
+    const scatter = weaponId === "grenade-launcher" ? scatterGrenade : scatterMissile;
+    const aim = input.targetTile;
+    for (let shotIndex = 0; shotIndex < input.weapon.bulletsPerClick; shotIndex += 1) {
+      const scattered = scatter({
+        shooter: shooter.position,
+        heading: shooter.scanHeading,
+        target: aim,
+        draw,
+      });
+      const landing = explosiveLanding({
+        arena: state.arena,
+        from: shooter.position,
+        scattered,
+        aim,
+        draw,
+      });
+      const projectileId = `${state.turnNumber}:${shooter.id}:${input.commandIndex}:${input.tick}:${shotIndex}`;
+      emit(input.tick, {
+        kind: "projectile-launched",
+        projectileId,
+        shooterId: shooter.id,
+        shotIndex,
+        weapon: weaponId,
+        from: shooter.position,
+        target: landing,
+      });
+      insertImpact(timingQueue, {
+        type: "explosive",
+        impactsAt: input.tick + explosiveFlightTicks(weaponId, shooter.position, landing),
+        projectileId,
+        shooterId: shooter.id,
+        shotIndex,
+        weapon: weaponId,
+        at: landing,
+      });
+    }
+  };
+
   /** Fires one Aim or Scan action with the given weapon. */
   const fireTimingWeapon = (input: Parameters<typeof launchBullet>[0]): void => {
-    if (!input.weapon.blast) {
-      launchBullet(input);
-      return;
-    }
-    const pendingDamage: PendingDamage[] = [];
-    resolveFiringAction({ ...input, pendingDamage });
-    applyPendingDamageAndDeaths(input.tick, pendingDamage);
+    if (input.weapon.blast) launchExplosive(input);
+    else launchBullet(input);
   };
 
   /** Command-end path, seg6:0x4A29..0x4A8F: apply the finished record and advance. */
@@ -1744,10 +1842,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       }),
       maxDistance: Math.min(active.command.maxDistance, weapon.maxRange),
     });
-    if (
-      !acquired ||
-      (weapon.id === "missile-launcher" && acquired.distance < MISSILE_SCAN_MIN_DISTANCE)
-    ) {
+    // Grenade (seg6:0x24FA) and missile (seg6:0x29CF) Scan & Fire hold fire
+    // while the target is closer than 2 and look again on the next step.
+    if (!acquired || (weapon.blast && acquired.distance < EXPLOSIVE_SCAN_MIN_DISTANCE)) {
       cursor.active = { ...active, nextScanAt: tick + SIMULATION_STEP_TICKS };
       return;
     }

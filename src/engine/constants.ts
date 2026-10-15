@@ -118,6 +118,43 @@ export const SIMULATION_STEP_TICKS = 5;
  */
 export const BULLET_IMPACT_DELAY_TICKS = 5;
 
+/**
+ * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
+ * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
+ * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the
+ * shooter's tile to the tile the shell lands on.
+ */
+export const GRENADE_FLIGHT = { ticksPerTile: 5, baseTicks: 20 } as const;
+export const MISSILE_FLIGHT = { ticksPerTwoTiles: 5, baseTicks: 10 } as const;
+
+/** Revision 4 explosive scatter jitter, DGROUP 0x15CE (seg6:0x39C7, seg6:0x3BA6). */
+export const EXPLOSIVE_SCATTER_JITTER = [-1, 0, 0, 1, -2, -1, 1, 2] as const;
+
+/**
+ * Revision 4 grenade and missile Scan & Fire both hold fire while the acquired
+ * target is closer than this (seg6:0x24FA grenade, seg6:0x29CF missile).
+ */
+export const EXPLOSIVE_SCAN_MIN_DISTANCE = 2;
+
+/**
+ * Revision 4 explosive path stop, seg87:0x2B77: each Low Wall on the path lets
+ * the shell pass when `(rand & 0xFF)` is below a threshold that falls with the
+ * tile's index k on the path (si = 2k compared with 4, 8 and 20).
+ */
+export const EXPLOSIVE_LOW_WALL_PASS_THRESHOLDS = [
+  { maxPathIndex: 2, threshold: 256 },
+  { maxPathIndex: 4, threshold: 248 },
+  { maxPathIndex: 10, threshold: 224 },
+  { maxPathIndex: Number.POSITIVE_INFINITY, threshold: 192 },
+] as const;
+
+/**
+ * A path-stop attempt succeeds only when the shell passed at least this many
+ * tiles, and at least `longMinimum` when the target is farther than
+ * `longDistance` (seg87:0x2B77 return value).
+ */
+export const EXPLOSIVE_PATH_MINIMUM = { tiles: 2, longDistance: 10, longMinimum: 4 } as const;
+
 // ──────────────────────────────────────────────────────────────────────────
 // Spotting (re-map/stealth-fence-ceremony-ai-formats.md §1)
 

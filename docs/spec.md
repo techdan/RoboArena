@@ -751,6 +751,32 @@ impacts land.
   the shot fires and land 5 ticks later (`seg6:0x3D2B`) on the robot it was
   fired at, wherever that robot is then. An Aim & Fire at a tile with no live
   enemy is a miss.
+- **Grenades and missiles** are scattered, stopped on their path, and fly for
+  a time that grows with distance; the blast is rolled when they land, against
+  the robots near the landing tile then (`seg6:0x5629`, `seg6:0x565D`).
+  - There is no range, cone or sight check when they fire. Aim & Fire throws
+    at the aim tile; Scan & Fire throws at the acquired robot's tile.
+  - Grenade scatter (`seg6:0x39C7`): inside the closed ±45° front arc, up to
+    4 tiles the shell goes exactly where aimed; up to 8 it is jittered by
+    `T[r&3]` on each axis; up to 12 the throw is scaled by `(13+(r&7))/16`
+    and jittered by `T[r&7]`; beyond 12 it is scaled by
+    `((r&7)+(r&3)+10)/16` and jittered by `T[r&7]`. Outside the front arc
+    the up-to-12 case uses `T[r&3]`. `T = [-1,0,0,1,-2,-1,1,2]`
+    (DGROUP `0x15CE`); the scaling truncates toward zero.
+  - Missile scatter (`seg6:0x3BA6`): no range scaling. Inside the front arc
+    it is exact up to 12 tiles and `T[r&3]` beyond; outside it is `T[r&3]`
+    up to 8 and `T[r&7]` beyond.
+  - Path stop (`seg87:0x2B36`): the shell follows a tile line that skips the
+    shooter's tile, stops on the tile before the first Wall, and each Low
+    Wall on the line draws `r & 0xFF` and stops the shell on the tile before
+    it unless the roll is under 256, 248, 224 or 192 for path index ≤ 2, ≤ 4,
+    ≤ 10 and beyond. A throw that passed fewer than 2 tiles, or fewer than 4
+    when the target is over 10 tiles away, is thrown again at the exact aim
+    point, and that second throw stands. Off-arena points are clamped first.
+  - Flight: a grenade lands `5·d + 20` ticks after it fires and a missile
+    `5·(d >> 1) + 10`, with d the floored distance to the landing tile.
+  - Grenade and missile Scan & Fire both hold fire while the target is closer
+    than 2 tiles (`seg6:0x24FA`, `seg6:0x29CF`).
 - **Damage is cut to the armor the target has left** (`seg6:0x5B09`). A robot
   already destroyed takes nothing from later impacts; the shooter's own death
   does not stop a shot in flight.
