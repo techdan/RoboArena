@@ -3,20 +3,20 @@
 import {
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
+  fireControlAccuracyAdjustment,
   LIVE_FIRE_HIT_THRESHOLDS,
   WEAPON_MAX_RANGE,
   WEAPON_TIMING,
 } from "../engine/constants";
 import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
-import { fireControlAccuracyAdjustment } from "../engine/firing";
 import {
   floorEuclideanDistance as floorDistance,
   isWithinFrontArc,
+  scanRankPenalty,
+  scanSightStrength,
   sightWalkTiles,
   targetCoverSamples,
 } from "../engine/geometry";
-import { scanSightStrength } from "../engine/visibility";
-import { scanRankPenalty } from "../engine/scanAndFire";
 import {
   calculateDirectDamageRangeFromFactors,
   calculateLiveFireBreakdownFromFactors,

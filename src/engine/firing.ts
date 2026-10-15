@@ -9,7 +9,7 @@
 import {
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
-  FIRE_CONTROL_ACCURACY_ADDS,
+  fireControlAccuracyAdjustment,
   LIVE_FIRE_HIT_THRESHOLDS,
 } from "./constants.js";
 import { resolveCover } from "./cover.js";
@@ -89,19 +89,7 @@ export interface LiveFireScoreInput {
 export { distanceScoreAdjustment } from "./liveFireMath.js";
 export type { DirectDamageRange, LiveFireScoreBreakdown } from "./liveFireMath.js";
 
-/**
- * Human-team fire-control add (seg6:0x3790): Aim & Fire passes parameter 0
- * (+4); Scan & Fire passes its Maximum Distance. Weapon and target terrain do
- * not enter this term.
- */
-export const fireControlAccuracyAdjustment = (
-  fireMode: "aim" | "scan",
-  scanMaxDistance?: number,
-): number => {
-  if (fireMode === "aim") return FIRE_CONTROL_ACCURACY_ADDS[0];
-  const index = Math.max(0, Math.min(FIRE_CONTROL_ACCURACY_ADDS.length - 1, scanMaxDistance ?? 18));
-  return FIRE_CONTROL_ACCURACY_ADDS[index] ?? 0;
-};
+export { fireControlAccuracyAdjustment } from "./constants.js";
 
 export const calculateLiveFireScoreBreakdown = (
   input: LiveFireScoreInput,

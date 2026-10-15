@@ -6,7 +6,7 @@
  * larger scan-grid sight value, then retain canonical order (seg18:0x072C).
  */
 
-import { floorEuclideanDistance, isWithinFrontArc, isWithinScanCone } from "./geometry.js";
+import { floorEuclideanDistance, isWithinScanCone, scanRankPenalty } from "./geometry.js";
 import { scanSightStrength } from "./visibility.js";
 import type { Arena, RobotState, TileCoord } from "./types.js";
 
@@ -24,21 +24,7 @@ export interface ScanTarget {
 
 const isOnArena = (position: RobotState["position"]): position is TileCoord => position !== "dock";
 
-/**
- * `seg18:0x0854` adds two to a candidate's rank distance unless seg21:0x0CCF
- * flagged it inside the closed ±45° inner cone. A same-tile candidate is never
- * flagged inner and so also takes the +2.
- */
-export const scanRankPenalty = (
-  from: TileCoord,
-  heading: RobotState["scanHeading"],
-  target: TileCoord,
-): 0 | 2 =>
-  from.x !== target.x || from.y !== target.y
-    ? isWithinFrontArc(from, heading, target)
-      ? 0
-      : 2
-    : 2;
+export { scanRankPenalty };
 
 export const findScanAndFireTarget = (input: {
   readonly arena: Arena;

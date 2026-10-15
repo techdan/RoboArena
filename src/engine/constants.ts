@@ -113,6 +113,20 @@ export const FIRE_CONTROL_ACCURACY_ADDS = [
   4, 7, 6, 5, 4, 3, 2, 1, 0, 0, -1, -1, -2, -2, -3, -3, -4, -5, -6,
 ] as const;
 
+/**
+ * Human-team fire-control add (seg6:0x3790): Aim & Fire passes parameter 0
+ * (+4); Scan & Fire passes its Maximum Distance. Weapon and target terrain do
+ * not enter this term.
+ */
+export const fireControlAccuracyAdjustment = (
+  fireMode: "aim" | "scan",
+  scanMaxDistance?: number,
+): number => {
+  if (fireMode === "aim") return FIRE_CONTROL_ACCURACY_ADDS[0];
+  const index = Math.max(0, Math.min(FIRE_CONTROL_ACCURACY_ADDS.length - 1, scanMaxDistance ?? 18));
+  return FIRE_CONTROL_ACCURACY_ADDS[index] ?? 0;
+};
+
 // ──────────────────────────────────────────────────────────────────────────
 // Arena
 

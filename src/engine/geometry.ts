@@ -5,7 +5,7 @@
  * and are shared by LoS, cover, and renderer path construction.
  */
 
-import type { Heading, TileCoord } from "./types.js";
+import type { Arena, Heading, TileCoord } from "./types.js";
 
 /**
  * The original integer square root, seg9:0x0530. Its final fix-up returns one
@@ -227,3 +227,41 @@ export const tilesAlongLineExclusive = (from: TileCoord, to: TileCoord): TileCoo
 
   return tiles;
 };
+
+const geometryTileAt = (arena: Arena, tile: TileCoord) => arena.tiles[tile.y]?.[tile.x];
+
+/**
+ * Exact scan-grid sight value from `seg87:0x19E3`.
+ *
+ * Clear sight starts at 16. The tiles come from the original sight walker
+ * (`sightWalkTiles`): the shooter's own tile is not sampled, the target tile
+ * is. Every Low Wall or Bush sample removes 3; Walls, Outer Walls and
+ * off-arena tiles return 0. Crevices and ordinary ground do not cut the value.
+ */
+export const scanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord): number => {
+  if (geometryTileAt(arena, from) === undefined || geometryTileAt(arena, to) === undefined)
+    return 0;
+  if (from.x === to.x && from.y === to.y) return 16;
+
+  let strength = 16;
+  for (const tile of sightWalkTiles(from, to)) {
+    const terrain = geometryTileAt(arena, tile)?.terrain;
+    if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") return 0;
+    if (terrain === "low-wall" || terrain === "bush") {
+      strength = Math.max(0, strength - 3);
+    }
+  }
+  return strength;
+};
+
+/**
+ * `seg18:0x0854` adds two to a candidate's rank distance unless seg21:0x0CCF
+ * flagged it inside the closed ±45° inner cone. A same-tile candidate is never
+ * flagged inner and so also takes the +2.
+ */
+export const scanRankPenalty = (from: TileCoord, heading: Heading, target: TileCoord): 0 | 2 =>
+  from.x !== target.x || from.y !== target.y
+    ? isWithinFrontArc(from, heading, target)
+      ? 0
+      : 2
+    : 2;
