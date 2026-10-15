@@ -51,7 +51,7 @@ pass; the full Phase 12.2 manual acceptance gates remain open.
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 546 tests)
+npm test               # Run all unit tests (currently 602 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans

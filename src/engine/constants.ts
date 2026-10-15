@@ -93,8 +93,121 @@ export const ORIGINAL_SPOTTING_RULES_REVISION = 2;
  */
 export const ORIGINAL_FORMATIONS_RULES_REVISION = 3;
 
+/**
+ * Rules revision 4 keeps revision 3 and adds the original combat timing:
+ * robots occupy their next tile partway through a move (seg6:0x2D59,
+ * seg6:0x2E04) and the remaining timing rules in docs/spec.md §4.
+ */
+export const ORIGINAL_TIMING_RULES_REVISION = 4;
+
+/**
+ * A 1-tile move occupies its destination 15 ticks in; a 2-tile move occupies
+ * the floored midpoint at 15 and the destination at 25 (seg6:0x2D8E,
+ * seg6:0x2E41..0x2EA9).
+ */
+export const MOVE_TILE_SWITCH_TICKS = 15;
+export const MOVE_DOUBLE_DESTINATION_SWITCH_TICKS = 25;
+
 /** The original simulation advances in 5-tick steps (seg6:0x4838..0x483E). */
 export const SIMULATION_STEP_TICKS = 5;
+
+/**
+ * Revision 4: a bullet (projectile type 4) is created with impact time
+ * `now + 5` (seg6:0x3D2B..0x3D32) and lands in the queue pass of a later step
+ * (seg6:0x556F, bullet branch seg6:0x56CD).
+ */
+export const BULLET_IMPACT_DELAY_TICKS = 5;
+
+/**
+ * Revision 4 movie tail. The movie runs to turn length + 150 (seg6:0x4790),
+ * and an impact due within 150 ticks of the end pushes the end out by another
+ * 150 (seg6:0x6330). No record starts and nothing fires at or after turn
+ * length, but projectiles land, moves finish their current step and spotting
+ * keeps running.
+ */
+export const MOVIE_TAIL_TICKS = 150;
+
+/**
+ * Revision 4 Scan & Fire pause, seg6:0x3E33. Each direct-fire Scan & Fire
+ * shot counts on the robot's program (`+1C`); the seventh in a row adds a
+ * pause of `base + 5·(rand & mask)` ticks to the cooldown, then the counter
+ * restarts at `rand & resetMask` (pause drawn first). DGROUP 0x14BA, the
+ * negotiated protocol level, is 2 in any same-version game, so the
+ * per-weapon rows apply.
+ */
+export interface ScanFirePause {
+  readonly base: number;
+  readonly mask: number;
+  readonly resetMask: number;
+}
+export const SCAN_FIRE_PAUSES: Readonly<
+  Record<"rifle" | "burst-gun" | "auto-rifle", ScanFirePause>
+> = {
+  "auto-rifle": { base: 30, mask: 3, resetMask: 1 },
+  "burst-gun": { base: 40, mask: 3, resetMask: 3 },
+  rifle: { base: 50, mask: 7, resetMask: 3 },
+};
+
+/** The pause comes when the shot counter passes 6, on the seventh shot (seg6:0x3E33). */
+export const SCAN_FIRE_PAUSE_AFTER_SHOTS = 6;
+
+/**
+ * seg6:0x3EE6: a direct-fire Scan & Fire step with no target, 20 or more
+ * ticks after the cooldown ran out, takes one off the shot counter.
+ */
+export const SCAN_FIRE_DECAY_IDLE_TICKS = 20;
+
+/**
+ * Revision 4 periodic spotting refresh, seg6:0x4091 (0x40BB..0x40FD): when
+ * due before turn length it sets activity 2 and redraws its timer
+ * `30 + 5·(rand & 15)` ticks ahead. Scan & Fire and Zap call it on every step
+ * (dispatch has just reset the timer); a robot with no orders left calls it
+ * from the idle path.
+ */
+export const SPOTTING_REFRESH = { baseTicks: 30, mask: 15 } as const;
+
+/**
+ * Revision 4 delayed death: a destroyed robot leaves the map 60 ticks after
+ * its death time (seg6:0x4C37..0x4C62, seg18:0x111E).
+ */
+export const DEATH_REMOVAL_DELAY_TICKS = 60;
+
+/**
+ * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
+ * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
+ * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the
+ * shooter's tile to the tile the shell lands on.
+ */
+export const GRENADE_FLIGHT = { ticksPerTile: 5, baseTicks: 20 } as const;
+export const MISSILE_FLIGHT = { ticksPerTwoTiles: 5, baseTicks: 10 } as const;
+
+/** Revision 4 explosive scatter jitter, DGROUP 0x15CE (seg6:0x39C7, seg6:0x3BA6). */
+export const EXPLOSIVE_SCATTER_JITTER = [-1, 0, 0, 1, -2, -1, 1, 2] as const;
+
+/**
+ * Revision 4 grenade and missile Scan & Fire both hold fire while the acquired
+ * target is closer than this (seg6:0x24FA grenade, seg6:0x29CF missile).
+ */
+export const EXPLOSIVE_SCAN_MIN_DISTANCE = 2;
+
+/**
+ * Revision 4 explosive path stop, seg87:0x2B77: each Low Wall on the path lets
+ * the shell pass when `(rand & 0xFF)` is below a threshold that falls with the
+ * tile's index k on the path (si = 2k compared with 4, 8 and 20).
+ */
+export const EXPLOSIVE_LOW_WALL_PASS_THRESHOLDS = [
+  { maxPathIndex: 2, threshold: 256 },
+  { maxPathIndex: 4, threshold: 248 },
+  { maxPathIndex: 10, threshold: 224 },
+  { maxPathIndex: Number.POSITIVE_INFINITY, threshold: 192 },
+] as const;
+
+/**
+ * A path-stop attempt succeeds only when the shell passed at least this many
+ * tiles, and at least `longMinimum` when the target is farther than
+ * `longDistance` (seg87:0x2B77 return value).
+ */
+export const EXPLOSIVE_PATH_MINIMUM = { tiles: 2, longDistance: 10, longMinimum: 4 } as const;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Spotting (re-map/stealth-fence-ceremony-ai-formats.md §1)

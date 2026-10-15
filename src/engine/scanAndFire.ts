@@ -32,6 +32,12 @@ export const findScanAndFireTarget = (input: {
   readonly shooterSide: number;
   readonly candidates: readonly ScanCandidate[];
   readonly maxDistance: number;
+  /**
+   * Rules revision 4: the sight value seg96:0x1FC5 returns, the spotting
+   * pass's cached pair value when the shooter's Team has the target spotted,
+   * else 0 (not a candidate). Omitted, sight is walked fresh.
+   */
+  readonly sightOf?: (target: RobotState & { readonly position: TileCoord }) => number;
 }): ScanTarget | null => {
   let selected: ScanTarget | null = null;
   for (const candidate of input.candidates) {
@@ -48,7 +54,9 @@ export const findScanAndFireTarget = (input: {
     if (distance > input.maxDistance || !insideCone) {
       continue;
     }
-    const scanStrength = scanSightStrength(input.arena, input.shooter.position, robot.position);
+    const scanStrength = input.sightOf
+      ? input.sightOf({ ...robot, position: robot.position })
+      : scanSightStrength(input.arena, input.shooter.position, robot.position);
     if (scanStrength === 0) {
       continue;
     }

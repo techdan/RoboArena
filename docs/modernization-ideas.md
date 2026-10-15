@@ -18,17 +18,19 @@ Binary references point into [re-map/](re-map/README.md).
 | Formations | Beginner shows every enemy and has no grenades, Zap or Time Bomb; Standard hides enemies and adds 3 grenades per robot, Zap and one Time Bomb per Team (`seg61:0x02A7`). Both are offered in the lobby. | Fog as its own option, or the other three formations (Fire Fight, Missile Fest, Beat the Clock). |
 | Time Bomb | Hits every Side, including the bomber's own Team (`seg6:0x5D73`). | Make the bomber's Team immune, or show armed bombs to enemies who can see the tile. |
 
-## Still to match, then reconsider
+## Original timing, kept for now
 
-These original behaviours are not implemented yet. The plan is to match them
-first and only then decide whether to modernize them.
+Rules revision 4 matches the original's combat timing (docs/spec.md and
+[re-map/timing.md](re-map/timing.md)). These are candidates to revisit after
+playtesting:
 
-- Robots occupy their destination tile partway through a move (`seg6:0x2D59`,
-  `seg6:0x2E04`).
-- The 5-tick bullet delay, projectile flight and scatter.
-- The Scan & Fire seven-shot cooldown.
-- The periodic spotting refresh for commands other than Zap, and holding
-  Scan & Fire checks to 5-tick steps (re-map README, "Still open").
+| Rule | Original behaviour (now in RoboArena) | Possible modern change |
+| --- | --- | --- |
+| Mid-move tile | A robot occupies its next tile 15 ticks into a step; a 2-tile step passes through the floored midpoint, which can be a Wall on a dogleg step. | Use the planned path tile, so a robot never stands in a Wall. |
+| Grenade and missile scatter | Scatter, a Low Wall/Fence stop roll and a re-throw (`seg6:0x39C7`, `seg87:0x2B36`). | Show the scatter area in the planner. |
+| Seven-shot pause | Every 7th Scan & Fire shot with a gun adds a 30–85 tick pause. | Show the pause on the timeline. |
+| Delayed death | A killed robot dies on the next step or at the end of its move, and its wreck stays on the map for 60 ticks. | Remove wrecks at once. |
+| Orders left at turn end | Dropped (inferred; the original may carry them over). | Carry unfinished orders into the next turn. |
 
 ## New ideas
 

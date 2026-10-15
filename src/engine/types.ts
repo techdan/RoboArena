@@ -339,7 +339,7 @@ export interface GameConfig {
    * 2 = original spotting roll and per-step turn/posture costs. Absent means
    * the earlier rules, kept so matches created before them still verify.
    */
-  readonly rulesRevision?: 2 | 3;
+  readonly rulesRevision?: 2 | 3 | 4;
   /** Formation flag `+0x1A` bit 0x01 (Beginner): every Team sees every enemy. */
   readonly showEnemyPositions?: true;
   /** Formation byte `+0x2C`: Zap is available to every robot. */

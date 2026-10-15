@@ -19,6 +19,7 @@ import { Assets, Sprite } from "pixi.js";
 import type { Container, Graphics, Texture } from "pixi.js";
 import type { TileCoord } from "../../engine/types";
 import type { ParticipantResolutionEvent } from "../../lib/net/protocol";
+import { projectileFlightSeconds } from "../animations";
 import { EFFECT_ASSETS, MARKER_ASSETS } from "../assets";
 import { MOVIE_TILE_SIZE } from "../RobotSprite";
 
@@ -154,6 +155,11 @@ export interface MovieEffectOptions {
    * ordinary forward advance, so a projectile may outlive its own beat.
    */
   readonly reset: boolean;
+  /**
+   * Impact tick by projectile id. A projectile whose impact is on a later tick
+   * flies until that tick instead of for a fixed beat.
+   */
+  readonly projectileImpactTicks?: ReadonlyMap<string, number>;
 }
 
 export const renderMovieEffects = (
@@ -188,6 +194,8 @@ export const renderMovieEffects = (
     if (event.kind === "projectile-launched") {
       const from = center(event.from);
       const to = center(event.target);
+      const flight = projectileFlightSeconds(options.projectileImpactTicks, event);
+      const travel = (beat: number): number => secs(flight ?? beat);
       if (event.weapon === "missile-launcher") {
         const missile = spawn(layer, EFFECT_ASSETS.projectileMissile, from, MOVIE_TILE_SIZE * 0.5);
         if (missile !== undefined) {
@@ -195,33 +203,37 @@ export const renderMovieEffects = (
           gsap.to(missile.position, {
             x: to.x,
             y: to.y,
-            duration: secs(0.3),
+            duration: travel(0.3),
             ease: "power1.in",
           });
-          removeAfter(missile, secs(0.32));
+          removeAfter(missile, travel(0.3) + secs(0.02));
         }
       } else if (event.weapon === "grenade-launcher") {
         const grenade = spawn(layer, EFFECT_ASSETS.projectileGrenade, from, MOVIE_TILE_SIZE * 0.35);
         if (grenade !== undefined) {
-          gsap.to(grenade.position, { x: to.x, y: to.y, duration: secs(0.34), ease: "none" });
+          gsap.to(grenade.position, { x: to.x, y: to.y, duration: travel(0.34), ease: "none" });
           // Fake lob height: swell mid-flight, settle on approach.
           gsap
             .timeline()
             .to(grenade.scale, {
               x: grenade.scale.x * 1.5,
               y: grenade.scale.y * 1.5,
-              duration: secs(0.17),
+              duration: travel(0.34) / 2,
             })
-            .to(grenade.scale, { x: grenade.scale.x, y: grenade.scale.y, duration: secs(0.17) });
-          removeAfter(grenade, secs(0.36));
+            .to(grenade.scale, {
+              x: grenade.scale.x,
+              y: grenade.scale.y,
+              duration: travel(0.34) / 2,
+            });
+          removeAfter(grenade, travel(0.34) + secs(0.02));
         }
       } else {
         const tracer = spawn(layer, EFFECT_ASSETS.tracerBullet, from, MOVIE_TILE_SIZE * 0.22);
         if (tracer !== undefined) {
           tracer.anchor.set(0.5, 0.125);
           tracer.rotation = rotationToward(from, to);
-          gsap.to(tracer.position, { x: to.x, y: to.y, duration: secs(0.18), ease: "none" });
-          removeAfter(tracer, secs(0.2));
+          gsap.to(tracer.position, { x: to.x, y: to.y, duration: travel(0.18), ease: "none" });
+          removeAfter(tracer, travel(0.18) + secs(0.02));
         }
       }
     }

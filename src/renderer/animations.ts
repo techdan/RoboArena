@@ -42,6 +42,8 @@ export interface MovieTimeline {
   readonly ticks: readonly number[];
   readonly snapshots: readonly MovieSnapshot[];
   readonly eventsByTick: ReadonlyMap<number, readonly ParticipantResolutionEvent[]>;
+  /** Tick each projectile lands on, by projectile id. */
+  readonly projectileImpactTicks: ReadonlyMap<string, number>;
 }
 
 export type AnimationCue =
@@ -182,6 +184,12 @@ export const buildMovieTimeline = (
     eventsByTick.set(event.tick, atTick);
   }
 
+  const projectileImpactTicks = new Map<string, number>();
+  for (const event of sorted) {
+    if (event.kind === "projectile-impacted")
+      projectileImpactTicks.set(event.projectileId, event.tick);
+  }
+
   const ticks = [...new Set([0, ...sorted.map((event) => event.tick)])].sort((a, b) => a - b);
   let robots: Readonly<Record<string, MovieRobotSnapshot>> = initialRobots(initialState);
   let bombs: readonly MovieBombSnapshot[] = (initialState.armedBombs ?? []).map((bomb) => ({
@@ -196,7 +204,22 @@ export const buildMovieTimeline = (
     }
     return { tick, robots, bombs } satisfies MovieSnapshot;
   });
-  return { ticks, snapshots, eventsByTick };
+  return { ticks, snapshots, eventsByTick, projectileImpactTicks };
+};
+
+/**
+ * Seconds at 1× a projectile spends in flight when it lands on a later tick
+ * than it was launched (rules revision 4 delays every impact); undefined when
+ * it lands on its launch tick and the renderer picks a travel time itself.
+ */
+export const projectileFlightSeconds = (
+  impactTicks: ReadonlyMap<string, number> | undefined,
+  launch: { readonly projectileId: string; readonly tick: number },
+): number | undefined => {
+  const impactTick = impactTicks?.get(launch.projectileId);
+  return impactTick !== undefined && impactTick > launch.tick
+    ? (impactTick - launch.tick) / TICKS_PER_SECOND
+    : undefined;
 };
 
 export const snapshotAtTick = (timeline: MovieTimeline, tick: number): MovieSnapshot => {

@@ -716,13 +716,184 @@ exact on-screen travel duration is presentation tuning, not an unresolved
 business-rule gate. Scan & Fire uses the same fire-boundary result authority.
 
 Strict impact timing is a separate product decision from result locking. The
-current MVP rule above is fire-boundary state mutation. A proposed fidelity
-upgrade would store the already-rolled result as an immutable pending impact,
-apply it at a deterministic impact tick, and drive the projectile animation
-from the same event. Do not introduce impact-time rerolls, tracking, or renderer
-authority under either model. Exact original projectile travel ticks remain
-unverified, so adopting strict timing also requires either a focused trace or
-explicit RoboArena travel constants.
+fire-boundary state mutation above remains the rule for matches on rules
+revisions 3 and earlier. Rules revision 4 adopts the original timing below.
+Neither model rerolls at impact or lets the renderer decide anything.
+
+### Rules revision 4: original combat timing
+
+Rules revision 4 (`ORIGINAL_TIMING_RULES_REVISION`) keeps revision 3 and
+replays the original movie loop (`seg6:0x47DE..0x4853`). The findings, with
+addresses and confidence tags, are in `docs/re-map/timing.md`. New matches
+start on revision 4.
+
+**The step loop.** Time advances in 5-tick steps from tick 0. Each step:
+
+1. dispatches every robot in global (Home-slot, roster) order
+   (`seg6:0x4892` → `seg6:0x4998`): a finished command applies its end state
+   and the next one starts on the same step, then the active command's handler
+   runs (fire, scan, zap, mid-move tile switch);
+2. checks Time Bombs (`seg6:0x50D3`);
+3. lands every projectile due by now (`seg6:0x556F`);
+4. runs the spotting pass (`seg6:0x5898`).
+
+A robot moving one tile occupies its destination 15 ticks into the step; a
+two-tile step occupies the floored midpoint at 15 and the destination at 25
+(`seg6:0x2D59`, `seg6:0x2E04`).
+
+**The tail.** The movie keeps stepping after turn length, to turn length +
+150 ticks, and an impact due within 150 ticks of that end pushes it out by
+another 150 (`seg6:0x4790`, `seg6:0x6330`). In the tail:
+
+- no command record starts, and nothing fires, scans or zaps
+  (`seg6:0x4ABB..0x4AE2`, `seg6:0x1FDB`);
+- projectiles in flight land, Time Bombs do not go off (`seg6:0x54B9`);
+- a record that started before turn length finishes and applies its end
+  state, so a move completes the step it is on, but the next record does not
+  start (`seg6:0x4A60..0x4A8B`);
+- the spotting pass runs on every step.
+
+The rest of a robot's orders is dropped. The original appears to carry the
+unexecuted records into the next turn (`seg14:0x00A2`, not traced); RoboArena
+does not, because the next turn's orders are planned from scratch
+(**inferred**, conservative). RoboArena also stops the tail early, on the
+first step at or after turn length with no projectile in flight and no
+command running except Scan & Fire or Zap: after that nothing can change. The
+`turn-end` event is on the last step processed.
+
+**Spotting flags.** Each step's spotting pass reads two flags per robot,
+written during that step and cleared after the pass (`seg96:0x02C5`). The
+activity code keeps the last value written (`seg96:0x0366`):
+
+- **3** when a Scan & Fire shot or a zap goes off (`seg6:0x20B6`,
+  `seg6:0x251E`, `seg6:0x29F3`, `seg6:0x2C93`). Aim & Fire writes no 3, so an
+  Aim & Fire shot does not reveal the shooter outright.
+- **2** from the periodic refresh (`seg6:0x4091`): before turn length, when
+  the robot's refresh timer is due, the timer is redrawn `30 + 5·(r&15)`
+  ticks ahead. Scan & Fire and Zap run it first thing on every step, and it is
+  always due there because dispatch has just reset the timer, so they draw
+  once and write 2 every step. A robot with no orders left runs it from the
+  idle path: first on the step after its orders ran out (or at ticks 0 and 5
+  with no orders), then every 30 to 105 ticks. Moves, Aim & Fire, posture,
+  heading, deploy, bomb and Self Destruct never refresh.
+- **1** when a record ends (`seg6:0x4F34`, `seg6:0x502B`): every record except
+  Scan & Fire and Zap, so a move gives 1 at the end of each step and a turn
+  or posture change at the end of each record, not while it runs.
+
+The moved flag is set when a moving robot switches its occupied tile
+(`seg6:0x2DEB`, `seg6:0x2EB6`) and when a move step or deploy ends
+(`seg6:0x4FB4..0x500A`); at turn start every robot is moved and every Team
+dirty (`seg96:0x0267`). A Team is dirty when any of its robots has a flag,
+including a robot still in the dock, which refreshes like any robot with no
+orders but is not on the map to spot or be spotted (**inferred**).
+The refresh draw comes at the robot's place in dispatch order, before any
+other draw its handler makes. With Show Enemy Positions the pass still runs
+and draws its rolls before every enemy is marked seen again (**inferred**).
+
+**Scan & Fire acquisition** (`seg18:0x072C`). Scan & Fire looks for a target
+only on its 5-tick steps, during dispatch, before that step's spotting pass:
+
+- a candidate must be an enemy its Team saw in the last spotting pass (every
+  enemy with Show Enemy Positions); others are skipped (`seg96:0x1FC5`);
+- its sight value is the spotting pass's cached pair value (`ctx+0x1B0`),
+  recomputed in the pass only for pairs where either robot moved
+  (`seg96:0x0900`), so a robot that switched tiles earlier in this step's
+  dispatch is ranked and scored with the sight of its old tile;
+- the cache is zeroed when the movie starts (`seg39:0x0354`), so nothing can
+  be acquired on tick 0; the earliest Scan & Fire shot is on tick 5.
+
+Range, cone, the +2 rank outside the inner arc and the sight tie-break are as
+in §6. The cached sight also feeds the hit score's sight penalty.
+
+**Projectiles.** Every shot is a queued projectile with an impact tick. The
+queue is sorted by impact tick and a new projectile goes before others due on
+the same tick, so equal impacts land newest first (`seg6:0x1AD3`). Because
+step 1 runs before step 3, every robot acts on a step before that step's
+impacts land.
+
+- **Bullets** (Rifle, Burst Gun, Auto Rifle): hit and damage are rolled when
+  the shot fires and land 5 ticks later (`seg6:0x3D2B`) on the robot it was
+  fired at, wherever that robot is then. An Aim & Fire at a tile with no live
+  enemy is a miss.
+- **Grenades and missiles** are scattered, stopped on their path, and fly for
+  a time that grows with distance; the blast is rolled when they land, against
+  the robots near the landing tile then (`seg6:0x5629`, `seg6:0x565D`).
+  - There is no range, cone or sight check when they fire. Aim & Fire throws
+    at the aim tile; Scan & Fire throws at the acquired robot's tile.
+  - Grenade scatter (`seg6:0x39C7`): inside the closed ±45° front arc, up to
+    4 tiles the shell goes exactly where aimed; up to 8 it is jittered by
+    `T[r&3]` on each axis; up to 12 the throw is scaled by `(13+(r&7))/16`
+    and jittered by `T[r&7]`; beyond 12 it is scaled by
+    `((r&7)+(r&3)+10)/16` and jittered by `T[r&7]`. Outside the front arc
+    the up-to-12 case uses `T[r&3]`. `T = [-1,0,0,1,-2,-1,1,2]`
+    (DGROUP `0x15CE`); the scaling truncates toward zero.
+  - Missile scatter (`seg6:0x3BA6`): no range scaling. Inside the front arc
+    it is exact up to 12 tiles and `T[r&3]` beyond; outside it is `T[r&3]`
+    up to 8 and `T[r&7]` beyond.
+  - Path stop (`seg87:0x2B36`): the shell follows a tile line that skips the
+    shooter's tile, stops on the tile before the first Wall, and each Low
+    Wall on the line draws `r & 0xFF` and stops the shell on the tile before
+    it unless the roll is under 256, 248, 224 or 192 for path index ≤ 2, ≤ 4,
+    ≤ 10 and beyond. A throw that passed fewer than 2 tiles, or fewer than 4
+    when the target is over 10 tiles away, is thrown again at the exact aim
+    point, and that second throw stands. Off-arena points are clamped first.
+  - Flight: a grenade lands `5·d + 20` ticks after it fires and a missile
+    `5·(d >> 1) + 10`, with d the floored distance to the landing tile.
+  - Grenade and missile Scan & Fire both hold fire while the target is closer
+    than 2 tiles (`seg6:0x24FA`, `seg6:0x29CF`).
+- **One cooldown per robot.** Every shot and zap sets the robot's cooldown
+  (program `+1A`), which lasts for the rest of the turn across commands:
+  direct fire the weapon's Aim duration (`seg6:0x3D79`), a grenade 30 (+50
+  after a scan shot, `seg6:0x3F43`), a missile 30 (+40, `seg6:0x3FA4`), a zap
+  60 (`seg6:0x4005`). Scan & Fire and Zap check it every step and act only
+  once it has run out. Aim & Fire fires when its record starts and does not
+  check it.
+- **Seven-shot pause** (`seg6:0x3E33`). Each direct-fire Scan & Fire shot
+  adds one to the robot's shot counter. On the seventh the cooldown gets an
+  extra `30 + 5·(r&3)` (Auto Rifle), `40 + 5·(r&3)` (Burst Gun) or
+  `50 + 5·(r&7)` (Rifle), then the counter restarts at `r&1` (Auto) or `r&3`
+  (Burst, Rifle). A Scan & Fire step with no target, 20 or more ticks after
+  the cooldown ran out, takes one off the counter (`seg6:0x3EE6`). The
+  counter and cooldown start at 0 each turn. Explosive scans have no counter.
+  The original also resets both when a weapon-select record runs
+  (`seg6:0x4D07`); RoboArena has no such records.
+- **Damage is cut to the armor the target has left** (`seg6:0x5B09`). A robot
+  already destroyed takes nothing from later impacts; the shooter's own death
+  does not stop a shot in flight.
+- **Zap** lands 5 ticks after it fires and **Self Destruct** 10 ticks after it
+  starts, through the same queue.
+- Each damaged robot draws the stagger roll `(rand & 3) + 1` right after its
+  damage, as part of the same impact (`seg6:0x4060`). The value is never read.
+- Blasts and zaps roll each robot's damage in global order, applying it and
+  drawing its stagger roll before the next robot (`seg6:0x5D73`,
+  `seg6:0x602B`).
+
+**Delayed death** (`seg14:0x071C`, `seg6:0x4B05`). Damage that reaches a
+robot's armor sets its death time to the next step, or to the end of the move
+step it is on when that is later.
+
+- From the lethal hit the robot is dead to targeting: Aim & Fire, Scan & Fire,
+  Zap and blasts skip it (`seg21:0x0AB1`), and later damage does nothing.
+- Until its death time a robot in a move keeps moving and switching tiles; it
+  starts nothing new.
+- At the death time the movie end is extended as for an impact
+  (`seg6:0x4B49`), the record in progress takes effect (a turn or posture
+  record completes, `seg14:0x0472`), the robot is `destroyed` and its orders
+  are aborted.
+- It stays on its tile, and still takes part in the spotting pass as observer
+  and target (the pair routine `seg96:0x0484` does not check
+  `seg21:0x0AB1`), until it leaves the map 60 ticks after its death time with
+  activity 1 and moved set (`seg6:0x4C37..0x4C62`). The movie runs until
+  every removal is done.
+
+The death and explosion sprites draw from the game RNG in the original
+(`seg6:0x10F3`, `seg6:0x13E1`); RoboArena does not replicate those visual
+draws.
+
+Events keep their split: `fired` and `projectile-launched` on the fire tick,
+`projectile-impacted`, `shot-missed` and `damaged` on the impact tick. A
+`damaged` event carries the damage actually taken. The movie flies each
+projectile until its impact tick.
 
 ---
 

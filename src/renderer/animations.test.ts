@@ -9,6 +9,7 @@ import {
   ANIMATION_CUES,
   buildMovieTimeline,
   presentationDelayMs,
+  projectileFlightSeconds,
   snapshotAtTick,
 } from "./animations";
 
@@ -190,5 +191,48 @@ describe("movie timeline", () => {
     expect(snapshotAtTick(timeline, 10).robots.contact).toMatchObject({ hp: 140 });
     expect(snapshotAtTick(timeline, 20).robots.contact).toMatchObject({ hp: 125 });
     expect(snapshotAtTick(timeline, 30).robots.contact).toBeUndefined();
+  });
+});
+
+describe("projectile flight", () => {
+  const state = makeMatch({
+    teamOneRobots: [makeRobot("r1", "team-1", "rifle", { x: 1, y: 1 })],
+  });
+  const shot = (impactTick: number): ResolutionEvent[] => [
+    {
+      tick: 10,
+      seq: 0,
+      kind: "projectile-launched",
+      projectileId: "p",
+      shooterId: "r1",
+      shotIndex: 0,
+      weapon: "grenade-launcher",
+      from: { x: 1, y: 1 },
+      target: { x: 5, y: 1 },
+    },
+    {
+      tick: impactTick,
+      seq: 1,
+      kind: "projectile-impacted",
+      projectileId: "p",
+      weapon: "grenade-launcher",
+      target: { x: 5, y: 1 },
+      outcome: "blast",
+    },
+  ];
+
+  it("flies until a later impact tick", () => {
+    const timeline = buildMovieTimeline(state, shot(50));
+    expect(timeline.projectileImpactTicks.get("p")).toBe(50);
+    expect(
+      projectileFlightSeconds(timeline.projectileImpactTicks, { projectileId: "p", tick: 10 }),
+    ).toBe(40 / 60);
+  });
+
+  it("leaves a same-tick impact to the renderer's own beat", () => {
+    const timeline = buildMovieTimeline(state, shot(10));
+    expect(
+      projectileFlightSeconds(timeline.projectileImpactTicks, { projectileId: "p", tick: 10 }),
+    ).toBeUndefined();
   });
 });

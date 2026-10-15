@@ -173,8 +173,13 @@ const assertConfig = (value: unknown, path: string): void => {
   assertOneOf(value.arenaType, ARENA_TYPES, `${path}.arenaType`);
   assertString(value.arenaSizeName, `${path}.arenaSizeName`);
   assertInteger(value.turnLengthSeconds, `${path}.turnLengthSeconds`, { min: 1, max: 40 });
-  if (value.rulesRevision !== undefined && value.rulesRevision !== 2 && value.rulesRevision !== 3) {
-    throw new Error(`${path}.rulesRevision must be 2 or 3 when present.`);
+  if (
+    value.rulesRevision !== undefined &&
+    value.rulesRevision !== 2 &&
+    value.rulesRevision !== 3 &&
+    value.rulesRevision !== 4
+  ) {
+    throw new Error(`${path}.rulesRevision must be 2, 3 or 4 when present.`);
   }
   for (const flag of ["showEnemyPositions", "zapArmed"] as const) {
     if (value[flag] !== undefined && value[flag] !== true) {
