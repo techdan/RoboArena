@@ -1,0 +1,15 @@
+// Cloudflare room service. Deploy with `npm run deploy:rooms` once logged in
+// with `npx wrangler login`; the site itself deploys from ../wrangler.jsonc. The Workers Free plan supports SQLite-backed
+// Durable Objects, which is all this needs.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "roboarena-rooms",
+  "main": "index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }],
+  "observability": { "enabled": true },
+}
