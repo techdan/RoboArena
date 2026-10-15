@@ -129,6 +129,13 @@ export const explainEvent = (event: ParticipantResolutionEvent): ExplainedEvent 
         title: "Time Bomb exploded",
         detail: `${event.ownerId}'s Time Bomb went off at ${event.at.x},${event.at.y}, blasting every robot within 4 tiles.`,
       };
+    case "self-destructed":
+      return {
+        ...base,
+        category: "combat",
+        title: "Self Destruct",
+        detail: `${event.robotId} self-destructed at ${event.at.x},${event.at.y}, blasting every robot within 4 tiles.`,
+      };
     case "destroyed":
       return {
         ...base,

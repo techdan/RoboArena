@@ -66,5 +66,18 @@ describe("authorized event explanations", () => {
         at: { x: 2, y: 3 },
       })?.title,
     ).toBe("Time Bomb exploded");
+    expect(
+      explainEvent({
+        tick: 30,
+        seq: 4,
+        kind: "self-destructed",
+        robotId: "r1",
+        at: { x: 2, y: 3 },
+      }),
+    ).toMatchObject({
+      category: "combat",
+      title: "Self Destruct",
+      detail: "r1 self-destructed at 2,3, blasting every robot within 4 tiles.",
+    });
   });
 });

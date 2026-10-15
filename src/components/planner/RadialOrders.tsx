@@ -8,6 +8,7 @@ import {
   Footprints,
   PersonStanding,
   Radar,
+  Skull,
   X,
   Zap,
 } from "lucide-react";
@@ -26,6 +27,8 @@ export interface RadialOrdersProps {
   readonly onZap?: () => void;
   /** Present only when this robot still carries a Time Bomb. */
   readonly onPlaceBomb?: () => void;
+  /** Present only when this robot is its Team's last one standing. */
+  readonly onSelfDestruct?: () => void;
   readonly onPosture: (posture: Posture) => void;
   readonly onHeadingPreview: (heading: Heading | null) => void;
   readonly onHeading: (heading: Heading) => void;
@@ -52,8 +55,8 @@ interface Item {
 }
 
 /**
- * Root ring: Move, Aim, Scan & fire, Posture, Face, then Zap and Bomb when the
- * robot may program them. Items share the circle evenly with the close button,
+ * Root ring: Move, Aim, Scan & fire, Posture, Face, then Zap, Bomb and Self
+ * destruct when the robot may program them. Items share the circle evenly with the close button,
  * which keeps the original 60-degree layout when only the five base orders show.
  */
 const rootItems = (
@@ -114,6 +117,14 @@ const rootItems = (
       hint: "B",
       icon: <Bomb size={14} aria-hidden="true" />,
       onClick: props.onPlaceBomb,
+    });
+  if (props.onSelfDestruct !== undefined)
+    entries.push({
+      key: "self-destruct",
+      label: "Self destruct",
+      hint: "X",
+      icon: <Skull size={14} aria-hidden="true" />,
+      onClick: props.onSelfDestruct,
     });
   const step = 360 / (entries.length + 1);
   return entries.map((entry, index) => ({ ...entry, angle: -90 + index * step }));

@@ -5,6 +5,8 @@ import {
   MOVE_SINGLE_COST_TICKS,
   BOMB_MAX_FUSE_SECONDS,
   PLACE_BOMB_COST_TICKS,
+  SELF_DESTRUCT_COST_TICKS,
+  SELF_DESTRUCT_IMPACT_DELAY_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   WEAPON_MAX_RANGE,
@@ -28,6 +30,7 @@ export type ActionHelpId =
   | "scan-fire"
   | "zap"
   | "place-bomb"
+  | "self-destruct"
   | "timeline"
   | "lock-orders";
 export type FormationHelpId = "beginner" | "standard";
@@ -254,6 +257,21 @@ export const ACTION_HELP: readonly HelpTopic[] = [
       { label: "Placing", value: formatGameTime(PLACE_BOMB_COST_TICKS) },
       { label: "Fuse", value: `0–${BOMB_MAX_FUSE_SECONDS}s after placing` },
       { label: "Blast radius", value: `${TIME_BOMB_BLAST.radius} tiles` },
+    ],
+  },
+  {
+    id: "action:self-destruct",
+    tab: "actions",
+    title: "Self Destruct",
+    summary: "Your last robot standing blows itself up, taking any robot in range with it.",
+    details: [
+      "Only offered when your Team has exactly one robot left alive, and only once that robot is deployed. Its own blast usually destroys it.",
+      `${formatGameTime(SELF_DESTRUCT_IMPACT_DELAY_TICKS)} after the command starts, the robot explodes on its own tile with the Time Bomb's blast. It hits every robot within ${TIME_BOMB_BLAST.radius} tiles, the robot itself included.`,
+    ],
+    facts: [
+      { label: "Command", value: formatGameTime(SELF_DESTRUCT_COST_TICKS) },
+      { label: "Blast", value: `${formatGameTime(SELF_DESTRUCT_IMPACT_DELAY_TICKS)} after start` },
+      { label: "Blast radius", value: `${TIME_BOMB_BLAST.radius} tiles, every Side` },
     ],
   },
   {

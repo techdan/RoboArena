@@ -44,7 +44,7 @@ python3 tools/re/export_data.py ROBOWIN docs/extracted/robosport-data.json src/l
 | 3 | The 19 unnamed selectors | ✅ C for 3, 4, 23, 69, 78; the rest are never produced | `seg74`, `seg80:0x01F6`, `seg12:0x02A5` callers | [commands.md](commands.md) §2, §10 |
 | 4 | Zap (Prod contact attack) | ✅ C | sel 3, `seg6:0x2BD9`, damage `seg6:0x602B` | [commands.md](commands.md) §3 |
 | 5 | Time Bomb | ✅ C | sel 23, `seg6:0x2B08`, detonation `seg6:0x542E`, blast cat 2 at DGROUP `0x1606` | [commands.md](commands.md) §4 |
-| 6 | Self Destruct | ✅ C (enable rule U) | sel 78, `seg6:0x3541`; enable `seg21:0x076C` | [commands.md](commands.md) §5 |
+| 6 | Self Destruct | ✅ C | sel 78, `seg6:0x3541`; enable `seg21:0x076C` | [commands.md](commands.md) §5 |
 | 7 | Grenade and Missile counts | ✅ C | robot +0x54/+0x56; Aim/Scan tables DGROUP `0x0B52`/`0x0B46` | [commands.md](commands.md) §7, [setup.md](setup.md) §1.3 |
 | 8 | Sport mode and objects | ✅ C | game struct handle DGROUP `0x2E3C` +0x18; object manager DGROUP `0x357A`; verb sel 69 → `seg6:0x2F36` | [sports.md](sports.md) §1–2 |
 | 9 | Treasure Hunt | ✅ C (end rule U) | placement `seg28:0x1867`, grab `seg6:0x32DB` | [sports.md](sports.md) §3 |
@@ -135,8 +135,7 @@ keep on purpose are listed in
 - AI target-score weights (`seg32:0x05D8`, `seg33`, `seg96:0x1B98`/`0x1D92`).
 - Treasure Hunt and Hostage end conditions beyond the Score Limit; hostage
   give/take limits; whether bullets can hit a held hostage.
-- Self Destruct enable rule (`seg21:0x076C`); the unidentified global
-  DGROUP `0x14BA` (gates the Scan & Fire cooldown and the base inset).
+- The unidentified global DGROUP `0x14BA` (gates the Scan & Fire cooldown and the base inset).
 - Fourteen unnamed command rows (2, 14, 18, 22, 40, 65–68, 73, 75–77, 79) and
   the Prod and Bomb select rows (1, 21) are never produced; the unnamed rows'
   intended verbs are guesses.

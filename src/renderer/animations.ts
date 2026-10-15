@@ -83,6 +83,7 @@ export const ANIMATION_CUES: Readonly<Record<ResolutionEvent["kind"], AnimationC
   zapped: "zap",
   "bomb-placed": "bomb",
   "bomb-exploded": "explosion",
+  "self-destructed": "explosion",
   "turn-end": "none",
 };
 

@@ -58,6 +58,7 @@ const eventKinds = [
   "zapped",
   "bomb-placed",
   "bomb-exploded",
+  "self-destructed",
   "turn-end",
 ] as const satisfies readonly ResolutionEvent["kind"][];
 // Validate field/event combinations so an accidental robotId on a damaged event
@@ -85,6 +86,7 @@ const eventFilterFields: {
   zapped: ["shooterId"],
   "bomb-placed": ["robotId"],
   "bomb-exploded": ["ownerId"],
+  "self-destructed": ["robotId"],
   "turn-end": [],
 };
 const eventFilter = z

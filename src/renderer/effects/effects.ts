@@ -111,6 +111,20 @@ const bombBlast = (layer: Container, at: { x: number; y: number }, secs: Clock) 
   }
 };
 
+/**
+ * Self Destruct: the Time Bomb's category-2 blast, plus a brighter white-hot
+ * core so the robot's own detonation reads as bigger than a planted bomb.
+ */
+const selfDestructBlast = (layer: Container, at: { x: number; y: number }, secs: Clock) => {
+  bombBlast(layer, at, secs);
+  const flash = spawn(layer, EFFECT_ASSETS.explosionLarge, at, MOVIE_TILE_SIZE * 4.2);
+  if (flash !== undefined) {
+    flash.tint = 0xfff4d6;
+    pop(flash, 0.4, 1.3, secs(0.35));
+    removeAfter(flash, secs(0.5));
+  }
+};
+
 /** Zap: two crossed blue-white crackles on the zapper's tile. */
 const zapCrackle = (layer: Container, at: { x: number; y: number }, secs: Clock) => {
   for (const [index, rotation] of [0, Math.PI / 3].entries()) {
@@ -244,6 +258,7 @@ export const renderMovieEffects = (
     }
     if (event.kind === "zapped") zapCrackle(layer, center(event.at), secs);
     if (event.kind === "bomb-exploded") bombBlast(layer, center(event.at), secs);
+    if (event.kind === "self-destructed") selfDestructBlast(layer, center(event.at), secs);
     if (event.kind === "destroyed") {
       const at = tileOf(event.robotId);
       if (at !== undefined) explosion(layer, at, true, secs);

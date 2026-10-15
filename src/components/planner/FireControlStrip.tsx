@@ -1,6 +1,6 @@
 "use client";
 
-import { Bomb, Crosshair, Radar, X, Zap } from "lucide-react";
+import { Bomb, Crosshair, Radar, Skull, X, Zap } from "lucide-react";
 import { TICKS_PER_SECOND } from "../../engine/constants";
 import type { TileCoord, WeaponId } from "../../engine/types";
 import { fireActionCount } from "../../planner/combatPresentation";
@@ -177,7 +177,7 @@ export function ScanFireControls({
 }
 
 export interface SpecialCommandControlsProps {
-  readonly kind: "zap" | "place-bomb";
+  readonly kind: "zap" | "place-bomb" | "self-destruct";
   readonly seconds: number;
   readonly onSecondsChange: (seconds: number) => void;
   readonly onCancel: () => void;
@@ -191,8 +191,9 @@ export const SPECIAL_COMMAND_SECONDS = {
 } as const;
 
 /**
- * Compact Zap / Place Bomb controls that take over the entry buttons' slot:
- * `⚡ seconds · Add · ✕` or `💣 fuse · Add · ✕`.
+ * Compact Zap / Place Bomb / Self Destruct controls that take over the entry
+ * buttons' slot: `⚡ seconds · Add · ✕`, `💣 fuse · Add · ✕`, or a
+ * parameterless `💀 · Confirm · ✕` that asks before the robot blows itself up.
  */
 export function SpecialCommandControls({
   kind,
@@ -201,6 +202,27 @@ export function SpecialCommandControls({
   onCancel,
   onConfirm,
 }: SpecialCommandControlsProps) {
+  if (kind === "self-destruct") {
+    return (
+      <div className="fire-inline" aria-label="Self Destruct controls">
+        <span className="fire-inline-mode" title="Self Destruct">
+          <Skull size={15} aria-hidden="true" />
+          <small>Self Destruct?</small>
+        </span>
+        <button type="button" className="fire-inline-primary cursor-pointer" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button
+          type="button"
+          className="fire-inline-cancel cursor-pointer"
+          aria-label="Cancel Self Destruct"
+          onClick={onCancel}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
   const zap = kind === "zap";
   const { min, max } = SPECIAL_COMMAND_SECONDS[kind];
   const name = zap ? "Zap" : "Place Bomb";

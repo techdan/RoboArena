@@ -697,6 +697,14 @@ export class BattleScene3D {
           this.focus(at, 2, secs(2.2));
           break;
         }
+        case "self-destructed": {
+          // The Time Bomb's blast, a touch larger: the robot is the bomb.
+          const at = this.worldOf(event.at, 0.35);
+          if (!animate) break;
+          this.effects.explosion(at, 2.4);
+          this.focus(at, 2.3, secs(2.4));
+          break;
+        }
         case "enemy-lost":
           if (animate) this.effects.ghostMarker(this.worldOf(event.lastSeenAt, 0.03));
           break;

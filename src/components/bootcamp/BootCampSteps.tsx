@@ -280,7 +280,7 @@ export function WeaponsStep() {
             </p>
           </div>
           <ul className="bc-bands bc-extras">
-            {(["action:zap", "action:place-bomb"] as const).map((id) => {
+            {(["action:zap", "action:place-bomb", "action:self-destruct"] as const).map((id) => {
               const topic = helpTopic(id);
               return (
                 <li key={id}>

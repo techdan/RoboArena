@@ -157,6 +157,7 @@ const LABEL: Record<RobotCommandSegment["kind"], string> = {
   "scan-and-fire": "Scan & fire",
   zap: "Zap",
   "place-bomb": "Bomb",
+  "self-destruct": "Self Destruct",
 };
 
 export function createPlannerConcept(): PlannerConcept {

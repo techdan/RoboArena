@@ -1,6 +1,6 @@
 "use client";
 
-import { Bomb, Crosshair, Radar, Zap } from "lucide-react";
+import { Bomb, Crosshair, Radar, Skull, Zap } from "lucide-react";
 import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import type { Heading, Posture, WeaponId } from "../../engine/types";
 import { HEADINGS, headingFromVector, rotateHeading } from "../../planner/presentation";
@@ -51,6 +51,8 @@ export interface PlannerActionStripProps {
   readonly zap?: SpecialCommandEntry;
   /** Place Bomb entry button; omitted when the robot carries no Time Bomb. */
   readonly placeBomb?: SpecialCommandEntry;
+  /** Self Destruct entry button; present only for a Team's last live, deployed robot. */
+  readonly selfDestruct?: SpecialCommandEntry;
 }
 
 export interface SpecialCommandEntry {
@@ -78,6 +80,7 @@ export function PlannerActionStrip({
   onScan,
   zap,
   placeBomb,
+  selfDestruct,
 }: PlannerActionStripProps) {
   const [keyboardHeading, setKeyboardHeading] = useState(heading);
   useEffect(() => setKeyboardHeading(heading), [heading]);
@@ -300,6 +303,19 @@ export function PlannerActionStrip({
                 onClick={placeBomb.onStart}
               >
                 <Bomb size={17} aria-hidden="true" /> Bomb
+              </button>
+            )}
+            {selfDestruct === undefined ? null : (
+              <button
+                type="button"
+                className="cursor-pointer"
+                aria-pressed={selfDestruct.active}
+                data-active={selfDestruct.active}
+                disabled={disabled}
+                title="Blow up this robot, blasting every robot nearby"
+                onClick={selfDestruct.onStart}
+              >
+                <Skull size={17} aria-hidden="true" /> Self Destruct
               </button>
             )}
           </>

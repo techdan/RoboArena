@@ -6,6 +6,7 @@ import {
   MOVE_SINGLE_COST_TICKS,
   BOMB_MAX_FUSE_SECONDS,
   PLACE_BOMB_COST_TICKS,
+  SELF_DESTRUCT_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   TICKS_PER_SECOND,
@@ -41,7 +42,10 @@ export interface ProjectedRobot {
 }
 
 /** Match rules the planner needs to decide which commands a robot may program. */
-export type PlannerRules = Pick<GameConfig, "zapArmed">;
+export type PlannerRules = Pick<GameConfig, "zapArmed" | "rulesRevision"> & {
+  /** Robots on the programming Team still alive (hp > 0); gates Self Destruct. */
+  readonly liveTeamRobots?: number;
+};
 
 export interface SegmentTiming {
   readonly index: number;
@@ -87,6 +91,8 @@ export const segmentDuration = (
       return segment.seconds * TICKS_PER_SECOND;
     case "place-bomb":
       return PLACE_BOMB_COST_TICKS;
+    case "self-destruct":
+      return SELF_DESTRUCT_COST_TICKS;
   }
 };
 
@@ -107,6 +113,7 @@ const applySegment = (
     case "aim-and-fire":
     case "scan-and-fire":
     case "zap":
+    case "self-destruct":
       return { ...state, tick: endTick };
     case "place-bomb":
       return { ...state, timeBombs: Math.max(0, state.timeBombs - 1), tick: endTick };
@@ -130,6 +137,16 @@ export const canProgramZap = (
 /** Place Bomb needs a carried bomb not already spent by an earlier command. */
 export const canProgramPlaceBomb = (projected: ProjectedRobot): boolean =>
   projected.timeBombs > 0 && projected.position !== "dock";
+
+/**
+ * Self Destruct (seg21:0x076C) is offered only under the original formation
+ * rules to a Team's last robot still standing, once it is on the board.
+ */
+export const canProgramSelfDestruct = (
+  rules: PlannerRules | undefined,
+  projected: ProjectedRobot,
+): boolean =>
+  (rules?.rulesRevision ?? 0) >= 3 && rules?.liveTeamRobots === 1 && projected.position !== "dock";
 
 export const timelineTiming = (
   robot: RobotState,
@@ -382,6 +399,7 @@ export const validatedTimelinePrefix = (
     ) {
       break;
     }
+    if (segment.kind === "self-destruct" && !canProgramSelfDestruct(rules, projected)) break;
     const endTick = projected.tick + segmentDuration(segment, projected);
     projected = applySegment(projected, segment, endTick);
     valid.push(segment);
