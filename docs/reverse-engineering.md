@@ -82,6 +82,12 @@ playtest mismatch was a coordinate/probe mismatch, not a file transform (§12).
 
 ### 0b. 2026-10-15 re-audit corrections (supersede the text below where they disagree)
 
+> **Later the same day:** the full extraction pass in [`re-map/`](re-map/README.md)
+> mapped every remaining system (commands, sports, setup, Stealth, AI, file
+> formats) and corrected a few readings here: the AI brain adds, the class
+> record layout (§5), and §6, which is the visibility **spotting roll**, not a
+> planner preview. Its corrections table supersedes this document.
+
 A second pass re-disassembled every combat claim in this document. These
 findings replaced earlier readings; the sections below are patched to match,
 and the engine follows them.
@@ -89,7 +95,7 @@ and the engine follows them.
 | Claim as previously written | Binary truth | Evidence |
 |---|---|---|
 | `+0x28` Side, `+0x2E` "terrain under robot", `+0x1E` stagger, `+0x5C` effect id are **robot** fields | Robot `+0` is the **Team** handle and `+0x5C` the **program** (command list) handle. `+0x28` Side and `+0x2E` **Brain** (0 Human, 1 Stupid, 2 Ferocious, 3 Crafty, 4 Paranoid) are **Team** fields. `+0x1E` is a byte on the **program** object. Robot `+0x42` scan heading, `+0x44/46` logical tile, `+0x48/4A` occupied tile, `+0x50` posture. | GlobalLock (reloc 1/2/18) chains in `seg6:0x35D1` and the command handlers |
-| Hit score adds `{1:+2,2:-1,3:-3}[target terrain]`, else a per-weapon add from `0x1596` | That switch is on the shooter's **Team Brain** (AI teams only). Human teams add the **fire-control** table `0x1596` (19 words `4,7,6,5,4,3,2,1,0,0,-1,-1,-2,-2,-3,-3,-4,-5,-6`) indexed by the command's first parameter: Aim & Fire passes 0 (+4), Scan & Fire passes its Maximum Distance. Weapon and target terrain do not enter the score. | `seg6:0x3790` |
+| Hit score adds `{1:+2,2:-1,3:-3}[target terrain]`, else a per-weapon add from `0x1596` | That switch is on the shooter's **Team Brain** (AI teams only): Stupid −3, Ferocious +2, Crafty −1, Paranoid 0, read from `0x1596` words 14/6/10 (corrected in `re-map/`). Human teams add the **fire-control** table `0x1596` (19 words `4,7,6,5,4,3,2,1,0,0,-1,-1,-2,-2,-3,-3,-4,-5,-6`) indexed by the command's first parameter: Aim & Fire passes 0 (+4), Scan & Fire passes its Maximum Distance. Weapon and target terrain do not enter the score. | `seg6:0x3790` |
 | Halving at `0x380A` = "target left the aimed tile" | `seg21:0x0F0A(shooterTile, heading, target)` is a **closed ±45° front-arc** test (same tile counts as inside). A target inside the 180° fire gate but outside the 90° front arc is shot at half score. | `seg21:0x0F0A` body |
 | Damage stagger halves the next 1–4 shots | The stagger byte lives on the program object and is **cleared at every command dispatch** before any fire handler reads it, so it never halves a shot in practice. Worth a DOSBox confirmation. | `seg6:0x4CDA` |
 | Aim & Fire resolves at the end of its interval | The shot fires on the **first tick** of the command, then the selector duration elapses. It hits whichever enemy occupies the aimed tile at that moment; none there wastes the shot. | `seg6:0x49F8..0x4AE2 → 0x4C7F → 0x1DCE`, `seg18:0x03C0` |
@@ -244,6 +250,11 @@ distance primitive.
 
 ## 5. Robot class stats — table at DGROUP `0x0CA8`
 
+> **Corrected (re-map/setup.md §5):** each class record is `[weaponId, weaponMask,
+> accuracy, armor]` starting at `0x0CA6`, so reading from `0x0CA8` gives
+> accuracy and armor followed by the *next* class's weapon id and mask. The
+> accuracy and armor columns below are right; bytes 2–3 are not this class's.
+
 5 classes × 4 bytes. **Column 0 (accuracy tier) and column 1 (armor) are
 confirmed**; the armor column matches the known dialog values byte-for-byte.
 
@@ -309,6 +320,13 @@ DGROUP `0x7F4` (see §7b). Live-fire selectors occupy values **5..12**.
 ---
 
 ## 6. Hit-chance model (planner preview) — additive index + table
+
+> **Corrected (re-map/stealth-fence-ceremony-ai-formats.md §1):** `seg96:0x09AF`
+> is the per-tick **visibility spotting roll** (callers only inside
+> `seg96:0x060D`), not a hit preview. The index arithmetic below is right; the
+> arguments are the target's cover class, sight strength, distance and
+> moved/acted flags, and Stealth adds its own gate. Read the heads-up below in
+> that light.
 
 > **Heads-up: there are _two_ hit systems, and this section is the *preview* one.**
 > `seg96:0x09AF` (below) builds the planner's "where can my shots land?" grid and
@@ -499,7 +517,7 @@ elif dist >= 7:    score += base - 2
 elif dist >= 3:    score += base/2 + (6 - dist)
 else:              score += base + 2*(3 - dist) + 2      # point-blank bonus
 # fire-control add (seg6:0x3790); the switch is on the shooter's Team Brain (+0x2E):
-score += { 1:+2, 2:-1, 3:-3 }[brain]          # AI teams; Human teams instead add
+score += { 1:-3, 2:+2, 3:-1 }[brain]          # AI: Stupid, Ferocious, Crafty (re-map); Human teams instead add
                                               # fireControl_0x1596[param], param = 0 for Aim,
                                               # Maximum Distance for Scan & Fire
 score -= (scanSightPenalty)                   # <=4: -4, <=8: -2, else 0; Aim passes 16
