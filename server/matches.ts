@@ -16,6 +16,7 @@ import type {
   TurnOrders,
 } from "../src/engine/types.js";
 import type { ProtocolErrorCode } from "../src/lib/net/protocol.js";
+import { validatePrivateTimeline } from "./orderValidation.js";
 
 export interface CanonicalTurnRecord {
   readonly turnNumber: number;
@@ -50,11 +51,19 @@ export interface AuthoritativeMatchRecord {
   pendingResolution?: PendingResolution;
   outcome: SurvivalOutcome;
   resignedPlayerIds: string[];
+  /** Private drafts survived a rejected pending turn; participants must review and relock. */
+  needsOrderReview?: boolean;
 }
 
-/** Players who have not resigned; only these gate turn resolution. */
+/** Only non-resigned Teams with surviving robots gate turn resolution. */
 export const activePlayerIds = (match: AuthoritativeMatchRecord): readonly string[] =>
-  match.playerIds.filter((playerId) => !match.resignedPlayerIds.includes(playerId));
+  match.playerIds.filter(
+    (playerId) =>
+      !match.resignedPlayerIds.includes(playerId) &&
+      match.state.teams.some(
+        (team) => team.id === playerId && team.robots.some((robot) => robot.hp > 0),
+      ),
+  );
 
 /**
  * A resignation-aware view of the teams for outcome and ceremony math only. A
@@ -108,6 +117,12 @@ const requireCurrentPlanningTurn = (
   if (match.resignedPlayerIds.includes(playerId)) {
     throw new MatchLifecycleError("WRONG_PHASE", "You have resigned from this match.");
   }
+  if (match.playerIds.includes(playerId) && !activePlayerIds(match).includes(playerId)) {
+    throw new MatchLifecycleError(
+      "WRONG_PHASE",
+      "Your Team is eliminated; no further orders are required.",
+    );
+  }
   if (match.phase !== "planning") {
     throw new MatchLifecycleError("WRONG_PHASE", "This match is not accepting orders.");
   }
@@ -154,10 +169,13 @@ export const validateParticipantOrders = (
       );
     }
     timelineIds.add(timeline.robotId);
-  }
-  const validation = resolveTurn({ state: match.state, orders, seed: "order-validation" });
-  if (validation.outcome !== "resolved") {
-    throw new MatchLifecycleError("INVALID_ORDERS", validation.message);
+    const error = validatePrivateTimeline(
+      match.state.arena,
+      team.homeSlot,
+      team.robots.find((robot) => robot.id === timeline.robotId)!,
+      timeline.segments,
+    );
+    if (error !== null) throw new MatchLifecycleError("INVALID_ORDERS", error);
   }
 };
 
@@ -166,8 +184,8 @@ export const submitParticipantOrders = (
   playerId: string,
   orders: TurnOrders,
 ): void => {
-  if (JSON.stringify(match.drafts[playerId]) === JSON.stringify(orders)) return;
   validateParticipantOrders(match, playerId, orders);
+  if (JSON.stringify(match.drafts[playerId]) === JSON.stringify(orders)) return;
   match.drafts[playerId] = structuredClone(orders);
   match.revision += 1;
 };
@@ -208,7 +226,7 @@ export const lockParticipantOrders = (
   submitParticipantOrders(match, playerId, orders);
   match.lockedPlayerIds.push(playerId);
   match.revision += 1;
-  if (match.lockedPlayerIds.length !== activePlayerIds(match).length) return;
+  if (!activePlayerIds(match).every((id) => match.lockedPlayerIds.includes(id))) return;
   match.pendingResolution = {
     turnNumber: match.state.turnNumber,
     seed,
@@ -216,6 +234,7 @@ export const lockParticipantOrders = (
     orders: combineLockedOrders(match),
   };
   match.phase = "resolving";
+  delete match.needsOrderReview;
   match.revision += 1;
 };
 
@@ -225,7 +244,15 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
   const initialState = match.state;
   const result = resolveTurn({ state: initialState, orders: pending.orders, seed: pending.seed });
   if (result.outcome !== "resolved") {
-    throw new MatchLifecycleError("INVALID_ORDERS", result.message);
+    // A legacy pending turn may predate structural validation. No partial
+    // engine result was committed: preserve drafts and durably reopen planning
+    // instead of retrying an invalid immutable program on every reconnect.
+    match.phase = "planning";
+    match.lockedPlayerIds = [];
+    match.needsOrderReview = true;
+    delete match.pendingResolution;
+    match.revision += 1;
+    return true;
   }
   const replay = createReplayLog({
     initialState: match.initialState,
@@ -280,6 +307,7 @@ export const resolvePendingTurn = (match: AuthoritativeMatchRecord): boolean => 
   match.phase = match.outcome.status === "ongoing" ? "planning" : "finished";
   match.drafts = {};
   match.lockedPlayerIds = [];
+  delete match.needsOrderReview;
   delete match.pendingResolution;
   match.revision += 1;
   return true;
@@ -371,6 +399,7 @@ export const participantStatus = (
   if (match.resignedPlayerIds.includes(playerId)) return "finished";
   if ((match.acknowledgedThrough[playerId] ?? 0) < match.state.turnNumber - 1) return "turn-ready";
   if (match.phase === "finished") return "finished";
+  if (!activePlayerIds(match).includes(playerId)) return "waiting";
   return match.lockedPlayerIds.includes(playerId) ? "waiting" : "planning";
 };
 

@@ -65,6 +65,10 @@ const reconnectFailure = (caught: unknown): ReconnectOutcome =>
 export function MatchGate({ matchId }: { readonly matchId: string }) {
   const [state, setState] = useState<GateState>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
+  const [saveAcknowledgement, setSaveAcknowledgement] = useState<{
+    readonly revision: string;
+    readonly orders: TurnOrders;
+  } | null>(null);
   const [connectionOutcome, setConnectionOutcome] = useState<ReconnectOutcome | null>(null);
   const playbackTimer = useRef<number | null>(null);
   const refresh = useCallback(async () => {
@@ -201,6 +205,8 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
         matchId,
         orders,
       });
+      if (!lock)
+        setSaveAcknowledgement({ revision: response.revision, orders: response.ownOrders });
       setState({ kind: "authorized", roomCode, snapshot: response });
       setConnectionOutcome(null);
       if (lock) {
@@ -305,6 +311,12 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
       return (
         <>
           {reconnect}
+          {snapshot.needsOrderReview ? (
+            <p role="status" className="match-privacy-note">
+              This Turn needs review after recovery. Your draft was preserved. Review it and lock
+              again.
+            </p>
+          ) : null}
           <MatchSectionBoundary
             section="planner"
             resetKey={snapshot.revision}
@@ -317,6 +329,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               match={match}
               serverOrders={snapshot.ownOrders}
               serverRevision={snapshot.revision}
+              saveAcknowledgement={saveAcknowledgement}
               syncing={busy}
               onSaveOrders={(orders) => void sendOrders(orders, false)}
               onLockOrders={(orders) => void sendOrders(orders, true)}
@@ -336,9 +349,14 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
             team={selfTeam}
             turnNumber={match.turnNumber}
             status={snapshot.status}
+            spectating={selfTeam.robots.every((robot) => robot.hp <= 0)}
           />
           <div className="match-flow-grid">
-            <ReadyPanel match={match} lockedPlayerIds={snapshot.lockedPlayerIds} />
+            <ReadyPanel
+              match={match}
+              lockedPlayerIds={snapshot.lockedPlayerIds}
+              requiredPlayerIds={snapshot.requiredPlayerIds ?? match.teams.map((team) => team.id)}
+            />
             <TeamDataPanel match={match} selfPlayerId={snapshot.selfPlayerId} />
           </div>
           <div className="match-flow-actions">

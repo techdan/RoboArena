@@ -22,7 +22,7 @@ production-grade.
 draft-complete; Phases 11.8 through 11.8.2 are implemented with visual review open.
 Phase 8 is locally complete; its former external-WSS/VM gate is superseded by
 Phase 12.5's Vercel HTTP + Supabase Postgres/Realtime migration. The repository
-has 346 passing tests. Phase 1.5 lint/format/CI is
+has 422 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
 movement, damage stagger, Side-based combat/visibility/scoring, arena
@@ -40,10 +40,20 @@ Phase 12.5 changes production transport/storage and runs two-network deployment
 acceptance. See
 `tasks/core-build-plan.md` and `docs/implementation-plan.md`.
 
+**2026-10-01 audit follow-up**: `docs/audit-2026-10-01.md` reopens the
+human hit-score formula: the alleged target-terrain adjustment is an AI-type
+branch, and the human accuracy addition is indexed by selected Scan distance
+(zero for Aim), not weapon. A01–A02 remain open pending a coordinated rules/replay
+compatibility change. A03–A08 are fixed: hidden-target event leakage, conditional
+ammo validation and stuck-turn recovery, eliminated-seat gating, false draft
+conflicts on save, polling storage growth, and vulnerable dependencies. Tests,
+typecheck, lint, formatting, production build and a two-session browser smoke
+pass; the full Phase 12.2 manual acceptance gates remain open.
+
 ## Commands
 
 ```bash
-npm test               # Run all unit tests (currently 346 tests)
+npm test               # Run all unit tests (currently 422 tests)
 npm run test:watch     # Vitest in watch mode
 npm run typecheck      # tsc --noEmit; strict mode
 npm run lint           # ESLint + engine nondeterminism bans
@@ -64,8 +74,9 @@ The codebase is in two distinct phases of completion:
 simulation realigned to the audited binary structures above, plus immutable
 turn scheduling, command validation, combat/visibility resolution, and replay
 verification.
-Confirmed named weapon cadence/accuracy mappings are centralized in
-`catalog.ts`; confirmed movement/action costs remain in `constants.ts`.
+Named weapon cadence/accuracy mappings are centralized in `catalog.ts`;
+accuracy interpretation needs the A01–A02 correction noted above. Confirmed
+movement/action costs remain in `constants.ts`.
 Every probabilistic decision goes through a seedable RNG (`createRng(seed)`).
 
 **Phase 3 (draft-complete)** — named missile/grenade blast dispatch, finite

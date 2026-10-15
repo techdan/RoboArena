@@ -2008,6 +2008,13 @@ evidence remains Phase 12.2.
 
 ### Phase 12.2 — local v1 release-candidate evidence gate [⬜ MANUAL GATE]
 
+**2026-10-01 audit follow-up**: A03–A08 in `docs/audit-2026-10-01.md` have
+implementation fixes for projection privacy, conditional-ammo validation and
+legacy recovery, eliminated-seat gating, draft-save acknowledgement, polling
+storage growth, and vulnerable dependencies. A01–A02's combat/replay correction
+is still open. This work does not close the four-session, physical-iPad or
+other manual gates below.
+
 **Goal**: freeze the complete local WS/SQLite v1 after Phase 12 resilience and
 Phase 12.1 presentation polish. This phase is evidence-driven: it runs the
 manual and restart matrices, records defects, and fixes only release blockers.

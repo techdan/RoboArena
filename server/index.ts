@@ -252,7 +252,8 @@ export function createRoomServer(databasePath = resolve("data/roboarena.sqlite")
             const access = service.resumeRoom(message.code, message.token);
             subscribe(socket, access);
             const response = service.getMatchSnapshot(message.code, message.token, requestId);
-            storage.saveRequestResult(principal, requestId, response);
+            // Reads have no mutation to deduplicate. Persisting every poll
+            // duplicates the complete snapshot indefinitely in request_results.
             send(socket, response);
             return;
           }
