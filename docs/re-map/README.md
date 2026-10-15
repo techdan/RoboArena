@@ -134,18 +134,18 @@ keep on purpose are listed in
 
 ## Still open
 
-- The periodic spotting refresh `seg6:0x4091` (activity 2) is implemented
-  for Zap only; five other callers (`seg6:0x1FCB`, `0x240C`, `0x28E1`,
-  `0x2D49`, `0x4AB5`) are not yet identified, so Scan & Fire and
-  scan-for-duration may also need it. RoboArena also checks Scan & Fire
-  targets every tick rather than every 5-tick step while holding fire.
+- The periodic spotting refresh `seg6:0x4091` and its callers are mapped in
+  [timing.md](timing.md) Q4 and implemented under rules revision 4. Rules
+  revisions 3 and earlier keep the Zap-only refresh and check Scan & Fire
+  targets every tick.
 
 - MVP selection rule and the PRS chunk inventory need `PLAYER.EXE`,
   `ROBOCOLR.PRS` and `ROBOMONO.PRS`, which were not in the staged folder.
 - AI target-score weights (`seg32:0x05D8`, `seg33`, `seg96:0x1B98`/`0x1D92`).
 - Treasure Hunt and Hostage end conditions beyond the Score Limit; hostage
   give/take limits; whether bullets can hit a held hostage.
-- The unidentified global DGROUP `0x14BA` (gates the Scan & Fire cooldown and the base inset).
+- DGROUP `0x14BA` is the negotiated network protocol level, 2 in a
+  same-version game ([timing.md](timing.md) Q3).
 - Fourteen unnamed command rows (2, 14, 18, 22, 40, 65–68, 73, 75–77, 79) and
   the Prod and Bomb select rows (1, 21) are never produced; the unnamed rows'
   intended verbs are guesses.
