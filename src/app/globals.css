@@ -4604,13 +4604,14 @@ a.planner-menu-item:focus-visible {
 
 /* First-turn guide */
 .first-turn-coach {
+  /* Beside the board, above the coordinate chip: never over the tiles the
+     player is being asked to tap, and clear of the aim card at the top right. */
   position: absolute;
   z-index: 19;
-  top: 5.2rem;
-  left: 50%;
-  width: min(25rem, calc(100vw - 2rem));
+  right: 1rem;
+  bottom: calc(var(--tactical-track-h, 14rem) + 2.75rem);
+  width: min(18rem, calc(100vw - 2rem));
   padding: 0.8rem 0.95rem 0.85rem;
-  transform: translateX(-50%);
   border: 1px solid rgb(253 224 71 / 35%);
   border-radius: 1rem;
   background: rgb(10 12 16 / 92%);
