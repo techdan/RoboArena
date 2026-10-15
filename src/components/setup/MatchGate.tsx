@@ -342,6 +342,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               roomCode={state.roomCode}
               selfPlayerId={snapshot.selfPlayerId}
               match={match}
+              arenaTheme={snapshot.arenaTheme}
               serverOrders={snapshot.ownOrders}
               serverRevision={snapshot.revision}
               syncing={busy}
@@ -431,6 +432,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
                 key={`rewatch-${rewatch.turnNumber}`}
                 initialState={deserializeMatchState(rewatch.initialState)}
                 events={rewatch.events}
+                arenaTheme={snapshot.arenaTheme}
               />
             ) : (
               <MovieExperience
@@ -439,6 +441,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
                 events={turn.events}
                 initialTick={turn.playbackTick}
                 onTickChange={(tick) => savePlaybackPosition(turn.turnNumber, tick)}
+                arenaTheme={snapshot.arenaTheme}
               />
             )}
           </MatchSectionBoundary>

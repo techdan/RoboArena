@@ -41,12 +41,20 @@ export const roomCodeSchema = z
   .toUpperCase()
   .regex(/^[A-HJ-NP-Z2-9]{6}$/, "Room codes contain six letters or numbers.");
 
+/** Presentation-only arena looks for the 3D movie; the host picks one per room. */
+export const ARENA_THEME_IDS = ["coliseum", "factory", "neon", "scrapyard"] as const;
+export const arenaThemeSchema = z.enum(ARENA_THEME_IDS);
+export type ArenaThemeName = z.infer<typeof arenaThemeSchema>;
+export const DEFAULT_ARENA_THEME_ID: ArenaThemeName = "coliseum";
+
 export const roomConfigSchema = z
   .object({
     gameLength: z.enum(["melee", "battle"]),
     arenaName: z.enum(["rubble-two", "rubble-three"]),
     formation: z.literal("beginner"),
     turnLengthSeconds: z.number().int().min(1).max(40),
+    // Optional so rooms saved before arena looks existed still load.
+    arenaTheme: arenaThemeSchema.optional(),
   })
   .strict()
   .superRefine((config, context) => {
@@ -67,6 +75,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   arenaName: "rubble-two",
   formation: "beginner",
   turnLengthSeconds: 15,
+  arenaTheme: DEFAULT_ARENA_THEME_ID,
 };
 
 export const configForLength = (gameLength: RoomConfig["gameLength"]): RoomConfig => ({

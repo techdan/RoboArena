@@ -63,9 +63,12 @@ const eventIsAuthorized = (
     case "command-aborted":
       return authorizedRobotIds.has(event.robotId);
     case "scan-target-acquired":
-      // Gate on the scanner only: delivering this to the target's owner while
-      // the scanner is unseen would leak the hidden robot's id and exact range.
-      return authorizedRobotIds.has(event.shooterId);
+      // Never gate on the target alone: delivering this to the target's owner
+      // while the scanner is unseen would leak the hidden robot's id and exact
+      // range. In 3-4 Team games a visible enemy scanner may also acquire a
+      // third Team's robot this participant cannot see, so both ends must be
+      // authorized.
+      return authorizedRobotIds.has(event.shooterId) && authorizedRobotIds.has(event.targetId);
     case "fired":
     case "shot-missed":
       return authorizedRobotIds.has(event.shooterId);
@@ -206,6 +209,7 @@ export const participantMatchSnapshot = (input: {
   readonly matchId: string;
   readonly playerId: string;
   readonly match: AuthoritativeMatchRecord;
+  readonly arenaTheme?: MatchSnapshotMessage["arenaTheme"] | undefined;
 }): MatchSnapshotMessage => {
   const acknowledged = input.match.acknowledgedThrough[input.playerId] ?? 0;
   const status = participantStatus(input.match, input.playerId);
@@ -223,6 +227,7 @@ export const participantMatchSnapshot = (input: {
     ownOrders: input.match.drafts[input.playerId] ?? emptyOrders(input.match.state.turnNumber),
     locked: input.match.lockedPlayerIds.includes(input.playerId),
     lockedPlayerIds: [...input.match.lockedPlayerIds],
+    ...(input.arenaTheme === undefined ? {} : { arenaTheme: input.arenaTheme }),
     unseenTurns: input.match.turns
       .filter((turn) => turn.turnNumber > acknowledged)
       .map((turn) =>

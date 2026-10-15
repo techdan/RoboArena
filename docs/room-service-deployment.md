@@ -1,143 +1,64 @@
-# Phase 12.5 Vercel + Supabase deployment migration
+# Deployment on Cloudflare (Workers Free plan)
 
-## Target architecture
+RoboArena deploys as two Cloudflare Workers and needs no separate database:
 
-RoboArena deploys without a VM or long-lived custom room-service host:
+- **`roboarena-rooms`** (`worker/`, config `worker/wrangler.jsonc`) is the
+  authoritative room service. Each room is one SQLite-backed Durable Object
+  (`RoomObject`) that runs the same `RoomService`, protocol handler
+  (`server/handler.ts`) and schema as the local server, with storage in the
+  object's built-in SQLite (`server/sqlStorage.ts`). Players hold hibernatable
+  WebSockets, so an idle room costs nothing and wakes on the next message.
+- **`roboarena`** (config `wrangler.jsonc`) is the Next.js site, built with
+  `@opennextjs/cloudflare`. Models, textures and other static files are served
+  as Worker static assets.
 
-- **Vercel** hosts the Next.js application, authenticated HTTP command routes,
-  participant-specific projection routes, and deterministic turn resolution.
-- **Supabase Postgres** stores canonical rooms, participant-token hashes,
-  idempotent request results, locked orders, pending resolutions, turns,
-  acknowledgements, and replay data.
-- **Supabase Realtime Broadcast** sends private room-revision invalidations.
-  **Presence** may provide advisory online indicators.
-- **SQLite + the standalone `ws` server** remain the zero-setup local/test
-  profile through the Phase 12.2 local release-candidate gate.
+This replaces the earlier Vercel + Supabase plan. The local profile is
+unchanged: `npm run dev` plus `npm run dev:server` (Node `ws` + SQLite).
 
-Every gameplay mutation goes through Vercel server code. The browser never
-writes authoritative tables or resolves shared turns. Realtime messages never
-contain orders, contacts, events, match state, participant tokens, or private
-projections; they tell an authorized browser only that a room revision changed,
-after which it refetches its projection from Vercel.
+## How a browser reaches a room
 
-There is no production `NEXT_PUBLIC_ROOM_WS_URL`, Docker/VM deployment, sticky
-room owner, or in-memory cross-request connection map.
+The client opens one WebSocket per room at `${NEXT_PUBLIC_ROOM_WS_URL}/rooms/<CODE>`.
+A CreateRoom connects before its code exists, so it uses
+`/rooms/new/<requestId>`; the Worker derives the code from that request id
+(`worker/routing.ts`), which means a retried CreateRoom reaches the same object
+and gets its cached answer instead of a second room. A Durable Object only
+accepts messages for its own code. The local Node server ignores the path.
 
-## Why the local service cannot be lifted unchanged
+A Durable Object processes one event at a time and `RoomService` still
+serializes each room, so there is no cross-instance locking. Turn resolution
+runs inside the object (30 s CPU budget per message), never in the front-door
+Worker (10 ms CPU per request on the Free plan).
 
-`server/index.ts` currently combines four concerns that Phase 12.5 separates:
+## First deploy
 
-1. WebSocket transport and connection tracking;
-2. schema validation and protocol dispatch;
-3. authoritative room/match transitions and projections;
-4. SQLite persistence plus process-local room locking.
-
-Vercel Functions may run concurrently and future requests are not guaranteed to
-reach the same instance. `RoomService.#locks`, `RoomService.#connected`, SQLite,
-and the socket broadcast map therefore cannot be deployed as authority. Extract
-one transport-independent command handler, move concurrency/idempotency into
-Postgres transactions, and treat Realtime as notification rather than state.
-
-## Storage and transaction profile
-
-The Postgres adapter accepts a server-only `DATABASE_URL` using the Supabase
-transaction pooler appropriate for serverless clients. Keep schema migrations
-under `supabase/migrations/` and apply them to local/test and hosted projects.
-Never place database, service-role, or JWT-signing credentials in a
-`NEXT_PUBLIC_*` variable.
-
-Required guarantees:
-
-- serialize mutations per room with `SELECT ... FOR UPDATE` or a
-  transaction-scoped advisory lock;
-- store the mutation and its unique `(principal, request_id)` result in one
-  transaction;
-- enforce unique locked-order and canonical-turn keys;
-- persist pending seed/nonce/combined orders before resolution;
-- apply a resolved candidate only if the pending nonce and revision still
-  match, so concurrent deterministic calculations cannot double-commit;
-- keep the previous canonical room intact if resolution or commit fails;
-- emit a room-revision invalidation only after commit.
-
-## HTTP and Realtime profile
-
-Expected deployed endpoints:
-
-- `POST /api/rooms/command` validates one versioned protocol command and
-  returns the caller's fresh participant projection;
-- `GET /api/rooms/:code/snapshot` authenticates the opaque room token and
-  returns the current participant projection;
-- `POST /api/rooms/:code/realtime-token` authenticates the seat and returns a
-  short-lived room-scoped JWT for a private Realtime channel.
-
-Private-channel RLS permits a scoped participant to receive Broadcast/Presence
-for its room. Clients may publish Presence but not Broadcast. Presence is UI
-advice only and never controls readiness, locks, resolution, acknowledgement,
-resignation, or ownership.
-
-The deployed client:
-
-1. submits commands over HTTP;
-2. subscribes to the private room channel;
-3. refetches after subscribe, reconnect, tab focus/visibility return, and each
-   room-changed notification;
-4. runs a slow 10-15 second revision poll while actively waiting;
-5. degrades to polling when Realtime is unavailable.
-
-Missed notifications therefore affect latency only. Canonical state and resume
-always come from Postgres through an authenticated Vercel projection.
-
-## Local development
-
-The existing commands remain the Phase 12–12.2 local profile:
-
-```text
-npm run dev
-npm run dev:server
+```sh
+npx wrangler login                 # once, opens the Cloudflare dashboard
+npm run deploy:rooms               # prints https://roboarena-rooms.<you>.workers.dev
+NEXT_PUBLIC_ROOM_WS_URL=wss://roboarena-rooms.<you>.workers.dev npm run deploy
 ```
 
-The SQLite adapter remains supported for unit/integration tests and local
-release-candidate validation. Phase 12.5 adds adapter-contract tests against
-local Supabase Postgres; it does not require every ordinary UI iteration to run
-the full Supabase stack.
+`NEXT_PUBLIC_ROOM_WS_URL` is baked into the client at build time, so set it for
+every site deploy. No secrets are needed: each room keeps its own idempotency
+secret in its SQLite.
 
-For migration testing:
+## Local Cloudflare run
 
-```text
-npx supabase init
-npx supabase start
+```sh
+npm run dev:rooms -- --port 8788                                   # rooms in workerd
+NEXT_PUBLIC_ROOM_WS_URL=ws://127.0.0.1:8788 npm run preview:cloudflare  # site in workerd
 ```
 
-The local Supabase stack requires Docker and must not be exposed publicly.
-Commit configuration and SQL migrations, never generated secrets.
+## Free-plan limits that matter
 
-## Deployment verification gate
+Personal/friends scale fits comfortably. Daily limits reset at 00:00 UTC and
+fail closed (nothing is billed on the Free plan).
 
-1. Finish the Phase 12.2 local release candidate before changing transport.
-2. Apply migrations to a hosted Supabase project.
-3. Configure server-only database/signing credentials and public Realtime
-   connection values in Vercel.
-4. Deploy the single Next.js application.
-5. Verify private channel authorization and rejection of cross-room access or
-   client-authored Broadcast events.
-6. Drop/delay Realtime messages and confirm subscribe/focus/polling refetch
-   converges on the canonical revision.
-7. Race duplicate mutations across independent handler instances and confirm
-   exactly one canonical transition commits.
-8. Trigger a Vercel cold start/redeploy and confirm rooms resume solely from
-   committed Postgres state.
-9. Complete a four-player match across two real networks without projection,
-   visibility, result, or replay divergence.
-10. Repeat the critical room-to-results path on physical iPad Safari.
+| Limit                              | Allowance                                       |
+| ---------------------------------- | ----------------------------------------------- |
+| Durable Object SQLite rows written | 100,000 / day (about 100 four-player matches)   |
+| Durable Object requests            | 100,000 / day; 20 WebSocket messages count as 1 |
+| Durable Object storage             | 5 GB per account                                |
+| Worker requests                    | 100,000 / day; static assets are free           |
 
-Passing this gate completes the deployed online FFA Survival v1.
-
-## Vendor references
-
-- [Vercel WebSocket support](https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections)
-- [Vercel Function limits](https://vercel.com/docs/functions/limitations)
-- [Supabase Realtime authorization](https://supabase.com/docs/guides/realtime/authorization)
-- [Supabase Broadcast](https://supabase.com/docs/guides/realtime/broadcast)
-- [Supabase database-change subscriptions](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes)
-- [Supabase local development](https://supabase.com/docs/guides/local-development)
-- [Supabase Postgres connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres)
+See [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing)
+and [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
