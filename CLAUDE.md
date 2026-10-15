@@ -21,7 +21,7 @@ production-grade.
 **Project state**: Phase 1R engine realignment and Phases 2-7 and 9-11.7 are
 draft-complete; Phases 11.8 through 11.8.2 are implemented with visual review open.
 Phase 8 is locally complete; its former external-WSS/VM gate is superseded by
-Phase 12.5's Vercel HTTP + Supabase Postgres/Realtime migration. The repository
+Phase 12.5's Cloudflare Workers + Durable Objects deployment. The repository
 has 346 passing tests. Phase 1.5 lint/format/CI is
 complete and the first GitHub Actions run passed. The 2026-07-15 RE completion
 pass closed the **2-4 Team** Survival business-rule audit, including exact slow
@@ -91,8 +91,9 @@ and a production visual regression test.
 hashed anonymous seat ownership, reconnecting long-lived WebSockets, SQLite WAL
 local/test persistence, 2-4 player setup/start UI, and four-browser integration
 coverage. The standalone WS/SQLite service remains the local/test profile.
-Phase 12.5 migrates deployed authority to Vercel Functions plus Supabase
-Postgres/Realtime with no VM or custom production WebSocket host.
+Phase 12.5 deploys the same authority as one SQLite-backed Cloudflare Durable
+Object per room (`worker/`), with the site on Workers via OpenNext; see
+`docs/room-service-deployment.md`.
 
 **Phase 9 (draft-complete)** — authenticated canonical setup snapshot, private
 versioned/reload-safe drafts with explicit prior-turn recovery, deterministic
@@ -131,7 +132,7 @@ implemented. Phase 12.1's bounded non-planner presentation pass is implemented;
 Phase 12.2 owns the local four-session,
 visual, restart, desktop, and physical-iPad evidence tracked in
 `docs/phase12-release-candidate.md`.
-Phase 12.5 then migrates to Vercel/Supabase and owns
+Phase 12.5 then deploys to Cloudflare and owns
 concurrency, security, cold-start, two-network, four-player, and deployed-iPad
 acceptance. Phase 13 polishes and enhances the deployed core battle game; Phase 13.5
 then adds online alliances before Stealth or additional sports, while Phase 16
@@ -209,8 +210,9 @@ Don't surface these as gaps unless something has changed about scope.
 - TypeScript 5.6 strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`, ESM)
 - Vitest 4.1 for tests
 - Phase 6+: Next.js 16 + React 19 + Tailwind v4 + PixiJS + GSAP; Zustand remains planned
-- Phase 12.5 deployed target: Vercel-hosted Next.js HTTP authority plus Supabase
-  Postgres and private Realtime invalidation/Presence; SQLite and the standalone
-  WebSocket service remain local/test only; no VM or Redis fan-out layer
+- Phase 12.5 deployed target: Cloudflare Workers Free plan. Rooms are SQLite-backed
+  Durable Objects with hibernatable WebSockets (`worker/`, `server/sqlStorage.ts`);
+  the Next.js site runs on Workers via `@opennextjs/cloudflare`. SQLite + the
+  standalone WebSocket service remain the local/test profile
 
 Parent project `C:\src\DevProjects\CLAUDE.md` adds rules across the workspace (e.g. all clickable elements get `cursor-pointer`, prefer Server Components by default).
