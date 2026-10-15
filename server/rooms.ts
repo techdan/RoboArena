@@ -1,15 +1,8 @@
 /** Authoritative Phase 8 room lifecycle and participant ownership. */
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { DEFAULT_ROSTER_BY_LENGTH, ROBOT_DEFINITIONS, WEAPONS } from "../src/engine/catalog.js";
-import type {
-  MatchState,
-  RobotClass,
-  RobotState,
-  TeamState,
-  WeaponId,
-  TurnOrders,
-} from "../src/engine/types.js";
+import { DEFAULT_ROSTER_BY_LENGTH } from "../src/engine/catalog.js";
+import type { MatchState, TurnOrders } from "../src/engine/types.js";
 import type {
   MatchSnapshotMessage,
   ParticipantRoomStatus,
@@ -25,6 +18,7 @@ import {
   type RoomConfig,
 } from "../src/lib/setup/validate.js";
 import { loadArena } from "../src/lib/arenas/index.js";
+import { createSurvivalMatchState } from "../src/lib/setup/matchState.js";
 import type { RoomStore } from "./store.js";
 import {
   acknowledgeTurn,
@@ -42,7 +36,6 @@ import { participantMatchSnapshot } from "./view.js";
 
 export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ID_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
 
 export interface PlayerRecord {
   readonly id: string;
@@ -326,6 +319,7 @@ export class RoomService {
       matchId: room.matchId!,
       playerId: player.id,
       match,
+      arenaTheme: room.config.arenaTheme,
     });
   }
 
@@ -349,6 +343,7 @@ export class RoomService {
       matchId: room.matchId!,
       playerId,
       match,
+      arenaTheme: room.config.arenaTheme,
     });
   }
 
@@ -371,6 +366,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -406,6 +402,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -429,6 +426,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -461,6 +459,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -485,6 +484,7 @@ export class RoomService {
         matchId,
         playerId: player.id,
         match,
+        arenaTheme: room.config.arenaTheme,
       });
     });
   }
@@ -586,47 +586,20 @@ export class RoomService {
   async #createMatchState(room: RoomRecord): Promise<MatchState> {
     const arena = await loadArena(room.config.arenaName);
     const roster = DEFAULT_ROSTER_BY_LENGTH[room.config.gameLength];
-    const teams: TeamState[] = room.players.map((player) => ({
-      id: player.id,
-      name: player.name,
-      color: player.color,
-      side: player.side!,
-      homeSlot: player.homeSlot!,
-      brain: "human",
-      robots: roster.map((robotClass, index) => this.#createRobot(player.id, robotClass, index)),
-      score: 0,
-    }));
-    return {
-      config: {
-        sportType: "survival",
-        formation: room.config.formation,
-        length: room.config.gameLength,
-        arenaType: "rubble",
-        arenaSizeName: arena.sizeName,
-        turnLengthSeconds: room.config.turnLengthSeconds,
-      },
-      turnNumber: 1,
-      teams,
+    return createSurvivalMatchState({
       arena,
-      lastKnownMarkers: new Map(),
-    };
-  }
-
-  #createRobot(teamId: string, robotClass: RobotClass, index: number): RobotState {
-    const definition = ROBOT_DEFINITIONS[robotClass];
-    return {
-      id: `${teamId}-r${index + 1}`,
-      teamId,
-      definition,
-      position: "dock",
-      hp: definition.armor,
-      posture: "upright",
-      scanHeading: "E",
-      damageStaggerActionsRemaining: 0,
-      ammo: Object.fromEntries(
-        WEAPON_IDS.map((weaponId) => [weaponId, WEAPONS[weaponId].startingAmmo]),
-      ) as Readonly<Record<WeaponId, number | "unlimited">>,
-    };
+      formation: room.config.formation,
+      length: room.config.gameLength,
+      turnLengthSeconds: room.config.turnLengthSeconds,
+      teams: room.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        color: player.color,
+        side: player.side!,
+        homeSlot: player.homeSlot!,
+        roster,
+      })),
+    });
   }
 
   async #withLock<T>(code: string, action: () => T | Promise<T>): Promise<T> {

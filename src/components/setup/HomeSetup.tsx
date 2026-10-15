@@ -17,6 +17,8 @@ import {
   RoomRequestError,
 } from "../../lib/net/client";
 import { PLAYER_COLORS, type PlayerColor } from "../../lib/setup/validate";
+import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
+import { FieldGuideButton } from "../help/HelpProvider";
 
 const PixiArena = dynamic(
   () => import("../../renderer/PixiArena").then((module) => module.PixiArena),
@@ -133,7 +135,9 @@ export function HomeSetup({ arena }: HomeSetupProps) {
               <p className="mt-1 text-sm text-white/45">Private simultaneous robot tactics</p>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <BootCampLink />
+            <FieldGuideButton />
             <Link className="secondary-link" href="/preview">
               Terrain lab
             </Link>
@@ -143,6 +147,10 @@ export function HomeSetup({ arena }: HomeSetupProps) {
             </Link>
           </div>
         </header>
+
+        <div className="mt-6">
+          <BootCampPrompt />
+        </div>
 
         <div className="home-main grid grid-cols-[1.05fr_0.95fr] gap-14 py-14">
           <section className="home-intro pt-8">

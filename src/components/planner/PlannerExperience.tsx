@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   CloudOff,
+  GraduationCap,
   LockKeyhole,
   Redo2,
   Save,
@@ -11,7 +12,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { TICKS_PER_SECOND, WEAPON_TIMING } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
@@ -34,6 +35,7 @@ import {
   rebaseTurnOrders,
   replaceTimeline,
   timelineForRobot,
+  timelineTiming,
   validatedTimelinePrefix,
 } from "../../planner/segments";
 import { tileAt } from "../../planner/pathfind";
@@ -64,7 +66,25 @@ import {
 import { AimFireControls, ScanFireControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
+import { FirstTurnCoach } from "./FirstTurnCoach";
+import {
+  coachFinished,
+  currentCoachStep,
+  rememberCoach,
+  type CoachStepId,
+} from "../../planner/firstTurnCoach";
 import { RobotSelector } from "./RobotSelector";
+import { PlannerBoard3D } from "./PlannerBoard3D";
+import { RadialOrders } from "./RadialOrders";
+import { ShotCard } from "./ShotCard";
+import { SquadRail } from "./SquadRail";
+import { TurnTrack } from "./TurnTrack";
+import {
+  preferredPlannerBoard,
+  rememberPlannerBoard,
+  supportsWebGl2,
+} from "../../renderer3d/support";
+import { DEFAULT_ARENA_THEME, type ArenaThemeId } from "../../renderer3d/themes";
 import { Timeline } from "./Timeline";
 import { FieldGuideButton, HelpButton } from "../help/HelpProvider";
 import { FirstTimeHint } from "../help/FirstTimeHint";
@@ -111,6 +131,8 @@ export interface PlannerExperienceProps {
   readonly roomCode: string;
   readonly selfPlayerId: string;
   readonly match: MatchState;
+  /** The room's arena look for the 3D board. */
+  readonly arenaTheme?: ArenaThemeId | undefined;
   readonly serverOrders?: TurnOrders;
   readonly serverRevision?: string;
   readonly syncing?: boolean;
@@ -130,7 +152,20 @@ export function PlannerExperience({
   onSaveOrders,
   onLockOrders,
   onResign,
+  arenaTheme,
 }: PlannerExperienceProps) {
+  // 3D board wherever WebGL2 runs, unless the player chose 2D. Decided after
+  // mount because the server render can't probe WebGL.
+  const [boardKind, setBoardKind] = useState<"3d" | "2d">("2d");
+  const [can3d, setCan3d] = useState(false);
+  useEffect(() => {
+    setCan3d(supportsWebGl2());
+    setBoardKind(preferredPlannerBoard());
+  }, []);
+  const chooseBoard = (kind: "3d" | "2d") => {
+    rememberPlannerBoard(kind);
+    setBoardKind(kind);
+  };
   const team = match.teams.find((candidate) => candidate.id === selfPlayerId);
   if (team === undefined)
     throw new Error("The participant team is missing from this match snapshot.");
@@ -204,6 +239,69 @@ export function PlannerExperience({
   >({});
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const [showAllPrograms, setShowAllPrograms] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [rehearsing, setRehearsing] = useState(false);
+  // First-turn guide: shown until the player finishes or closes it once.
+  const [coachActive, setCoachActive] = useState(false);
+  const [coachOrdersOpened, setCoachOrdersOpened] = useState(false);
+  const [coachRehearsed, setCoachRehearsed] = useState(false);
+  const [coachSkipped, setCoachSkipped] = useState<ReadonlySet<CoachStepId>>(new Set());
+  useEffect(() => {
+    setCoachActive(!coachFinished(window.localStorage));
+  }, []);
+  useEffect(() => {
+    if (ordersOpen) setCoachOrdersOpened(true);
+  }, [ordersOpen]);
+  useEffect(() => {
+    if (rehearsing) setCoachRehearsed(true);
+  }, [rehearsing]);
+  const finishCoach = () => {
+    setCoachActive(false);
+    rememberCoach(window.localStorage, true);
+  };
+  const replayCoach = () => {
+    rememberCoach(window.localStorage, false);
+    setCoachOrdersOpened(false);
+    setCoachRehearsed(false);
+    setCoachSkipped(new Set());
+    setCoachActive(true);
+  };
+  // Overlaid chrome sizes, so the 3D board frames the arena in the open area.
+  const barRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [boardInsets, setBoardInsets] = useState({ top: 0, right: 0, bottom: 0, left: 0 });
+  useEffect(() => {
+    if (boardKind !== "3d") return;
+    const measure = () => {
+      const bar = barRef.current?.getBoundingClientRect();
+      const rail = railRef.current?.getBoundingClientRect();
+      const track = trackRef.current?.getBoundingClientRect();
+      const next = {
+        top: Math.round(bar?.bottom ?? 0),
+        right: 16,
+        bottom: Math.round(track === undefined ? 0 : window.innerHeight - track.top),
+        left: Math.round(rail?.right ?? 0),
+      };
+      setBoardInsets((current) =>
+        current.top === next.top &&
+        current.bottom === next.bottom &&
+        current.left === next.left &&
+        current.right === next.right
+          ? current
+          : next,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const element of [barRef.current, railRef.current, trackRef.current])
+      if (element !== null) observer.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [boardKind]);
   const budgetTicks = match.config.turnLengthSeconds * TICKS_PER_SECOND;
   const [draftStorageStatus, setDraftStorageStatus] = useState<"saved" | "error">(
     initialDraft.current.kind === "unavailable" ? "error" : "saved",
@@ -378,6 +476,23 @@ export function PlannerExperience({
     setPreviewTick(
       previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
     );
+  };
+  /** Tapping a robot on the board selects it and opens its orders ring. */
+  const pickRobotOnBoard = (robotId: string) => {
+    if (robotId === selectedRobot.id) {
+      setOrdersOpen((open) => !open);
+      return;
+    }
+    selectRobot(robotId);
+    setOrdersOpen(true);
+  };
+  const chooseBoardTile = (
+    tile: TileCoord,
+    modifiers: { readonly ctrl: boolean; readonly shift: boolean },
+  ) => {
+    setOrdersOpen(false);
+    setRehearsing(false);
+    chooseTile(tile, modifiers);
   };
   const selectCommand = (robotId: string, _index: number, endTick: number) => {
     if (robotId !== selectedRobot.id) selectRobot(robotId);
@@ -753,6 +868,57 @@ export function PlannerExperience({
     setNotice("Using the current authoritative server turn.");
   };
 
+  // Rehearse: play the whole squad's orders in real time from the playhead.
+  const previewTickRef = useRef(previewTick);
+  previewTickRef.current = previewTick;
+  useEffect(() => {
+    if (!rehearsing) return;
+    let frame = 0;
+    let last = performance.now();
+    const step = (now: number) => {
+      const next = Math.min(
+        budgetTicks,
+        previewTickRef.current + ((now - last) / 1000) * TICKS_PER_SECOND,
+      );
+      last = now;
+      previewTickRef.current = next;
+      setPreviewTick(next);
+      if (next >= budgetTicks) setRehearsing(false);
+      else frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [budgetTicks, rehearsing]);
+  const toggleRehearse = () => {
+    if (rehearsing) {
+      setRehearsing(false);
+      return;
+    }
+    setOrdersOpen(false);
+    if (previewTick >= budgetTicks - 1) setPreviewTick(0);
+    setRehearsing(true);
+  };
+  const cyclePosture = () => {
+    const order: readonly Posture[] = ["upright", "ducking", "crouching"];
+    addPosture(order[(order.indexOf(projected.posture) + 1) % order.length] ?? "upright");
+  };
+  const tacticalKeysRef = useRef({
+    aim: startAim,
+    scan: startScan,
+    posture: cyclePosture,
+    orders: () => setOrdersOpen(true),
+    rehearse: toggleRehearse,
+  });
+  tacticalKeysRef.current = {
+    aim: startAim,
+    scan: startScan,
+    posture: cyclePosture,
+    orders: () => setOrdersOpen(true),
+    rehearse: toggleRehearse,
+  };
+  const tacticalRef = useRef(false);
+  tacticalRef.current = boardKind === "3d";
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && (aimTool || aimDialog !== null || scanDialog !== null)) {
@@ -771,6 +937,30 @@ export function PlannerExperience({
         target.closest("input, select, textarea, [contenteditable='true']") !== null;
       if (aimDialog !== null || scanDialog !== null || typing) {
         return;
+      }
+      if (!(event.ctrlKey || event.metaKey || event.altKey) && tacticalRef.current) {
+        const key = event.key.toLowerCase();
+        const action =
+          key === "a"
+            ? tacticalKeysRef.current.aim
+            : key === "s"
+              ? tacticalKeysRef.current.scan
+              : key === "d"
+                ? tacticalKeysRef.current.posture
+                : key === "f"
+                  ? tacticalKeysRef.current.orders
+                  : key === "r"
+                    ? tacticalKeysRef.current.rehearse
+                    : null;
+        if (action !== null) {
+          event.preventDefault();
+          action();
+          return;
+        }
+        if (event.key === "Escape") {
+          setOrdersOpen(false);
+          return;
+        }
       }
       if (!(event.ctrlKey || event.metaKey)) {
         const shortcutRobot = team.robots[Number(event.key) - 1];
@@ -795,6 +985,322 @@ export function PlannerExperience({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [aimDialog, aimTool, scanDialog, selectedRobot.id, team.robots]);
+
+  const confirmAim = () => {
+    if (aimDialog === null) return;
+    const count = fireActionCount(aimDialog.weapon, aimShots);
+    const shots = Array.from(
+      { length: aimShots },
+      () =>
+        ({
+          kind: "aim-and-fire",
+          target: aimDialog.target,
+          weapon: aimDialog.weapon,
+          repeat: false,
+        }) satisfies RobotCommandSegment,
+    );
+    commitSegments(
+      shots,
+      `${count.primary} added at ${aimDialog.target.x},${aimDialog.target.y}${count.projectiles === null ? "" : ` · ${count.projectiles}`}.`,
+    );
+  };
+  const chooseWeapon = (weapon: WeaponId) => {
+    setWeaponChoiceByRobot((current) => ({ ...current, [selectedRobot.id]: weapon }));
+    setAimDialog((current) => (current === null ? null : { ...current, weapon }));
+    setScanDialog((current) =>
+      current === null
+        ? null
+        : {
+            ...current,
+            weapon,
+            maxDistance: Math.min(current.maxDistance, PLANNER_WEAPON_RANGE[weapon]),
+          },
+    );
+  };
+  const fireActive = aimTool || aimDialog !== null || scanDialog !== null;
+  const conflictBanner =
+    state.conflictRevision !== null && state.conflictOrders !== null ? (
+      <div className="planner-conflict" role="alert">
+        <AlertTriangle size={18} aria-hidden="true" />
+        <span>
+          {state.conflictOrders.turnNumber === match.turnNumber
+            ? "The server state changed while this browser has an unsent draft. Your work was preserved."
+            : `The server advanced to Turn ${match.turnNumber}. Your Turn ${state.conflictOrders.turnNumber} draft remains preserved for recovery.`}
+        </span>
+        <button type="button" onClick={keepOrRecoverConflict}>
+          {state.conflictOrders.turnNumber === match.turnNumber
+            ? "Keep local draft"
+            : "Recover compatible commands"}
+        </button>
+        <button type="button" onClick={acceptAuthoritative}>
+          Use server turn
+        </button>
+      </div>
+    ) : null;
+  const plannerMenu = (
+    <PlannerMenu alert={draftStorageStatus === "error"}>
+      <FieldGuideButton />
+      {boardKind === "3d" ? (
+        <button type="button" className="planner-menu-item cursor-pointer" onClick={replayCoach}>
+          <GraduationCap size={14} aria-hidden="true" /> First turn guide
+        </button>
+      ) : null}
+      <Link className="planner-menu-item" href={`/room/${roomCode}`}>
+        Room {roomCode}
+      </Link>
+      <span className="planner-menu-item">
+        <ShieldCheck size={14} aria-hidden="true" /> Seat verified
+      </span>
+      <span className="planner-menu-item" role="status" aria-live="polite">
+        {draftStorageStatus === "saved" ? (
+          <Save size={14} aria-hidden="true" />
+        ) : (
+          <CloudOff size={14} aria-hidden="true" />
+        )}
+        {draftStorageStatus === "saved" ? "Saved locally" : "Memory only — storage unavailable"}
+      </span>
+      {onResign === undefined ? null : <ResignControl onResign={onResign} disabled={syncing} />}
+    </PlannerMenu>
+  );
+  const syncActions = (
+    <>
+      {onSaveOrders === undefined ? null : (
+        <button
+          type="button"
+          className="planner-sync-action"
+          disabled={syncing}
+          onClick={() => onSaveOrders(orders)}
+        >
+          <UploadCloud size={14} aria-hidden="true" /> Save to server
+        </button>
+      )}
+      {onLockOrders === undefined ? null : (
+        <span className="header-action-with-help">
+          <button
+            type="button"
+            className="planner-lock-action"
+            disabled={syncing}
+            onClick={() => onLockOrders(orders)}
+          >
+            <LockKeyhole size={14} aria-hidden="true" />
+            {syncing ? "Locking…" : "Lock orders"}
+          </button>
+          <HelpButton topic="action:lock-orders" label="Lock orders" />
+        </span>
+      )}
+    </>
+  );
+
+  if (boardKind === "3d") {
+    const selectedName = robotNames.get(selectedRobot.id) ?? "Selected robot";
+    const plannedRobots = team.robots.filter(
+      (robot) =>
+        robot.hp > 0 &&
+        (timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks).at(-1)
+          ?.endTick ?? 0) > 0,
+    ).length;
+    const livingRobots = team.robots.filter((robot) => robot.hp > 0).length;
+    const coachStep = coachActive
+      ? currentCoachStep({
+          timelines: team.robots
+            .filter((robot) => robot.hp > 0)
+            .map((robot) => timelineForRobot(orders, robot.id).segments),
+          ordersOpened: coachOrdersOpened,
+          rehearsed: coachRehearsed,
+          skipped: coachSkipped,
+        })
+      : null;
+    return (
+      <main
+        className="tactical-planner desktop-viewport-gate"
+        data-coach={coachStep?.id}
+        style={{ "--tactical-track-h": `${boardInsets.bottom}px` } as CSSProperties}
+      >
+        <PlannerBoard3D
+          match={match}
+          theme={arenaTheme ?? DEFAULT_ARENA_THEME}
+          onUse2D={() => chooseBoard("2d")}
+          insets={boardInsets}
+          arena={match.arena}
+          robots={robotViews}
+          contacts={contactViews}
+          ghosts={ghostViews}
+          previewProgress={Math.min(1, previewTick / Math.max(1, budgetTicks))}
+          homeAreas={homeAreaOverlays}
+          route={selectedRoute}
+          cursor={cursor}
+          cursorState={cursorState}
+          targetingOverlay={targetingOverlay}
+          firingInteractionActive={fireActive}
+          onAssumedPosture={setTargetingPosture}
+          onCursor={setCursor}
+          onChooseTile={chooseBoardTile}
+          onChooseRobot={pickRobotOnBoard}
+          anchorTile={
+            ordersOpen && !fireActive && !rehearsing && projected.position !== "dock"
+              ? projected.position
+              : null
+          }
+          anchorContent={
+            <RadialOrders
+              key={selectedRobot.id}
+              name={selectedName}
+              posture={projected.posture}
+              heading={projected.scanHeading}
+              onMove={() => {
+                setOrdersOpen(false);
+                setNotice(`Tap the floor to move ${selectedName}.`);
+              }}
+              onAim={() => {
+                setOrdersOpen(false);
+                startAim();
+              }}
+              onScan={() => {
+                setOrdersOpen(false);
+                startScan();
+              }}
+              onPosture={addPosture}
+              onHeadingPreview={setHeadingPreview}
+              onHeading={addHeading}
+              onClose={() => setOrdersOpen(false)}
+            />
+          }
+        />
+        <header className="tactical-bar" ref={barRef}>
+          <div className="tactical-bar-lead">
+            {plannerMenu}
+            <div>
+              <p className="eyebrow">Turn {match.turnNumber} · Your orders</p>
+              <h1>Plan your {match.config.turnLengthSeconds} seconds</h1>
+            </div>
+          </div>
+          <div className="tactical-bar-actions">
+            <span className="tactical-progress">
+              {plannedRobots} of {livingRobots} robots planned
+            </span>
+            {syncActions}
+          </div>
+        </header>
+        <div className="tactical-rail" ref={railRef}>
+          <SquadRail
+            robots={team.robots}
+            names={robotNames}
+            orders={orders}
+            selectedRobotId={selectedRobot.id}
+            budgetTicks={budgetTicks}
+            onSelect={(robotId) => {
+              selectRobot(robotId);
+              setOrdersOpen(true);
+            }}
+            onClear={() =>
+              edit(
+                replaceTimeline(orders, selectedRobot.id, []),
+                `${selectedName} plan cleared. Undo remains available.`,
+              )
+            }
+          />
+          <div className="history-buttons tactical-history" aria-label="Draft history">
+            <button
+              type="button"
+              onClick={() => changeHistory("undo")}
+              disabled={state.history.past.length === 0}
+              aria-label="Undo"
+              title="Undo — Ctrl+Z"
+            >
+              <Undo2 size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => changeHistory("redo")}
+              disabled={state.history.future.length === 0}
+              aria-label="Redo"
+              title="Redo — Ctrl+Shift+Z"
+            >
+              <Redo2 size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        {conflictBanner}
+        {coachStep !== null ? (
+          fireActive && coachStep.id !== "aim" ? null : (
+            <FirstTurnCoach
+              step={coachStep}
+              turnSeconds={match.config.turnLengthSeconds}
+              onSkipStep={() => setCoachSkipped((skipped) => new Set([...skipped, coachStep.id]))}
+              onFinish={finishCoach}
+            />
+          )
+        ) : projected.position === "dock" ? (
+          <div className="tactical-hint" role="status">
+            Tap a tile in your home corner to deploy <strong>{selectedName}</strong>.
+          </div>
+        ) : !ordersOpen && !fireActive && !rehearsing ? (
+          <div className="tactical-hint" role="status">
+            Tap the floor to move <strong>{selectedName}</strong>, or tap it for orders.
+          </div>
+        ) : null}
+        {aimTool || aimDialog !== null ? (
+          <ShotCard
+            arena={match.arena}
+            shooter={projectedShooter}
+            shooterName={selectedName}
+            target={aimDialog?.target ?? cursor}
+            locked={aimDialog !== null}
+            weapon={aimWeapon}
+            weapons={weapons}
+            shots={aimShots}
+            maxShots={aimMaxShots}
+            firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
+            assumedPosture={targetingPosture}
+            authorizedContacts={authorizedContacts}
+            onWeapon={chooseWeapon}
+            onShots={setAimShots}
+            onConfirm={confirmAim}
+            onCancel={() => cancelFire("Aim canceled.")}
+          />
+        ) : scanDialog !== null ? (
+          <aside className="tactical-card scan-card" aria-label="Scan and fire">
+            <header>
+              <p className="eyebrow">Scan &amp; fire · {selectedName}</p>
+            </header>
+            <p className="shot-card-empty">
+              {selectedName} fires at any enemy that enters the lit arc within range.
+            </p>
+            {fireControls}
+          </aside>
+        ) : null}
+        {notice.length === 0 ? null : (
+          <div
+            className="planner-notice tactical-notice"
+            data-severity={/blocked|out of|unavailable|invalid/i.test(notice) ? "warning" : "info"}
+            role="status"
+            aria-live="polite"
+          >
+            <span>{notice}</span>
+          </div>
+        )}
+        <div className="tactical-track" ref={trackRef}>
+          <TurnTrack
+            robots={team.robots}
+            names={robotNames}
+            orders={orders}
+            selectedRobotId={selectedRobot.id}
+            budgetTicks={budgetTicks}
+            previewTick={previewTick}
+            rehearsing={rehearsing}
+            onPreviewTick={(tick) => {
+              setRehearsing(false);
+              setPreviewTick(tick);
+            }}
+            onRehearse={toggleRehearse}
+            onSelectRobot={selectRobot}
+            onSelectCommand={selectCommand}
+            onRemoveFrom={removeFrom}
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="planner-page desktop-viewport-gate">
@@ -972,6 +1478,15 @@ export function PlannerExperience({
             onChooseTile={chooseTile}
             onChooseRobot={selectRobot}
           />
+          {can3d ? (
+            <button
+              type="button"
+              className="planner-board-switch cursor-pointer"
+              onClick={() => chooseBoard("3d")}
+            >
+              3D board
+            </button>
+          ) : null}
           {aimReviewOpen && aimDialog !== null ? (
             <AimAndFireDialog
               arena={match.arena}
@@ -985,23 +1500,7 @@ export function PlannerExperience({
               assumedPosture={targetingPosture}
               authorizedContacts={authorizedContacts}
               onBack={() => setAimReviewOpen(false)}
-              onConfirm={() => {
-                const count = fireActionCount(aimDialog.weapon, aimShots);
-                const shots = Array.from(
-                  { length: aimShots },
-                  () =>
-                    ({
-                      kind: "aim-and-fire",
-                      target: aimDialog.target,
-                      weapon: aimDialog.weapon,
-                      repeat: false,
-                    }) satisfies RobotCommandSegment,
-                );
-                commitSegments(
-                  shots,
-                  `${count.primary} added at ${aimDialog.target.x},${aimDialog.target.y}${count.projectiles === null ? "" : ` · ${count.projectiles}`}.`,
-                );
-              }}
+              onConfirm={confirmAim}
             />
           ) : null}
           {notice.length === 0 ? null : (
