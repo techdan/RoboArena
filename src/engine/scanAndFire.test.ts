@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeOpenArena, makeRobot } from "./__fixtures__/match.js";
-import { findScanAndFireTarget, isOnScanConeBoundary } from "./scanAndFire.js";
+import { findScanAndFireTarget, scanRankPenalty } from "./scanAndFire.js";
 
 describe("Scan & Fire acquisition", () => {
   it("selects the nearest eligible enemy", () => {
@@ -114,11 +114,14 @@ describe("Scan & Fire acquisition", () => {
     ).toBeNull();
   });
 
-  it("detects only the exact inclusive cone boundary", () => {
+  it("adds the +2 ranking penalty outside the 90-degree front arc (seg18:0x0854)", () => {
     const from = { x: 5, y: 5 };
-    expect(isOnScanConeBoundary(from, "E", { x: 9, y: 5 })).toBe(false);
-    expect(isOnScanConeBoundary(from, "E", { x: 6, y: 9 })).toBe(false);
-    expect(isOnScanConeBoundary(from, "E", { x: 5, y: 9 })).toBe(true);
-    expect(isOnScanConeBoundary(from, "E", from)).toBe(false);
+    expect(scanRankPenalty(from, "E", { x: 9, y: 5 })).toBe(0);
+    expect(scanRankPenalty(from, "E", { x: 8, y: 8 })).toBe(0);
+    expect(scanRankPenalty(from, "E", { x: 6, y: 9 })).toBe(2);
+    expect(scanRankPenalty(from, "E", { x: 5, y: 9 })).toBe(2);
+    expect(scanRankPenalty(from, "SE", { x: 5, y: 9 })).toBe(0);
+    expect(scanRankPenalty(from, "SE", { x: 4, y: 9 })).toBe(2);
+    expect(scanRankPenalty(from, "E", from)).toBe(2);
   });
 });

@@ -1,12 +1,12 @@
 /**
  * Posture/terrain cover classification from RoboSport's seg87 trace (RE §15).
  *
- * Line-of-sight blocking follows the center path. Cover itself is local to the
+ * Line-of-sight blocking follows the original sight walk. Cover itself is local to the
  * target endpoint: the target tile, the major-axis neighbor toward the shooter,
  * and—only for exact or near diagonals—the corner neighbor toward the shooter.
  */
 
-import { targetCoverSamples, tilesAlongLineExclusive } from "./geometry.js";
+import { sightWalkTiles, targetCoverSamples } from "./geometry.js";
 import type { ArenaTile, CoverClass, Posture, Terrain, TileCoord } from "./types.js";
 
 export { targetCoverSamples } from "./geometry.js";
@@ -54,11 +54,18 @@ export const resolveCover = (input: {
     return { outcome: "cover", coverClass: 4 };
   }
 
-  // The separate LoS gate rejects complete walls anywhere on the center path.
-  for (const tileCoord of [...tilesAlongLineExclusive(from, to), to]) {
+  // The separate sight gate (seg87:0x19E3, checked by the seg76 validator)
+  // rejects a Wall on the original sight walk, or enough Bush/Low Wall
+  // samples to bring the 16-point sight value to 0.
+  let sight = 16;
+  for (const tileCoord of sightWalkTiles(from, to)) {
     const terrain = arenaTileAt(tileCoord)?.terrain;
-    if (terrain === "wall" || terrain === "outer-wall") {
+    if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") {
       return { outcome: "blocked", stoppedAt: tileCoord };
+    }
+    if (terrain === "low-wall" || terrain === "bush") {
+      sight -= 3;
+      if (sight <= 0) return { outcome: "blocked", stoppedAt: tileCoord };
     }
   }
 

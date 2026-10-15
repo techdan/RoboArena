@@ -61,7 +61,7 @@ const weaponSummary = (weaponId: WeaponId): string => {
 
 const robotRole: Readonly<Record<V1RobotClass, string>> = {
   rifle: "Durable, accurate line unit for dependable direct fire.",
-  burst: "Balanced close-to-mid-range attacker that rolls three bullets per burst.",
+  burst: "Balanced close-to-mid-range attacker with a quick trigger and a wide damage roll.",
   auto: "Fast-firing pressure unit with lighter armor and lower accuracy.",
   missile: "Limited-ammo explosive support whose blast can also hurt friendlies.",
 };

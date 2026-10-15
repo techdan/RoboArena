@@ -117,11 +117,11 @@ export function AimAndFireDialog({
                   <strong>{entry.chancePercent}% estimate</strong>
                   <small>
                     {COVER_LABELS[entry.coverClass]} {signed(entry.breakdown.coverAdjustment)} ·
-                    range {signed(entry.breakdown.distanceAccuracyAdjustment)} · terrain{" "}
-                    {signed(entry.breakdown.weaponTerrainAdjustment)}
+                    range {signed(entry.breakdown.distanceAccuracyAdjustment)} · fire control{" "}
+                    {signed(entry.breakdown.fireControlAdjustment)}
                   </small>
-                  {entry.offTileBreakdown === null ? null : (
-                    <small>If target leaves tile: {entry.offTileBreakdown.chancePercent}%</small>
+                  {entry.breakdown.targetInFrontArc ? null : (
+                    <small>Outside the 90° front arc: score halved</small>
                   )}
                 </div>
               ))}

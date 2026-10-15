@@ -34,12 +34,12 @@
       "semantic_evidence": "seg96:0x09af has only planner/AI callers; the live movie resolver uses 0x156e"
     },
     {
-      "id": "weapon-accuracy-adds",
+      "id": "fire-control-accuracy-adds",
       "status": "confirmed",
-      "encoding": "u16le",
+      "encoding": "i16le",
       "offset": "0x1596",
-      "values": [4, 7, 6, 5, 4, 3, 2, 1],
-      "semantic_evidence": "seg6:0x3790 indexes selector-5; seg14:0x07b4 maps named weapon groups to selectors"
+      "values": [4, 7, 6, 5, 4, 3, 2, 1, 0, 0, -1, -1, -2, -2, -3, -3, -4, -5, -6],
+      "semantic_evidence": "seg6:0x3790 indexes the command's first parameter for Human teams: 0 for Aim & Fire, Maximum Distance for Scan & Fire (2026-10-15 re-audit)"
     },
     {
       "id": "grenade-masks",

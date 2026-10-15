@@ -63,8 +63,8 @@ describe("Phase 3 projectile and blast semantics", () => {
     expect(first).toEqual(second);
     expect(eventsOf(first.events, "projectile-launched")).toEqual([
       expect.objectContaining({
-        tick: 30,
-        projectileId: "1:m1:0:30:0",
+        tick: 0,
+        projectileId: "1:m1:0:0:0",
         shooterId: "m1",
         weapon: "missile-launcher",
         from: { x: 1, y: 1 },
@@ -73,12 +73,12 @@ describe("Phase 3 projectile and blast semantics", () => {
     ]);
     expect(eventsOf(first.events, "projectile-impacted")).toEqual([
       expect.objectContaining({
-        tick: 30,
-        projectileId: "1:m1:0:30:0",
+        tick: 0,
+        projectileId: "1:m1:0:0:0",
         outcome: "blast",
       }),
     ]);
-    expect(eventsOf(first.events, "damaged").every((event) => event.tick === 30)).toBe(true);
+    expect(eventsOf(first.events, "damaged").every((event) => event.tick === 0)).toBe(true);
     expect(first.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(2);
   });
 
@@ -129,7 +129,7 @@ describe("Phase 3 projectile and blast semantics", () => {
       }
     }
     expect(result).toBeDefined();
-    expect(eventsOf(result?.events ?? [], "damaged")[0]?.tick).toBe(30);
+    expect(eventsOf(result?.events ?? [], "damaged")[0]?.tick).toBe(0);
     expect(eventsOf(result?.events ?? [], "move-step")[0]?.tick).toBe(40);
     expect(result?.nextState.teams[1]?.robots[0]?.position).toEqual({ x: 3, y: 1 });
   });
@@ -170,7 +170,7 @@ describe("Phase 3 projectile and blast semantics", () => {
     expect(result).toBeDefined();
     expect(eventsOf(result?.events ?? [], "projectile-impacted")).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ projectileId: "1:m1:0:30:0", outcome: "blast" }),
+        expect.objectContaining({ projectileId: "1:m1:0:0:0", outcome: "blast" }),
       ]),
     );
     expect(
@@ -318,7 +318,7 @@ describe("Phase 3 projectile and blast semantics", () => {
       }),
     );
 
-    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([30, 60, 90]);
+    expect(eventsOf(result.events, "fired").map((event) => event.tick)).toEqual([0, 30, 60]);
     expect(result.nextState.teams[0]?.robots[0]?.ammo["missile-launcher"]).toBe(0);
   });
 

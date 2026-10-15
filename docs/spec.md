@@ -215,14 +215,18 @@ Posture commands set an absolute posture. Any actual change costs **10 ticks
 | Weapon           | Bullets/click | Engine firing interval | Max range | Ammo                                       |
 | ---------------- | ------------: | ---------------------- | --------: | ------------------------------------------ |
 | Rifle            |             1 | 30 ticks (0.50 s) ✅   |     18 ✅ | unlimited                                  |
-| Burst Gun        |      **3** ✅ | 15 ticks (0.25 s) ✅   |     18 ✅ | unlimited                                  |
+| Burst Gun        |      **1** ✅ | 15 ticks (0.25 s) ✅   |     18 ✅ | unlimited                                  |
 | Auto Rifle       |             1 | 10 ticks (0.17 s) ✅   |     18 ✅ | unlimited                                  |
 | Missile Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | 3                                          |
 | Grenade Launcher | 1 (explosive) | 30 ticks (0.50 s) ✅   |     18 ✅ | custom grant 0–9; not granted in main game |
 
-Scan & Fire repeat intervals are Rifle/Burst/Auto/Missile/Grenade =
-`30/20/10/20/20` ticks. Named selectors and both timing columns are confirmed;
-range uses **floored Euclidean distance** and is uniform at 18. ✅
+Scan & Fire re-fire delays are Rifle/Burst/Auto/Missile/Grenade =
+`30/15/10/70/80` ticks: the weapon's Aim duration, plus 40 for missiles and 50
+for grenades (`seg6:0x3D79/0x3FA4/0x3F43`, corrected 2026-10-15). Aim & Fire
+shoots on the command's first tick, then the interval elapses. A Missile Scan &
+Fire holds fire while its acquired target is closer than 2 tiles. Every firing
+action, Burst included, is one hit roll and one damage roll. Range uses
+**floored Euclidean distance** and is uniform at 18. ✅
 
 Finite ammunition is match-persistent in RoboArena v1. A Missile robot starts
 the match with 3 missiles; every launch decrements that stored value and it does
@@ -237,7 +241,7 @@ distance adjustments. The roll families and labels are exact.
 | Weapon     | Base roll per bullet                                     |
 | ---------- | -------------------------------------------------------- |
 | Rifle      | `10 + (random & 7)` → 10–17 ✅                           |
-| Burst Gun  | `8 + (random & 15)` → 8–23, three independent bullets ✅ |
+| Burst Gun  | `8 + (random & 15)` → 8–23, one roll per burst ✅          |
 | Auto Rifle | `6 + (random & 15)` → 6–21 ✅                            |
 
 Damage adjustment: cover class 1/2/3/4 adds `-4/0/0/+4`; distance `<5` adds
@@ -336,46 +340,54 @@ Scan headings are absolute commands; any changed heading costs **5 ticks
 ### Per-shot resolution pipeline
 
 ```
-1. Range gate: `floorEuclidean(shooter, aimedTile) <= 18`.
-2. Angle gate: aimed tile must be inside the scan cone.
-3. LoS/cover: centerline LoS rejects walls. Target cover samples the target,
+1. Angle gate: target tile must be inside the scan cone.
+2. Sight gate: the original sub-tile sight walk rejects a Wall, or Bush/Low
+   Wall samples that cut sight strength to 0.
+3. Range gate: `floorEuclidean(shooter, targetTile) <= 18`.
+   Cover: target cover samples the target,
    one neighbor toward the shooter on the major axis (distance ≥2), and a
    corner neighbor only when `abs(dx-dy)<2`; ties are y-major. This yields
    cover class 1..4.
 4. Score starts from cover class `1/2/3/4 -> 4/8/12/18`.
-5. Add the exact accuracy/distance ladder and target-terrain modifier
-   (`rough +2`, `bush -1`, `low-wall -3`, otherwise weapon-property add).
+5. Add the exact accuracy/distance ladder and the fire-control add from
+   `0x1596` = `4,7,6,5,4,3,2,1,0,0,-1,-1,-2,-2,-3,-3,-4,-5,-6`, indexed by 0
+   for Aim & Fire (+4) and by the Maximum Distance for Scan & Fire. Weapon and
+   target terrain do not change the score.
 6. Aim & Fire passes scan-sight strength 16, so no scan penalty applies.
    Scan & Fire subtracts 4 at sight strength `<=4`, 2 at `<=8`, otherwise 0.
-7. Clamp score to 0..19. If the shooter is damage-staggered, halve it. If the
-   target left the aimed tile, halve it again.
+7. Clamp score to 0..19. If the target is outside the closed ±45° front arc
+   of the shooter's heading, halve it.
 8. Hit when `(rng & 255) < LIVE_FIRE_HIT_THRESHOLDS[score]`.
 9. On hit, roll direct damage and apply cover/distance adjustments above.
 ```
 
-Every successful damage application assigns the target a `1..4` firing-action
-stagger count (`(game RNG & 3) + 1`). Each later firing action consumes one
-count and halves every bullet's hit score for that action. This is original
-robot field `+0x1E`; it is not an ammunition counter. Shooter posture has no
-independent score or damage modifier beyond endpoint/LoS legality. ✅
+Every successful damage application assigns the target a `1..4` stagger count
+(`(game RNG & 3) + 1`) on its program object (`+0x1E`). The original clears it
+at every command dispatch (`seg6:0x4CDA`) before a fire handler reads it, so it
+never halves a shot; RoboArena keeps the RNG draw and the counter but does not
+apply the halving (corrected 2026-10-15; DOSBox confirmation recommended).
+Shooter posture has no independent score or damage modifier beyond
+endpoint/LoS legality. ✅
 
 ### Two firing modes
 
-- **Aim & Fire** (tile-targeted): hit and damage lock when the fire command
-  resolves. If the target has already left the aimed tile, the score is halved.
-  Later projectile flight does not reroll or enable in-flight dodging. ✅
+- **Aim & Fire** (tile-targeted): fires on the command's first tick at the
+  enemy on the aimed tile then; with none there the shot is wasted. Hit and
+  damage lock at that moment. Later projectile flight does not reroll or enable
+  in-flight dodging. ✅
 - **Scan & Fire** (enemy-targeted, reacquires): remains active for
   `seconds × 60`, filters eligible enemies by the player-set maximum distance,
   chooses the nearest adjusted-distance candidate, fires, then reacquires at
   the weapon's Scan repeat interval. Equal adjusted distances prefer the higher
   scan-sight strength, then retain canonical Home-slot/roster order. ✅
 
-The acquisition adjustment is exact: a candidate on the inclusive cone boundary
-adds 2 to its floored-Euclidean distance; other candidates use raw distance.
+The acquisition adjustment is exact: a candidate outside the closed ±45° front
+arc (or on the scanner's own tile) adds 2 to its floored-Euclidean distance;
+candidates inside the front arc use raw distance.
 Equal adjusted distances prefer higher scan-sight strength, then retain
 Home-slot/roster candidate order. The same exact 0..16 sight strength feeds the
-live-fire penalty bands: it starts at 16, each endpoint-inclusive Low Wall or
-Bush sample subtracts 3, and a Wall reduces it to 0. Aim & Fire passes 16. ✅
+live-fire penalty bands: it starts at 16, each Low Wall or Bush sample on the
+original sight walk subtracts 3, and a Wall reduces it to 0. Aim & Fire passes 16. ✅
 
 #### Stationary scanner versus a moving target
 
@@ -483,13 +495,13 @@ The internal reconciled
 planner chrome.
 
 Aim & Fire labels the heatmap as the chance against a robot on that fixed tile
-when the command resolves and explains the conditional off-aimed-tile penalty.
+when the command starts and explains the outside-front-arc halving.
 Scan & Fire labels it as the chance **if an eligible enemy is acquired on that
 tile at an opportunity**; it uses the selected maximum distance, the Scan
 accuracy mapping, and terrain-derived sight strength. Scan timing copy says
 that acquisition checks immediately and then at the weapon's
-`scanFiringIntervalTicks` for the chosen duration. The exact perpendicular cone
-boundary's `+2` adjusted-distance acquisition rule is explained in the cursor
+`scanFiringIntervalTicks` for the chosen duration. The outside-front-arc `+2`
+adjusted-distance acquisition rule is explained in the cursor
 tooltip on hover/focus; the drawn wedge replaces both
 per-tile boundary boxes and any footprint perimeter outline.
 
@@ -531,9 +543,13 @@ Ordinary visibility and Scan & Fire share the exact scan-grid sight strength:
 
 - Clear sight starts at 16; a target is visible while the result is greater than 0. ✅
 - A Wall or Outer Wall sample immediately returns 0. ✅
-- Every Low Wall or Bush sample subtracts 3, including shooter and target
-  endpoints; one partial obstacle therefore reduces strength to 13 rather than
-  blocking sight. Six partial samples exhaust the value. ✅
+- Samples come from the original sight walk (`seg56:0x0360`): Bresenham on
+  5× sub-tile centres, each newly entered tile once, shooter tile excluded,
+  target tile included, and an intermediate tile equal to the scaled end point
+  skipped (original bug). ✅
+- Every Low Wall or Bush sample subtracts 3; one partial obstacle therefore
+  reduces strength to 13 rather than blocking sight. Six partial samples
+  exhaust the value. ✅
 - Crevices, Rough Ground, and Open Ground do not reduce sight strength. ✅
 
 This path is terrain-based. Posture does not independently alter ordinary

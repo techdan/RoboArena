@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { blastDamagePresentation, fireActionCount } from "./combatPresentation";
 
 describe("planner combat presentation", () => {
-  it("teaches that Burst actions launch three independent bullets", () => {
+  it("counts a Burst action as one hit roll", () => {
     expect(fireActionCount("burst-gun", 4)).toEqual({
       primary: "4 bursts",
-      projectiles: "12 bullets",
+      projectiles: null,
     });
     expect(fireActionCount("rifle", 1)).toEqual({
       primary: "1 shot",

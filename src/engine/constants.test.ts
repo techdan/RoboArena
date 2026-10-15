@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FIRE_CONTROL_ACCURACY_ADDS,
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
   LIVE_FIRE_HIT_THRESHOLDS,
@@ -7,7 +8,6 @@ import {
   MOVIE_FPS_OPTIONS,
   TICKS_PER_SECOND,
   TURN_DURATION_TICKS_DEFAULT,
-  WEAPON_ACCURACY_ADDS,
 } from "./constants.js";
 
 describe("binary-derived constants", () => {
@@ -40,7 +40,9 @@ describe("binary-derived constants", () => {
     expect(COVER_CLASS_BULLET_DAMAGE_ADJUST).toEqual({ 1: -4, 2: 0, 3: 0, 4: 4 });
   });
 
-  it("transcribes the weapon-property add table", () => {
-    expect(WEAPON_ACCURACY_ADDS).toEqual([4, 7, 6, 5, 4, 3, 2, 1]);
+  it("transcribes all 19 words of the fire-control add table at 0x1596", () => {
+    expect(FIRE_CONTROL_ACCURACY_ADDS).toEqual([
+      4, 7, 6, 5, 4, 3, 2, 1, 0, 0, -1, -1, -2, -2, -3, -3, -4, -5, -6,
+    ]);
   });
 });

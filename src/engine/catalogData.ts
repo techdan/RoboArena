@@ -14,17 +14,14 @@ export const WEAPON_CATALOG_DATA: Readonly<Record<WeaponId, WeaponCatalogData>> 
     bulletsPerClick: 1,
     startingAmmo: "unlimited",
     damageRoll: { base: 10, mask: 7 },
-    accuracyAddIndex: 0,
-    scanAccuracyAddIndex: 1,
   },
   "burst-gun": {
     displayName: "Burst Gun",
     kind: "burst",
-    bulletsPerClick: 3,
+    // One hit/damage roll and one projectile per firing action (seg6:0x1DCE).
+    bulletsPerClick: 1,
     startingAmmo: "unlimited",
     damageRoll: { base: 8, mask: 15 },
-    accuracyAddIndex: 3,
-    scanAccuracyAddIndex: 4,
   },
   "auto-rifle": {
     displayName: "Machine Gun",
@@ -32,8 +29,6 @@ export const WEAPON_CATALOG_DATA: Readonly<Record<WeaponId, WeaponCatalogData>> 
     bulletsPerClick: 1,
     startingAmmo: "unlimited",
     damageRoll: { base: 6, mask: 15 },
-    accuracyAddIndex: 6,
-    scanAccuracyAddIndex: 7,
   },
   "missile-launcher": {
     displayName: "Missile Launcher",

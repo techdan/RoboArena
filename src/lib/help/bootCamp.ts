@@ -14,6 +14,7 @@ import {
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
   DEPLOY_COST_TICKS,
+  fireControlAccuracyAdjustment,
   LIVE_FIRE_HIT_THRESHOLDS,
   MOVE_DOUBLE_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
@@ -21,7 +22,6 @@ import {
   SCAN_DIRECTION_COST_TICKS,
   TICKS_PER_SECOND,
   TURN_DURATION_TICKS_DEFAULT,
-  WEAPON_ACCURACY_ADDS,
   WEAPON_MAX_RANGE,
   WEAPON_TIMING,
 } from "../../engine/constants";
@@ -34,7 +34,6 @@ import type {
   Posture,
   RandomMaskRoll,
   RobotClass,
-  Terrain,
   WeaponDefinition,
   WeaponId,
 } from "../../engine/types";
@@ -85,22 +84,6 @@ export const explosiveCoverCut = (raw: number, coverClass: CoverClass): number =
 /** Mirror of the bullet distance damage adjustment in `engine/firing.ts` (parity-tested). */
 export const bulletDistanceDamageAdjust = (distance: number): number =>
   distance > 12 ? -4 : distance < 5 ? 4 : 0;
-
-/** Mirror of the target-terrain score term in `engine/firing.ts` (parity-tested). */
-export const weaponTerrainScoreAdjust = (
-  terrain: Terrain,
-  weapon: WeaponDefinition,
-  fireMode: "aim" | "scan",
-): number => {
-  if (terrain === "rough") return 2;
-  if (terrain === "bush") return -1;
-  if (terrain === "low-wall") return -3;
-  const index =
-    fireMode === "scan"
-      ? (weapon.scanAccuracyAddIndex ?? weapon.accuracyAddIndex ?? 0)
-      : (weapon.accuracyAddIndex ?? 0);
-  return WEAPON_ACCURACY_ADDS[index];
-};
 
 export const V1_CLASSES: readonly V1RobotClass[] = ["rifle", "burst", "auto", "missile"];
 export const POSTURES: readonly Posture[] = ["upright", "ducking", "crouching"];
@@ -316,8 +299,8 @@ export const CLASS_BRIEFING: Readonly<Record<V1RobotClass, ClassBriefing>> = {
   burst: {
     role: "Hard-hitting brawler",
     bestAt: [
-      `${stat("burst").shotsPerTrigger} bullets every trigger pull`,
-      "Highest sustained damage",
+      `Widest damage roll (${formatRange(stat("burst").damagePerHit)} per hit)`,
+      `Quick ${formatSeconds(stat("burst").aimIntervalTicks)} trigger`,
     ],
     watchOut: [`${stat("burst").armor} HP armor`, "Less accurate than the Rifle in Scan & Fire"],
   },
@@ -439,41 +422,31 @@ export const coverClassFor = (posture: Posture, spot: CoverSpot): CoverClass =>
   coverClassForPostureOn(posture, spot);
 
 /**
- * Engine hit chance (Aim or Scan & Fire, target on the aimed tile, no stagger).
- * `targetTerrain` is where the target stands: a robot behind a low wall stands
- * on open ground, while a robot in a bush stands on the bush.
+ * Engine hit chance (Aim or Scan & Fire, target inside the shooter's front
+ * arc). Scan & Fire uses the full 18-tile Maximum Distance unless given one;
+ * a tighter Maximum Distance aims better.
  */
 export const hitChancePercent = (input: {
   readonly robotClass: V1RobotClass;
   readonly distance: number;
   readonly coverClass: CoverClass;
   readonly fireMode?: "aim" | "scan";
-  readonly targetTerrain?: "open" | "bush" | "rough" | "low-wall";
-  readonly weaponId?: WeaponId;
+  readonly scanMaxDistance?: number;
 }): number => {
   const robot = ROBOT_CATALOG_DATA[input.robotClass];
-  let weapon = WEAPONS[input.weaponId ?? robot.primaryWeapon];
-  if (weapon.damageRoll === undefined) weapon = WEAPONS.rifle;
   const fireMode = input.fireMode ?? "aim";
   return calculateLiveFireBreakdownFromFactors({
     fireMode,
     coverAdjustment: COVER_CLASS_HIT_SCORE[input.coverClass],
     distanceAccuracyAdjustment: distanceScoreAdjustment(input.distance, robot.accuracy + 4),
-    weaponTerrainAdjustment: weaponTerrainScoreAdjust(
-      input.targetTerrain ?? "open",
-      weapon,
-      fireMode,
-    ),
+    fireControlAdjustment: fireControlAccuracyAdjustment(fireMode, input.scanMaxDistance),
     // Full scan sight (clear line): Scan & Fire takes no sight-strength penalty.
     scanStrength: 16,
     damageStaggered: false,
-    targetOnAimedTile: true,
+    targetInFrontArc: true,
     hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
   }).chancePercent;
 };
-
-export const spotTerrain = (spot: CoverSpot): "open" | "bush" =>
-  spot === "bush" ? "bush" : "open";
 
 /** Example distances for the posture/cover chance table. */
 export const COVER_EXAMPLE = { shooter: "rifle" as V1RobotClass, near: 5, far: 13 } as const;
@@ -498,7 +471,6 @@ export const coverMatrix = (): CoverMatrixRow[] =>
           robotClass: COVER_EXAMPLE.shooter,
           distance,
           coverClass,
-          targetTerrain: spotTerrain(spot),
         });
       return {
         spot,
@@ -509,12 +481,18 @@ export const coverMatrix = (): CoverMatrixRow[] =>
     }),
   }));
 
-/** Aim vs Scan hit chance for each class at one distance against a cover class. */
+/** Aim vs Scan hit chance per class at one distance; Scan's Maximum Distance is set to that distance. */
 export const fireModeComparison = (distance: number, coverClass: CoverClass) =>
   V1_CLASSES.map((robotClass) => ({
     robotClass,
     aim: hitChancePercent({ robotClass, distance, coverClass, fireMode: "aim" }),
-    scan: hitChancePercent({ robotClass, distance, coverClass, fireMode: "scan" }),
+    scan: hitChancePercent({
+      robotClass,
+      distance,
+      coverClass,
+      fireMode: "scan",
+      scanMaxDistance: distance,
+    }),
   }));
 
 // ──────────────────────────────────────────────────────────────────────────

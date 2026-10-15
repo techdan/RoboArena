@@ -4,7 +4,9 @@ import {
   bearingDegrees,
   chebyshevDistance,
   floorEuclideanDistance,
+  isWithinFrontArc,
   isWithinScanCone,
+  sightWalkTiles,
   tilesAlongLineExclusive,
 } from "./geometry.js";
 
@@ -28,6 +30,11 @@ describe("floorEuclideanDistance", () => {
     const b = { x: 3, y: 4 };
     expect(floorEuclideanDistance(a, b)).toBe(5);
     expect(chebyshevDistance(a, b)).toBe(4);
+  });
+
+  it("keeps the original integer square root's even-square undercount (seg9:0x0530)", () => {
+    expect(floorEuclideanDistance({ x: 0, y: 0 }, { x: 6, y: 8 })).toBe(9);
+    expect(floorEuclideanDistance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
   });
 
   it("is symmetric", () => {
@@ -121,5 +128,39 @@ describe("tilesAlongLineExclusive", () => {
 
   it("returns no intermediate tile for adjacent points", () => {
     expect(tilesAlongLineExclusive({ x: 0, y: 0 }, { x: 1, y: 1 })).toEqual([]);
+  });
+});
+
+describe("isWithinFrontArc", () => {
+  it("uses a closed 90-degree arc for cardinal and diagonal headings", () => {
+    const from = { x: 5, y: 5 };
+    expect(isWithinFrontArc(from, "E", { x: 8, y: 8 })).toBe(true);
+    expect(isWithinFrontArc(from, "E", { x: 8, y: 9 })).toBe(false);
+    expect(isWithinFrontArc(from, "NE", { x: 9, y: 5 })).toBe(true);
+    expect(isWithinFrontArc(from, "NE", { x: 9, y: 6 })).toBe(false);
+    expect(isWithinFrontArc(from, "N", from)).toBe(true);
+  });
+});
+
+describe("sightWalkTiles", () => {
+  it("walks sub-tile centres and reports each newly entered tile (seg56:0x0360)", () => {
+    expect(sightWalkTiles({ x: 0, y: 0 }, { x: 2, y: 1 })).toEqual([
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ]);
+    expect(sightWalkTiles({ x: 0, y: 0 }, { x: 3, y: 0 })).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ]);
+    expect(sightWalkTiles({ x: 4, y: 4 }, { x: 4, y: 4 })).toEqual([]);
+  });
+
+  it("skips an intermediate tile equal to the scaled end point", () => {
+    const walked = sightWalkTiles({ x: 10, y: 10 }, { x: 1, y: 1 });
+    expect(walked).not.toContainEqual({ x: 7, y: 7 });
+    expect(walked.at(-1)).toEqual({ x: 1, y: 1 });
+    expect(walked).toHaveLength(8);
   });
 });

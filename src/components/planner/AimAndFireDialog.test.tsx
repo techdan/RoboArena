@@ -15,7 +15,7 @@ const shared = {
 };
 
 describe("Aim & Fire review teaching", () => {
-  it("distinguishes Burst actions from their total bullet count", () => {
+  it("counts Burst actions as bursts, one hit roll each", () => {
     const html = renderToStaticMarkup(
       <AimAndFireDialog
         {...shared}
@@ -26,7 +26,7 @@ describe("Aim & Fire review teaching", () => {
     );
 
     expect(html).toContain("2 bursts");
-    expect(html).toContain("6 bullets");
+    expect(html).not.toContain("bullets");
     expect(html).toContain("Add 2 bursts");
     expect(html).not.toContain("Shots <strong>2");
   });

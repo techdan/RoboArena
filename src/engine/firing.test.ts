@@ -6,6 +6,7 @@ import {
   calculateLiveFireScore,
   calculateLiveFireScoreBreakdown,
   distanceScoreAdjustment,
+  fireControlAccuracyAdjustment,
   resolveFire,
 } from "./firing.js";
 import type { Rng } from "./rng.js";
@@ -40,7 +41,6 @@ const baseContext = {
   shooterTile: { x: 0, y: 0 },
   shooterHeading: "E" as const,
   shooterAccuracy: 2 as const,
-  aimedTile: { x: 10, y: 0 },
   targetTile: { x: 10, y: 0 },
   targetPosture: "upright" as const,
   weapon: WEAPONS.rifle,
@@ -61,35 +61,42 @@ describe("live-fire score", () => {
         accuracy: 2,
         distance: 10,
         coverClass: 4,
-        targetTerrain: "open",
-        weapon: WEAPONS.rifle,
-        targetOnAimedTile: true,
+        targetInFrontArc: true,
       }),
     ).toBe(19);
   });
 
-  it("uses exact terrain additions", () => {
+  it("adds the fire-control term from the firing mode, not weapon or terrain", () => {
     const common = {
       accuracy: 0 as const,
       distance: 10,
       coverClass: 1 as const,
-      weapon: WEAPONS.rifle,
-      targetOnAimedTile: true,
+      targetInFrontArc: true,
     };
-    expect(calculateLiveFireScore({ ...common, targetTerrain: "rough" })).toBe(8);
-    expect(calculateLiveFireScore({ ...common, targetTerrain: "bush" })).toBe(5);
-    expect(calculateLiveFireScore({ ...common, targetTerrain: "low-wall" })).toBe(3);
+    expect(fireControlAccuracyAdjustment("aim")).toBe(4);
+    expect(fireControlAccuracyAdjustment("scan", 0)).toBe(4);
+    expect(fireControlAccuracyAdjustment("scan", 6)).toBe(2);
+    expect(fireControlAccuracyAdjustment("scan", 10)).toBe(-1);
+    expect(fireControlAccuracyAdjustment("scan", 18)).toBe(-6);
+    expect(fireControlAccuracyAdjustment("scan")).toBe(-6);
+    expect(calculateLiveFireScore(common)).toBe(10);
+    expect(
+      calculateLiveFireScore({
+        ...common,
+        fireMode: "scan",
+        scanStrength: 16,
+        scanMaxDistance: 10,
+      }),
+    ).toBe(5);
   });
 
-  it("halves the score when the target left the aimed tile", () => {
+  it("halves the score when the target is outside the front arc", () => {
     expect(
       calculateLiveFireScore({
         accuracy: 2,
         distance: 10,
         coverClass: 4,
-        targetTerrain: "open",
-        weapon: WEAPONS.rifle,
-        targetOnAimedTile: false,
+        targetInFrontArc: false,
       }),
     ).toBe(9);
   });
@@ -100,55 +107,51 @@ describe("live-fire score", () => {
         accuracy: 2,
         distance: 10,
         coverClass: 4,
-        targetTerrain: "open",
-        weapon: WEAPONS.rifle,
-        targetOnAimedTile: true,
+        targetInFrontArc: true,
         damageStaggered: true,
       }),
     ).toBe(9);
   });
 
-  it("uses the named Scan & Fire accuracy add and sight-strength bands", () => {
+  it("applies the Scan & Fire sight-strength bands", () => {
     const common = {
       accuracy: 0 as const,
       distance: 13,
       coverClass: 1 as const,
-      targetTerrain: "open" as const,
-      weapon: WEAPONS.rifle,
-      targetOnAimedTile: true,
+      targetInFrontArc: true,
       fireMode: "scan" as const,
+      scanMaxDistance: 6,
     };
-    expect(calculateLiveFireScore({ ...common, scanStrength: 16 })).toBe(9);
-    expect(calculateLiveFireScore({ ...common, scanStrength: 8 })).toBe(7);
-    expect(calculateLiveFireScore({ ...common, scanStrength: 4 })).toBe(5);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 16 })).toBe(4);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 8 })).toBe(2);
+    expect(calculateLiveFireScore({ ...common, scanStrength: 4 })).toBe(0);
   });
 
-  it("reconciles the documented Burst Scan explanation", () => {
+  it("reconciles a Burst Scan explanation", () => {
     const breakdown = calculateLiveFireScoreBreakdown({
       accuracy: 1,
       distance: 9,
       coverClass: 3,
-      targetTerrain: "open",
-      weapon: WEAPONS["burst-gun"],
-      targetOnAimedTile: true,
+      targetInFrontArc: true,
       fireMode: "scan",
       scanStrength: 7,
+      scanMaxDistance: 9,
     });
     expect(breakdown).toMatchObject({
       coverAdjustment: 12,
       distanceAccuracyAdjustment: 3,
-      weaponTerrainAdjustment: 4,
+      fireControlAdjustment: 0,
       scanPenalty: 2,
-      preClampSubtotal: 17,
-      clampedScore: 17,
-      finalScore: 17,
-      threshold: 208,
-      chancePercent: 81,
+      preClampSubtotal: 13,
+      clampedScore: 13,
+      finalScore: 13,
+      threshold: 144,
+      chancePercent: 56,
     });
     expect(
       breakdown.coverAdjustment +
         breakdown.distanceAccuracyAdjustment +
-        breakdown.weaponTerrainAdjustment -
+        breakdown.fireControlAdjustment -
         breakdown.scanPenalty,
     ).toBe(breakdown.preClampSubtotal);
   });
@@ -157,43 +160,40 @@ describe("live-fire score", () => {
     const accuracies = [0, 1, 2] as const;
     const distances = [2, 3, 6, 7, 12, 13] as const;
     const coverClasses = [1, 2, 3, 4] as const;
-    const terrains = ["open", "rough", "bush", "low-wall"] as const;
-    const weapons = [WEAPONS.rifle, WEAPONS["burst-gun"], WEAPONS["auto-rifle"]] as const;
+    const maxDistances = [0, 9, 18] as const;
     const modes = ["aim", "scan"] as const;
     const scanStrengths = [4, 8, 9, 16] as const;
 
     for (const accuracy of accuracies)
       for (const distance of distances)
         for (const coverClass of coverClasses)
-          for (const targetTerrain of terrains)
-            for (const weapon of weapons)
-              for (const fireMode of modes)
-                for (const scanStrength of scanStrengths)
-                  for (const damageStaggered of [false, true])
-                    for (const targetOnAimedTile of [false, true]) {
-                      const input = {
-                        accuracy,
-                        distance,
-                        coverClass,
-                        targetTerrain,
-                        weapon,
-                        fireMode,
-                        scanStrength,
-                        damageStaggered,
-                        targetOnAimedTile,
-                      } as const;
-                      const breakdown = calculateLiveFireScoreBreakdown(input);
-                      expect(breakdown.finalScore).toBe(calculateLiveFireScore(input));
-                      expect(
-                        breakdown.coverAdjustment +
-                          breakdown.distanceAccuracyAdjustment +
-                          breakdown.weaponTerrainAdjustment -
-                          breakdown.scanPenalty,
-                      ).toBe(breakdown.preClampSubtotal);
-                      expect(breakdown.threshold).toBe(
-                        LIVE_FIRE_HIT_THRESHOLDS[breakdown.finalScore],
-                      );
-                    }
+          for (const scanMaxDistance of maxDistances)
+            for (const fireMode of modes)
+              for (const scanStrength of scanStrengths)
+                for (const damageStaggered of [false, true])
+                  for (const targetInFrontArc of [false, true]) {
+                    const input = {
+                      accuracy,
+                      distance,
+                      coverClass,
+                      scanMaxDistance,
+                      fireMode,
+                      scanStrength,
+                      damageStaggered,
+                      targetInFrontArc,
+                    } as const;
+                    const breakdown = calculateLiveFireScoreBreakdown(input);
+                    expect(breakdown.finalScore).toBe(calculateLiveFireScore(input));
+                    expect(
+                      breakdown.coverAdjustment +
+                        breakdown.distanceAccuracyAdjustment +
+                        breakdown.fireControlAdjustment -
+                        breakdown.scanPenalty,
+                    ).toBe(breakdown.preClampSubtotal);
+                    expect(breakdown.threshold).toBe(
+                      LIVE_FIRE_HIT_THRESHOLDS[breakdown.finalScore],
+                    );
+                  }
   }, 15_000);
 
   it("shows clamp and integer-halving stages in resolver order", () => {
@@ -201,9 +201,7 @@ describe("live-fire score", () => {
       accuracy: 2,
       distance: 2,
       coverClass: 4,
-      targetTerrain: "open",
-      weapon: WEAPONS.rifle,
-      targetOnAimedTile: false,
+      targetInFrontArc: false,
       damageStaggered: true,
     });
     expect(breakdown.preClampSubtotal).toBeGreaterThan(19);
@@ -219,9 +217,7 @@ describe("live-fire score", () => {
         accuracy: 2,
         distance: 2,
         coverClass: 4,
-        targetTerrain: "open",
-        weapon: WEAPONS.rifle,
-        targetOnAimedTile: false,
+        targetInFrontArc: false,
         damageStaggered: true,
       }),
     ).toBe(breakdown.finalScore);
@@ -254,7 +250,6 @@ describe("resolveFire", () => {
     expect(
       resolveFire({
         ...baseContext,
-        aimedTile: { x: 18, y: 18 },
         targetTile: { x: 18, y: 18 },
         rng: sequenceRng(0),
       }),
@@ -266,7 +261,6 @@ describe("resolveFire", () => {
       resolveFire({
         ...baseContext,
         shooterHeading: "SE",
-        aimedTile: { x: 13, y: 13 },
         targetTile: { x: 13, y: 13 },
         rng: sequenceRng(0, 0),
       }).outcome,

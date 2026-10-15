@@ -6,7 +6,7 @@
  * presentation-only; ordinary visibility and Scan & Fire resolve as engine state.
  */
 
-import { TICKS_PER_SECOND } from "./constants.js";
+import { MISSILE_SCAN_MIN_DISTANCE, TICKS_PER_SECOND } from "./constants.js";
 import { WEAPONS } from "./catalog.js";
 import { resolveBlast } from "./blast.js";
 import { commandDurationTicks, moveStepDurationTicks, moveStepSize } from "./commandInterpreter.js";
@@ -84,7 +84,8 @@ interface ActiveCommand {
   readonly command: RobotCommandSegment;
   readonly completesAt: number;
   readonly moveIndex: number;
-  readonly intendedTargetId: string | null;
+  /** Aim & Fire shoots on the command's first tick (seg6:0x4C7F dispatch). */
+  readonly aimPending: boolean;
   readonly nextScanAt: number | null;
 }
 
@@ -311,7 +312,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
 
     let completesAt: number;
-    let intendedTargetId: string | null = null;
+    let aimPending = false;
     let nextScanAt: number | null = null;
     if (command.kind === "move") {
       if (
@@ -475,7 +476,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         );
       }
       completesAt = tick + (commandDurationTicks(command, robot, weapon.firingIntervalTicks) ?? 0);
-      intendedTargetId = findTargetAt(actor, command.target);
+      aimPending = true;
     }
 
     cursor.active = {
@@ -483,7 +484,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       command,
       completesAt,
       moveIndex: 0,
-      intendedTargetId,
+      aimPending,
       nextScanAt,
     };
     emit(tick, {
@@ -514,6 +515,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     readonly target?: RobotState & { readonly position: TileCoord };
     readonly fireMode: "aim" | "scan";
     readonly scanStrength?: number;
+    readonly scanMaxDistance?: number;
     readonly pendingDamage: PendingDamage[];
   }): number | "unlimited" => {
     const shooter = robots.get(input.actor.robotId);
@@ -642,15 +644,18 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         shooterTile: shooter.position,
         shooterHeading: shooter.scanHeading,
         shooterAccuracy: shooter.definition.accuracy,
-        aimedTile: input.targetTile,
         targetTile: input.target.position,
         targetPosture: input.target.posture,
         weapon: input.weapon,
         arenaTileAt: (coord) => tileAt(state.arena, coord),
         rng,
-        damageStaggered: shooter.damageStaggerActionsRemaining > 0,
+        // The original stores the stagger count on the program object and
+        // clears it at every command dispatch (seg6:0x4CDA) before any fire
+        // handler reads it, so it never halves a shot (RE §15).
+        damageStaggered: false,
         fireMode: input.fireMode,
         ...(input.scanStrength === undefined ? {} : { scanStrength: input.scanStrength }),
+        ...(input.scanMaxDistance === undefined ? {} : { scanMaxDistance: input.scanMaxDistance }),
       });
       if (result.outcome === "hit") {
         input.pendingDamage.push({
@@ -698,6 +703,40 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     return updatedShooter.ammo[input.weapon.id];
   };
 
+  /**
+   * Aim & Fire shoots on the first tick of its command, then the selector's
+   * duration elapses (seg6:0x49F8..0x4AE2 → 0x4C7F → 0x1DCE). The shot
+   * resolves against whichever enemy robot occupies the aimed tile at that
+   * moment (seg18:0x03C0); with none there, the shot is wasted.
+   */
+  const resolveAimStarts = (tick: number, pendingDamage: PendingDamage[]): void => {
+    for (const actor of actors) {
+      const cursor = cursors.get(actor.robotId);
+      const active = cursor?.active;
+      if (!cursor || !active || !active.aimPending || active.command.kind !== "aim-and-fire") {
+        continue;
+      }
+      cursor.active = { ...active, aimPending: false };
+      const command = active.command;
+      const targetId = findTargetAt(actor, command.target);
+      const targetRobot = targetId ? robots.get(targetId) : undefined;
+      const target =
+        targetRobot && isTileCoord(targetRobot.position)
+          ? { ...targetRobot, position: targetRobot.position }
+          : undefined;
+      resolveFiringAction({
+        actor,
+        commandIndex: active.commandIndex,
+        tick,
+        weapon: WEAPONS[command.weapon],
+        targetTile: command.target,
+        ...(target === undefined ? {} : { target }),
+        fireMode: "aim",
+        pendingDamage,
+      });
+    }
+  };
+
   const resolveScanOpportunities = (tick: number, pendingDamage: PendingDamage[]): void => {
     for (const actor of actors) {
       const cursor = cursors.get(actor.robotId);
@@ -725,7 +764,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         }),
         maxDistance: Math.min(active.command.maxDistance, weapon.maxRange),
       });
-      if (!acquired) {
+      // Missile Scan & Fire holds fire while its best target is too close.
+      if (
+        !acquired ||
+        (weapon.id === "missile-launcher" && acquired.distance < MISSILE_SCAN_MIN_DISTANCE)
+      ) {
         cursor.active = { ...active, nextScanAt: tick + 1 };
         continue;
       }
@@ -744,6 +787,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         target: acquired.robot,
         fireMode: "scan",
         scanStrength: acquired.scanStrength,
+        scanMaxDistance: active.command.maxDistance,
         pendingDamage,
       });
       if (remainingAmmo === 0) {
@@ -853,6 +897,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
   updateVisibility(0);
   const initialScanDamage: PendingDamage[] = [];
+  resolveAimStarts(0, initialScanDamage);
   resolveScanOpportunities(0, initialScanDamage);
   applyPendingDamageAndDeaths(0, initialScanDamage);
   updateVisibility(0);
@@ -860,6 +905,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     const error = startAvailableCommand(actor, 0);
     if (error) return error;
   }
+  const lateStartDamage: PendingDamage[] = [];
+  resolveAimStarts(0, lateStartDamage);
+  applyPendingDamageAndDeaths(0, lateStartDamage);
+  if (lateStartDamage.length > 0) updateVisibility(0);
 
   for (let tick = 1; tick <= turnDuration; tick += 1) {
     const due = actors.flatMap((actor) => {
@@ -957,28 +1006,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     const pendingDamage: PendingDamage[] = [];
     for (const { actor, active } of due) {
       if (active.command.kind !== "aim-and-fire") continue;
-      const command = active.command;
       const cursor = cursors.get(actor.robotId);
-      if (!cursor) continue;
-      const weapon = WEAPONS[command.weapon];
-      const intendedTarget = active.intendedTargetId
-        ? robots.get(active.intendedTargetId)
-        : undefined;
-      const target =
-        intendedTarget && isTileCoord(intendedTarget.position)
-          ? { ...intendedTarget, position: intendedTarget.position }
-          : undefined;
-      const remainingAmmo = resolveFiringAction({
-        actor,
-        commandIndex: active.commandIndex,
-        tick,
-        weapon,
-        targetTile: command.target,
-        ...(target === undefined ? {} : { target }),
-        fireMode: "aim",
-        pendingDamage,
-      });
-      if (command.repeat && remainingAmmo === 0) cursor.nextIndex += 1;
+      if (cursor?.active !== active) continue;
+      const ammo = robots.get(actor.robotId)?.ammo[active.command.weapon];
+      if (active.command.repeat && ammo === 0) cursor.nextIndex += 1;
       finishActive(cursor);
     }
 
@@ -999,6 +1030,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         if (error) return error;
       }
       const postStartScanDamage: PendingDamage[] = [];
+      resolveAimStarts(tick, postStartScanDamage);
       resolveScanOpportunities(tick, postStartScanDamage);
       applyPendingDamageAndDeaths(tick, postStartScanDamage);
       if (postStartScanDamage.length > 0) updateVisibility(tick);

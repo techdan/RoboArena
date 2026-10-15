@@ -7,14 +7,14 @@ export interface LiveFireScoreBreakdown {
   readonly fireMode: "aim" | "scan";
   readonly coverAdjustment: number;
   readonly distanceAccuracyAdjustment: number;
-  readonly weaponTerrainAdjustment: number;
+  readonly fireControlAdjustment: number;
   readonly scanStrength: number;
   readonly scanPenalty: number;
   readonly preClampSubtotal: number;
   readonly clampedScore: number;
   readonly damageStaggered: boolean;
   readonly scoreAfterDamageStagger: number;
-  readonly targetOnAimedTile: boolean;
+  readonly targetInFrontArc: boolean;
   readonly finalScore: number;
   readonly threshold: number;
   readonly chancePercent: number;
@@ -41,21 +41,21 @@ export const calculateLiveFireBreakdownFromFactors = (input: {
   readonly fireMode: "aim" | "scan";
   readonly coverAdjustment: number;
   readonly distanceAccuracyAdjustment: number;
-  readonly weaponTerrainAdjustment: number;
+  readonly fireControlAdjustment: number;
   readonly scanStrength: number;
   readonly damageStaggered: boolean;
-  readonly targetOnAimedTile: boolean;
+  readonly targetInFrontArc: boolean;
   readonly hitThresholds: readonly number[];
 }): LiveFireScoreBreakdown => {
   const scanPenalty = input.scanStrength <= 4 ? 4 : input.scanStrength <= 8 ? 2 : 0;
   const preClampSubtotal =
     input.coverAdjustment +
     input.distanceAccuracyAdjustment +
-    input.weaponTerrainAdjustment -
+    input.fireControlAdjustment -
     scanPenalty;
   const clampedScore = Math.max(0, Math.min(19, preClampSubtotal));
   const scoreAfterDamageStagger = input.damageStaggered ? clampedScore >> 1 : clampedScore;
-  const finalScore = input.targetOnAimedTile
+  const finalScore = input.targetInFrontArc
     ? scoreAfterDamageStagger
     : scoreAfterDamageStagger >> 1;
   const threshold = input.hitThresholds[finalScore] ?? 0;
@@ -63,14 +63,14 @@ export const calculateLiveFireBreakdownFromFactors = (input: {
     fireMode: input.fireMode,
     coverAdjustment: input.coverAdjustment,
     distanceAccuracyAdjustment: input.distanceAccuracyAdjustment,
-    weaponTerrainAdjustment: input.weaponTerrainAdjustment,
+    fireControlAdjustment: input.fireControlAdjustment,
     scanStrength: input.scanStrength,
     scanPenalty,
     preClampSubtotal,
     clampedScore,
     damageStaggered: input.damageStaggered,
     scoreAfterDamageStagger,
-    targetOnAimedTile: input.targetOnAimedTile,
+    targetInFrontArc: input.targetInFrontArc,
     finalScore,
     threshold,
     chancePercent: Math.round((threshold / 256) * 100),

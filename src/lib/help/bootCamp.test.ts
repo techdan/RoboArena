@@ -107,7 +107,7 @@ describe("Boot Camp squad stats", () => {
       expect(stats.range).toBe(weapon.maxRange);
       expect(stats.ammo).toBe(weapon.startingAmmo);
     }
-    expect(byClass("burst").damagePerTrigger).toEqual({ min: 24, max: 69 });
+    expect(byClass("burst").damagePerTrigger).toEqual({ min: 8, max: 23 });
     expect(byClass("missile").secondaryWeaponNames).toEqual([WEAPONS.rifle.displayName]);
   });
 
@@ -131,7 +131,7 @@ describe("Boot Camp squad stats", () => {
     const least = <K extends keyof (typeof SQUAD_STATS)[number]>(key: K) =>
       [...SQUAD_STATS].sort((a, b) => Number(a[key]) - Number(b[key]))[0]!.robotClass;
     expect(most("armor")).toBe("rifle");
-    expect(most("peakDamagePerSecond")).toBe("burst");
+    expect(most("peakDamagePerSecond")).toBe("missile");
     expect(least("peakDamagePerSecond")).toBe("rifle");
     expect(least("aimIntervalTicks")).toBe("auto");
     expect(least("accuracyTier")).toBe("auto");
@@ -269,31 +269,27 @@ describe("Boot Camp browser-safe engine mirrors", () => {
     }
   });
 
-  it("matches the engine live-fire chance for every class, distance, cover, terrain, and mode", () => {
-    const terrains = ["open", "rough", "bush", "low-wall"] as const;
+  it("matches the engine live-fire chance for every class, distance, cover, mode, and scan distance", () => {
     for (const robotClass of V1_CLASSES) {
       const robot = ROBOT_DEFINITIONS[robotClass];
-      const primary = WEAPONS[robot.primaryWeapon];
-      const weapon = primary.damageRoll === undefined ? WEAPONS.rifle : primary;
       for (const fireMode of ["aim", "scan"] as const) {
         for (const coverClass of [1, 2, 3, 4] as const) {
-          for (const targetTerrain of terrains) {
+          for (const scanMaxDistance of [4, 10, 18] as const) {
             for (let distance = 0; distance <= WEAPONS.rifle.maxRange; distance += 1) {
               const engine = calculateLiveFireScoreBreakdown({
                 accuracy: robot.accuracy,
                 distance,
                 coverClass,
-                targetTerrain,
-                weapon,
-                targetOnAimedTile: true,
+                targetInFrontArc: true,
                 fireMode,
+                scanMaxDistance,
               }).chancePercent;
               const mirrored = hitChancePercent({
                 robotClass,
                 distance,
                 coverClass,
                 fireMode,
-                targetTerrain,
+                scanMaxDistance,
               });
               expect(mirrored).toBe(engine);
             }

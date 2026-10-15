@@ -70,8 +70,8 @@ describe("weapon catalog", () => {
     for (const weapon of Object.values(WEAPONS)) expect(weapon.maxRange).toBe(18);
   });
 
-  it("keeps burst at three bullets per click", () => {
-    expect(WEAPONS["burst-gun"].bulletsPerClick).toBe(3);
+  it("rolls a Burst action once, like every direct-fire action (seg6:0x1DCE)", () => {
+    for (const weapon of Object.values(WEAPONS)) expect(weapon.bulletsPerClick).toBe(1);
   });
 
   it("uses fixed, integer fire costs", () => {
@@ -81,32 +81,23 @@ describe("weapon catalog", () => {
     }
   });
 
-  it("maps named Aim & Fire and Scan & Fire selector timing", () => {
-    expect(WEAPONS.rifle).toMatchObject({
-      firingIntervalTicks: 30,
-      scanFiringIntervalTicks: 30,
-      accuracyAddIndex: 0,
-      scanAccuracyAddIndex: 1,
-    });
+  it("maps Aim durations and the Scan & Fire re-fire delay (seg6:0x3D79/0x3F43/0x3FA4)", () => {
+    expect(WEAPONS.rifle).toMatchObject({ firingIntervalTicks: 30, scanFiringIntervalTicks: 30 });
     expect(WEAPONS["burst-gun"]).toMatchObject({
       firingIntervalTicks: 15,
-      scanFiringIntervalTicks: 20,
-      accuracyAddIndex: 3,
-      scanAccuracyAddIndex: 4,
+      scanFiringIntervalTicks: 15,
     });
     expect(WEAPONS["auto-rifle"]).toMatchObject({
       firingIntervalTicks: 10,
       scanFiringIntervalTicks: 10,
-      accuracyAddIndex: 6,
-      scanAccuracyAddIndex: 7,
     });
     expect(WEAPONS["missile-launcher"]).toMatchObject({
       firingIntervalTicks: 30,
-      scanFiringIntervalTicks: 20,
+      scanFiringIntervalTicks: 70,
     });
     expect(WEAPONS["grenade-launcher"]).toMatchObject({
       firingIntervalTicks: 30,
-      scanFiringIntervalTicks: 20,
+      scanFiringIntervalTicks: 80,
     });
   });
 

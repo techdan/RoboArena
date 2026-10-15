@@ -11,14 +11,11 @@ export interface FireActionCount {
 const counted = (count: number, singular: string, plural = `${singular}s`): string =>
   `${count} ${count === 1 ? singular : plural}`;
 
-/** Labels firing actions accurately: a Burst action launches three independent bullets. */
+/** Labels firing actions. A Burst action is one hit roll and one damage roll. */
 export const fireActionCount = (weapon: WeaponId, actions: number): FireActionCount => {
   const weaponData = WEAPON_CATALOG_DATA[weapon];
   if (weaponData.kind === "burst") {
-    return {
-      primary: counted(actions, "burst", "bursts"),
-      projectiles: counted(actions * weaponData.bulletsPerClick, "bullet"),
-    };
+    return { primary: counted(actions, "burst", "bursts"), projectiles: null };
   }
   if (weapon === "missile-launcher") {
     return { primary: counted(actions, "missile"), projectiles: null };

@@ -101,10 +101,6 @@ export interface WeaponDefinition {
   readonly startingAmmo: number | "unlimited";
   /** Direct-fire base + (random & mask), before cover/distance adjustments. */
   readonly damageRoll?: RandomMaskRoll;
-  /** Aim & Fire selector index into the exact 0x1596 add table. */
-  readonly accuracyAddIndex?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
-  /** Scan & Fire selector index into the exact 0x1596 add table. */
-  readonly scanAccuracyAddIndex?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** For explosives: blast radius and per-radius damage curve. */
   readonly blast?: {
     readonly radius: number;

@@ -3,16 +3,19 @@
 import {
   COVER_CLASS_BULLET_DAMAGE_ADJUST,
   COVER_CLASS_HIT_SCORE,
+  fireControlAccuracyAdjustment,
   LIVE_FIRE_HIT_THRESHOLDS,
-  WEAPON_ACCURACY_ADDS,
   WEAPON_MAX_RANGE,
   WEAPON_TIMING,
 } from "../engine/constants";
 import { WEAPON_CATALOG_DATA } from "../engine/catalogData";
 import {
   floorEuclideanDistance as floorDistance,
+  isWithinFrontArc,
+  scanRankPenalty,
+  scanSightStrength,
+  sightWalkTiles,
   targetCoverSamples,
-  tilesAlongLineExclusive as lineExclusive,
 } from "../engine/geometry";
 import {
   calculateDirectDamageRangeFromFactors,
@@ -83,7 +86,6 @@ export interface HitEstimate {
   readonly threshold: number;
   readonly chancePercent: number;
   readonly breakdown: LiveFireScoreBreakdown;
-  readonly offTileBreakdown: LiveFireScoreBreakdown | null;
   readonly damageRange: DirectDamageRange | null;
 }
 
@@ -114,7 +116,8 @@ export interface AimPreview {
   readonly resolution: "direct-hit-roll" | "blast";
   readonly fireMode: "aim" | "scan";
   readonly scanStrength: number;
-  readonly onConeBoundary: boolean;
+  /** Scan & Fire ranks this tile at distance +2 (outside the 90° front arc). */
+  readonly scanRankPenalized: boolean;
   readonly estimates: readonly HitEstimate[];
   readonly stoppedAt?: TileCoord;
 }
@@ -159,24 +162,7 @@ export const isTileInScanGate = (from: TileCoord, heading: Heading, target: Tile
   return headingX * (target.x - from.x) + headingY * (target.y - from.y) >= 0;
 };
 
-const isOnScanGateBoundary = (from: TileCoord, heading: Heading, target: TileCoord): boolean => {
-  if (from.x === target.x && from.y === target.y) return false;
-  const [headingX, headingY] = HEADING_VECTORS[heading];
-  return headingX * (target.x - from.x) + headingY * (target.y - from.y) === 0;
-};
-
 const terrainAt = (arena: Arena, tile: TileCoord) => arena.tiles[tile.y]?.[tile.x]?.terrain;
-
-const previewScanSightStrength = (arena: Arena, from: TileCoord, to: TileCoord): number => {
-  if (from.x === to.x && from.y === to.y) return 16;
-  let strength = 16;
-  for (const tile of [from, ...lineExclusive(from, to), to]) {
-    const terrain = terrainAt(arena, tile);
-    if (terrain === undefined || terrain === "wall" || terrain === "outer-wall") return 0;
-    if (terrain === "low-wall" || terrain === "bush") strength = Math.max(0, strength - 3);
-  }
-  return strength;
-};
 
 const coverAt = (
   arena: Arena,
@@ -222,13 +208,14 @@ const coverAt = (
 const estimate = (
   arena: Arena,
   from: TileCoord,
+  heading: Heading,
   target: TileCoord,
   posture: Posture,
   accuracy: AccuracyTier,
   weapon: WeaponId,
-  damageStaggered: boolean,
   fireMode: "aim" | "scan",
   scanStrength: number,
+  maxDistance: number,
 ): HitEstimate => {
   const distance = floorDistance(from, target);
   const { coverClass, coverSource } = coverAt(arena, from, target, posture);
@@ -239,35 +226,17 @@ const estimate = (
     maxRange: WEAPON_MAX_RANGE,
   } as const;
   const targetTerrain = terrainAt(arena, target) ?? "open";
-  const accuracyIndex =
-    fireMode === "scan"
-      ? (weaponDefinition.scanAccuracyAddIndex ?? weaponDefinition.accuracyAddIndex ?? 0)
-      : (weaponDefinition.accuracyAddIndex ?? 0);
-  const weaponTerrainAdjustment =
-    targetTerrain === "rough"
-      ? 2
-      : targetTerrain === "bush"
-        ? -1
-        : targetTerrain === "low-wall"
-          ? -3
-          : (WEAPON_ACCURACY_ADDS[accuracyIndex] ?? 0);
-  const breakdownInput = {
+  const breakdown = calculateLiveFireBreakdownFromFactors({
     fireMode,
     coverAdjustment: COVER_CLASS_HIT_SCORE[coverClass],
     distanceAccuracyAdjustment: distanceScoreAdjustment(distance, accuracy + 4),
-    weaponTerrainAdjustment,
+    fireControlAdjustment: fireControlAccuracyAdjustment(fireMode, maxDistance),
     scanStrength: fireMode === "scan" ? scanStrength : 16,
-    damageStaggered,
+    // Damage stagger never reaches a shot in the original (RE §15).
+    damageStaggered: false,
+    targetInFrontArc: isWithinFrontArc(from, heading, target),
     hitThresholds: LIVE_FIRE_HIT_THRESHOLDS,
-  } as const;
-  const breakdown = calculateLiveFireBreakdownFromFactors({
-    ...breakdownInput,
-    targetOnAimedTile: true,
   });
-  const offTileBreakdown =
-    fireMode === "aim"
-      ? calculateLiveFireBreakdownFromFactors({ ...breakdownInput, targetOnAimedTile: false })
-      : null;
   const damageRoll = weaponDefinition.damageRoll;
   const damageRange =
     damageRoll === undefined
@@ -288,7 +257,6 @@ const estimate = (
     threshold: breakdown.threshold,
     chancePercent: breakdown.chancePercent,
     breakdown,
-    offTileBreakdown,
     damageRange,
   };
 };
@@ -316,7 +284,7 @@ export const previewAim = (input: {
       resolution,
       fireMode,
       scanStrength: 0,
-      onConeBoundary: false,
+      scanRankPenalized: false,
       estimates: [],
     };
   const distance = floorDistance(position, input.target);
@@ -324,20 +292,9 @@ export const previewAim = (input: {
     PLANNER_WEAPON_RANGE[input.weapon],
     input.maxDistance ?? PLANNER_WEAPON_RANGE[input.weapon],
   );
-  const onConeBoundary = isOnScanGateBoundary(position, input.shooter.scanHeading, input.target);
-  if (distance > maxDistance)
-    return {
-      status: "out-of-range",
-      distance,
-      target: input.target,
-      weapon: input.weapon,
-      authorizedContact: null,
-      resolution,
-      fireMode,
-      scanStrength: 0,
-      onConeBoundary,
-      estimates: [],
-    };
+  const scanRankPenalized =
+    scanRankPenalty(position, input.shooter.scanHeading, input.target) === 2;
+  // Original validator order: cone, sight, then range (seg76:0x0775..0x081C).
   if (!isTileInScanGate(position, input.shooter.scanHeading, input.target))
     return {
       status: "angle-blocked",
@@ -348,16 +305,15 @@ export const previewAim = (input: {
       resolution,
       fireMode,
       scanStrength: 0,
-      onConeBoundary,
+      scanRankPenalized,
       estimates: [],
     };
-  const scanStrength =
-    fireMode === "scan" ? previewScanSightStrength(input.arena, position, input.target) : 16;
-  const stoppedAt = [...lineExclusive(position, input.target), input.target].find((tile) => {
-    const terrain = terrainAt(input.arena, tile);
-    return terrain === "wall" || terrain === "outer-wall";
-  });
-  if (stoppedAt !== undefined || scanStrength === 0)
+  const sightStrength = scanSightStrength(input.arena, position, input.target);
+  if (sightStrength === 0) {
+    const stoppedAt = sightWalkTiles(position, input.target).find((tile) => {
+      const terrain = terrainAt(input.arena, tile);
+      return terrain === undefined || terrain === "wall" || terrain === "outer-wall";
+    });
     return {
       status: "sight-blocked",
       distance,
@@ -366,11 +322,26 @@ export const previewAim = (input: {
       authorizedContact: null,
       resolution,
       fireMode,
-      scanStrength,
-      onConeBoundary,
+      scanStrength: 0,
+      scanRankPenalized,
       estimates: [],
       ...(stoppedAt === undefined ? {} : { stoppedAt }),
     };
+  }
+  if (distance > maxDistance)
+    return {
+      status: "out-of-range",
+      distance,
+      target: input.target,
+      weapon: input.weapon,
+      authorizedContact: null,
+      resolution,
+      fireMode,
+      scanStrength: 0,
+      scanRankPenalized,
+      estimates: [],
+    };
+  const scanStrength = fireMode === "scan" ? sightStrength : 16;
   const contact =
     input.authorizedContacts.find(
       (candidate) => candidate.tile.x === input.target.x && candidate.tile.y === input.target.y,
@@ -388,7 +359,7 @@ export const previewAim = (input: {
     resolution,
     fireMode,
     scanStrength,
-    onConeBoundary,
+    scanRankPenalized,
     estimates:
       resolution === "blast"
         ? []
@@ -396,13 +367,14 @@ export const previewAim = (input: {
             estimate(
               input.arena,
               position,
+              input.shooter.scanHeading,
               input.target,
               posture,
               input.shooter.definition.accuracy,
               input.weapon,
-              input.shooter.damageStaggerActionsRemaining > 0,
               fireMode,
               scanStrength,
+              maxDistance,
             ),
           ),
   };
