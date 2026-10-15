@@ -25,7 +25,11 @@ import type {
   WeaponId,
 } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
-import type { MovieSnapshot, MovieTimeline } from "../renderer/animations";
+import {
+  projectileFlightSeconds,
+  type MovieSnapshot,
+  type MovieTimeline,
+} from "../renderer/animations";
 import { planMovement } from "../renderer/motion";
 import { buildArena, type ArenaBuild } from "./ArenaBuilder";
 import { PlannerOverlays3D } from "./PlannerOverlays3D";
@@ -564,12 +568,15 @@ export class BattleScene3D {
     for (const event of events) {
       if (event.kind !== "projectile-launched") continue;
       const tiles = Math.hypot(event.target.x - event.from.x, event.target.y - event.from.y);
+      // A projectile that lands on a later tick (rules revision 4) flies until
+      // then; its impact event plays on arrival with no further delay.
       const seconds =
-        event.weapon === "missile-launcher"
+        projectileFlightSeconds(this.timeline.projectileImpactTicks, event) ??
+        (event.weapon === "missile-launcher"
           ? missileFlightSeconds(tiles)
           : event.weapon === "grenade-launcher"
             ? grenadeFlightSeconds(tiles)
-            : tracerFlightSeconds(tiles);
+            : tracerFlightSeconds(tiles));
       launches.set(event.projectileId, secs(seconds));
       flightByShot.set(`${event.shooterId}#${event.shotIndex}`, secs(seconds));
     }

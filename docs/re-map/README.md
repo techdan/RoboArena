@@ -34,6 +34,16 @@ python3 tools/re/export_data.py ROBOWIN docs/extracted/robosport-data.json src/l
 | [setup.md](setup.md) | Quick Start roster table, formation weapons and flags, game lengths, Campaign, game-options struct, turn and clock limits, point-buy rating |
 | [stealth-fence-ceremony-ai-formats.md](stealth-fence-ceremony-ai-formats.md) | The visibility spotting roll and Stealth rule, Fence, ceremony counters, AI brain structure, TWN/PRS container format and chunk inventory |
 | [resources.md](resources.md) | Index of all string blocks, dialogs and menus |
+| [timing.md](timing.md) | The movie step loop, projectile queue, flight times, scatter, cooldowns, spotting refresh, Scan & Fire sight cache and delayed death |
+
+## Original timing (rules revision 4)
+
+[timing.md](timing.md) maps the original combat timing: the 5-tick movie
+loop (`seg6:0x47DE`), the projectile queue (`seg6:0x556F`), bullet, missile
+and grenade flight, the shared fire cooldown and seven-shot pause, the
+spotting refresh and activity flags, the step-only Scan & Fire sight cache
+and delayed death. RoboArena implements it as rules revision 4
+(`ORIGINAL_TIMING_RULES_REVISION`); `docs/spec.md` documents the rules.
 
 ## Extraction list
 

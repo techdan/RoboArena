@@ -716,13 +716,56 @@ exact on-screen travel duration is presentation tuning, not an unresolved
 business-rule gate. Scan & Fire uses the same fire-boundary result authority.
 
 Strict impact timing is a separate product decision from result locking. The
-current MVP rule above is fire-boundary state mutation. A proposed fidelity
-upgrade would store the already-rolled result as an immutable pending impact,
-apply it at a deterministic impact tick, and drive the projectile animation
-from the same event. Do not introduce impact-time rerolls, tracking, or renderer
-authority under either model. Exact original projectile travel ticks remain
-unverified, so adopting strict timing also requires either a focused trace or
-explicit RoboArena travel constants.
+fire-boundary state mutation above remains the rule for matches on rules
+revisions 3 and earlier. Rules revision 4 adopts the original timing below.
+Neither model rerolls at impact or lets the renderer decide anything.
+
+### Rules revision 4: original combat timing
+
+Rules revision 4 (`ORIGINAL_TIMING_RULES_REVISION`) keeps revision 3 and
+replays the original movie loop (`seg6:0x47DE..0x4853`). The findings, with
+addresses and confidence tags, are in `docs/re-map/timing.md`. New matches
+still start on revision 3.
+
+**The step loop.** Time advances in 5-tick steps from tick 0. Each step:
+
+1. dispatches every robot in global (Home-slot, roster) order
+   (`seg6:0x4892` → `seg6:0x4998`): a finished command applies its end state
+   and the next one starts on the same step, then the active command's handler
+   runs (fire, scan, zap, mid-move tile switch);
+2. checks Time Bombs (`seg6:0x50D3`);
+3. lands every projectile due by now (`seg6:0x556F`);
+4. runs the spotting pass (`seg6:0x5898`).
+
+A robot moving one tile occupies its destination 15 ticks into the step; a
+two-tile step occupies the floored midpoint at 15 and the destination at 25
+(`seg6:0x2D59`, `seg6:0x2E04`).
+
+**Projectiles.** Every shot is a queued projectile with an impact tick. The
+queue is sorted by impact tick and a new projectile goes before others due on
+the same tick, so equal impacts land newest first (`seg6:0x1AD3`). Because
+step 1 runs before step 3, every robot acts on a step before that step's
+impacts land.
+
+- **Bullets** (Rifle, Burst Gun, Auto Rifle): hit and damage are rolled when
+  the shot fires and land 5 ticks later (`seg6:0x3D2B`) on the robot it was
+  fired at, wherever that robot is then. An Aim & Fire at a tile with no live
+  enemy is a miss.
+- **Damage is cut to the armor the target has left** (`seg6:0x5B09`). A robot
+  already destroyed takes nothing from later impacts; the shooter's own death
+  does not stop a shot in flight.
+- **Zap** lands 5 ticks after it fires and **Self Destruct** 10 ticks after it
+  starts, through the same queue.
+- Each damaged robot draws the stagger roll `(rand & 3) + 1` right after its
+  damage, as part of the same impact (`seg6:0x4060`). The value is never read.
+- Blasts and zaps roll each robot's damage in global order, applying it and
+  drawing its stagger roll before the next robot (`seg6:0x5D73`,
+  `seg6:0x602B`).
+
+Events keep their split: `fired` and `projectile-launched` on the fire tick,
+`projectile-impacted`, `shot-missed` and `damaged` on the impact tick. A
+`damaged` event carries the damage actually taken. The movie flies each
+projectile until its impact tick.
 
 ---
 

@@ -111,6 +111,13 @@ export const MOVE_DOUBLE_DESTINATION_SWITCH_TICKS = 25;
 /** The original simulation advances in 5-tick steps (seg6:0x4838..0x483E). */
 export const SIMULATION_STEP_TICKS = 5;
 
+/**
+ * Revision 4: a bullet (projectile type 4) is created with impact time
+ * `now + 5` (seg6:0x3D2B..0x3D32) and lands in the queue pass of a later step
+ * (seg6:0x556F, bullet branch seg6:0x56CD).
+ */
+export const BULLET_IMPACT_DELAY_TICKS = 5;
+
 // ──────────────────────────────────────────────────────────────────────────
 // Spotting (re-map/stealth-fence-ceremony-ai-formats.md §1)
 

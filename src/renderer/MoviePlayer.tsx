@@ -483,6 +483,7 @@ export function MoviePlayer({
           reducedMotion: reducedMotionRef.current,
           speed: speedRef.current,
           reset: !advanced,
+          projectileImpactTicks: timeline.projectileImpactTicks,
         });
 
         // A jump lands on a tick whose reactions never played, so clear any
