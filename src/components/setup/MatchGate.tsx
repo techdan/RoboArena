@@ -315,6 +315,7 @@ export function MatchGate({ matchId }: { readonly matchId: string }) {
               roomCode={state.roomCode}
               selfPlayerId={snapshot.selfPlayerId}
               match={match}
+              arenaTheme={snapshot.arenaTheme}
               serverOrders={snapshot.ownOrders}
               serverRevision={snapshot.revision}
               syncing={busy}
