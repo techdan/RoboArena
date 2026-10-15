@@ -761,6 +761,33 @@ first step at or after turn length with no projectile in flight and no
 command running except Scan & Fire or Zap: after that nothing can change. The
 `turn-end` event is on the last step processed.
 
+**Spotting flags.** Each step's spotting pass reads two flags per robot,
+written during that step and cleared after the pass (`seg96:0x02C5`). The
+activity code keeps the last value written (`seg96:0x0366`):
+
+- **3** when a Scan & Fire shot or a zap goes off (`seg6:0x20B6`,
+  `seg6:0x251E`, `seg6:0x29F3`, `seg6:0x2C93`). Aim & Fire writes no 3, so an
+  Aim & Fire shot does not reveal the shooter outright.
+- **2** from the periodic refresh (`seg6:0x4091`): before turn length, when
+  the robot's refresh timer is due, the timer is redrawn `30 + 5·(r&15)`
+  ticks ahead. Scan & Fire and Zap run it first thing on every step, and it is
+  always due there because dispatch has just reset the timer, so they draw
+  once and write 2 every step. A robot with no orders left runs it from the
+  idle path: first on the step after its orders ran out (or at ticks 0 and 5
+  with no orders), then every 30 to 105 ticks. Moves, Aim & Fire, posture,
+  heading, deploy, bomb and Self Destruct never refresh.
+- **1** when a record ends (`seg6:0x4F34`, `seg6:0x502B`): every record except
+  Scan & Fire and Zap, so a move gives 1 at the end of each step and a turn
+  or posture change at the end of each record, not while it runs.
+
+The moved flag is set when a moving robot switches its occupied tile
+(`seg6:0x2DEB`, `seg6:0x2EB6`) and when a move step or deploy ends
+(`seg6:0x4FB4..0x500A`); at turn start every robot is moved and every Team
+dirty (`seg96:0x0267`). A Team is dirty when any of its robots has a flag.
+The refresh draw comes at the robot's place in dispatch order, before any
+other draw its handler makes. With Show Enemy Positions the pass still runs
+and draws its rolls before every enemy is marked seen again (**inferred**).
+
 **Projectiles.** Every shot is a queued projectile with an impact tick. The
 queue is sorted by impact tick and a new projectile goes before others due on
 the same tick, so equal impacts land newest first (`seg6:0x1AD3`). Because

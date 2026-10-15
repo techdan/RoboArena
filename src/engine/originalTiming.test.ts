@@ -796,3 +796,126 @@ describe("Scan & Fire seven-shot pause and shared cooldown (seg6:0x3D79, seg6:0x
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });
+
+describe("spotting refresh and activity flags (seg6:0x4091, seg6:0x4F34, seg96:0x0366)", () => {
+  const ofTeam = (events: readonly ResolutionEvent[], teamId: string, enemyId: string) =>
+    ofKind(events, "enemy-spotted")
+      .filter((event) => event.teamId === teamId && event.enemyId === enemyId)
+      .map((event) => event.tick);
+  const withRevision = (state: MatchState, rulesRevision: 3 | 4): MatchState => ({
+    ...state,
+    config: { ...state.config, rulesRevision },
+  });
+
+  it("lets idle robots keep rolling on their periodic refresh", () => {
+    // b crouches on a Low Wall 4 tiles in front of a: index 2 (16/256) a roll.
+    const idle = (rulesRevision: 3 | 4) =>
+      withRevision(
+        revision4(
+          makeMatch({
+            arena: withTerrain(makeOpenArena(12, 12), [[6, 5, "low-wall"]]),
+            turnLengthSeconds: 40,
+            teamOneRobots: [makeRobot("a", "team-1", "rifle", { x: 2, y: 5 })],
+            teamTwoRobots: [
+              makeRobot("b", "team-2", "rifle", { x: 6, y: 5 }, { posture: "crouching" }),
+            ],
+          }),
+        ),
+        rulesRevision,
+      );
+    const orders: TurnOrders = { turnNumber: 1, timelines: [] };
+    // Revision 3 rolls once, at turn start; revision 4 keeps rolling.
+    expect(ofTeam(resolved(idle(3), orders, "a").events, "team-1", "b")).toEqual([]);
+    const [spottedAt] = ofTeam(resolved(idle(4), orders, "a").events, "team-1", "b");
+    expect(spottedAt).toBeGreaterThan(0);
+  });
+
+  describe("only a scan shot reveals the shooter outright (seg6:0x20B6)", () => {
+    // a can never spot b by roll: index 0 at distance 28 behind a Low Wall.
+    // c stands in front of b, facing away from it.
+    const sniper = (rulesRevision: 3 | 4) =>
+      withRevision(
+        revision4(
+          makeMatch({
+            arena: withTerrain(makeOpenArena(32, 12), [[29, 5, "low-wall"]]),
+            teamOneRobots: [
+              makeRobot("a", "team-1", "rifle", { x: 1, y: 5 }),
+              makeRobot("c", "team-1", "rifle", { x: 27, y: 5 }, { scanHeading: "W" }),
+            ],
+            teamTwoRobots: [
+              makeRobot(
+                "b",
+                "team-2",
+                "rifle",
+                { x: 29, y: 5 },
+                {
+                  posture: "crouching",
+                  scanHeading: "W",
+                },
+              ),
+            ],
+          }),
+        ),
+        rulesRevision,
+      );
+    const aimOrders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [{ robotId: "b", segments: [aim({ x: 27, y: 5 })] }],
+    };
+
+    it("Aim & Fire writes no activity 3, so b stays hidden", () => {
+      const events = resolved(sniper(4), aimOrders).events;
+      expect(ofKind(events, "fired").map((event) => event.tick)).toEqual([0]);
+      expect(ofTeam(events, "team-1", "b")).toEqual([]);
+    });
+
+    it("Scan & Fire reveals b on the step it fires", () => {
+      const orders: TurnOrders = {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: "b",
+            segments: [{ kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 2 }],
+          },
+        ],
+      };
+      const events = resolved(sniper(4), orders).events;
+      const [firstShot] = ofKind(events, "fired").map((event) => event.tick);
+      expect(ofTeam(events, "team-1", "b")[0]).toBe(firstShot);
+    });
+
+    it("keeps revision 3 revealing an Aim & Fire shot", () => {
+      expect(ofTeam(resolved(sniper(3), aimOrders).events, "team-1", "b")).toEqual([0]);
+    });
+  });
+
+  it("verifies in a replay", () => {
+    const state = revision4(
+      makeMatch({
+        arena: withTerrain(makeOpenArena(12, 12), [[6, 5, "low-wall"]]),
+        turnLengthSeconds: 10,
+        teamOneRobots: [
+          makeRobot("a", "team-1", "rifle", { x: 2, y: 5 }),
+          makeRobot("z", "team-1", "rifle", { x: 2, y: 8 }),
+        ],
+        teamTwoRobots: [
+          makeRobot("b", "team-2", "rifle", { x: 6, y: 5 }, { posture: "crouching" }),
+        ],
+      }),
+    );
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "z",
+          segments: [
+            { kind: "move", posture: "upright", path: [{ to: { x: 3, y: 8 } }] },
+            { kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 3 },
+          ],
+        },
+      ],
+    };
+    const replay = createReplayLog({ initialState: state, turns: [{ seed: "f", orders }] });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});

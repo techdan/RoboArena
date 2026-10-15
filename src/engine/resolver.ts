@@ -12,6 +12,7 @@ import {
   BULLET_IMPACT_DELAY_TICKS,
   MOVIE_TAIL_TICKS,
   SCAN_FIRE_DECAY_IDLE_TICKS,
+  SPOTTING_REFRESH,
   SCAN_FIRE_PAUSE_AFTER_SHOTS,
   SCAN_FIRE_PAUSES,
   type ScanFirePause,
@@ -1360,6 +1361,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     tick: number,
     turnStart: boolean,
     dueKinds: ReadonlyMap<string, RobotCommandSegment["kind"]>,
+    /** Revision 4: the flags written during the step, in place of the per-command table. */
+    stepFlags?: {
+      readonly moved: ReadonlySet<string>;
+      readonly activity: ReadonlyMap<string, SpottingActivity>;
+    },
   ): void => {
     const teams: SpottingTeam[] = state.teams.map((team) => {
       let dirty = turnStart;
@@ -1372,14 +1378,18 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         // Per-tick table seg6:0x4F34: moves and deploys set the moved flag;
         // every command except Scan & Fire and Zap sets activity 1; Zap's
         // refresh sets 2 (seg6:0x40F5) and firing or zapping sets 3.
-        const moved = turnStart || kinds.some((kind) => kind === "move" || kind === "deploy");
-        const activity: SpottingActivity = firedThisTick.has(id)
-          ? 3
-          : kinds.some((kind) => kind !== "scan-and-fire" && kind !== "zap")
-            ? 1
-            : refreshedThisStep.has(id)
-              ? 2
-              : 0;
+        const moved = stepFlags
+          ? turnStart || stepFlags.moved.has(id)
+          : turnStart || kinds.some((kind) => kind === "move" || kind === "deploy");
+        const activity: SpottingActivity = stepFlags
+          ? (stepFlags.activity.get(id) ?? 0)
+          : firedThisTick.has(id)
+            ? 3
+            : kinds.some((kind) => kind !== "scan-and-fire" && kind !== "zap")
+              ? 1
+              : refreshedThisStep.has(id)
+                ? 2
+                : 0;
         if (moved || activity !== 0) dirty = true;
         if (robot && robot.hp > 0 && isTileCoord(robot.position)) {
           live.push({ robot: { ...robot, position: robot.position }, moved, activity });
@@ -1393,14 +1403,27 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         dirty,
       };
     });
-    spotted = showAllEnemies
-      ? new Map(state.teams.map((team) => [team.id, allEnemiesOf(team)]))
-      : updateSpotting({
-          arena: state.arena,
-          teams,
-          spotted,
-          rollByte: () => rng.nextUint32() & 0xff,
-        });
+    if (stepFlags) {
+      // Revision 4: with Show Enemy Positions every mask bit is set, but the
+      // pass still runs and rolls before the mask is set again (inferred).
+      const everyone = new Map(state.teams.map((team) => [team.id, allEnemiesOf(team)]));
+      const rolled = updateSpotting({
+        arena: state.arena,
+        teams,
+        spotted: showAllEnemies ? everyone : spotted,
+        rollByte: () => rng.nextUint32() & 0xff,
+      });
+      spotted = showAllEnemies ? everyone : rolled;
+    } else {
+      spotted = showAllEnemies
+        ? new Map(state.teams.map((team) => [team.id, allEnemiesOf(team)]))
+        : updateSpotting({
+            arena: state.arena,
+            teams,
+            spotted,
+            rollByte: () => rng.nextUint32() & 0xff,
+          });
+    }
     for (const team of state.teams) applyVisibleEnemies(tick, team.id, liveSpotted(team.id));
     firedThisTick.clear();
     refreshedThisStep.clear();
@@ -1424,14 +1447,44 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
    * fire and zap cooldown `+1A` and the Scan & Fire shot counter `+1C`. Both
    * start at 0 each turn (seg12:0x0000, seg88:0x03CD).
    */
-  const timingPrograms = new Map<string, { cooldownUntil: number; scanShots: number }>();
-  const timingProgramOf = (robotId: string): { cooldownUntil: number; scanShots: number } => {
+  interface TimingProgram {
+    cooldownUntil: number;
+    scanShots: number;
+    /** Refresh timer `+18` (seg6:0x4091). */
+    refreshAt: number;
+    /** The tick the program reached its terminator, or null while orders remain. */
+    idleSince: number | null;
+  }
+  const timingPrograms = new Map<string, TimingProgram>();
+  const timingProgramOf = (robotId: string): TimingProgram => {
     let program = timingPrograms.get(robotId);
     if (!program) {
-      program = { cooldownUntil: 0, scanShots: 0 };
+      program = { cooldownUntil: 0, scanShots: 0, refreshAt: 0, idleSince: null };
       timingPrograms.set(robotId, program);
     }
     return program;
+  };
+
+  /**
+   * Step flags for the spotting pass: the activity code (seg96:0x0366, last
+   * write wins) and the moved flag (seg96:0x0324). Cleared after each pass
+   * (seg96:0x02C5).
+   */
+  const timingActivity = new Map<string, SpottingActivity>();
+  const timingMoved = new Set<string>();
+
+  /**
+   * Periodic refresh, seg6:0x4091: before turn length and once the timer is
+   * due, redraw it 30 + 5·(r&15) ticks ahead and set activity 2.
+   */
+  const refreshTiming = (robotId: string, tick: number): void => {
+    const program = timingProgramOf(robotId);
+    if (tick >= turnDuration || tick < program.refreshAt) return;
+    program.refreshAt =
+      tick +
+      SPOTTING_REFRESH.baseTicks +
+      SIMULATION_STEP_TICKS * (rng.nextUint32() & SPOTTING_REFRESH.mask);
+    timingActivity.set(robotId, 2);
   };
 
   /** Commands that completed on the step being resolved, for the spotting pass. */
@@ -1767,21 +1820,22 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
    * (seg6:0x3E33); grenades and missiles wait 30, plus 50 or 40 after a scan
    * shot (seg6:0x3F43, seg6:0x3FA4).
    */
-  const fireTimingWeapon = (input: Parameters<typeof launchBullet>[0]): void => {
+  const fireTimingWeapon = (input: Parameters<typeof launchBullet>[0]): boolean => {
     const fired = input.weapon.blast ? launchExplosive(input) : launchBullet(input);
-    if (!fired) return;
+    if (!fired) return false;
     const program = timingProgramOf(input.actor.robotId);
     const timing = WEAPON_TIMING[input.weapon.id];
     program.cooldownUntil =
       input.tick +
       (input.fireMode === "scan" ? timing.scanFiringIntervalTicks : timing.firingIntervalTicks);
     const pause = (SCAN_FIRE_PAUSES as Partial<Record<WeaponId, ScanFirePause>>)[input.weapon.id];
-    if (input.fireMode !== "scan" || pause === undefined) return;
+    if (input.fireMode !== "scan" || pause === undefined) return true;
     program.scanShots += 1;
     if (program.scanShots > SCAN_FIRE_PAUSE_AFTER_SHOTS) {
       program.cooldownUntil += pause.base + SIMULATION_STEP_TICKS * (rng.nextUint32() & pause.mask);
       program.scanShots = rng.nextUint32() & pause.resetMask;
     }
+    return true;
   };
 
   /** Command-end path, seg6:0x4A29..0x4A8F: apply the finished record and advance. */
@@ -1795,6 +1849,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     if (!robot || !cursor || robot.hp <= 0) return null;
     timingDueKinds.set(robot.id, active.command.kind);
     const command = active.command;
+    // End handler seg6:0x4F34: activity 1 for every record but Scan & Fire and
+    // Zap (seg6:0x502B); a move step or deploy also sets moved (seg6:0x4FB4..0x500A).
+    if (command.kind !== "scan-and-fire" && command.kind !== "zap") {
+      timingActivity.set(robot.id, 1);
+    }
+    if (command.kind === "move" || command.kind === "deploy") timingMoved.add(robot.id);
     if (command.kind === "deploy") {
       robots.set(robot.id, { ...robot, position: command.to });
       emit(tick, { kind: "deployed", robotId: robot.id, to: command.to });
@@ -1884,6 +1944,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
     const shooter = robots.get(actor.robotId);
     if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) return;
+    // Refresh first (seg6:0x1FCB, 0x240C, 0x28E1): dispatch has just set
+    // `+18 = now`, so it fires on every step before turn length.
+    refreshTiming(shooter.id, tick);
     // Shared cooldown gate `now >= +1A` (seg6:0x1FE3, 0x2424, 0x28F9).
     const program = timingProgramOf(shooter.id);
     if (tick < program.cooldownUntil) return;
@@ -1920,7 +1983,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       targetId: acquired.robot.id,
       distance: acquired.distance,
     });
-    fireTimingWeapon({
+    const fired = fireTimingWeapon({
       actor,
       commandIndex: active.commandIndex,
       tick,
@@ -1931,6 +1994,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       scanStrength: acquired.scanStrength,
       scanMaxDistance: active.command.maxDistance,
     });
+    // Activity 3 on a scan shot (seg6:0x20B6, 0x251E, 0x29F3); Aim & Fire writes none.
+    if (fired) timingActivity.set(shooter.id, 3);
   };
 
   /** Zap on one step (seg6:0x2BD9). */
@@ -1941,15 +2006,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
     const zapper = robots.get(actor.robotId);
     if (!zapper || zapper.hp <= 0 || !isTileCoord(zapper.position)) return;
+    refreshTiming(zapper.id, tick); // seg6:0x2C44
     const program = timingProgramOf(zapper.id);
     if (tick < program.cooldownUntil) return;
-    if (tick >= (active.nextRefreshAt ?? tick)) {
-      refreshedThisStep.add(zapper.id);
-      cursor.active = {
-        ...active,
-        nextRefreshAt: tick + 30 + SIMULATION_STEP_TICKS * (rng.nextUint32() & 15),
-      };
-    }
     if (findTargetAt(actor, zapper.position) === null) return;
     insertImpact(timingQueue, {
       type: "zap",
@@ -1960,6 +2019,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     });
     extendMovie(tick + ZAP_IMPACT_DELAY_TICKS);
     firedThisTick.add(zapper.id);
+    timingActivity.set(zapper.id, 3); // seg6:0x2C93
     emit(tick, { kind: "zapped", shooterId: zapper.id, at: zapper.position });
     // seg6:0x4005: dur(3) with parameter 0 is 0, plus 60.
     program.cooldownUntil = tick + ZAP_COOLDOWN_TICKS;
@@ -1968,7 +2028,18 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   /** One robot's turn in the step, seg6:0x4998. */
   const dispatchTimingRobot = (actor: Actor, tick: number): MalformedOrders | null => {
     const cursor = cursors.get(actor.robotId);
-    if (!cursor) return null;
+    const alive = robots.get(actor.robotId);
+    if (!cursor || !alive || alive.hp <= 0) return null;
+    const program = timingProgramOf(actor.robotId);
+    const atTerminator = (): boolean =>
+      cursor.active === null && cursor.nextIndex >= cursor.timeline.segments.length;
+
+    // Idle path seg6:0x4A91..0x4AB5: a program at its terminator refreshes.
+    if (atTerminator()) {
+      program.idleSince ??= tick;
+      if (program.idleSince === tick) program.refreshAt = tick;
+      refreshTiming(actor.robotId, tick);
+    }
     const ending = cursor.active;
     if (ending && ending.completesAt <= tick) {
       const error = completeTimingRecord(actor, ending, tick);
@@ -1979,15 +2050,23 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const error = startAvailableCommand(actor, tick);
       if (error) return error;
     }
+    // Dispatch seg6:0x4C7F sets `+18 = now`; on the terminator that restarts
+    // the idle refresh timer from the step the orders ran out.
+    if (atTerminator()) {
+      program.idleSince ??= tick;
+      if (program.idleSince === tick && tick < turnDuration) program.refreshAt = tick;
+    }
     const active = cursor.active;
     const robot = robots.get(actor.robotId);
     if (!active || !robot || robot.hp <= 0) return null;
 
-    // Move handlers seg6:0x2D59 / 0x2E04: the occupied tile switches mid-step.
+    // Move handlers seg6:0x2D59 / 0x2E04: the occupied tile switches mid-step
+    // and sets the moved flag (seg6:0x2DEB, 0x2EB6).
     const next = active.tileSwitches?.[0];
     if (next !== undefined && next.at === tick) {
       cursor.active = { ...active, tileSwitches: active.tileSwitches!.slice(1) };
       robots.set(robot.id, { ...robot, position: next.to });
+      timingMoved.add(robot.id);
       emit(tick, { kind: "move-step", robotId: robot.id, to: next.to });
       return null;
     }
@@ -2065,7 +2144,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       }
       detonateTimingBombs(tick);
       landTimingImpacts(tick);
-      runSpotting(tick, tick === 0, timingDueKinds);
+      runSpotting(tick, tick === 0, timingDueKinds, {
+        moved: timingMoved,
+        activity: timingActivity,
+      });
+      timingMoved.clear();
+      timingActivity.clear();
       if (tick >= turnDuration && timingTailIsQuiet()) return tick;
     }
     return tick - SIMULATION_STEP_TICKS;

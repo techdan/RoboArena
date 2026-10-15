@@ -158,6 +158,15 @@ export const SCAN_FIRE_PAUSE_AFTER_SHOTS = 6;
 export const SCAN_FIRE_DECAY_IDLE_TICKS = 20;
 
 /**
+ * Revision 4 periodic spotting refresh, seg6:0x4091 (0x40BB..0x40FD): when
+ * due before turn length it sets activity 2 and redraws its timer
+ * `30 + 5·(rand & 15)` ticks ahead. Scan & Fire and Zap call it on every step
+ * (dispatch has just reset the timer); a robot with no orders left calls it
+ * from the idle path.
+ */
+export const SPOTTING_REFRESH = { baseTicks: 30, mask: 15 } as const;
+
+/**
  * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
  * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
  * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the
