@@ -19,7 +19,7 @@ import {
 } from "../src/lib/setup/validate.js";
 import { loadArena } from "../src/lib/arenas/index.js";
 import { createSurvivalMatchState } from "../src/lib/setup/matchState.js";
-import type { RoomStorage } from "./storage.js";
+import type { RoomStore } from "./store.js";
 import {
   acknowledgeTurn,
   activePlayerIds,
@@ -34,7 +34,7 @@ import {
 } from "./matches.js";
 import { participantMatchSnapshot } from "./view.js";
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ID_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export interface PlayerRecord {
@@ -117,10 +117,22 @@ export class RoomService {
   readonly #connected = new Map<string, number>();
   readonly #locks = new Map<string, Promise<void>>();
 
-  constructor(readonly storage: RoomStorage) {}
+  constructor(readonly storage: RoomStore) {}
 
-  createRoom(name: string, color: PlayerColor, participantToken?: string): RoomAccess {
-    let code = randomId(6, CODE_ALPHABET);
+  /**
+   * `fixedCode` is set when the room's code was chosen before the request
+   * arrived (a Durable Object owns exactly one code); it is never reused.
+   */
+  createRoom(
+    name: string,
+    color: PlayerColor,
+    participantToken?: string,
+    fixedCode?: string,
+  ): RoomAccess {
+    let code = fixedCode ?? randomId(6, CODE_ALPHABET);
+    if (fixedCode !== undefined && this.storage.loadRoom(fixedCode) !== undefined) {
+      throw new RoomError("INTERNAL_ERROR", "That room code is already in use. Try again.");
+    }
     while (this.storage.loadRoom(code) !== undefined) code = randomId(6, CODE_ALPHABET);
     const token = participantToken ?? randomBytes(32).toString("base64url");
     const player: PlayerRecord = {
