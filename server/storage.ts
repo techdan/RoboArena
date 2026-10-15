@@ -6,26 +6,16 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { ServerMessage } from "../src/lib/net/protocol.js";
 import type { RoomRecord } from "./rooms.js";
+import {
+  ROOM_SCHEMA_SQL,
+  decodeStored as decode,
+  encodeStored as encode,
+  withoutIssuedToken,
+  type LockOrdersInput,
+  type RoomStore,
+} from "./store.js";
 
-const encode = (value: unknown): string =>
-  JSON.stringify(value, (_key, nested: unknown) =>
-    nested instanceof Map ? { __roboArenaMap: [...nested.entries()] } : nested,
-  );
-
-const decode = <T>(value: string): T =>
-  JSON.parse(value, (_key, nested: unknown) => {
-    if (
-      typeof nested === "object" &&
-      nested !== null &&
-      "__roboArenaMap" in nested &&
-      Array.isArray((nested as { __roboArenaMap: unknown }).__roboArenaMap)
-    ) {
-      return new Map((nested as { __roboArenaMap: readonly [unknown, unknown][] }).__roboArenaMap);
-    }
-    return nested;
-  }) as T;
-
-export class RoomStorage {
+export class RoomStorage implements RoomStore {
   readonly #database: DatabaseSync;
   readonly #idempotencySecret: string;
 
@@ -35,33 +25,7 @@ export class RoomStorage {
     this.#database.exec(
       "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;",
     );
-    this.#database.exec(`
-      CREATE TABLE IF NOT EXISTS rooms (
-        code TEXT PRIMARY KEY,
-        data_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS request_results (
-        principal TEXT NOT NULL,
-        request_id TEXT NOT NULL,
-        response_json TEXT NOT NULL,
-        PRIMARY KEY (principal, request_id)
-      );
-      CREATE TABLE IF NOT EXISTS service_metadata (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS locked_orders (
-        room_code TEXT NOT NULL,
-        turn_number INTEGER NOT NULL,
-        player_id TEXT NOT NULL,
-        orders_json TEXT NOT NULL,
-        resolution_nonce TEXT NOT NULL,
-        PRIMARY KEY (room_code, turn_number, player_id),
-        FOREIGN KEY (room_code) REFERENCES rooms(code) ON DELETE CASCADE
-      );
-      PRAGMA user_version = 1;
-    `);
+    this.#database.exec(`${ROOM_SCHEMA_SQL} PRAGMA user_version = 1;`);
     const secretRow = this.#database
       .prepare("SELECT value FROM service_metadata WHERE key = 'idempotency_secret'")
       .get() as { readonly value: string } | undefined;
@@ -98,16 +62,7 @@ export class RoomStorage {
   }
 
   saveRequestResult(principal: string, requestId: string, response: ServerMessage): void {
-    const storedResponse: ServerMessage =
-      response.kind === "RoomSnapshot" && response.participantToken !== undefined
-        ? {
-            version: response.version,
-            requestId: response.requestId,
-            kind: response.kind,
-            room: response.room,
-            selfPlayerId: response.selfPlayerId,
-          }
-        : response;
+    const storedResponse = withoutIssuedToken(response);
     this.#database
       .prepare(
         "INSERT OR IGNORE INTO request_results (principal, request_id, response_json) VALUES (?, ?, ?)",
@@ -121,13 +76,7 @@ export class RoomStorage {
       .digest("base64url");
   }
 
-  lockOrders(input: {
-    readonly roomCode: string;
-    readonly turnNumber: number;
-    readonly playerId: string;
-    readonly orders: unknown;
-    readonly resolutionNonce: string;
-  }): boolean {
+  lockOrders(input: LockOrdersInput): boolean {
     const result = this.#database
       .prepare(
         `INSERT OR IGNORE INTO locked_orders
