@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   CloudOff,
+  GraduationCap,
   LockKeyhole,
   Redo2,
   Save,
@@ -65,6 +66,13 @@ import {
 import { AimFireControls, ScanFireControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
+import { FirstTurnCoach } from "./FirstTurnCoach";
+import {
+  coachFinished,
+  currentCoachStep,
+  rememberCoach,
+  type CoachStepId,
+} from "../../planner/firstTurnCoach";
 import { RobotSelector } from "./RobotSelector";
 import { PlannerBoard3D } from "./PlannerBoard3D";
 import { RadialOrders } from "./RadialOrders";
@@ -233,6 +241,31 @@ export function PlannerExperience({
   const [showAllPrograms, setShowAllPrograms] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [rehearsing, setRehearsing] = useState(false);
+  // First-turn guide: shown until the player finishes or closes it once.
+  const [coachActive, setCoachActive] = useState(false);
+  const [coachOrdersOpened, setCoachOrdersOpened] = useState(false);
+  const [coachRehearsed, setCoachRehearsed] = useState(false);
+  const [coachSkipped, setCoachSkipped] = useState<ReadonlySet<CoachStepId>>(new Set());
+  useEffect(() => {
+    setCoachActive(!coachFinished(window.localStorage));
+  }, []);
+  useEffect(() => {
+    if (ordersOpen) setCoachOrdersOpened(true);
+  }, [ordersOpen]);
+  useEffect(() => {
+    if (rehearsing) setCoachRehearsed(true);
+  }, [rehearsing]);
+  const finishCoach = () => {
+    setCoachActive(false);
+    rememberCoach(window.localStorage, true);
+  };
+  const replayCoach = () => {
+    rememberCoach(window.localStorage, false);
+    setCoachOrdersOpened(false);
+    setCoachRehearsed(false);
+    setCoachSkipped(new Set());
+    setCoachActive(true);
+  };
   // Overlaid chrome sizes, so the 3D board frames the arena in the open area.
   const barRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -1007,6 +1040,11 @@ export function PlannerExperience({
   const plannerMenu = (
     <PlannerMenu alert={draftStorageStatus === "error"}>
       <FieldGuideButton />
+      {boardKind === "3d" ? (
+        <button type="button" className="planner-menu-item cursor-pointer" onClick={replayCoach}>
+          <GraduationCap size={14} aria-hidden="true" /> First turn guide
+        </button>
+      ) : null}
       <Link className="planner-menu-item" href={`/room/${roomCode}`}>
         Room {roomCode}
       </Link>
@@ -1062,9 +1100,20 @@ export function PlannerExperience({
           ?.endTick ?? 0) > 0,
     ).length;
     const livingRobots = team.robots.filter((robot) => robot.hp > 0).length;
+    const coachStep = coachActive
+      ? currentCoachStep({
+          timelines: team.robots
+            .filter((robot) => robot.hp > 0)
+            .map((robot) => timelineForRobot(orders, robot.id).segments),
+          ordersOpened: coachOrdersOpened,
+          rehearsed: coachRehearsed,
+          skipped: coachSkipped,
+        })
+      : null;
     return (
       <main
         className="tactical-planner desktop-viewport-gate"
+        data-coach={coachStep?.id}
         style={{ "--tactical-track-h": `${boardInsets.bottom}px` } as CSSProperties}
       >
         <PlannerBoard3D
@@ -1172,7 +1221,16 @@ export function PlannerExperience({
           </div>
         </div>
         {conflictBanner}
-        {projected.position === "dock" ? (
+        {coachStep !== null ? (
+          fireActive && coachStep.id !== "aim" ? null : (
+            <FirstTurnCoach
+              step={coachStep}
+              turnSeconds={match.config.turnLengthSeconds}
+              onSkipStep={() => setCoachSkipped((skipped) => new Set([...skipped, coachStep.id]))}
+              onFinish={finishCoach}
+            />
+          )
+        ) : projected.position === "dock" ? (
           <div className="tactical-hint" role="status">
             Tap a tile in your home corner to deploy <strong>{selectedName}</strong>.
           </div>
