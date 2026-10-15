@@ -69,8 +69,10 @@ python3 tools/re/export_data.py ROBOWIN docs/extracted/robosport-data.json src/l
 
 ## Findings that affect the game RoboArena already ships
 
-These came out of this pass. None is implemented yet; each changes how the
-current Survival game plays and needs a decision before it is.
+These came out of this pass. Items 1 and 2 are implemented as rules revision 2
+for new matches (`src/engine/spotting.ts`, `src/engine/orientation.ts`); items 3
+and 4 are not. Divergences we keep on purpose are listed in
+[../modernization-ideas.md](../modernization-ideas.md).
 
 1. **Ordinary visibility is a per-tick spotting roll, not certain sight.** In
    the original, an enemy inside your cone with line of sight is seen only when
@@ -78,15 +80,16 @@ current Survival game plays and needs a decision before it is.
    target's cover class, sight strength, distance and whether it moved or acted
    this tick (`seg96:0x09AF`, called only from the pair routine `seg96:0x060D`).
    Firing reveals the shooter automatically. Once seen, a robot stays seen while
-   it stays in any enemy cone. RoboArena currently shows every enemy in cone,
-   in range and in line of sight. `reverse-engineering.md` §6 called this
+   it stays in any enemy cone. Implemented under rules revision 2; matches
+   created earlier still show every enemy in cone, range and line of sight. `reverse-engineering.md` §6 called this
    routine the planner hit preview; that was wrong.
 2. **Turning and posture changes are charged per step.** Both the human planner
    and the AI emit one record per octant turned (5 ticks each, shortest way
    round) and route Upright↔Crouching through Ducking (2 × 10 ticks)
-   (`seg80:0x0422`, `seg80:0x0352`).
+   (`seg80:0x0422`, `seg80:0x0352`). Implemented under rules revision 2.
 3. **The Beginner formation turns Show Enemy Positions on** (`seg61`, flags
-   `|= 7`). Other formations show damage only.
+   `|= 7`). Other formations show damage only. Not
+   adopted: RoboArena keeps fog (see the modernization list).
 4. **Robots occupy their destination tile partway through a move** (15 ticks
    into a 1-tile move; midpoint then destination for a 2-tile move,
    `seg6:0x2D59`, `seg6:0x2E04`). This was already on the deferred list.

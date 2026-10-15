@@ -296,6 +296,11 @@ export interface GameConfig {
   readonly arenaType: ArenaType;
   readonly arenaSizeName: string; // e.g. "Rubble Three"
   readonly turnLengthSeconds: number; // 1–40, default 15
+  /**
+   * 2 = original spotting roll and per-step turn/posture costs. Absent means
+   * the earlier rules, kept so matches created before them still verify.
+   */
+  readonly rulesRevision?: 2;
 }
 
 export interface TeamState {
@@ -317,6 +322,16 @@ export interface MatchState {
   readonly arena: Arena;
   /** Last-known enemy positions per observing team, from the previous turn end. */
   readonly lastKnownMarkers: ReadonlyMap<string, readonly LastKnownMarker[]>;
+  /**
+   * Rules revision 2 only: enemies each Team has spotted, carried between turns
+   * the way the original saves and restores its masks (seg95:0x0AEE/0x0A51).
+   */
+  readonly spottedEnemies?: readonly SpottedEnemies[];
+}
+
+export interface SpottedEnemies {
+  readonly teamId: string;
+  readonly enemyIds: readonly string[];
 }
 
 export interface LastKnownMarker {

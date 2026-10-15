@@ -10,6 +10,7 @@ import {
   WEAPON_TIMING,
 } from "../engine/constants";
 import { chunkMovementPath } from "../engine/movementChunking";
+import { headingTurnSteps, postureChangeSteps } from "../engine/orientation";
 import { canTraverse } from "../engine/traversal";
 import type {
   Arena,
@@ -59,10 +60,16 @@ export const segmentDuration = (
       return DEPLOY_COST_TICKS;
     case "move":
       return moveDuration(segment.path);
+    // Original rules: one record per posture level and per octant turned
+    // (re-map/commands.md §9).
     case "set-posture":
-      return segment.posture === projected.posture ? 0 : POSTURE_CHANGE_COST_TICKS;
+      return (
+        postureChangeSteps(projected.posture, segment.posture).length * POSTURE_CHANGE_COST_TICKS
+      );
     case "set-scan-direction":
-      return segment.heading === projected.scanHeading ? 0 : SCAN_DIRECTION_COST_TICKS;
+      return (
+        headingTurnSteps(projected.scanHeading, segment.heading).length * SCAN_DIRECTION_COST_TICKS
+      );
     case "aim-and-fire":
       return WEAPON_TIMING[segment.weapon].firingIntervalTicks;
     case "scan-and-fire":

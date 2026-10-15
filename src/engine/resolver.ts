@@ -6,23 +6,33 @@
  * presentation-only; ordinary visibility and Scan & Fire resolve as engine state.
  */
 
-import { MISSILE_SCAN_MIN_DISTANCE, TICKS_PER_SECOND } from "./constants.js";
+import {
+  MISSILE_SCAN_MIN_DISTANCE,
+  ORIGINAL_SPOTTING_RULES_REVISION,
+  POSTURE_CHANGE_COST_TICKS,
+  SCAN_DIRECTION_COST_TICKS,
+  TICKS_PER_SECOND,
+} from "./constants.js";
 import { WEAPONS } from "./catalog.js";
 import { resolveBlast } from "./blast.js";
 import { commandDurationTicks, moveStepDurationTicks, moveStepSize } from "./commandInterpreter.js";
 import { resolveCover } from "./cover.js";
 import { floorEuclideanDistance, isWithinScanCone } from "./geometry.js";
 import { canTraverseTile, isFullSpeedTile } from "./movement.js";
+import { headingTurnSteps, postureChangeSteps } from "./orientation.js";
 import { createRng } from "./rng.js";
 import { resolveFire } from "./firing.js";
 import { findScanAndFireTarget } from "./scanAndFire.js";
-import { computeVisibility, visibilityTileKey } from "./visibility.js";
+import { updateSpotting, type SpottingActivity, type SpottingTeam } from "./spotting.js";
+import { computeVisibility, spottedEnemyIds, visibilityTileKey } from "./visibility.js";
 import type {
   Arena,
   CommandTimeline,
+  Heading,
   LastKnownMarker,
   MatchState,
   MovementStep,
+  Posture,
   ResolutionEvent,
   RobotCommandSegment,
   RobotState,
@@ -84,6 +94,11 @@ interface ActiveCommand {
   readonly command: RobotCommandSegment;
   readonly completesAt: number;
   readonly moveIndex: number;
+  /**
+   * Rules revision 2: the intermediate records of a stepped turn or posture
+   * change; `moveIndex` counts the ones applied (re-map/commands.md §9).
+   */
+  readonly orientationSteps?: readonly Posture[] | readonly Heading[];
   /** Aim & Fire shoots on the command's first tick (seg6:0x4C7F dispatch). */
   readonly aimPending: boolean;
   readonly nextScanAt: number | null;
@@ -254,12 +269,16 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     });
   }
 
+  const originalRules = state.config.rulesRevision === ORIGINAL_SPOTTING_RULES_REVISION;
   const rng = createRng(input.seed);
   const events: ResolutionEvent[] = [];
   let seq = 0;
   const emit = (tick: number, payload: EventPayload): void => {
     events.push({ tick, seq: seq++, ...payload } as ResolutionEvent);
   };
+
+  /** Robots that fired on the tick being resolved (activity code 3, seg6:0x20B6). */
+  const firedThisTick = new Set<string>();
 
   const findTargetAt = (shooter: Actor, target: TileCoord): string | null => {
     for (const candidate of actors) {
@@ -314,6 +333,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     let completesAt: number;
     let aimPending = false;
     let nextScanAt: number | null = null;
+    let orientationSteps: readonly Posture[] | readonly Heading[] | undefined;
     if (command.kind === "move") {
       if (
         !Array.isArray(command.path) ||
@@ -385,7 +405,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         cursor.nextIndex += 1;
         return null;
       }
-      completesAt = tick + duration;
+      if (originalRules) {
+        orientationSteps = postureChangeSteps(robot.posture, command.posture);
+        completesAt = tick + POSTURE_CHANGE_COST_TICKS;
+      } else {
+        completesAt = tick + duration;
+      }
     } else if (command.kind === "set-scan-direction") {
       if (!HEADINGS.includes(command.heading)) {
         return malformed("illegal-command", "Scan heading is invalid.", robot.id, commandIndex);
@@ -403,7 +428,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         cursor.nextIndex += 1;
         return null;
       }
-      completesAt = tick + duration;
+      if (originalRules) {
+        orientationSteps = headingTurnSteps(robot.scanHeading, command.heading);
+        completesAt = tick + SCAN_DIRECTION_COST_TICKS;
+      } else {
+        completesAt = tick + duration;
+      }
     } else if (command.kind === "scan-and-fire") {
       const weapon = (WEAPONS as Partial<Record<string, WeaponDefinition>>)[command.weapon];
       if (!weapon || !robotOwnsWeapon(robot, weapon) || (!weapon.damageRoll && !weapon.blast)) {
@@ -484,6 +514,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       command,
       completesAt,
       moveIndex: 0,
+      ...(orientationSteps === undefined ? {} : { orientationSteps }),
       aimPending,
       nextScanAt,
     };
@@ -522,6 +553,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     if (!shooter || shooter.hp <= 0 || !isTileCoord(shooter.position)) {
       return input.weapon.startingAmmo;
     }
+    firedThisTick.add(shooter.id);
     emit(input.tick, {
       kind: "fired",
       shooterId: shooter.id,
@@ -850,34 +882,101 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     })),
   });
 
+  const latestEnemies = new Map<string, ReadonlySet<string>>();
+
+  const applyVisibleEnemies = (tick: number, teamId: string, next: ReadonlySet<string>): void => {
+    const previous = latestEnemies.get(teamId);
+    const lastSeen = lastSeenByTeam.get(teamId) ?? new Map<string, TileCoord>();
+    for (const enemyId of next) {
+      const enemy = robots.get(enemyId);
+      if (!enemy || !isTileCoord(enemy.position)) continue;
+      lastSeen.set(enemyId, enemy.position);
+      if (!previous?.has(enemyId)) {
+        emit(tick, { kind: "enemy-spotted", teamId, enemyId, at: enemy.position });
+      }
+    }
+    if (previous) {
+      for (const enemyId of previous) {
+        if (next.has(enemyId)) continue;
+        const lastSeenAt = lastSeen.get(enemyId);
+        if (lastSeenAt) emit(tick, { kind: "enemy-lost", teamId, enemyId, lastSeenAt });
+      }
+    }
+    lastSeenByTeam.set(teamId, lastSeen);
+    latestEnemies.set(teamId, next);
+  };
+
   const updateVisibility = (tick: number): void => {
+    // Rules revision 2 changes visibility only in the per-tick spotting pass.
+    if (originalRules) return;
     const snapshot = snapshotState();
     for (const team of state.teams) {
       const next = computeVisibility(snapshot, team.id);
-      const previous = latestVisibility.get(team.id);
-      const lastSeen = lastSeenByTeam.get(team.id) ?? new Map<string, TileCoord>();
-
-      for (const enemyId of next.visibleEnemies) {
-        const enemy = robots.get(enemyId);
-        if (!enemy || !isTileCoord(enemy.position)) continue;
-        lastSeen.set(enemyId, enemy.position);
-        if (!previous?.visibleEnemies.has(enemyId)) {
-          emit(tick, { kind: "enemy-spotted", teamId: team.id, enemyId, at: enemy.position });
-        }
-      }
-      if (previous) {
-        for (const enemyId of previous.visibleEnemies) {
-          if (next.visibleEnemies.has(enemyId)) continue;
-          const lastSeenAt = lastSeen.get(enemyId);
-          if (lastSeenAt) {
-            emit(tick, { kind: "enemy-lost", teamId: team.id, enemyId, lastSeenAt });
-          }
-        }
-      }
-
-      lastSeenByTeam.set(team.id, lastSeen);
+      applyVisibleEnemies(tick, team.id, next.visibleEnemies);
       latestVisibility.set(team.id, next);
     }
+  };
+
+  /** Carried spotting masks (seg95:0x0A51 restores them at turn start). */
+  let spotted = new Map<string, Set<string>>(
+    state.teams.map((team) => [team.id, new Set(spottedEnemyIds(state, team.id))]),
+  );
+
+  /** Enemies a Team sees: spotted, alive and on the arena. */
+  const liveSpotted = (teamId: string): Set<string> =>
+    new Set(
+      [...(spotted.get(teamId) ?? [])].filter((id) => {
+        const robot = robots.get(id);
+        return robot !== undefined && robot.hp > 0 && isTileCoord(robot.position);
+      }),
+    );
+
+  /**
+   * One per-tick spotting pass (seg6:0x5898). `dueKinds` holds the commands that
+   * completed this tick, which were in effect for it alongside any active one.
+   */
+  const runSpotting = (
+    tick: number,
+    turnStart: boolean,
+    dueKinds: ReadonlyMap<string, RobotCommandSegment["kind"]>,
+  ): void => {
+    const teams: SpottingTeam[] = state.teams.map((team) => {
+      let dirty = turnStart;
+      const live: SpottingTeam["robots"][number][] = [];
+      for (const { id } of team.robots) {
+        const robot = robots.get(id);
+        const kinds = [dueKinds.get(id), cursors.get(id)?.active?.command.kind].filter(
+          (kind): kind is RobotCommandSegment["kind"] => kind !== undefined,
+        );
+        // Per-tick table seg6:0x4F34: moves and deploys set the moved flag;
+        // every command except Scan & Fire sets activity 1; firing sets 3.
+        const moved = turnStart || kinds.some((kind) => kind === "move" || kind === "deploy");
+        const activity: SpottingActivity = firedThisTick.has(id)
+          ? 3
+          : kinds.some((kind) => kind !== "scan-and-fire")
+            ? 1
+            : 0;
+        if (moved || activity !== 0) dirty = true;
+        if (robot && robot.hp > 0 && isTileCoord(robot.position)) {
+          live.push({ robot: { ...robot, position: robot.position }, moved, activity });
+        }
+      }
+      return {
+        id: team.id,
+        side: team.side,
+        robotIds: team.robots.map((robot) => robot.id),
+        robots: live,
+        dirty,
+      };
+    });
+    spotted = updateSpotting({
+      arena: state.arena,
+      teams,
+      spotted,
+      rollByte: () => rng.nextUint32() & 0xff,
+    });
+    for (const team of state.teams) applyVisibleEnemies(tick, team.id, liveSpotted(team.id));
+    firedThisTick.clear();
   };
 
   const finishActive = (cursor: Cursor): void => {
@@ -909,6 +1008,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   resolveAimStarts(0, lateStartDamage);
   applyPendingDamageAndDeaths(0, lateStartDamage);
   if (lateStartDamage.length > 0) updateVisibility(0);
+  if (originalRules) runSpotting(0, true, new Map());
 
   for (let tick = 1; tick <= turnDuration; tick += 1) {
     const due = actors.flatMap((actor) => {
@@ -982,18 +1082,31 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const robot = robots.get(actor.robotId);
       const cursor = cursors.get(actor.robotId);
       if (!robot || !cursor || robot.hp <= 0) continue;
+      const steps = active.orientationSteps;
       if (active.command.kind === "set-posture") {
-        robots.set(robot.id, { ...robot, posture: active.command.posture });
-        emit(tick, {
-          kind: "posture-changed",
-          robotId: robot.id,
-          posture: active.command.posture,
-        });
+        const posture =
+          (steps?.[active.moveIndex] as Posture | undefined) ?? active.command.posture;
+        robots.set(robot.id, { ...robot, posture });
+        emit(tick, { kind: "posture-changed", robotId: robot.id, posture });
       } else {
-        robots.set(robot.id, { ...robot, scanHeading: active.command.heading });
-        emit(tick, { kind: "scan-rotated", robotId: robot.id, heading: active.command.heading });
+        const heading =
+          (steps?.[active.moveIndex] as Heading | undefined) ?? active.command.heading;
+        robots.set(robot.id, { ...robot, scanHeading: heading });
+        emit(tick, { kind: "scan-rotated", robotId: robot.id, heading });
       }
-      finishActive(cursor);
+      if (steps !== undefined && active.moveIndex + 1 < steps.length) {
+        cursor.active = {
+          ...active,
+          moveIndex: active.moveIndex + 1,
+          completesAt:
+            tick +
+            (active.command.kind === "set-posture"
+              ? POSTURE_CHANGE_COST_TICKS
+              : SCAN_DIRECTION_COST_TICKS),
+        };
+      } else {
+        finishActive(cursor);
+      }
     }
 
     if (
@@ -1035,6 +1148,34 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       applyPendingDamageAndDeaths(tick, postStartScanDamage);
       if (postStartScanDamage.length > 0) updateVisibility(tick);
     }
+    if (originalRules) {
+      runSpotting(
+        tick,
+        false,
+        new Map(due.map(({ actor, active }) => [actor.robotId, active.command.kind] as const)),
+      );
+    }
+  }
+
+  const finalTeams = state.teams.map((team) => ({
+    ...team,
+    robots: team.robots.map((robot) => robots.get(robot.id) ?? robot),
+  }));
+  const spottedEnemies = originalRules
+    ? state.teams.map((team) => ({
+        teamId: team.id,
+        enemyIds: [...liveSpotted(team.id)].sort(),
+      }))
+    : undefined;
+  if (originalRules) {
+    const finalSnapshot: MatchState = {
+      ...state,
+      teams: finalTeams,
+      spottedEnemies: spottedEnemies ?? [],
+    };
+    for (const team of state.teams) {
+      latestVisibility.set(team.id, computeVisibility(finalSnapshot, team.id));
+    }
   }
 
   const nextLastKnownMarkers = new Map<string, readonly LastKnownMarker[]>();
@@ -1062,11 +1203,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const nextState: MatchState = {
     ...state,
     turnNumber: state.turnNumber + 1,
-    teams: state.teams.map((team) => ({
-      ...team,
-      robots: team.robots.map((robot) => robots.get(robot.id) ?? robot),
-    })),
+    teams: finalTeams,
     lastKnownMarkers: nextLastKnownMarkers,
+    ...(spottedEnemies === undefined ? {} : { spottedEnemies }),
   };
   return { outcome: "resolved", nextState, events };
 };

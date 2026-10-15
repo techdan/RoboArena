@@ -23,8 +23,11 @@ export const projectMatchState = (state: MatchState, playerId: string): MatchSta
   if (observer === undefined) throw new Error("Participant Team is missing from match state.");
   const visibility = computeVisibility(state, playerId);
   const ownMarkers = state.lastKnownMarkers.get(playerId) ?? [];
+  // Spotting masks are authority-only; the filtered robots already carry them.
+  const publicState: MatchState = { ...state };
+  delete (publicState as { spottedEnemies?: unknown }).spottedEnemies;
   return {
-    ...state,
+    ...publicState,
     teams: state.teams.map((team) => ({
       ...team,
       robots:

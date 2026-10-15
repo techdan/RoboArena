@@ -168,6 +168,9 @@ const assertConfig = (value: unknown, path: string): void => {
   assertOneOf(value.arenaType, ARENA_TYPES, `${path}.arenaType`);
   assertString(value.arenaSizeName, `${path}.arenaSizeName`);
   assertInteger(value.turnLengthSeconds, `${path}.turnLengthSeconds`, { min: 1, max: 40 });
+  if (value.rulesRevision !== undefined && value.rulesRevision !== 2) {
+    throw new Error(`${path}.rulesRevision must be 2 when present.`);
+  }
 };
 
 const assertArena = (value: unknown, path: string): void => {

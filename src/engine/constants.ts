@@ -60,11 +60,45 @@ export const MOVE_DOUBLE_COST_TICKS = 40;
 /** Deploy command, selector 74 (RE §19). */
 export const DEPLOY_COST_TICKS = 120;
 
-/** Any absolute posture-setting command, selectors 70..72 (RE §19). */
+/**
+ * One posture-setting record, selectors 70..72 (RE §19). Under original-rules
+ * matches the planner emits one record per posture level, so Upright↔Crouching
+ * passes through Ducking and costs two records (seg80:0x0352, re-map/commands.md §9).
+ */
 export const POSTURE_CHANGE_COST_TICKS = 10;
 
-/** Any absolute scan-heading command, selectors 24..31 (RE §19). */
+/**
+ * One scan-heading record, selectors 24..31 (RE §19). Under original-rules
+ * matches a turn emits one record per octant, the shortest way round
+ * (seg80:0x0422, re-map/commands.md §9).
+ */
 export const SCAN_DIRECTION_COST_TICKS = 5;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Rules revisions
+
+/**
+ * Rules revision 2 adds the original per-tick spotting roll and per-step turn
+ * and posture costs. Matches without a revision keep the earlier rules so that
+ * their stored replays still verify.
+ */
+export const ORIGINAL_SPOTTING_RULES_REVISION = 2;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Spotting (re-map/stealth-fence-ceremony-ai-formats.md §1)
+
+/** Spotting probabilities out of 256 by index 0..13, DGROUP 0x213A. */
+export const SPOTTING_THRESHOLDS = [
+  0, 8, 16, 24, 32, 40, 48, 56, 64, 96, 128, 160, 208, 255,
+] as const;
+
+/** Base spotting index by the target's cover class, jump table seg96:0x0AA4. */
+export const SPOTTING_COVER_BASE: Readonly<Record<1 | 2 | 3 | 4, number>> = {
+  1: 2,
+  2: 4,
+  3: 6,
+  4: 10,
+};
 
 // ──────────────────────────────────────────────────────────────────────────
 // Survival ceremony

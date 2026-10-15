@@ -6,6 +6,7 @@
  */
 
 import { ROBOT_DEFINITIONS, WEAPONS } from "../../engine/catalog";
+import { ORIGINAL_SPOTTING_RULES_REVISION } from "../../engine/constants";
 import type {
   Arena,
   Formation,
@@ -65,9 +66,10 @@ export const createSurvivalMatchState = (input: {
     sportType: "survival",
     formation: input.formation,
     length: input.length,
-    arenaType: "rubble",
+    arenaType: input.arena.type,
     arenaSizeName: input.arena.sizeName,
     turnLengthSeconds: input.turnLengthSeconds,
+    rulesRevision: ORIGINAL_SPOTTING_RULES_REVISION,
   },
   turnNumber: 1,
   teams: input.teams.map((team): TeamState => ({
