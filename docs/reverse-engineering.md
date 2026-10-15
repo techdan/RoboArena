@@ -634,8 +634,12 @@ nested arrays in `robosport-data.json`. Dimensions (⚠️ note Rubble Two):
 | Set | Maps (name → size) |
 |---|---|
 | **Rubble Town** | One 16×16 · **Two 24×24** · Three 32×32 · Four 40×40 · Five 48×48 · Six 44×44 · Seven 40×20 · Eight 32×32 |
-| **Suburbs** | 8 maps, same size ladder |
-| **Computer Town** | 8 maps, same size ladder |
+| **Suburbs** | One 16×16 · Two 24×24 · Three 32×32 · Four 44×44 · Five 52×20 · Six 36×36 · Seven 20×48 · Eight 52×44 |
+| **Computer Town** | One 16×16 · Two 24×24 · Three 32×32 · Four 44×44 · Five 20×40 · Six 28×28 · Seven 36×24 · Eight 40×20 |
+
+(Corrected 2026-10-15: Suburbs and Computer Town do not share Rubble's size
+ladder. No map in any set uses a Fence tile. Suburbs has no Low Walls, and
+Computer Town has them only on Computer One.)
 
 Game-length → default arena (from `priority-tests.md`, now with corrected sizes):
 Melee → **Rubble Two (24×24)**, Battle → **Rubble Three (32×32)**.
@@ -1218,7 +1222,7 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 9 | **Clock rate** | **60 units/s — CONFIRMED** (§19) | — | 🟩 | P1 |
-| 10 | **Fire interval per named weapon** | Rifle 30/30, Burst 15/20, Auto 10/10, Missile 30/20, Grenade 30/20 (Aim/Scan) | `seg14:0x07B4`; `seg6:0x4CF2`; `seg13:0x08C5` | 🟩 | P1 |
+| 10 | **Fire interval per named weapon** | Aim 30/15/10/30/30; Scan re-fire 30/15/10/70/80 (Rifle/Burst/Auto/Missile/Grenade, §0b) | `seg14:0x07B4`; `seg6:0x4CF2`; `seg13:0x08C5` | 🟩 | P1 |
 | 11 | **Move cost & slow terrain** | fixed one-tile 30 / two-tile 40; no parity; TIL movement `2` permits path pairing, `1` forces single waypoints | selectors 41..64; `seg87:0x2901`, `0x0BF6..0x0D3D` | 🟩 | P1 |
 | 12 | **Deploy / posture / scan-heading costs** | 120 / 10 / 5; absolute posture/heading commands | selectors 24..31, 70..74 | 🟩 | P1 |
 | 13 | **Descriptor column 2** | presentation/path width (16/24/…/112), not a mechanic range | readers in `seg13/seg76` | 🟩 | P3 |
@@ -1246,8 +1250,8 @@ sub-part remains).
 | # | Item | Working value & source | Where to confirm | Conf | Pri |
 |---|---|---|---|---|---|
 | 22 | **Scan cone hard boundary** | closed ±90° forward semicircle; boundary included | `seg76:0x0775` → `seg21:0x0CCF` | 🟩 | P1 |
-| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; exact cone-boundary distance adjustment `+2`; equal adjusted candidates prefer higher scan-grid sight strength, then canonical candidate order; the same strength feeds live-fire penalties | `seg6:0x1F74`; `seg18:0x072C..0x0919`; `seg21:0x0CCF`; `seg87:0x19E3`; `seg96:0x0900..0x09AE/0x1FC5`; `seg6:0x3D79` | 🟩 | P1 |
-| 24 | **Aim & Fire moving-target** | **confirmed**: off-aimed-tile halves hit (§15, `seg21:0x0F0A`) | — | 🟩 | P1 |
+| 23 | **Scan & Fire acquisition** | duration=`seconds×60`; reacquire at named interval; max-distance filter; `+2` rank distance outside the ±45° front arc; missile holds fire under 2 tiles; equal adjusted candidates prefer higher scan-grid sight strength, then canonical candidate order; the same strength feeds live-fire penalties | `seg6:0x1F74`; `seg18:0x072C..0x0919`; `seg21:0x0CCF`; `seg87:0x19E3`; `seg96:0x0900..0x09AE/0x1FC5`; `seg6:0x3D79` | 🟩 | P1 |
+| 24 | **Aim & Fire moving-target** | **revised**: fires on the command's first tick at whoever is on the tile; `seg21:0x0F0A` is the front-arc halving (§0b) | — | 🟩 | P1 |
 | 25 | **Arena coordinate reconciliation** | MAP=`body[y*width+x]`; no flip/transpose; display border +8 | `seg81:0x092F/0x09F2` | 🟩 | P1 |
 | 26 | **Home Area / Dock positions per arena** | homes use exact 6/8/12/16 dimension thresholds at NW/NE/SE/SW; Team Name box fixes home slot without compaction; Dock is off-field | `seg87:0x1F32`; manual; complete INF/MAP parse | 🟩 | P1 |
 | 27 | **Deploy timing** | selector 74 costs 120; no stride parity to reset | duration table + deploy handler `seg6:0x2ECF` | 🟩 | P1 |
@@ -1259,7 +1263,7 @@ sub-part remains).
 - ✅ Distance = floored Euclidean · ✅ Robot armor/accuracy (`0x0CA8`) · ✅ Stat
   bytes 2–3 unused · ✅ Bullet damage rolls · ✅ Explosive blast tables · ✅ RNG
   (dual-stream LFSR) · ✅ Clock = 60 Hz · ✅ named selectors/timing · ✅ Terrain
-  properties + all arenas · ✅ Moving-target = off-tile halving · ✅ Cover =
+  properties + all arenas · ✅ Moving-target = fire at command start, front-arc halving (§0b) · ✅ Cover =
   height-LoS + exact endpoint sampling · ✅ closed scan boundary · ✅ 5 sports & 5 bots identified · ✅ Bot availability
   (build-mode, not sport-mode gated).
 
