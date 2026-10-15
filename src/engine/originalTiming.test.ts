@@ -605,3 +605,111 @@ describe("explosive flight in the resolver (seg6:0x218D, seg6:0x266F, seg6:0x556
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });
+
+describe("the movie tail after turn length (seg6:0x47DE, seg6:0x4A60, seg6:0x6330)", () => {
+  // One-second turns: turn length is 60 ticks.
+  const shortTurn = (rulesRevision: 3 | 4 = 4) => {
+    const base = revision4(
+      makeMatch({
+        arena: makeOpenArena(14, 12),
+        turnLengthSeconds: 1,
+        teamOneRobots: [makeRobot("m", "team-1", "missile", { x: 1, y: 5 })],
+        teamTwoRobots: [makeRobot("t", "team-2", "rifle", { x: 12, y: 5 }, { hp: 400 })],
+      }),
+    );
+    return { ...base, config: { ...base.config, rulesRevision } };
+  };
+  const longMove: TurnOrders = {
+    turnNumber: 1,
+    timelines: [
+      {
+        robotId: "m",
+        segments: [
+          {
+            kind: "move",
+            posture: "upright",
+            path: [
+              { via: { x: 2, y: 5 }, to: { x: 3, y: 5 } },
+              { via: { x: 4, y: 5 }, to: { x: 5, y: 5 } },
+              { to: { x: 6, y: 5 } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const turnEnd = (events: readonly ResolutionEvent[]) => ofKind(events, "turn-end")[0]!.tick;
+
+  it("lands a missile in flight after turn length and ends the movie on that step", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "m",
+          segments: [
+            { kind: "move", posture: "upright", path: [{ to: { x: 2, y: 5 } }] },
+            aim({ x: 12, y: 5 }, "missile-launcher"),
+          ],
+        },
+      ],
+    };
+    const events = resolved(shortTurn(), orders).events;
+    // Fired at 30 from (2,5), d = 10: 30 + 5·5 + 10 = 65.
+    expect(ofKind(events, "fired").map((event) => event.tick)).toEqual([30]);
+    expect(ofKind(events, "damaged").map((event) => event.tick)).toEqual([65]);
+    expect(turnEnd(events)).toBe(65);
+    expect(events.at(-1)!.kind).toBe("turn-end");
+  });
+
+  it("finishes the move step that crosses turn length and drops the rest", () => {
+    const result = resolved(shortTurn(), longMove);
+    const events = result.events;
+    // The second step starts at 40 < 60 and ends at 80; the third would start at 80.
+    expect(ofKind(events, "move-step").map((event) => [event.tick, event.to.x])).toEqual([
+      [15, 2],
+      [25, 3],
+      [55, 4],
+      [65, 5],
+    ]);
+    expect(result.nextState.teams[0]!.robots[0]!.position).toEqual({ x: 5, y: 5 });
+    expect(turnEnd(events)).toBe(80);
+    const ticks = events.map((event) => event.tick);
+    expect(ticks).toEqual([...ticks].sort((a, b) => a - b));
+  });
+
+  it("starts nothing and fires nothing at or after turn length", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        {
+          robotId: "m",
+          segments: [
+            {
+              kind: "move",
+              posture: "upright",
+              path: [{ to: { x: 2, y: 5 } }, { to: { x: 3, y: 5 } }],
+            },
+            aim({ x: 12, y: 5 }, "missile-launcher"),
+          ],
+        },
+      ],
+    };
+    const events = resolved(shortTurn(), orders).events;
+    expect(ofKind(events, "fired")).toEqual([]);
+    expect(turnEnd(events)).toBe(60);
+  });
+
+  it("keeps revision 3 stopping at turn length", () => {
+    const result = resolved(shortTurn(3), longMove);
+    expect(result.nextState.teams[0]!.robots[0]!.position).toEqual({ x: 3, y: 5 });
+    expect(turnEnd(result.events)).toBe(60);
+  });
+
+  it("verifies in a replay", () => {
+    const replay = createReplayLog({
+      initialState: shortTurn(),
+      turns: [{ seed: "d", orders: longMove }],
+    });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});

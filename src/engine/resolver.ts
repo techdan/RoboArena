@@ -10,6 +10,7 @@ import {
   BOMB_CARRY_MINIMUM_TICKS,
   BOMB_MAX_FUSE_SECONDS,
   BULLET_IMPACT_DELAY_TICKS,
+  MOVIE_TAIL_TICKS,
   MISSILE_SCAN_MIN_DISTANCE,
   EXPLOSIVE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
@@ -444,6 +445,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const pendingSelfDestructs: PendingSelfDestruct[] = [];
   /** Revision 4: the projectile queue `ctx+2`, sorted by impact time (seg6:0x1AD3). */
   const timingQueue: TimingProjectile[] = [];
+  /** Revision 4 movie end, `ctx+0x0A` (seg6:0x4790); set when the movie starts. */
+  let movieEnd = 0;
+  /** seg6:0x6330: a late impact pushes the movie end out by another 150 ticks. */
+  const extendMovie = (tick: number): void => {
+    if (movieEnd - tick <= MOVIE_TAIL_TICKS) movieEnd += MOVIE_TAIL_TICKS;
+  };
   /**
    * seg21:0x076C enables Self Destruct only while a Team has exactly one robot
    * whose damage has not reached its armor; judged from the planned position.
@@ -776,8 +783,12 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         impactsAt: tick + SELF_DESTRUCT_IMPACT_DELAY_TICKS,
       };
       // Revision 4 queues it with every other projectile (seg6:0x3541 → 0x1AD3).
-      if (timingRules) insertImpact(timingQueue, { type: "self-destruct", ...blast });
-      else pendingSelfDestructs.push(blast);
+      if (timingRules) {
+        insertImpact(timingQueue, { type: "self-destruct", ...blast });
+        extendMovie(blast.impactsAt);
+      } else {
+        pendingSelfDestructs.push(blast);
+      }
     }
     return null;
   };
@@ -1712,9 +1723,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         from: shooter.position,
         target: landing,
       });
+      const impactsAt = input.tick + explosiveFlightTicks(weaponId, shooter.position, landing);
+      extendMovie(impactsAt);
       insertImpact(timingQueue, {
         type: "explosive",
-        impactsAt: input.tick + explosiveFlightTicks(weaponId, shooter.position, landing),
+        impactsAt,
         projectileId,
         shooterId: shooter.id,
         shotIndex,
@@ -1760,7 +1773,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const moved: RobotState = { ...robot, position: step.to };
       robots.set(robot.id, moved);
       const nextStep = command.path[active.moveIndex + 1];
-      if (!nextStep) {
+      // seg6:0x4A60: a record ending at or after turn length is not advanced past.
+      if (!nextStep || tick >= turnDuration) {
         finishActive(cursor);
         return null;
       }
@@ -1794,7 +1808,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         robots.set(robot.id, { ...robot, scanHeading: heading });
         emit(tick, { kind: "scan-rotated", robotId: robot.id, heading });
       }
-      if (steps !== undefined && active.moveIndex + 1 < steps.length) {
+      if (steps !== undefined && active.moveIndex + 1 < steps.length && tick < turnDuration) {
         cursor.active = {
           ...active,
           moveIndex: active.moveIndex + 1,
@@ -1899,6 +1913,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       at: zapper.position,
       impactsAt: tick + ZAP_IMPACT_DELAY_TICKS,
     });
+    extendMovie(tick + ZAP_IMPACT_DELAY_TICKS);
     firedThisTick.add(zapper.id);
     emit(tick, { kind: "zapped", shooterId: zapper.id, at: zapper.position });
     cursor.active = { ...cursor.active!, nextZapAt: tick + ZAP_COOLDOWN_TICKS };
@@ -1913,7 +1928,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       const error = completeTimingRecord(actor, ending, tick);
       if (error) return error;
     }
-    if (!cursor.active) {
+    // No record starts at or after turn length (seg6:0x4ABB..0x4AE2).
+    if (!cursor.active && tick < turnDuration) {
       const error = startAvailableCommand(actor, tick);
       if (error) return error;
     }
@@ -1973,9 +1989,29 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     armedBombs = remaining;
   };
 
-  /** Runs the revision 4 movie and returns the last tick it processed. */
+  /**
+   * Nothing left that can change the outcome: no projectile in flight and no
+   * command still running except Scan & Fire and Zap, which cannot fire after
+   * turn length and end without any state change.
+   */
+  const timingTailIsQuiet = (): boolean =>
+    timingQueue.length === 0 &&
+    actors.every((actor) => {
+      const kind = cursors.get(actor.robotId)?.active?.command.kind;
+      return kind === undefined || kind === "scan-and-fire" || kind === "zap";
+    });
+
+  /**
+   * Runs the revision 4 movie and returns the last tick it processed. The
+   * original keeps stepping until the movie end, turn length + 150 or later
+   * (seg6:0x47DE, seg6:0x6330), so shots in flight land and moves finish
+   * their current step. RoboArena stops once the tail is quiet, which
+   * changes nothing but the movie length.
+   */
   const runTimingTurn = (): number | MalformedOrders => {
-    for (let tick = 0; tick <= turnDuration; tick += SIMULATION_STEP_TICKS) {
+    movieEnd = turnDuration + MOVIE_TAIL_TICKS;
+    let tick = 0;
+    for (; tick <= movieEnd; tick += SIMULATION_STEP_TICKS) {
       timingDueKinds.clear();
       for (const actor of actors) {
         const error = dispatchTimingRobot(actor, tick);
@@ -1984,14 +2020,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
       detonateTimingBombs(tick);
       landTimingImpacts(tick);
       runSpotting(tick, tick === 0, timingDueKinds);
+      if (tick >= turnDuration && timingTailIsQuiet()) return tick;
     }
-    // Anything still in flight lands after turn end (seg6:0x6330 extends the movie).
-    let endTick = turnDuration;
-    while (timingQueue.length > 0) {
-      endTick = timingQueue[0]!.impactsAt;
-      landTimingImpacts(endTick);
-    }
-    return endTick;
+    return tick - SIMULATION_STEP_TICKS;
   };
 
   const turnDuration = Math.round(state.config.turnLengthSeconds * TICKS_PER_SECOND);

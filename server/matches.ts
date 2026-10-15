@@ -387,7 +387,16 @@ export const setPlaybackPosition = (
   if (turn === undefined) {
     throw new MatchLifecycleError("STALE_TURN", "That turn result is not available.");
   }
-  const maximumTick = secondsToTicks(turn.initialState.config.turnLengthSeconds);
+  // A movie can run past turn length while shots in flight land (seg6:0x6330),
+  // so the last processed tick is the turn-end event's.
+  const turnEndTick = turn.events.reduce(
+    (latest, event) => (event.kind === "turn-end" ? event.tick : latest),
+    0,
+  );
+  const maximumTick = Math.max(
+    secondsToTicks(turn.initialState.config.turnLengthSeconds),
+    turnEndTick,
+  );
   match.playbackPositions[playerId] = {
     turnNumber,
     tick: Math.max(0, Math.min(maximumTick, tick)),

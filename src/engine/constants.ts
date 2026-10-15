@@ -119,6 +119,15 @@ export const SIMULATION_STEP_TICKS = 5;
 export const BULLET_IMPACT_DELAY_TICKS = 5;
 
 /**
+ * Revision 4 movie tail. The movie runs to turn length + 150 (seg6:0x4790),
+ * and an impact due within 150 ticks of the end pushes the end out by another
+ * 150 (seg6:0x6330). No record starts and nothing fires at or after turn
+ * length, but projectiles land, moves finish their current step and spotting
+ * keeps running.
+ */
+export const MOVIE_TAIL_TICKS = 150;
+
+/**
  * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
  * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
  * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the

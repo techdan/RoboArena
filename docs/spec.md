@@ -741,6 +741,26 @@ A robot moving one tile occupies its destination 15 ticks into the step; a
 two-tile step occupies the floored midpoint at 15 and the destination at 25
 (`seg6:0x2D59`, `seg6:0x2E04`).
 
+**The tail.** The movie keeps stepping after turn length, to turn length +
+150 ticks, and an impact due within 150 ticks of that end pushes it out by
+another 150 (`seg6:0x4790`, `seg6:0x6330`). In the tail:
+
+- no command record starts, and nothing fires, scans or zaps
+  (`seg6:0x4ABB..0x4AE2`, `seg6:0x1FDB`);
+- projectiles in flight land, Time Bombs do not go off (`seg6:0x54B9`);
+- a record that started before turn length finishes and applies its end
+  state, so a move completes the step it is on, but the next record does not
+  start (`seg6:0x4A60..0x4A8B`);
+- the spotting pass runs on every step.
+
+The rest of a robot's orders is dropped. The original appears to carry the
+unexecuted records into the next turn (`seg14:0x00A2`, not traced); RoboArena
+does not, because the next turn's orders are planned from scratch
+(**inferred**, conservative). RoboArena also stops the tail early, on the
+first step at or after turn length with no projectile in flight and no
+command running except Scan & Fire or Zap: after that nothing can change. The
+`turn-end` event is on the last step processed.
+
 **Projectiles.** Every shot is a queued projectile with an impact tick. The
 queue is sorted by impact tick and a new projectile goes before others due on
 the same tick, so equal impacts land newest first (`seg6:0x1AD3`). Because
