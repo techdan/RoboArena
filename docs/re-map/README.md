@@ -69,9 +69,11 @@ python3 tools/re/export_data.py ROBOWIN docs/extracted/robosport-data.json src/l
 
 ## Findings that affect the game RoboArena already ships
 
-These came out of this pass. Items 1 and 2 are implemented as rules revision 2
-for new matches (`src/engine/spotting.ts`, `src/engine/orientation.ts`); items 3
-and 4 are not. Divergences we keep on purpose are listed in
+These came out of this pass. Items 1 and 2 were implemented as rules revision 2
+(`src/engine/spotting.ts`, `src/engine/orientation.ts`). Rules revision 3 adds
+items 3 and 5 and the Beginner/Standard formation setups, with Zap and Time
+Bomb (`src/engine/formations.ts`). Item 4 is not implemented. Divergences we
+keep on purpose are listed in
 [../modernization-ideas.md](../modernization-ideas.md).
 
 1. **Ordinary visibility is a per-tick spotting roll, not certain sight.** In
@@ -88,11 +90,18 @@ and 4 are not. Divergences we keep on purpose are listed in
    round) and route Upright↔Crouching through Ducking (2 × 10 ticks)
    (`seg80:0x0422`, `seg80:0x0352`). Implemented under rules revision 2.
 3. **The Beginner formation turns Show Enemy Positions on** (`seg61`, flags
-   `|= 7`). Other formations show damage only. Not
-   adopted: RoboArena keeps fog (see the modernization list).
+   `|= 7`). Other formations show damage only. Implemented under rules
+   revision 3; the lobby offers Beginner and Standard.
 4. **Robots occupy their destination tile partway through a move** (15 ticks
    into a 1-tile move; midpoint then destination for a 2-tile move,
    `seg6:0x2D59`, `seg6:0x2E04`). This was already on the deferred list.
+5. **The simulation runs in 5-tick steps.** The movie loop dispatches or
+   continues every robot's command, runs the per-step updates and the
+   spotting pass, then advances `now` by 5 (`seg6:0x4802..0x483E`). Every
+   command duration is a multiple of 5, so only the spotting pass changes:
+   revision 2 rolled every tick, five times too often. `now` restarts at 0
+   each turn (`seg6:0x4599`); the turn's end is turn length + 150 ticks
+   (`seg6:0x4790`), extended for late effects by `seg6:0x6330`.
 
 ## Corrections to earlier documents
 
@@ -114,6 +123,12 @@ and 4 are not. Divergences we keep on purpose are listed in
 | STR 1869–1870 "Stealth Alert" | No such strings; the alert is static text in dialog `STEALTHALERT` | resource table |
 
 ## Still open
+
+- The periodic spotting refresh `seg6:0x4091` (activity 2) is implemented
+  for Zap only; five other callers (`seg6:0x1FCB`, `0x240C`, `0x28E1`,
+  `0x2D49`, `0x4AB5`) are not yet identified, so Scan & Fire and
+  scan-for-duration may also need it. RoboArena also checks Scan & Fire
+  targets every tick rather than every 5-tick step while holding fire.
 
 - MVP selection rule and the PRS chunk inventory need `PLAYER.EXE`,
   `ROBOCOLR.PRS` and `ROBOMONO.PRS`, which were not in the staged folder.

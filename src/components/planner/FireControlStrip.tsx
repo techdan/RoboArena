@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, Radar, X } from "lucide-react";
+import { Bomb, Crosshair, Radar, X, Zap } from "lucide-react";
 import { TICKS_PER_SECOND } from "../../engine/constants";
 import type { TileCoord, WeaponId } from "../../engine/types";
 import { fireActionCount } from "../../planner/combatPresentation";
@@ -168,6 +168,72 @@ export function ScanFireControls({
         type="button"
         className="fire-inline-cancel"
         aria-label="Cancel Scan & Fire"
+        onClick={onCancel}
+      >
+        <X size={15} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+export interface SpecialCommandControlsProps {
+  readonly kind: "zap" | "place-bomb";
+  readonly seconds: number;
+  readonly onSecondsChange: (seconds: number) => void;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}
+
+/** Zap lasts 1-40 seconds; a bomb fuse runs 0-40 seconds after it is placed. */
+export const SPECIAL_COMMAND_SECONDS = {
+  zap: { min: 1, max: 40 },
+  "place-bomb": { min: 0, max: 40 },
+} as const;
+
+/**
+ * Compact Zap / Place Bomb controls that take over the entry buttons' slot:
+ * `⚡ seconds · Add · ✕` or `💣 fuse · Add · ✕`.
+ */
+export function SpecialCommandControls({
+  kind,
+  seconds,
+  onSecondsChange,
+  onCancel,
+  onConfirm,
+}: SpecialCommandControlsProps) {
+  const zap = kind === "zap";
+  const { min, max } = SPECIAL_COMMAND_SECONDS[kind];
+  const name = zap ? "Zap" : "Place Bomb";
+  return (
+    <div className="fire-inline" aria-label={`${name} controls`}>
+      <span className="fire-inline-mode" title={name}>
+        {zap ? <Zap size={15} aria-hidden="true" /> : <Bomb size={15} aria-hidden="true" />}
+        <small>{zap ? "Zap" : "Time Bomb"}</small>
+      </span>
+      <label className="fire-inline-number">
+        <span>{zap ? "Secs" : "Fuse"}</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          name={zap ? "zap-seconds" : "bomb-fuse-seconds"}
+          autoComplete="off"
+          min={min}
+          max={max}
+          value={seconds}
+          onChange={(event) =>
+            onSecondsChange(
+              Math.max(min, Math.min(max, Math.round(Number(event.currentTarget.value) || min))),
+            )
+          }
+        />
+      </label>
+      <button type="button" className="fire-inline-primary cursor-pointer" onClick={onConfirm}>
+        Add
+      </button>
+      <button
+        type="button"
+        className="fire-inline-cancel cursor-pointer"
+        aria-label={`Cancel ${name}`}
         onClick={onCancel}
       >
         <X size={15} aria-hidden="true" />

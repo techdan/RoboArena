@@ -63,6 +63,7 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
     robots,
     contacts,
     ghosts,
+    bombs,
     homeAreas,
     route,
     cursor,
@@ -212,7 +213,8 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
       overlays.selection(selected.position, teamHex);
     for (const contact of contacts) overlays.contact(contact.position);
     for (const ghost of ghosts) overlays.lastKnown(ghost.at);
-  }, [status, targetingOverlay, homeAreas, route, selected, contacts, ghosts]);
+    for (const bomb of bombs ?? []) overlays.armedBomb(bomb.at);
+  }, [status, targetingOverlay, homeAreas, route, selected, contacts, ghosts, bombs]);
 
   useEffect(() => {
     if (status !== "ready") return;

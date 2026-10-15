@@ -189,6 +189,24 @@ describe("authorized firing previews", () => {
     ).toEqual(["rifle"]);
   });
 
+  it("offers a Standard robot's grenades until its three are programmed", () => {
+    const base = makeRobot("r1", "t1", "rifle", { x: 1, y: 1 });
+    const robot = {
+      ...base,
+      definition: { ...base.definition, secondaryWeapons: ["grenade-launcher" as const] },
+      ammo: { ...base.ammo, "grenade-launcher": 3 },
+    };
+    const lob = {
+      kind: "aim-and-fire",
+      target: { x: 4, y: 1 },
+      weapon: "grenade-launcher",
+      repeat: false,
+    } as const;
+    expect(availableWeapons(robot)).toEqual(["rifle", "grenade-launcher"]);
+    expect(availableWeapons(robot, [lob, lob])).toEqual(["rifle", "grenade-launcher"]);
+    expect(availableWeapons(robot, [lob, lob, lob])).toEqual(["rifle"]);
+  });
+
   it("defaults Scan & Fire to the weapon range and remaining whole-second horizon", () => {
     expect(defaultScanSettings("rifle", 685)).toEqual({ maxDistance: 18, seconds: 11 });
     expect(defaultScanSettings("rifle", 870)).toEqual({ maxDistance: 18, seconds: 14 });

@@ -3,6 +3,8 @@ import { makeOpenArena, makeRobot } from "../engine/__fixtures__/match";
 import type { Arena, TurnOrders } from "../engine/types";
 import {
   appendSegment,
+  canProgramPlaceBomb,
+  canProgramZap,
   deleteSegment,
   planMovement,
   projectRobotAtTick,
@@ -205,5 +207,61 @@ describe("planner segments", () => {
       segments: [scan],
       droppedCount: 1,
     });
+  });
+
+  it("times Zap by its seconds and Place Bomb at 60 ticks", () => {
+    const robot = { ...makeRobot("r1", "t1", "rifle", { x: 1, y: 1 }), timeBombs: 1 };
+    expect(
+      timelineTiming(
+        robot,
+        [
+          { kind: "zap", seconds: 5 },
+          { kind: "place-bomb", fuseSeconds: 3 },
+        ],
+        900,
+      ).map((entry) => [entry.startTick, entry.endTick, entry.createsScanOpportunity]),
+    ).toEqual([
+      [0, 300, false],
+      [300, 360, false],
+    ]);
+  });
+
+  it("spends carried Time Bombs in the projection", () => {
+    const robot = { ...makeRobot("r1", "t1", "rifle", { x: 1, y: 1 }), timeBombs: 1 };
+    const bomb = { kind: "place-bomb" as const, fuseSeconds: 5 };
+    expect(projectRobotAtTick(robot, []).timeBombs).toBe(1);
+    expect(projectRobotAtTick(robot, [bomb], 59).timeBombs).toBe(1);
+    expect(projectRobotAtTick(robot, [bomb], 60).timeBombs).toBe(0);
+    expect(canProgramPlaceBomb(projectRobotAtTick(robot, []))).toBe(true);
+    expect(canProgramPlaceBomb(projectRobotAtTick(robot, [bomb]))).toBe(false);
+    expect(projectRobotAtTick(makeRobot("r2", "t1", "rifle", { x: 1, y: 1 }), []).timeBombs).toBe(
+      0,
+    );
+    const docked = { ...makeRobot("r3", "t1", "rifle", "dock"), timeBombs: 1 };
+    expect(canProgramPlaceBomb(projectRobotAtTick(docked, []))).toBe(false);
+    expect(canProgramZap({ zapArmed: true }, projectRobotAtTick(docked, []))).toBe(false);
+    expect(canProgramZap({ zapArmed: true }, projectRobotAtTick(robot, []))).toBe(true);
+    expect(canProgramZap({}, projectRobotAtTick(robot, []))).toBe(false);
+  });
+
+  it("keeps Zap only when armed and drops a second bomb placement", () => {
+    const arena = makeOpenArena(6, 6);
+    const robot = { ...makeRobot("r1", "t1", "rifle", { x: 1, y: 1 }), timeBombs: 1 };
+    const zap = { kind: "zap" as const, seconds: 4 };
+    const bomb = { kind: "place-bomb" as const, fuseSeconds: 2 };
+    expect(validatedTimelinePrefix(arena, robot, 0, [zap, bomb], { zapArmed: true })).toEqual({
+      segments: [zap, bomb],
+      droppedCount: 0,
+    });
+    expect(validatedTimelinePrefix(arena, robot, 0, [zap, bomb])).toEqual({
+      segments: [],
+      droppedCount: 2,
+    });
+    expect(validatedTimelinePrefix(arena, robot, 0, [bomb, bomb, zap], { zapArmed: true })).toEqual(
+      { segments: [bomb], droppedCount: 2 },
+    );
+    expect(
+      validatedTimelinePrefix(arena, robot, 0, [{ kind: "zap", seconds: 41 }], { zapArmed: true }),
+    ).toEqual({ segments: [], droppedCount: 1 });
   });
 });

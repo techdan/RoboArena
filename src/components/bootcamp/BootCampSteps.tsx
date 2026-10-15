@@ -7,6 +7,7 @@ import {
   Radar,
   ShieldHalf,
   TriangleAlert,
+  Zap,
 } from "lucide-react";
 import type { CSSProperties } from "react";
 import {
@@ -41,7 +42,7 @@ import {
   SQUAD_STATS,
   ticksToSeconds,
 } from "../../lib/help/bootCamp";
-import { TERRAIN_HELP } from "../../lib/help/content";
+import { FORMATION_HELP, helpTopic, TERRAIN_HELP } from "../../lib/help/content";
 import { RobotPortrait } from "../help/RobotPortrait";
 import { SquadComparison } from "../help/SquadComparison";
 
@@ -266,6 +267,32 @@ export function WeaponsStep() {
               ))}
             </tbody>
           </table>
+        </section>
+
+        <section className="bc-panel" aria-labelledby="bc-formations">
+          <div className="bc-panel-head">
+            <h3 id="bc-formations">
+              <Zap aria-hidden="true" /> Formations and extra tools
+            </h3>
+            <p>
+              {FORMATION_HELP.map((topic) => `${topic.title}: ${topic.summary}`).join(" ")} The host
+              picks the formation in room setup.
+            </p>
+          </div>
+          <ul className="bc-bands bc-extras">
+            {(["action:zap", "action:place-bomb"] as const).map((id) => {
+              const topic = helpTopic(id);
+              return (
+                <li key={id}>
+                  <strong>{topic.title}</strong>
+                  <span>
+                    {topic.summary}{" "}
+                    {topic.facts.map((fact) => `${fact.label}: ${fact.value}.`).join(" ")}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       </div>
 

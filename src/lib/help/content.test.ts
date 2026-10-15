@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROBOT_DEFINITIONS, WEAPONS } from "../../engine/catalog.js";
-import { ACTION_HELP, HELP_TOPICS, ROBOT_HELP, helpTopic } from "./content.js";
+import { ACTION_HELP, HELP_TOPICS, ROBOT_HELP, helpTopic, helpTopicsForTab } from "./content.js";
 
 describe("Phase 11.5 help content", () => {
   it("exposes every shipped non-Stealth class and omits Stealth", () => {
@@ -30,5 +30,17 @@ describe("Phase 11.5 help content", () => {
       label: "One tile",
       value: "0.50s",
     });
+  });
+
+  it("covers Zap, Place Bomb and both lobby formations", () => {
+    expect(helpTopic("action:zap").facts).toContainEqual({ label: "Duration", value: "1–40s" });
+    expect(helpTopic("action:place-bomb").facts).toContainEqual({
+      label: "Placing",
+      value: "1.00s",
+    });
+    expect(helpTopicsForTab("formations").map((topic) => topic.id)).toEqual([
+      "formation:beginner",
+      "formation:standard",
+    ]);
   });
 });

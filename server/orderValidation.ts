@@ -8,6 +8,7 @@ import { moveStepSize } from "../src/engine/commandInterpreter.js";
 import { canTraverseTile, isFullSpeedTile } from "../src/engine/movement.js";
 import type {
   Arena,
+  GameConfig,
   HomeSlot,
   RobotCommandSegment,
   RobotState,
@@ -19,7 +20,10 @@ export const validatePrivateTimeline = (
   homeSlot: HomeSlot,
   robot: RobotState,
   segments: readonly RobotCommandSegment[],
+  config?: Pick<GameConfig, "rulesRevision" | "zapArmed">,
 ): string | null => {
+  const formationRules = (config?.rulesRevision ?? 0) >= 3;
+  let timeBombs = robot.timeBombs ?? 0;
   if (robot.hp <= 0 && segments.length > 0) return "Destroyed robots cannot receive commands.";
   let position = robot.position;
   let posture = robot.posture;
@@ -122,6 +126,21 @@ export const validatePrivateTimeline = (
         }
         break;
       }
+      case "zap":
+        if (!formationRules || config?.zapArmed !== true) return "Zap is not armed in this game.";
+        if (!Number.isInteger(segment.seconds) || segment.seconds < 1 || segment.seconds > 40)
+          return "Zap duration must be 1-40 seconds.";
+        break;
+      case "place-bomb":
+        if (!formationRules || timeBombs <= 0) return "This robot carries no Time Bomb.";
+        if (
+          !Number.isInteger(segment.fuseSeconds) ||
+          segment.fuseSeconds < 0 ||
+          segment.fuseSeconds > 40
+        )
+          return "Bomb fuse must be 0-40 seconds.";
+        timeBombs -= 1;
+        break;
       default:
         return "Unsupported command.";
     }

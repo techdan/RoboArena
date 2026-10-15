@@ -28,4 +28,43 @@ describe("authorized event explanations", () => {
     expect(result?.detail).toContain("unseen source");
     expect(result?.detail).not.toContain("undefined");
   });
+
+  it("describes Zap damage and Time Bomb events", () => {
+    expect(
+      explainEvent({
+        tick: 60,
+        seq: 1,
+        kind: "damaged",
+        damageKind: "zap",
+        sourceId: "r1",
+        targetId: "e1",
+        damage: 75,
+      })?.detail,
+    ).toBe("e1: r1 zapped it for 75 damage.");
+    expect(
+      explainEvent({ tick: 60, seq: 0, kind: "zapped", shooterId: "r1", at: { x: 2, y: 3 } })
+        ?.title,
+    ).toBe("Zap");
+    expect(
+      explainEvent({
+        tick: 120,
+        seq: 2,
+        kind: "bomb-placed",
+        robotId: "r1",
+        bombId: "b1",
+        at: { x: 2, y: 3 },
+        detonatesAt: 480,
+      })?.detail,
+    ).toBe("r1 armed a Time Bomb at 2,3.");
+    expect(
+      explainEvent({
+        tick: 480,
+        seq: 3,
+        kind: "bomb-exploded",
+        bombId: "b1",
+        ownerId: "r1",
+        at: { x: 2, y: 3 },
+      })?.title,
+    ).toBe("Time Bomb exploded");
+  });
 });

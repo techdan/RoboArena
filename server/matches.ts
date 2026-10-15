@@ -174,6 +174,7 @@ export const validateParticipantOrders = (
       team.homeSlot,
       team.robots.find((robot) => robot.id === timeline.robotId)!,
       timeline.segments,
+      match.state.config,
     );
     if (error !== null) throw new MatchLifecycleError("INVALID_ORDERS", error);
   }

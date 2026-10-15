@@ -52,7 +52,7 @@ export const roomConfigSchema = z
   .object({
     gameLength: z.enum(["melee", "battle"]),
     arenaName: z.enum(ARENA_NAMES),
-    formation: z.literal("beginner"),
+    formation: z.enum(["beginner", "standard"]),
     turnLengthSeconds: z.number().int().min(1).max(40),
     // Optional so rooms saved before arena looks existed still load.
     arenaTheme: arenaThemeSchema.optional(),
@@ -64,7 +64,7 @@ export type RoomConfig = z.infer<typeof roomConfigSchema>;
 export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   gameLength: "melee",
   arenaName: "rubble-two",
-  formation: "beginner",
+  formation: "standard",
   turnLengthSeconds: 15,
   arenaTheme: DEFAULT_ARENA_THEME_ID,
 };

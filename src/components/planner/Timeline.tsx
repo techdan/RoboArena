@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, MapPin, Radar, Trash2 } from "lucide-react";
+import { Bomb, Crosshair, MapPin, Radar, Trash2, Zap } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
@@ -56,6 +56,15 @@ const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) =>
         <span className="timeline-fire-glyph" aria-hidden="true">
           <Radar size={15} />
           <i>{weaponInitial(segment)}</i>
+        </span>
+      );
+    case "zap":
+      return <Zap size={15} aria-hidden="true" />;
+    case "place-bomb":
+      return (
+        <span className="timeline-fire-glyph" aria-hidden="true">
+          <Bomb size={15} />
+          <i>{segment.fuseSeconds}</i>
         </span>
       );
   }

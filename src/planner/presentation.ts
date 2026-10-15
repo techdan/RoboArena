@@ -158,6 +158,20 @@ export const commandPresentation = (
         detail: `${WEAPON_LABELS[segment.weapon]}, ${segment.maxDistance} tiles for ${segment.seconds} seconds`,
         weapon: segment.weapon,
       };
+    case "zap":
+      return {
+        label: "Zap",
+        compact: `${segment.seconds}s`,
+        detail: `Zap enemies on this tile for ${segment.seconds} seconds`,
+        weapon: null,
+      };
+    case "place-bomb":
+      return {
+        label: "Place Bomb",
+        compact: `Fuse ${segment.fuseSeconds}s`,
+        detail: `Arm a Time Bomb here with a ${segment.fuseSeconds}-second fuse`,
+        weapon: null,
+      };
   }
 };
 

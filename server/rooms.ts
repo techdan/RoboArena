@@ -1,7 +1,6 @@
 /** Authoritative Phase 8 room lifecycle and participant ownership. */
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { DEFAULT_ROSTER_BY_LENGTH } from "../src/engine/catalog.js";
 import type { MatchState, TurnOrders } from "../src/engine/types.js";
 import type {
   MatchSnapshotMessage,
@@ -18,7 +17,7 @@ import {
   type RoomConfig,
 } from "../src/lib/setup/validate.js";
 import { loadArena } from "../src/lib/arenas/index.js";
-import { createSurvivalMatchState } from "../src/lib/setup/matchState.js";
+import { createSurvivalMatchState, formationRoster } from "../src/lib/setup/matchState.js";
 import type { RoomStore } from "./store.js";
 import {
   acknowledgeTurn,
@@ -585,7 +584,7 @@ export class RoomService {
 
   async #createMatchState(room: RoomRecord): Promise<MatchState> {
     const arena = await loadArena(room.config.arenaName);
-    const roster = DEFAULT_ROSTER_BY_LENGTH[room.config.gameLength];
+    const roster = formationRoster(room.config.formation, room.config.gameLength);
     return createSurvivalMatchState({
       arena,
       formation: room.config.formation,

@@ -3,20 +3,39 @@ import {
   DEPLOY_COST_TICKS,
   MOVE_DOUBLE_COST_TICKS,
   MOVE_SINGLE_COST_TICKS,
+  BOMB_MAX_FUSE_SECONDS,
+  PLACE_BOMB_COST_TICKS,
   POSTURE_CHANGE_COST_TICKS,
   SCAN_DIRECTION_COST_TICKS,
   WEAPON_MAX_RANGE,
+  TIME_BOMB_BLAST,
   WEAPON_TIMING,
+  ZAP_COOLDOWN_TICKS,
+  ZAP_DAMAGE_ROLL,
+  ZAP_MAX_SECONDS,
 } from "../../engine/constants";
 import { canTraverse, isFullSpeedTerrain } from "../../engine/traversal";
 import type { Posture, RobotClass, Terrain, WeaponId } from "../../engine/types";
 import { formatGameTime } from "../formatTime";
 
-export type HelpTab = "robots" | "terrain" | "actions";
+export type HelpTab = "robots" | "terrain" | "actions" | "formations";
 export type V1RobotClass = Exclude<RobotClass, "stealth">;
 export type ActionHelpId =
-  "movement" | "posture" | "scan-direction" | "aim-fire" | "scan-fire" | "timeline" | "lock-orders";
-export type HelpTopicId = `robot:${V1RobotClass}` | `terrain:${Terrain}` | `action:${ActionHelpId}`;
+  | "movement"
+  | "posture"
+  | "scan-direction"
+  | "aim-fire"
+  | "scan-fire"
+  | "zap"
+  | "place-bomb"
+  | "timeline"
+  | "lock-orders";
+export type FormationHelpId = "beginner" | "standard";
+export type HelpTopicId =
+  | `robot:${V1RobotClass}`
+  | `terrain:${Terrain}`
+  | `action:${ActionHelpId}`
+  | `formation:${FormationHelpId}`;
 
 export interface HelpFact {
   readonly label: string;
@@ -205,6 +224,39 @@ export const ACTION_HELP: readonly HelpTopic[] = [
     facts: [{ label: "Repeat cadence", value: weaponCadences("scan") }],
   },
   {
+    id: "action:zap",
+    tab: "actions",
+    title: "Zap",
+    summary: "Shock any enemy standing on this robot’s own tile for a chosen number of seconds.",
+    details: [
+      "Zap reaches only the zapper’s tile, so it pays off when an enemy walks into or shares your square.",
+      "Only the Standard formation arms Zap. It cannot be programmed while the robot is docked.",
+    ],
+    facts: [
+      { label: "Duration", value: `1–${ZAP_MAX_SECONDS}s` },
+      { label: "Rate", value: `At most once per ${formatGameTime(ZAP_COOLDOWN_TICKS)}` },
+      {
+        label: "Damage",
+        value: `${ZAP_DAMAGE_ROLL.base}–${ZAP_DAMAGE_ROLL.base + ZAP_DAMAGE_ROLL.mask} HP, no cover`,
+      },
+    ],
+  },
+  {
+    id: "action:place-bomb",
+    tab: "actions",
+    title: "Place Bomb",
+    summary: "Arm a Time Bomb on the robot’s tile with a fuse of your choosing, then walk away.",
+    details: [
+      "The bomb blasts every robot nearby, your own included. A long fuse can carry it into a later turn.",
+      "In Standard each Team’s first robot carries one bomb. Only you can see where your bomb lies.",
+    ],
+    facts: [
+      { label: "Placing", value: formatGameTime(PLACE_BOMB_COST_TICKS) },
+      { label: "Fuse", value: `0–${BOMB_MAX_FUSE_SECONDS}s after placing` },
+      { label: "Blast radius", value: `${TIME_BOMB_BLAST.radius} tiles` },
+    ],
+  },
+  {
     id: "action:timeline",
     tab: "actions",
     title: "Program Timeline",
@@ -228,7 +280,43 @@ export const ACTION_HELP: readonly HelpTopic[] = [
   },
 ];
 
-export const HELP_TOPICS: readonly HelpTopic[] = [...ROBOT_HELP, ...TERRAIN_HELP, ...ACTION_HELP];
+export const FORMATION_HELP: readonly HelpTopic[] = [
+  {
+    id: "formation:beginner",
+    tab: "formations",
+    title: "Beginner Formation",
+    summary: "Every enemy robot is always on your map. Missile robots carry the only explosives.",
+    details: [
+      "Good for learning: you can plan around the whole enemy squad without scouting.",
+      "No grenades, no Zap and no Time Bombs.",
+    ],
+    facts: [
+      { label: "Enemies", value: "Always visible" },
+      { label: "Explosives", value: "Missiles only" },
+    ],
+  },
+  {
+    id: "formation:standard",
+    tab: "formations",
+    title: "Standard Formation",
+    summary: "Enemies stay hidden until your robots spot them, and every robot has more tools.",
+    details: [
+      "Every robot carries grenades alongside its main weapon, and any robot can Zap.",
+      "Each Team’s first robot also carries one Time Bomb.",
+    ],
+    facts: [
+      { label: "Enemies", value: "Hidden until spotted" },
+      { label: "Extras", value: "Grenades, Zap, one Time Bomb per Team" },
+    ],
+  },
+];
+
+export const HELP_TOPICS: readonly HelpTopic[] = [
+  ...ROBOT_HELP,
+  ...TERRAIN_HELP,
+  ...ACTION_HELP,
+  ...FORMATION_HELP,
+];
 const HELP_BY_ID = new Map(HELP_TOPICS.map((topic) => [topic.id, topic]));
 
 export const helpTopic = (id: HelpTopicId): HelpTopic => {

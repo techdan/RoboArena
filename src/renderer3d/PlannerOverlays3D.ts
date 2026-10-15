@@ -407,4 +407,15 @@ export class PlannerOverlays3D {
     }
     this.group.add(group);
   }
+
+  /** One of the player's own armed Time Bombs: an amber disc ringed by its pulse. */
+  armedBomb(tile: TileCoord, color = "#ffb347"): void {
+    const c = centre(tile);
+    const group = new THREE.Group();
+    group.position.set(c.x, FLOOR + 0.014, c.y);
+    group.add(flat(new THREE.CircleGeometry(0.2, 24), additive("#ff4d3d", 0.9), 0));
+    group.add(flat(new THREE.RingGeometry(0.3, 0.36, 32), additive(color, 0.95), 0));
+    this.group.add(group);
+    this.pulses.push({ mesh: group, phase: 0.4 });
+  }
 }

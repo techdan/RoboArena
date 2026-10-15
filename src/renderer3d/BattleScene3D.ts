@@ -542,6 +542,11 @@ export class BattleScene3D {
       if (snapshot.robots[id] === undefined) rig.root.visible = false;
     }
 
+    // Armed bombs hold their tiles until the snapshot that sees them explode.
+    this.effects.syncBombs(
+      snapshot.bombs.map((bomb) => ({ id: bomb.id, at: this.worldOf(bomb.at, 0) })),
+    );
+
     if (options.reducedMotion) return;
     this.playEvents(this.timeline.eventsByTick.get(snapshot.tick) ?? [], snapshot, animate, secs);
   }
@@ -641,6 +646,7 @@ export class BattleScene3D {
             const from =
               source?.groundPosition() ?? rig.groundPosition().add(new THREE.Vector3(0, 0, -1));
             if (event.damageKind === "direct") this.effects.hitSparks(rig.chestWorld(), from);
+            if (event.damageKind === "zap") this.effects.zapArc(rig.chestWorld());
             rig.flinch(from, Math.min(1.4, 0.4 + event.damage / 40));
             this.focus(rig.groundPosition(), 0.9, secs(1));
           });
@@ -676,6 +682,19 @@ export class BattleScene3D {
           const target = rigOf(event.targetId);
           if (target !== undefined && animate)
             this.effects.lockOn(target.groundPosition().setY(0.04));
+          break;
+        }
+        case "zapped":
+          if (animate) this.effects.zapArc(this.worldOf(event.at, 0.35));
+          break;
+        case "bomb-placed":
+          if (animate) this.effects.footfall(this.worldOf(event.at, 0), false);
+          break;
+        case "bomb-exploded": {
+          const at = this.worldOf(event.at, 0.15);
+          if (!animate) break;
+          this.effects.explosion(at, 2);
+          this.focus(at, 2, secs(2.2));
           break;
         }
         case "enemy-lost":

@@ -107,7 +107,7 @@ export function buildAutoplayState(options: AutoplayOptions, arena: Arena): Matc
   const homeSlots = autoplayHomeSlots(options.seed, options.teams.length);
   return createSurvivalMatchState({
     arena,
-    formation: "beginner",
+    formation: "standard",
     length: options.arena === "rubble-two" ? "melee" : "battle",
     turnLengthSeconds: options.turnLengthSeconds ?? 15,
     teams: options.teams.map((team, index) => ({

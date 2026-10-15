@@ -25,11 +25,25 @@ import {
   HOME_SLOTS,
   PLAYER_COLORS,
   type PlayerColor,
+  type RoomConfig,
 } from "../../lib/setup/validate";
 import { ARENA_THEME_ORDER, ARENA_THEMES } from "../../renderer3d/themes";
 import { TeamRow } from "./TeamRow";
 import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
 import { FieldGuideButton } from "../help/HelpProvider";
+
+const FORMATION_ORDER: readonly RoomConfig["formation"][] = ["beginner", "standard"];
+
+/** Lobby names and one-line rules summaries for the Quick Start formations. */
+const FORMATION_LABELS: Readonly<
+  Record<RoomConfig["formation"], { readonly name: string; readonly tagline: string }>
+> = {
+  beginner: { name: "Beginner", tagline: "All enemies visible, missiles only." },
+  standard: {
+    name: "Standard",
+    tagline: "Hidden enemies, grenades, Zap and one Time Bomb per team.",
+  },
+};
 
 export function RoomSetup({ code }: { readonly code: string }) {
   const router = useRouter();
@@ -485,6 +499,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
                       config: {
                         ...next,
                         arenaName: keepArena ? room.config.arenaName : next.arenaName,
+                        formation: room.config.formation,
                         arenaTheme: room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID,
                       },
                     });
@@ -532,6 +547,38 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 </select>
               </label>
               <label className="setup-label mt-4">
+                Formation
+                <select
+                  className="setup-input cursor-pointer"
+                  value={room.config.formation}
+                  disabled={!isHost}
+                  onChange={(event) => {
+                    const config = roomConfigSchema.safeParse({
+                      ...room.config,
+                      formation: event.currentTarget.value,
+                    });
+                    if (!config.success) return;
+                    send({
+                      version: PROTOCOL_VERSION,
+                      requestId: requestId(),
+                      kind: "UpdateConfig",
+                      code,
+                      token,
+                      config: config.data,
+                    });
+                  }}
+                >
+                  {FORMATION_ORDER.map((formation) => (
+                    <option key={formation} value={formation}>
+                      {FORMATION_LABELS[formation].name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1.5 block text-[11px] font-normal normal-case tracking-normal text-white/40">
+                  {FORMATION_LABELS[room.config.formation].tagline}
+                </span>
+              </label>
+              <label className="setup-label mt-4">
                 Arena look
                 <select
                   className="setup-input"
@@ -567,7 +614,7 @@ export function RoomSetup({ code }: { readonly code: string }) {
                 </div>
                 <div className="setup-stat">
                   <span>Formation</span>
-                  <strong>Beginner</strong>
+                  <strong>{FORMATION_LABELS[room.config.formation].name}</strong>
                 </div>
                 <div className="setup-stat">
                   <span>Sport</span>
