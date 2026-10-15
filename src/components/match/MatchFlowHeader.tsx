@@ -12,12 +12,14 @@ export function MatchFlowHeader({
   team,
   turnNumber,
   status,
+  spectating = false,
 }: {
   readonly roomCode: string;
   readonly matchId: string;
   readonly team: { readonly name: string; readonly color: string };
   readonly turnNumber: number;
   readonly status: MatchSnapshotMessage["status"];
+  readonly spectating?: boolean;
 }) {
   const copy = matchFlowCopy(status, turnNumber);
   return (
@@ -40,7 +42,7 @@ export function MatchFlowHeader({
         <ShieldCheck size={15} aria-hidden="true" /> Room state saved
       </div>
       <FieldGuideButton />
-      <RoomStatus status={status} turnNumber={turnNumber} />
+      <RoomStatus status={status} turnNumber={turnNumber} spectating={spectating} />
     </header>
   );
 }

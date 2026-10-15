@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { makeFfaMatch, makeMatch, makeRobot } from "../src/engine/__fixtures__/match";
 import { verifyReplay } from "../src/engine/replay";
+import { resolveTurn } from "../src/engine/resolver.js";
 import type { ResolutionEvent } from "../src/engine/types";
 import {
   acknowledgeTurn,
@@ -139,7 +140,7 @@ describe("authoritative match lifecycle", () => {
     });
     expect(projected.events[2]).toEqual({
       tick: 30,
-      seq: 4,
+      seq: 2,
       kind: "damaged",
       damageKind: "direct",
       targetId: "r1",
@@ -242,6 +243,69 @@ describe("authoritative match lifecycle", () => {
     expect(JSON.stringify(projected)).not.toContain('"r3"');
   });
 
+  it.each([3, 4])("keeps hidden third-party scanning private in a %i-player match", (count) => {
+    const project = (hiddenY: number) => {
+      const teams = [
+        {
+          id: "observer",
+          robots: [makeRobot("a", "observer", "rifle", { x: 1, y: 1 }, { scanHeading: "N" })],
+        },
+        {
+          id: "scanner",
+          robots: [makeRobot("b", "scanner", "rifle", { x: 6, y: 1 }, { scanHeading: "S" })],
+        },
+        { id: "hidden", robots: [makeRobot("c", "hidden", "rifle", { x: 6, y: hiddenY })] },
+        ...(count === 4
+          ? [{ id: "fourth", robots: [makeRobot("d", "fourth", "rifle", "dock")] }]
+          : []),
+      ];
+      const state = makeFfaMatch(teams, { turnLengthSeconds: 1 });
+      const orders = {
+        turnNumber: 1,
+        timelines: [
+          {
+            robotId: "b",
+            segments: [
+              { kind: "scan-and-fire", weapon: "rifle", maxDistance: 18, seconds: 1 } as const,
+            ],
+          },
+        ],
+      };
+      const result = resolveTurn({ state, orders, seed: "audit-privacy" });
+      if (result.outcome !== "resolved") throw new Error(result.message);
+      return projectTurnResult(
+        {
+          initialState: state,
+          orders,
+          events: result.events,
+          turnNumber: 1,
+          seed: "audit-privacy",
+          resolutionNonce: "nonce",
+          participantOrders: {},
+          eventDigest: "unused",
+          nextStateDigest: "unused",
+        },
+        "observer",
+      );
+    };
+    const projected = project(3);
+    expect(
+      projected.initialState.teams.flatMap((team) => team.robots.map((robot) => robot.id)),
+    ).toEqual(["a", "b"]);
+    expect(
+      projected.events.some(
+        (event) =>
+          event.kind === "scan-target-acquired" ||
+          event.kind === "fired" ||
+          event.kind === "projectile-launched" ||
+          event.kind === "shot-missed",
+      ),
+    ).toBe(false);
+    // Moving only a hidden target changes combat outcomes, but cannot change
+    // the observer's movie or reveal the count through global sequence gaps.
+    expect(project(5)).toEqual(projected);
+  });
+
   it("rejects a divergent stored replay before appending another turn", () => {
     const state = makeMatch();
     const match = createAuthoritativeMatch(state, ["team-1", "team-2"]);
@@ -305,7 +369,6 @@ describe("authoritative match lifecycle", () => {
     });
     const match = createAuthoritativeMatch(state, ["team-1", "team-2"]);
     lockParticipantOrders(match, "team-1", emptyOrders(1), "final-seed", "final-nonce");
-    lockParticipantOrders(match, "team-2", emptyOrders(1), "final-seed", "final-nonce");
     resolvePendingTurn(match);
     expect(participantStatus(match, "team-1")).toBe("turn-ready");
     acknowledgeTurn(match, "team-1", 1);
@@ -329,6 +392,41 @@ describe("authoritative match lifecycle", () => {
 });
 
 describe("multi-player free-for-all lifecycle", () => {
+  it("lets survivors advance while an eliminated participant watches independently", () => {
+    const state = makeFfaMatch([
+      { id: "a", robots: [makeRobot("ra", "a", "rifle", { x: 1, y: 1 })] },
+      { id: "b", robots: [makeRobot("rb", "b", "rifle", { x: 6, y: 1 })] },
+      { id: "c", robots: [makeRobot("rc", "c", "rifle", "dock", { hp: 0 })] },
+    ]);
+    const match = createAuthoritativeMatch(state, ["a", "b", "c"]);
+    expect(activePlayerIds(match)).toEqual(["a", "b"]);
+    expect(participantStatus(match, "c")).toBe("waiting");
+    expect(() => lockParticipantOrders(match, "c", emptyOrders(1), "seed", "nonce")).toThrow(
+      "eliminated",
+    );
+    lockParticipantOrders(match, "a", emptyOrders(1), "seed", "nonce");
+    lockParticipantOrders(match, "b", emptyOrders(1), "seed", "nonce");
+    expect(resolvePendingTurn(match)).toBe(true);
+    expect(participantStatus(match, "c")).toBe("turn-ready");
+    acknowledgeTurn(match, "c", 1);
+    expect(participantStatus(match, "c")).toBe("waiting");
+    expect(
+      participantMatchSnapshot({
+        requestId: "view",
+        roomCode: "ABC234",
+        matchId: "match",
+        playerId: "c",
+        match,
+      }).requiredPlayerIds,
+    ).toEqual(["a", "b"]);
+    for (const player of ["a", "b"]) {
+      acknowledgeTurn(match, player, 1);
+      lockParticipantOrders(match, player, emptyOrders(2), "seed2", "nonce2");
+    }
+    expect(resolvePendingTurn(match)).toBe(true);
+    expect(match.turns).toHaveLength(2);
+  });
+
   const FIELD_POSITIONS = [
     { x: 1, y: 1 },
     { x: 6, y: 1 },
@@ -414,7 +512,8 @@ describe("multi-player free-for-all lifecycle", () => {
       })),
     );
     const match = createAuthoritativeMatch(state, players);
-    for (const id of players) lockParticipantOrders(match, id, emptyOrders(1), "seed", "nonce");
+    for (const id of activePlayerIds(match))
+      lockParticipantOrders(match, id, emptyOrders(1), "seed", "nonce");
     resolvePendingTurn(match);
     for (const id of players) acknowledgeTurn(match, id, 1);
     const result = participantMatchSnapshot({
@@ -437,11 +536,33 @@ describe("multi-player free-for-all lifecycle", () => {
     const state = makeFfaMatch(
       players.map((id) => ({
         id,
-        robots: [makeRobot(`${id}-r1`, id, "rifle", "dock", { hp: 0 })],
+        robots: [makeRobot(`${id}-r1`, id, "missile", { x: 3, y: 3 }, { hp: 1 })],
       })),
     );
     const match = createAuthoritativeMatch(state, players);
-    for (const id of players) lockParticipantOrders(match, id, emptyOrders(1), "seed", "nonce");
+    for (const id of players)
+      lockParticipantOrders(
+        match,
+        id,
+        {
+          turnNumber: 1,
+          timelines: [
+            {
+              robotId: `${id}-r1`,
+              segments: [
+                {
+                  kind: "aim-and-fire",
+                  weapon: "missile-launcher",
+                  target: { x: 3, y: 3 },
+                  repeat: false,
+                },
+              ],
+            },
+          ],
+        },
+        "seed",
+        "nonce",
+      );
     resolvePendingTurn(match);
     for (const id of players) acknowledgeTurn(match, id, 1);
     const result = participantMatchSnapshot({
@@ -507,6 +628,7 @@ describe("resignation", () => {
 
   it("resolves immediately when a resignation was the last thing a turn awaited", () => {
     const match = createAuthoritativeMatch(ffaState(3), ["team-1", "team-2", "team-3"]);
+    match.needsOrderReview = true;
     lockParticipantOrders(match, "team-1", emptyOrders(1), "turn-seed", "turn-nonce");
     lockParticipantOrders(match, "team-2", emptyOrders(1), "turn-seed", "turn-nonce");
     expect(match.phase).toBe("planning"); // still waiting on team-3
@@ -515,6 +637,7 @@ describe("resignation", () => {
     expect(resolvePendingTurn(match)).toBe(true);
     expect(match.pendingResolution).toBeUndefined();
     expect(match.turns).toHaveLength(1);
+    expect(match.needsOrderReview).toBeUndefined();
   });
 
   it("awards the win and full ceremony credit to the last un-resigned side", () => {

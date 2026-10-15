@@ -11,6 +11,51 @@ const orders = (turnNumber: number, robotId = "r1"): TurnOrders => ({
 });
 
 describe("planner draft state", () => {
+  it("acknowledges its own save without losing undo history or reporting a conflict", () => {
+    const local = plannerReducer(createPlannerState(orders(1), "rev-1"), {
+      type: "edit",
+      orders: orders(1, "saved"),
+    });
+    const saved = plannerReducer(local, {
+      type: "save-acknowledged",
+      revision: "rev-2",
+      orders: orders(1, "saved"),
+    });
+    expect(saved.history).toBe(local.history);
+    expect(saved).toMatchObject({
+      dirty: false,
+      authoritativeRevision: "rev-2",
+      conflictRevision: null,
+    });
+  });
+
+  it("preserves edits made while saving and ignores acknowledgements for an earlier turn", () => {
+    let local = plannerReducer(createPlannerState(orders(1), "rev-1"), {
+      type: "edit",
+      orders: orders(1, "submitted"),
+    });
+    local = plannerReducer(local, { type: "edit", orders: orders(1, "newer") });
+    const saved = plannerReducer(local, {
+      type: "save-acknowledged",
+      revision: "rev-2",
+      orders: orders(1, "submitted"),
+    });
+    expect(saved).toMatchObject({
+      dirty: true,
+      conflictRevision: null,
+      authoritativeRevision: "rev-2",
+    });
+    expect(saved.history.present).toEqual(orders(1, "newer"));
+    const next = createPlannerState(orders(2), "rev-3");
+    expect(
+      plannerReducer(next, {
+        type: "save-acknowledged",
+        revision: "rev-2",
+        orders: orders(1, "submitted"),
+      }),
+    ).toBe(next);
+  });
+
   it("undoes/redoes byte-equivalent orders and clears redo on a new edit", () => {
     const initial = createPlannerState(orders(1), "rev-1");
     const editedOrders: TurnOrders = {

@@ -12,6 +12,7 @@ export interface PlannerState {
 }
 
 export type PlannerAction =
+  | { readonly type: "save-acknowledged"; readonly revision: string; readonly orders: TurnOrders }
   | { readonly type: "edit"; readonly orders: TurnOrders }
   | { readonly type: "undo" }
   | { readonly type: "redo" }
@@ -48,6 +49,15 @@ export const plannerReducer = (state: PlannerState, action: PlannerAction): Plan
       return { ...state, history: undoHistory(state.history), dirty: true };
     case "redo":
       return { ...state, history: redoHistory(state.history), dirty: true };
+    case "save-acknowledged":
+      if (action.orders.turnNumber !== state.history.present.turnNumber) return state;
+      return {
+        ...state,
+        authoritativeRevision: action.revision,
+        dirty: JSON.stringify(state.history.present) !== JSON.stringify(action.orders),
+        conflictRevision: null,
+        conflictOrders: null,
+      };
     case "authoritative-refresh":
       if (action.revision === state.authoritativeRevision) return state;
       if (state.dirty) {

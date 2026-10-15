@@ -4,15 +4,18 @@ import type { MatchState } from "../../engine/types";
 export function ReadyPanel({
   match,
   lockedPlayerIds,
+  requiredPlayerIds,
 }: {
   readonly match: MatchState;
   readonly lockedPlayerIds: readonly string[];
+  readonly requiredPlayerIds: readonly string[];
 }) {
   const locked = new Set(lockedPlayerIds);
+  const required = new Set(requiredPlayerIds);
   return (
     <section className="match-panel">
       <p className="eyebrow">Turn {match.turnNumber} readiness</p>
-      <h2>Waiting for {match.teams.length - locked.size}</h2>
+      <h2>Waiting for {requiredPlayerIds.filter((id) => !locked.has(id)).length}</h2>
       <ul className="ready-list">
         {match.teams.map((team) => (
           <li key={team.id}>
@@ -22,13 +25,17 @@ export function ReadyPanel({
               aria-hidden="true"
             />
             <span>{team.name}</span>
-            <span data-ready={locked.has(team.id)}>
-              {locked.has(team.id) ? (
+            <span data-ready={!required.has(team.id) || locked.has(team.id)}>
+              {!required.has(team.id) || locked.has(team.id) ? (
                 <Check size={14} aria-hidden="true" />
               ) : (
                 <Clock3 size={14} aria-hidden="true" />
               )}
-              {locked.has(team.id) ? "Locked" : "Planning"}
+              {!required.has(team.id)
+                ? "Not required"
+                : locked.has(team.id)
+                  ? "Locked"
+                  : "Planning"}
             </span>
           </li>
         ))}
