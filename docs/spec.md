@@ -228,8 +228,10 @@ mobile middle point in the cover system.
 | Ducking           | same traversal as Upright | 4 / 3 / 2 ✅                          |
 | Crouching         | Open Ground only          | 3 / 2 / 1 ✅                          |
 
-Posture commands set an absolute posture. Any actual change costs **10 ticks
-(1/6 s)**; selecting the current posture is a no-op. ✅
+Posture commands set an absolute posture. Each level costs **10 ticks
+(1/6 s)**, and Upright↔Crouching passes through Ducking (2 × 10 ticks,
+`seg80:0x0352`); selecting the current posture is a no-op. ✅ Matches created
+before rules revision 2 keep the legacy flat 10-tick cost.
 
 ---
 
@@ -357,8 +359,11 @@ forward ±90° semicircle**: exact perpendicular boundary rays are accepted and
 the first tile behind either boundary is rejected. Implement as integer
 `dot(headingVector, target-shooter) >= 0`. ✅
 
-Scan headings are absolute commands; any changed heading costs **5 ticks
-(1/12 s)** regardless of angular distance. ✅
+Scan headings are absolute commands. The robot turns one octant at a time the
+shortest way round (a half turn goes clockwise), and each octant costs **5 ticks
+(1/12 s)**, so N→S costs 20 ticks (`seg80:0x0422`, `seg30:0x13A2`). ✅ Matches
+created before rules revision 2 keep the legacy flat 5-tick cost so their
+replays still verify.
 
 ### Per-shot resolution pipeline
 
@@ -548,12 +553,40 @@ Friendly bodies do **not** block bullets and do not take damage from friendly bu
 
 ## 7. Visibility
 
-Per-team visibility is semantically current every tick and is recomputed at each
-boundary that can change position, posture, heading, or survival. A team sees:
+A team sees:
 
 - All robots on its Side (allies are always visible)
 - Tiles within any of its own robots' scan cone × range with unobstructed LoS
-- Enemy robots in those visible tiles (with caveats below)
+- Enemy robots it has **spotted** (rules revision 2, below)
+
+### Spotting roll (rules revision 2) ✅
+
+New matches use `GameConfig.rulesRevision: 2`, which matches the original's
+per-tick spotting (`src/engine/spotting.ts`; re-map
+`stealth-fence-ceremony-ai-formats.md` §1). After every tick, for each pair of
+Teams on different Sides where either Team moved or acted (`seg6:0x5898`,
+`seg96:0x03E0`), every pair of live robots with sight strength > 0 and cover on
+both ends (`seg96:0x060D`) is checked in both directions. A target inside the
+observer's scan cone is seen outright if it fired this tick; otherwise a roll
+decides (`seg96:0x09AF`):
+
+- index = cover base {1:2, 2:4, 3:6, 4:10} − (4 − sight≫2), +4 if it moved
+  this tick or else +2 if it ran any other command, − (distance≫2 − 2),
+  clamped to 0..13;
+- seen when `rng & 0xFF` < `[0,8,16,24,32,40,48,56,64,96,128,160,208,255][index]`
+  (DGROUP `0x213A`).
+
+An enemy already seen stays seen while it remains inside any cone of the
+observing Team with sight and cover; an enemy outside every such cone is
+dropped (`seg96:0x0AAC`). When neither robot of a pair moved or acted, only
+that retention applies. At turn start every robot counts as moved
+(`seg96:0x0267`). The spotted set carries across turns in
+`MatchState.spottedEnemies` (authority-only; never sent to clients). Rolls use
+the authoritative turn RNG. Matches without the revision keep the legacy rule:
+every enemy in a visible tile is seen.
+
+The original's Beginner formation also turns Show Enemy Positions on, which
+removes fog entirely. RoboArena keeps fog; see `docs/modernization-ideas.md`.
 
 Enemy sensor contacts are **not pooled across allied Teams**. The original
 initializes each observing Team's visible-robot mask with all same-Side robots

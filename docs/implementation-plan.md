@@ -415,6 +415,13 @@ no speed statistic. A runner can cross the cone between weapon opportunities
 without being acquired; after acquisition, leaving later does not reroll the
 locked shot.
 
+**2026-10-15 fidelity update (rules revision 2, ✅ DRAFT COMPLETE)**: new
+matches replace certain sight with the original per-tick spotting roll
+(`seg96:0x09AF`, DGROUP `0x213A`) and charge turns per octant and posture
+changes per level via Ducking (`seg80:0x0422`, `seg80:0x0352`). Matches created
+earlier keep the legacy rules so stored replays verify. See `docs/spec.md` §7
+and `docs/modernization-ideas.md`.
+
 These are bundled because both need scan-cone calculations against moving targets per tick. Splitting into two phases would duplicate the per-tick visibility-against-cone logic.
 
 **Dependencies**: Phase 3.

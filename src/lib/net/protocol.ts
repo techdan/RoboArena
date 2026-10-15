@@ -469,6 +469,7 @@ const serializedMatchStateSchema = z
         arenaType: z.enum(["rubble", "suburbs", "computer"]),
         arenaSizeName: z.string().min(1),
         turnLengthSeconds: z.number().int().min(1).max(40),
+        rulesRevision: z.literal(2).optional(),
       })
       .strict(),
     turnNumber: z.number().int().min(1),

@@ -134,10 +134,9 @@ export function TurnStep() {
           ))}
         </ul>
         <p className="bc-footnote">
-          Example opening. Turning to face a new scan direction costs only{" "}
-          {formatSeconds(SCAN_DIRECTION_COST_TICKS)} and a posture change{" "}
-          {formatSeconds(POSTURE_CHANGE_COST_TICKS)}, so cheap set-up orders leave most of the turn
-          for an ambush.
+          Example opening. Turning costs only {formatSeconds(SCAN_DIRECTION_COST_TICKS)} per eighth
+          of a turn and a posture change {formatSeconds(POSTURE_CHANGE_COST_TICKS)} per level, so
+          cheap set-up orders leave most of the turn for an ambush.
         </p>
       </section>
 
@@ -448,7 +447,8 @@ export function TerrainStep() {
           </table>
           <p className="bc-footnote">
             Crouching can&apos;t walk into bushes or low walls — crouch on open ground right behind
-            them. Each posture change costs {formatSeconds(POSTURE_CHANGE_COST_TICKS)}.
+            them. Each posture level costs {formatSeconds(POSTURE_CHANGE_COST_TICKS)}; Upright to
+            Crouching goes through Ducking, so it costs twice that.
           </p>
         </section>
       </div>
@@ -504,7 +504,7 @@ export const firstTurnChecklist = (): readonly ChecklistItem[] => {
     {
       id: "scan",
       title: "Face the enemy",
-      body: `Set scan direction toward where enemies will come from. You can only shoot inside that half-circle, and turning costs just ${formatSeconds(SCAN_DIRECTION_COST_TICKS)}.`,
+      body: `Set scan direction toward where enemies will come from. You can only shoot inside that half-circle, and turning costs ${formatSeconds(SCAN_DIRECTION_COST_TICKS)} per eighth of a turn.`,
     },
     {
       id: "ambush",

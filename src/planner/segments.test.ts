@@ -64,7 +64,9 @@ describe("planner segments", () => {
     expect(projectRobotAtTick(robot, segments, 119).position).toBe("dock");
     expect(projectRobotAtTick(robot, segments, 120).position).toEqual({ x: 1, y: 1 });
     expect(projectRobotAtTick(robot, segments, 130).posture).toBe("ducking");
-    expect(projectRobotAtTick(robot, segments, 135).scanHeading).toBe("S");
+    expect(projectRobotAtTick(robot, segments, 135).scanHeading).not.toBe("S");
+    // E→S is two octants, so 10 ticks (seg80:0x0422).
+    expect(projectRobotAtTick(robot, segments, 140).scanHeading).toBe("S");
     expect(
       timelineTiming(robot, segments, 130).map((entry) => [
         entry.startTick,
@@ -74,7 +76,7 @@ describe("planner segments", () => {
     ).toEqual([
       [0, 120, false],
       [120, 130, false],
-      [130, 135, true],
+      [130, 140, true],
     ]);
     expect(
       timelineForRobot(deleteSegment(orders, robot.id, 1), robot.id).segments.map(
@@ -161,8 +163,8 @@ describe("planner segments", () => {
       { kind: "scan-and-fire", weapon: "rifle", maxDistance: 12, seconds: 2 },
     ] as const;
     expect(previewParkingTick(robot, [], 900)).toBe(0);
-    expect(previewParkingTick(robot, segments, 900)).toBe(135);
-    expect(previewParkingTick(robot, segments, 900, 1)).toBe(15);
+    expect(previewParkingTick(robot, segments, 900)).toBe(140);
+    expect(previewParkingTick(robot, segments, 900, 1)).toBe(20);
     expect(
       previewParkingTick(
         robot,

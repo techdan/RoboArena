@@ -12,16 +12,22 @@ import {
 } from "./constants.js";
 import { chebyshevDistance } from "./geometry.js";
 import { moveStepCostTicks } from "./movement.js";
+import { headingTurnSteps, postureChangeSteps } from "./orientation.js";
 import type { Heading, Posture, RobotCommandSegment, RobotState, TileCoord } from "./types.js";
 
-/** Selectors 70..72 set an absolute posture and all cost 10 ticks. */
-export const postureChangeCostTicks = (from: Posture, to: Posture): number =>
-  from === to ? 0 : POSTURE_CHANGE_COST_TICKS;
+/**
+ * Selectors 70..72 cost 10 ticks per record. With `stepped` (rules revision 2)
+ * Upright↔Crouching is two records via Ducking; otherwise one record.
+ */
+export const postureChangeCostTicks = (from: Posture, to: Posture, stepped = false): number =>
+  from === to ? 0 : (stepped ? postureChangeSteps(from, to).length : 1) * POSTURE_CHANGE_COST_TICKS;
 
-/** Selectors 24..31 set an absolute heading and all cost 5 ticks. */
-export const scanRotationCostTicks = (from: Heading, to: Heading): number => {
-  return from === to ? 0 : SCAN_DIRECTION_COST_TICKS;
-};
+/**
+ * Selectors 24..31 cost 5 ticks per record. With `stepped` (rules revision 2)
+ * a turn is one record per octant; otherwise one record.
+ */
+export const scanRotationCostTicks = (from: Heading, to: Heading, stepped = false): number =>
+  from === to ? 0 : (stepped ? headingTurnSteps(from, to).length : 1) * SCAN_DIRECTION_COST_TICKS;
 
 export const moveStepSize = (from: TileCoord, to: TileCoord): 1 | 2 | null => {
   const distance = chebyshevDistance(from, to);
@@ -38,14 +44,15 @@ export const commandDurationTicks = (
   command: Exclude<RobotCommandSegment, { readonly kind: "move" }>,
   robot: RobotState,
   firingIntervalTicks?: number,
+  stepped = false,
 ): number | null => {
   switch (command.kind) {
     case "deploy":
       return DEPLOY_COST_TICKS;
     case "set-posture":
-      return postureChangeCostTicks(robot.posture, command.posture);
+      return postureChangeCostTicks(robot.posture, command.posture, stepped);
     case "set-scan-direction":
-      return scanRotationCostTicks(robot.scanHeading, command.heading);
+      return scanRotationCostTicks(robot.scanHeading, command.heading, stepped);
     case "aim-and-fire":
       return firingIntervalTicks ?? null;
     case "scan-and-fire":

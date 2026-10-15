@@ -165,16 +165,20 @@ export const ACTION_HELP: readonly HelpTopic[] = [
     summary: "Set upright, ducking, or crouching posture at an exact point in the program.",
     details: [
       "Posture affects movement permission, cover, and the projected state used by later commands.",
+      "Upright to Crouching (and back) passes through Ducking and costs two changes.",
     ],
-    facts: [{ label: "Change cost", value: formatGameTime(POSTURE_CHANGE_COST_TICKS) }],
+    facts: [{ label: "Cost per level", value: formatGameTime(POSTURE_CHANGE_COST_TICKS) }],
   },
   {
     id: "action:scan-direction",
     tab: "actions",
     title: "Scan Direction",
     summary: "Set the center heading of the inclusive forward scan semicircle.",
-    details: ["The two perpendicular boundary rays are included in the scan gate."],
-    facts: [{ label: "Change cost", value: formatGameTime(SCAN_DIRECTION_COST_TICKS) }],
+    details: [
+      "The two perpendicular boundary rays are included in the scan gate.",
+      "The robot turns one eighth at a time the shortest way round; a half turn goes clockwise.",
+    ],
+    facts: [{ label: "Cost per eighth", value: formatGameTime(SCAN_DIRECTION_COST_TICKS) }],
   },
   {
     id: "action:aim-fire",
