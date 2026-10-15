@@ -167,6 +167,12 @@ export const SCAN_FIRE_DECAY_IDLE_TICKS = 20;
 export const SPOTTING_REFRESH = { baseTicks: 30, mask: 15 } as const;
 
 /**
+ * Revision 4 delayed death: a destroyed robot leaves the map 60 ticks after
+ * its death time (seg6:0x4C37..0x4C62, seg18:0x111E).
+ */
+export const DEATH_REMOVAL_DELAY_TICKS = 60;
+
+/**
  * Revision 4 explosive flight. A grenade lands `now + 5·d + 20` ticks after it
  * fires (seg6:0x230C..0x2317) and a missile `now + 5·(d >> 1) + 10`
  * (seg6:0x27DB..0x27EC), where d is the floored Euclidean distance from the

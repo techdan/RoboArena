@@ -11,6 +11,7 @@ import {
   BOMB_MAX_FUSE_SECONDS,
   BULLET_IMPACT_DELAY_TICKS,
   MOVIE_TAIL_TICKS,
+  DEATH_REMOVAL_DELAY_TICKS,
   SCAN_FIRE_DECAY_IDLE_TICKS,
   SPOTTING_REFRESH,
   SCAN_FIRE_PAUSE_AFTER_SHOTS,
@@ -1391,7 +1392,9 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
                 ? 2
                 : 0;
         if (moved || activity !== 0) dirty = true;
-        if (robot && robot.hp > 0 && isTileCoord(robot.position)) {
+        // Revision 4: the pair routine (seg96:0x0484) does not check seg21:0x0AB1,
+        // so a destroyed robot takes part until it leaves the map.
+        if (robot && (stepFlags !== undefined || robot.hp > 0) && isTileCoord(robot.position)) {
           live.push({ robot: { ...robot, position: robot.position }, moved, activity });
         }
       }
@@ -1506,23 +1509,92 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     rng.nextUint32();
   };
 
-  /** A robot whose damage reached its armor is destroyed and docked. */
-  const killRobot = (tick: number, robot: RobotState): void => {
-    robots.set(robot.id, { ...robot, hp: 0, position: "dock" });
-    emit(tick, { kind: "destroyed", robotId: robot.id });
-    const cursor = cursors.get(robot.id);
-    if (!cursor) return;
-    const abortedIndex = cursor.active?.commandIndex ?? cursor.nextIndex;
-    if (cursor.active || cursor.timeline.segments[abortedIndex]) {
-      emit(tick, {
-        kind: "command-aborted",
-        robotId: robot.id,
-        commandIndex: abortedIndex,
-        reason: "destroyed",
-      });
+  /**
+   * Delayed death, seg14:0x071C: lethal damage sets the death time `+20` to
+   * the next step, or to the end of the move record the robot is in. From
+   * that moment the robot is dead to targeting, Zap and blasts (hp 0,
+   * seg21:0x0AB1), but it finishes its move and stays on the map, still
+   * taking part in spotting, until it is removed 60 ticks after death
+   * (seg6:0x4C37).
+   */
+  const timingDeaths = new Map<string, { readonly deathAt: number }>();
+
+  const scheduleDeath = (tick: number, robotId: string): void => {
+    const active = cursors.get(robotId)?.active;
+    const deathAt =
+      active?.command.kind === "move" && active.completesAt > tick
+        ? active.completesAt
+        : tick + SIMULATION_STEP_TICKS;
+    timingDeaths.set(robotId, { deathAt });
+  };
+
+  /** seg14:0x0472 at death: the record in progress takes effect. */
+  const applyRecordAtDeath = (tick: number, robot: RobotState, active: ActiveCommand): void => {
+    const command = active.command;
+    if (command.kind === "move") {
+      const step = command.path[active.moveIndex];
+      if (step && isTileCoord(robot.position) && !sameTile(robot.position, step.to)) {
+        robots.set(robot.id, { ...robot, position: step.to });
+        emit(tick, { kind: "move-step", robotId: robot.id, to: step.to });
+      }
+    } else if (command.kind === "set-posture") {
+      const posture =
+        (active.orientationSteps?.[active.moveIndex] as Posture | undefined) ?? command.posture;
+      robots.set(robot.id, { ...robot, posture });
+      emit(tick, { kind: "posture-changed", robotId: robot.id, posture });
+    } else if (command.kind === "set-scan-direction") {
+      const heading =
+        (active.orientationSteps?.[active.moveIndex] as Heading | undefined) ?? command.heading;
+      robots.set(robot.id, { ...robot, scanHeading: heading });
+      emit(tick, { kind: "scan-rotated", robotId: robot.id, heading });
     }
-    cursor.active = null;
-    cursor.nextIndex = cursor.timeline.segments.length;
+  };
+
+  /**
+   * Dead-state dispatch, seg6:0x4B05: at the death time the movie end is
+   * extended (seg6:0x4B49), the record in progress applies and the robot is
+   * destroyed; 60 ticks later it leaves the map with activity 1 and moved
+   * (seg18:0x111E, seg6:0x4C56, seg6:0x4C62). Before its death time a robot
+   * in a move keeps switching tiles.
+   */
+  const dispatchDoomedRobot = (robotId: string, deathAt: number, tick: number): void => {
+    const robot = robots.get(robotId);
+    const cursor = cursors.get(robotId);
+    if (!robot || !cursor) return;
+    if (tick < deathAt) {
+      const active = cursor.active;
+      const next = active?.tileSwitches?.[0];
+      if (active && next !== undefined && next.at === tick) {
+        cursor.active = { ...active, tileSwitches: active.tileSwitches!.slice(1) };
+        robots.set(robot.id, { ...robot, position: next.to });
+        timingMoved.add(robot.id);
+        emit(tick, { kind: "move-step", robotId: robot.id, to: next.to });
+      }
+      return;
+    }
+    if (tick === deathAt) {
+      extendMovie(tick);
+      if (cursor.active) applyRecordAtDeath(tick, robot, cursor.active);
+      emit(tick, { kind: "destroyed", robotId });
+      const abortedIndex = cursor.active?.commandIndex ?? cursor.nextIndex;
+      if (cursor.active || cursor.timeline.segments[abortedIndex]) {
+        emit(tick, {
+          kind: "command-aborted",
+          robotId,
+          commandIndex: abortedIndex,
+          reason: "destroyed",
+        });
+      }
+      cursor.active = null;
+      cursor.nextIndex = cursor.timeline.segments.length;
+      return;
+    }
+    if (tick === deathAt + DEATH_REMOVAL_DELAY_TICKS) {
+      robots.set(robotId, { ...robot, position: "dock" });
+      timingActivity.set(robotId, 1);
+      timingMoved.add(robotId);
+      timingDeaths.delete(robotId);
+    }
   };
 
   /**
@@ -1542,7 +1614,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     const damaged = { ...target, hp: target.hp - applied };
     robots.set(target.id, damaged);
     emit(tick, { kind: "damaged", ...payload, targetId, damage: applied } as EventPayload);
-    if (damaged.hp === 0) killRobot(tick, damaged);
+    if (damaged.hp === 0) scheduleDeath(tick, damaged.id);
   };
 
   /**
@@ -2043,6 +2115,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
 
   /** One robot's turn in the step, seg6:0x4998. */
   const dispatchTimingRobot = (actor: Actor, tick: number): MalformedOrders | null => {
+    const death = timingDeaths.get(actor.robotId);
+    if (death) {
+      dispatchDoomedRobot(actor.robotId, death.deathAt, tick);
+      return null;
+    }
     const cursor = cursors.get(actor.robotId);
     const alive = robots.get(actor.robotId);
     if (!cursor || !alive || alive.hp <= 0) return null;
@@ -2137,6 +2214,7 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
    */
   const timingTailIsQuiet = (): boolean =>
     timingQueue.length === 0 &&
+    timingDeaths.size === 0 &&
     actors.every((actor) => {
       const kind = cursors.get(actor.robotId)?.active?.command.kind;
       return kind === undefined || kind === "scan-and-fire" || kind === "zap";

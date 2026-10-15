@@ -783,7 +783,9 @@ activity code keeps the last value written (`seg96:0x0366`):
 The moved flag is set when a moving robot switches its occupied tile
 (`seg6:0x2DEB`, `seg6:0x2EB6`) and when a move step or deploy ends
 (`seg6:0x4FB4..0x500A`); at turn start every robot is moved and every Team
-dirty (`seg96:0x0267`). A Team is dirty when any of its robots has a flag.
+dirty (`seg96:0x0267`). A Team is dirty when any of its robots has a flag,
+including a robot still in the dock, which refreshes like any robot with no
+orders but is not on the map to spot or be spotted (**inferred**).
 The refresh draw comes at the robot's place in dispatch order, before any
 other draw its handler makes. With Show Enemy Positions the pass still runs
 and draws its rolls before every enemy is marked seen again (**inferred**).
@@ -865,6 +867,28 @@ impacts land.
 - Blasts and zaps roll each robot's damage in global order, applying it and
   drawing its stagger roll before the next robot (`seg6:0x5D73`,
   `seg6:0x602B`).
+
+**Delayed death** (`seg14:0x071C`, `seg6:0x4B05`). Damage that reaches a
+robot's armor sets its death time to the next step, or to the end of the move
+step it is on when that is later.
+
+- From the lethal hit the robot is dead to targeting: Aim & Fire, Scan & Fire,
+  Zap and blasts skip it (`seg21:0x0AB1`), and later damage does nothing.
+- Until its death time a robot in a move keeps moving and switching tiles; it
+  starts nothing new.
+- At the death time the movie end is extended as for an impact
+  (`seg6:0x4B49`), the record in progress takes effect (a turn or posture
+  record completes, `seg14:0x0472`), the robot is `destroyed` and its orders
+  are aborted.
+- It stays on its tile, and still takes part in the spotting pass as observer
+  and target (the pair routine `seg96:0x0484` does not check
+  `seg21:0x0AB1`), until it leaves the map 60 ticks after its death time with
+  activity 1 and moved set (`seg6:0x4C37..0x4C62`). The movie runs until
+  every removal is done.
+
+The death and explosion sprites draw from the game RNG in the original
+(`seg6:0x10F3`, `seg6:0x13E1`); RoboArena does not replicate those visual
+draws.
 
 Events keep their split: `fired` and `projectile-launched` on the fire tick,
 `projectile-impacted`, `shot-missed` and `damaged` on the impact tick. A

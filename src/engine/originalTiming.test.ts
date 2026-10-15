@@ -217,7 +217,8 @@ describe("delayed bullet impact (seg6:0x3CAE, seg6:0x556F)", () => {
     expect(ofKind(events, "damaged").map((event) => [event.sourceId, event.damage])).toEqual([
       ["b", 10],
     ]);
-    expect(ofKind(events, "destroyed").map((event) => event.tick)).toEqual([5]);
+    // Death comes on the next step (seg14:0x071C).
+    expect(ofKind(events, "destroyed").map((event) => event.tick)).toEqual([10]);
   });
 
   it("lets every robot act before the step's impacts land (seg6:0x4802..0x4824)", () => {
@@ -236,8 +237,14 @@ describe("delayed bullet impact (seg6:0x3CAE, seg6:0x556F)", () => {
       [0, "a"],
       [5, "t"],
     ]);
+    // Lethal damage at 5; death on the next step.
+    expect(
+      ofKind(events, "damaged")
+        .filter((event) => event.targetId === "t")
+        .map((event) => event.tick),
+    ).toEqual([5]);
     expect(ofKind(events, "destroyed").map((event) => [event.tick, event.robotId])).toEqual([
-      [5, "t"],
+      [10, "t"],
     ]);
     // The dead robot's bullet is already in flight and still lands.
     expect(
@@ -1049,6 +1056,116 @@ describe("step-only Scan & Fire on the spotted set and cached sight (seg18:0x072
       ],
     };
     const replay = createReplayLog({ initialState: state, turns: [{ seed: "g", orders }] });
+    expect(verifyReplay(replay)).toEqual({ ok: true });
+  });
+});
+
+describe("delayed death (seg14:0x071C, seg6:0x4B05)", () => {
+  const victim = (input: { turnLengthSeconds?: number; rulesRevision?: 3 | 4 } = {}) => {
+    const base = revision4(
+      makeMatch({
+        arena: makeOpenArena(12, 12),
+        ...(input.turnLengthSeconds === undefined
+          ? {}
+          : { turnLengthSeconds: input.turnLengthSeconds }),
+        teamOneRobots: [
+          makeRobot("a", "team-1", "rifle", { x: 2, y: 5 }),
+          makeRobot("b", "team-1", "rifle", { x: 2, y: 6 }),
+        ],
+        teamTwoRobots: [
+          makeRobot("t", "team-2", "rifle", { x: 4, y: 5 }, { hp: 1, scanHeading: "W" }),
+        ],
+      }),
+    );
+    return { ...base, config: { ...base.config, rulesRevision: input.rulesRevision ?? 4 } };
+  };
+  const shootT: TurnOrders["timelines"][number] = {
+    robotId: "a",
+    segments: [aim({ x: 4, y: 5 })],
+  };
+
+  it("finishes the move it is on and dies at the move's end", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        shootT,
+        // b shoots at t's tile at 10, after t's lethal hit at 5.
+        {
+          robotId: "b",
+          segments: [{ kind: "set-posture", posture: "ducking" }, aim({ x: 4, y: 5 })],
+        },
+        {
+          robotId: "t",
+          segments: [{ kind: "move", posture: "upright", path: [{ to: { x: 4, y: 4 } }] }],
+        },
+      ],
+    };
+    const result = resolved(victim(), orders);
+    const events = result.events;
+    expect(ofKind(events, "damaged").map((event) => event.tick)).toEqual([5]);
+    expect(ofKind(events, "move-step").map((event) => [event.tick, event.to])).toEqual([
+      [15, { x: 4, y: 4 }],
+    ]);
+    expect(ofKind(events, "destroyed").map((event) => event.tick)).toEqual([30]);
+    // Dead to targeting at once (seg21:0x0AB1).
+    expect(ofKind(events, "shot-missed").map((event) => [event.tick, event.reason])).toEqual([
+      [15, "no-target"],
+    ]);
+    expect(result.nextState.teams[1]!.robots[0]!.position).toBe("dock");
+  });
+
+  it("applies the record in progress at the death time (seg14:0x0472)", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        shootT,
+        // W → SW → S: two 5-tick records; the second is running at the death time.
+        { robotId: "t", segments: [{ kind: "set-scan-direction", heading: "S" }] },
+      ],
+    };
+    const events = resolved(victim(), orders).events;
+    expect(ofKind(events, "scan-rotated").map((event) => [event.tick, event.heading])).toEqual([
+      [5, "SW"],
+      [10, "S"],
+    ]);
+    expect(ofKind(events, "destroyed").map((event) => event.tick)).toEqual([10]);
+  });
+
+  it("keeps the movie running until the robot leaves the map 60 ticks later", () => {
+    const orders: TurnOrders = { turnNumber: 1, timelines: [shootT] };
+    const result = resolved(victim({ turnLengthSeconds: 1 }), orders);
+    expect(ofKind(result.events, "destroyed").map((event) => event.tick)).toEqual([10]);
+    expect(ofKind(result.events, "turn-end").map((event) => event.tick)).toEqual([70]);
+    expect(result.nextState.teams[1]!.robots[0]).toMatchObject({ hp: 0, position: "dock" });
+  });
+
+  it("keeps revision 3 destroying on the fire tick", () => {
+    const orders: TurnOrders = { turnNumber: 1, timelines: [shootT] };
+    const events = resolved(victim({ rulesRevision: 3 }), orders).events;
+    expect(ofKind(events, "destroyed").map((event) => event.tick)).toEqual([0]);
+  });
+
+  it("verifies in a replay", () => {
+    const orders: TurnOrders = {
+      turnNumber: 1,
+      timelines: [
+        shootT,
+        {
+          robotId: "t",
+          segments: [
+            {
+              kind: "move",
+              posture: "upright",
+              path: [{ via: { x: 5, y: 5 }, to: { x: 6, y: 4 } }],
+            },
+          ],
+        },
+      ],
+    };
+    const replay = createReplayLog({
+      initialState: victim({ turnLengthSeconds: 1 }),
+      turns: [{ seed: "h", orders }],
+    });
     expect(verifyReplay(replay)).toEqual({ ok: true });
   });
 });
