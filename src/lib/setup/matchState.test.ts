@@ -24,7 +24,7 @@ const build = (formation: "beginner" | "standard") =>
 describe("createSurvivalMatchState formations", () => {
   it("arms Standard with grenades, Zap and one Time Bomb on the first robot", () => {
     const state = build("standard");
-    expect(state.config).toMatchObject({ rulesRevision: 3, zapArmed: true });
+    expect(state.config).toMatchObject({ rulesRevision: 4, zapArmed: true });
     expect(state.config.showEnemyPositions).toBeUndefined();
     const robots = state.teams[0]!.robots;
     expect(robots.map((robot) => robot.definition.class)).toEqual([
@@ -45,7 +45,7 @@ describe("createSurvivalMatchState formations", () => {
 
   it("gives Beginner no grenades, Zap or bombs and shows enemy positions", () => {
     const state = build("beginner");
-    expect(state.config).toMatchObject({ rulesRevision: 3, showEnemyPositions: true });
+    expect(state.config).toMatchObject({ rulesRevision: 4, showEnemyPositions: true });
     expect(state.config.zapArmed).toBeUndefined();
     for (const robot of state.teams[0]!.robots) {
       expect(robot.definition.secondaryWeapons ?? []).not.toContain("grenade-launcher");

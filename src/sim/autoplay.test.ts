@@ -126,6 +126,21 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
   const turnTicks = Math.round(before.config.turnLengthSeconds * TICKS_PER_SECOND);
   const sides = sideOf(before);
   const events = turn.events;
+  // Rules revision 4: shots land after they fire, robots occupy a 2-tile move's
+  // floored midpoint (which may be any terrain), and the movie runs past turn
+  // length into the 150-tick tail (docs/spec.md, revision 4).
+  const timing = (before.config.rulesRevision ?? 0) >= 4;
+  const lastTick = timing ? turnTicks + 150 + 200 : turnTicks;
+  const intermediateSteps = new Set<number>();
+  if (timing) {
+    events.forEach((event, index) => {
+      if (event.kind !== "move-step") return;
+      const next = events
+        .slice(index + 1)
+        .find((later) => later.kind === "move-step" && later.robotId === event.robotId);
+      if (next !== undefined && next.tick - event.tick === 10) intermediateSteps.add(index);
+    });
+  }
 
   if ((turn.droppedSegments ?? 0) !== 0) {
     fail(`client planner dropped ${turn.droppedSegments} bot segments`);
@@ -143,8 +158,8 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
 
   events.forEach((event, index) => {
     if (event.seq !== index) fail(`seq ${event.seq} at index ${index} is not gap-free`);
-    if (!Number.isInteger(event.tick) || event.tick < 0 || event.tick > turnTicks) {
-      fail(`event ${event.kind} tick ${event.tick} outside 0..${turnTicks}`);
+    if (!Number.isInteger(event.tick) || event.tick < 0 || event.tick > lastTick) {
+      fail(`event ${event.kind} tick ${event.tick} outside 0..${lastTick}`);
     }
     if (event.tick < previousTick) fail(`tick decreased ${previousTick} -> ${event.tick}`);
     previousTick = event.tick;
@@ -153,7 +168,10 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
       if (deadBefore.has(actor))
         fail(`robot ${actor} destroyed in an earlier turn acted: ${event.kind}`);
       const diedAt = destroyedAt.get(actor);
-      if (diedAt !== undefined) fail(`robot ${actor} acted (${event.kind}) after destruction`);
+      const inFlight = timing && (event.kind === "damaged" || event.kind === "shot-missed");
+      if (diedAt !== undefined && !inFlight) {
+        fail(`robot ${actor} acted (${event.kind}) after destruction`);
+      }
     }
     if (event.kind === "command-aborted") {
       if (destroyedAt.get(event.robotId) !== event.tick) {
@@ -198,7 +216,10 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
           fail(`${robot.id} jumped from ${key(robot.position)} to ${key(event.to)}`);
         }
         const terrain = before.arena.tiles[event.to.y]?.[event.to.x]?.terrain;
-        if (terrain === undefined || !canTraverse(robot.posture, terrain)) {
+        if (
+          !intermediateSteps.has(index) &&
+          (terrain === undefined || !canTraverse(robot.posture, terrain))
+        ) {
           fail(`${robot.id} moved onto ${terrain ?? "out of bounds"} while ${robot.posture}`);
         }
         robots.set(robot.id, { ...robot, position: event.to });
@@ -241,8 +262,8 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
         if (projectile === undefined) fail(`impact for unknown projectile ${event.projectileId}`);
         else {
           projectile.impacts += 1;
-          if (projectile.tick !== event.tick)
-            fail(`projectile ${event.projectileId} impacted on a later tick`);
+          if (timing ? event.tick < projectile.tick : projectile.tick !== event.tick)
+            fail(`projectile ${event.projectileId} impacted on a different tick`);
         }
         break;
       }
@@ -254,7 +275,7 @@ const checkTurn = ({ label, before, turn, deadBefore }: TurnCheck): string[] => 
           break;
         }
         if (!Number.isInteger(event.damage) || event.damage < 0) fail(`bad damage ${event.damage}`);
-        if (!firedThisTick.shooters.has(source.id)) {
+        if (!timing && !firedThisTick.shooters.has(source.id)) {
           fail(`damage from ${source.id} without a same-tick fired event`);
         }
         if (event.damageKind === "direct" && sides.get(source.id) === sides.get(target.id)) {

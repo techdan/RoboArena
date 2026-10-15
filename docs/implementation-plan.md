@@ -433,6 +433,13 @@ last robot standing can Self Destruct, a 20-tick command whose category 2 blast
 lands on its own tile 10 ticks after it starts (`seg21:0x076C`,
 `seg6:0x3541`). See `docs/spec.md` §4.
 
+**2026-10-15 original combat timing (rules revision 4, ✅ DRAFT COMPLETE)**: new
+matches use revision 4: the original 5-tick step loop, mid-move tile switch,
+delayed bullet impact, grenade/missile flight, scatter and path stop, the
+150-tick movie tail, the shared cooldown and seven-shot pause, the original
+spotting refresh and activity flags, step-only Scan & Fire against spotted
+targets, and delayed death. See `docs/spec.md` and `docs/re-map/timing.md`.
+
 These are bundled because both need scan-cone calculations against moving targets per tick. Splitting into two phases would duplicate the per-tick visibility-against-cone logic.
 
 **Dependencies**: Phase 3.
