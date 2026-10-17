@@ -1,4 +1,5 @@
 import { Activity, Crosshair, Film, Gauge, MoveRight } from "lucide-react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FieldGuideButton } from "../../../components/help/HelpProvider";
 import { LobbyBreadcrumb } from "../../../components/LobbyBreadcrumb";
@@ -9,6 +10,21 @@ import { createLineupMovie, createShowcaseMovie } from "../../../lib/replays/sho
 interface MoviePageProps {
   readonly params: Promise<{ readonly id: string }>;
   readonly searchParams: Promise<{ readonly t?: string }>;
+}
+
+const MOVIE_TITLES: Readonly<Record<string, string>> = {
+  demo: "Replay demo",
+  showcase: "Arena showcase",
+  lineup: "Robot lineup",
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  return { title: MOVIE_TITLES[id] ?? "Turn movie" };
 }
 
 export default async function MoviePage({ params, searchParams }: MoviePageProps) {

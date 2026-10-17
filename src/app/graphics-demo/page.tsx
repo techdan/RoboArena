@@ -11,7 +11,7 @@
 
 import { GraphicsDemo } from "../../components/spike/GraphicsDemo";
 
-export const metadata = { title: "Graphics spike · RoboArena" };
+export const metadata = { title: "Graphics bench" };
 
 export default function GraphicsDemoPage() {
   return (

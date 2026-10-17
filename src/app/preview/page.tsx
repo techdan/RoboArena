@@ -1,7 +1,10 @@
 import { Layers3, Radar } from "lucide-react";
+import type { Metadata } from "next";
 import { ArenaPreview } from "../../components/ArenaPreview";
 import { LobbyBreadcrumb } from "../../components/LobbyBreadcrumb";
 import { arenaProvenance, loadArena } from "../../lib/arenas";
+
+export const metadata: Metadata = { title: "Terrain lab" };
 
 export default async function PreviewPage() {
   const [rubbleTwo, rubbleThree] = await Promise.all([
