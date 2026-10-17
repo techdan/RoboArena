@@ -11,6 +11,7 @@ import {
 
 const deploy: RobotCommandSegment = { kind: "deploy", to: { x: 2, y: 2 } };
 const move: RobotCommandSegment = { kind: "move", path: [], posture: "upright" };
+const face: RobotCommandSegment = { kind: "set-scan-direction", heading: "E" };
 const aim: RobotCommandSegment = {
   kind: "aim-and-fire",
   target: { x: 6, y: 6 },
@@ -27,11 +28,12 @@ const facts = (overrides: Partial<CoachFacts> = {}): CoachFacts => ({
 });
 
 describe("first-turn coach", () => {
-  it("walks deploy, move, orders, aim, squad, rehearse and lock in order", () => {
+  it("walks deploy, move, orders, facing, aim, squad, rehearse and lock in order", () => {
     expect(COACH_STEPS.map((step) => step.id)).toEqual([
       "deploy",
       "move",
       "orders",
+      "facing",
       "aim",
       "squad",
       "rehearse",
@@ -42,31 +44,41 @@ describe("first-turn coach", () => {
     expect(currentCoachStep(facts({ timelines: [[deploy, move], []] })).id).toBe("orders");
     expect(
       currentCoachStep(facts({ timelines: [[deploy, move], []], ordersOpened: true })).id,
+    ).toBe("facing");
+    expect(
+      currentCoachStep(facts({ timelines: [[deploy, move, face], []], ordersOpened: true })).id,
     ).toBe("aim");
     expect(
-      currentCoachStep(facts({ timelines: [[deploy, move, aim], []], ordersOpened: true })).id,
+      currentCoachStep(facts({ timelines: [[deploy, move, face, aim], []], ordersOpened: true }))
+        .id,
     ).toBe("squad");
     expect(
-      currentCoachStep(facts({ timelines: [[deploy, move, aim], [deploy]], ordersOpened: true }))
-        .id,
+      currentCoachStep(
+        facts({ timelines: [[deploy, move, face, aim], [deploy]], ordersOpened: true }),
+      ).id,
     ).toBe("rehearse");
     expect(
       currentCoachStep(
-        facts({ timelines: [[deploy, move, aim], [deploy]], ordersOpened: true, rehearsed: true }),
+        facts({
+          timelines: [[deploy, move, face, aim], [deploy]],
+          ordersOpened: true,
+          rehearsed: true,
+        }),
       ).id,
     ).toBe("lock");
   });
 
   it("goes back to an earlier step when undo removes the order it was waiting for", () => {
     const ahead = facts({ timelines: [[deploy, move], []], ordersOpened: true, rehearsed: true });
-    expect(currentCoachStep(ahead).id).toBe("aim");
+    expect(currentCoachStep(ahead).id).toBe("facing");
     expect(currentCoachStep({ ...ahead, timelines: [[deploy], []] }).id).toBe("move");
   });
 
   it("lets the player skip steps they cannot do yet, but only those", () => {
     const stuck = facts({ timelines: [[deploy, move], []], ordersOpened: true });
-    expect(currentCoachStep({ ...stuck, skipped: new Set(["aim"]) }).id).toBe("squad");
+    expect(currentCoachStep({ ...stuck, skipped: new Set(["facing", "aim"]) }).id).toBe("squad");
     expect(COACH_STEPS.filter((step) => step.skippable).map((step) => step.id)).toEqual([
+      "facing",
       "aim",
       "squad",
     ]);
