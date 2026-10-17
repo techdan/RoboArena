@@ -207,7 +207,7 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
 
 /** Art upgrade: robots against taller cover, with dimmer glow. Size is still
  * being chosen with the owner, so `?robotScale=` overrides it for comparison. */
-const ART_ROBOT_SCALE = 1.15;
+const ART_ROBOT_SCALE = 0.85;
 const ART_ROBOT_GLOW = 0.4;
 const artRobotScale = (): number => {
   try {
@@ -303,7 +303,6 @@ export class BattleScene3D {
   private readonly cameraGoal = new THREE.Vector3();
   private readonly lookGoal = new THREE.Vector3();
   private readonly lookCurrent = new THREE.Vector3();
-  private orbitAngle = 0;
   private disposed = false;
   private readonly beams: THREE.Mesh[] = [];
   private readonly scheduled: { at: number; run: () => void }[] = [];
@@ -1383,7 +1382,7 @@ export class BattleScene3D {
       this.lookCurrent.copy(this.controls.target);
     } else {
       // Director: drift toward the weighted centre of recent action, framing it
-      // from a high three-quarter angle that slowly orbits for parallax.
+      // from a high three-quarter angle with a fixed heading.
       for (let i = this.focuses.length - 1; i >= 0; i -= 1) {
         if ((this.focuses[i]?.until ?? 0) < this.now) this.focuses.splice(i, 1);
       }
@@ -1403,17 +1402,16 @@ export class BattleScene3D {
         this.lookGoal.copy(arena.center);
         spread = extent * 0.6;
       }
-      this.orbitAngle += dt * (this.cameraMode === "overview" ? 0.05 : 0.025);
       const overview = this.cameraMode === "overview" || weight === 0;
       const distance = overview
         ? extent * 1.25
         : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05);
       const elevation = overview ? 0.95 : 0.78;
-      const azimuth = Math.sin(this.orbitAngle) * 0.45;
+      // A fixed heading from the south; the camera no longer orbits while idle.
       this.cameraGoal.set(
-        this.lookGoal.x + Math.sin(azimuth) * distance * Math.cos(elevation),
+        this.lookGoal.x,
         this.lookGoal.y + Math.sin(elevation) * distance,
-        this.lookGoal.z + Math.cos(azimuth) * distance * Math.cos(elevation),
+        this.lookGoal.z + distance * Math.cos(elevation),
       );
       const ease = 1 - Math.exp(-dt * (overview ? 0.9 : 1.6));
       this.camera.position.lerp(this.cameraGoal, ease);

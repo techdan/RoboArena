@@ -115,6 +115,37 @@ const tileMatrix = (
     new THREE.Vector3(scale.x, scale.y, scale.z),
   );
 
+/** Art upgrade: wall faces that border open floor step in from the tile edge,
+ * so one-tile lanes show a strip of floor on each side ("white space") while
+ * wall-to-wall joins stay solid and runs read as continuous barriers. The
+ * engine's cover rules are unaffected; this is presentation only. */
+const WALL_INSET = 0.1;
+const insetWallMatrix = (
+  arena: Arena,
+  x: number,
+  y: number,
+  quarter: number,
+  height: number,
+): THREE.Matrix4 => {
+  const solid = (dx: number, dy: number) => {
+    const terrain = arena.tiles[y + dy]?.[x + dx]?.terrain;
+    return terrain === undefined || terrain === "wall" || terrain === "outer-wall";
+  };
+  const left = solid(-1, 0) ? 0 : WALL_INSET;
+  const right = solid(1, 0) ? 0 : WALL_INSET;
+  const near = solid(0, -1) ? 0 : WALL_INSET;
+  const far = solid(0, 1) ? 0 : WALL_INSET;
+  const width = 1 - left - right;
+  const depth = 1 - near - far;
+  // The model's local axes swap with world axes on odd quarter turns.
+  const swapped = Math.round(quarter / (Math.PI / 2)) % 2 === 1;
+  return tileMatrix(x + 0.5 + (left - right) / 2, y + 0.5 + (near - far) / 2, quarter, {
+    x: swapped ? depth : width,
+    y: height,
+    z: swapped ? width : depth,
+  });
+};
+
 /** Paints the arena floor (colour map, plus an emissive map for glowing seams). */
 const paintFloor = (
   arena: Arena,
@@ -365,7 +396,9 @@ export const buildArena = (
                 : library.props.has("WallB") && hash01(key, 13) > 0.5
                   ? "WallB"
                   : "Wall",
-            matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }),
+            matrix: art
+              ? insetWallMatrix(arena, x, y, quarter, 0.92 + hash01(key, 2) * 0.16)
+              : tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }),
           });
           break;
         case "outer-wall":
@@ -383,7 +416,8 @@ export const buildArena = (
           break;
         }
         case "bush": {
-          const s = 0.9 + hash01(key, 3) * 0.3;
+          // Art upgrade: shrubs sit inside their tile, leaving floor around them.
+          const s = art ? 0.72 + hash01(key, 3) * 0.16 : 0.9 + hash01(key, 3) * 0.3;
           if (art && theme.id === "coliseum") {
             bushes.push(tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }));
             break;
