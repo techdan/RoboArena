@@ -106,6 +106,31 @@ export const gaitGroups = (legCount: number): readonly (0 | 1)[] =>
     return ((row + side) % 2) as 0 | 1;
   });
 
+/**
+ * Which gait group may lift its feet this frame, given each resting leg's drift
+ * from its target (`null` for a leg already mid-step). The group that has
+ * fallen furthest behind goes first, so a fast stride cannot let the first
+ * group step over and over while the other foot stays planted and the leg
+ * stretches out behind the hull.
+ */
+export const pickStepGroup = (
+  drifts: readonly (number | null)[],
+  groups: readonly (0 | 1)[],
+  threshold: number,
+): 0 | 1 | null => {
+  const worst = [-1, -1];
+  drifts.forEach((drift, index) => {
+    const group = groups[index] ?? 0;
+    if (drift === null) worst[group] = Infinity;
+    else worst[group] = Math.max(worst[group] ?? -1, drift);
+  });
+  // A group still mid-step holds the other one down; its stragglers may join it.
+  if (worst[0] === Infinity) return 0;
+  if (worst[1] === Infinity) return 1;
+  const pick: 0 | 1 = (worst[1] ?? -1) > (worst[0] ?? -1) ? 1 : 0;
+  return (worst[pick] ?? -1) > threshold ? pick : null;
+};
+
 /** Height of a stepping foot along its swing, a smooth arch peaking mid-step. */
 export const swingHeight = (u: number, peak: number): number => {
   const t = Math.min(1, Math.max(0, u));
@@ -116,6 +141,12 @@ export const swingHeight = (u: number, peak: number): number => {
 export const skitterEase = (u: number): number => {
   const t = Math.min(1, Math.max(0, u));
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+};
+
+/** Stride ease: a walker's even sine in-out pace from tile to tile. */
+export const strideEase = (u: number): number => {
+  const t = Math.min(1, Math.max(0, u));
+  return (1 - Math.cos(Math.PI * t)) / 2;
 };
 
 /** Ballistic hop profile: 0 at take-off and landing, 1 at apex. */

@@ -22,7 +22,9 @@ import {
   gaitGroups,
   hash01,
   hopArc,
+  pickStepGroup,
   skitterEase,
+  strideEase,
   solveLeg,
   Spring,
   swingHeight,
@@ -39,6 +41,9 @@ const POSTURE_HEIGHT: Readonly<Record<Posture, number>> = {
 };
 /** Robots are drawn larger than life so they read against tile-sized cover. */
 export const ROBOT_SCALE = 1.3;
+
+/** Peak-to-average speed of the walkers' sine in-out stride ease. */
+const STRIDE_PEAK = Math.PI / 2;
 
 const POSTURE_SPREAD: Readonly<Record<Posture, number>> = {
   upright: 1,
@@ -495,7 +500,8 @@ export class RobotRig {
     if (this.segment !== null) {
       const { from, to, start, duration, hop } = this.segment;
       const u = Math.min(1, (now - start) / duration);
-      const eased = hop ? u : skitterEase(u);
+      // Walkers stride at an even pace; splayed legs keep the skittering lurch.
+      const eased = hop ? u : this.model.locomotion === "upright" ? strideEase(u) : skitterEase(u);
       this.position.lerpVectors(from, to, eased);
       if (hop) {
         hopLift = hopArc(u) * 0.55;
@@ -575,18 +581,43 @@ export class RobotRig {
 
     // 4. Feet: planted in world space, stepping in alternating groups.
     const upright = this.model.locomotion === "upright";
-    const stepDuration = (upright ? 0.24 : 0.15) / Math.max(0.5, speed);
+    // Walkers under their hips have little reach, so quick moves (planner
+    // previews, fast playback) quicken the stride until a foot cannot fall
+    // further behind than the leg can stretch. Plan for the segment's peak pace,
+    // not the lagging smoothed velocity.
+    const legSpan = (this.model.upperLength + this.model.lowerLength) * ROBOT_SCALE;
+    const bodySpeed =
+      this.segment !== null && !this.segment.hop
+        ? (this.segment.from.distanceTo(this.segment.to) / this.segment.duration) * STRIDE_PEAK
+        : this.velocity.length();
+    const stepDuration = upright
+      ? Math.max(
+          0.07,
+          Math.min(
+            0.24 / Math.max(0.5, speed),
+            bodySpeed > 1e-3 ? (legSpan * 0.3) / bodySpeed : Infinity,
+          ),
+        )
+      : 0.15 / Math.max(0.5, speed);
     const threshold = this.destroyedState ? 0 : moving ? 0.12 : 0.04;
-    const stepping = [false, false];
-    for (const leg of this.legs) if (leg.stepping) stepping[leg.group] = true;
-    for (const leg of this.legs) {
+    const drifts = this.legs.map((leg) => {
+      if (leg.stepping || this.airborne > 0) return null;
+      const target = this.restWorld(leg, tmpV3, moving ? stepDuration * 1.1 : 0);
+      return Math.hypot(target.x - leg.planted.x, target.z - leg.planted.z);
+    });
+    const liftGroup = pickStepGroup(
+      drifts,
+      this.legs.map((leg) => leg.group),
+      threshold,
+    );
+    this.legs.forEach((leg, index) => {
       if (this.airborne > 0) {
         // Tuck legs under the hull mid-leap.
         this.restWorld(leg, leg.planted, 0);
         leg.planted.lerp(tmpV3b.set(this.position.x, 0, this.position.y), 0.3);
         leg.planted.y = hopLift * 0.6 + 0.06;
         leg.stepping = false;
-        continue;
+        return;
       }
       if (leg.stepping) {
         const u = (now - leg.stepStart) / leg.stepDuration;
@@ -596,27 +627,25 @@ export class RobotRig {
           leg.planted.y = 0;
           if (moving || this.destroyedState) this.events.onFootfall?.(leg.planted, false);
         } else {
+          // Walkers reach for where the hip will be, so a lurch cannot strand the foot.
+          if (upright && moving) this.restWorld(leg, leg.stepTo, (1 - u) * leg.stepDuration * 1.1);
           leg.planted.lerpVectors(leg.stepFrom, leg.stepTo, skitterEase(u));
           leg.planted.y = swingHeight(u, upright ? 0.24 : 0.16);
         }
-        continue;
+        return;
       }
-      const target = this.restWorld(leg, tmpV3, moving ? stepDuration * 1.1 : 0);
-      const drift = Math.hypot(target.x - leg.planted.x, target.z - leg.planted.z);
-      const otherGroup = leg.group === 0 ? 1 : 0;
-      if (drift > threshold && !stepping[otherGroup]) {
+      const drift = drifts[index] ?? 0;
+      // A foot left past the leg's reach steps at once, even out of turn.
+      if ((leg.group === liftGroup && drift > threshold) || (upright && drift > legSpan * 0.75)) {
         leg.stepping = true;
-        stepping[leg.group] = true;
         leg.stepStart = now;
         leg.stepDuration = this.destroyedState ? 0.3 : stepDuration;
         leg.stepFrom.copy(leg.planted);
-        leg.stepTo.copy(target);
-        // Planted legs sink slightly into the ground plane at y=0.
-        leg.planted.y = 0;
-      } else {
-        leg.planted.y = 0;
+        this.restWorld(leg, leg.stepTo, moving ? stepDuration * 1.1 : 0);
       }
-    }
+      // Planted legs sink slightly into the ground plane at y=0.
+      leg.planted.y = 0;
+    });
 
     // 5. Solve every leg toward its foot.
     this.hull.updateMatrixWorld(true);
