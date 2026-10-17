@@ -1,12 +1,10 @@
 "use client";
 
-import { ArrowRight, Film, Gamepad2, RadioTower, Users } from "lucide-react";
-import dynamic from "next/dynamic";
+import { ArrowRight, Film, Map as MapIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import type { Arena } from "../../engine/types";
-import { PROTOCOL_VERSION, type RoomSnapshotMessage } from "../../lib/net/protocol";
+import { PROTOCOL_VERSION } from "../../lib/net/protocol";
 import {
   forgetRoom,
   recentRooms,
@@ -16,78 +14,64 @@ import {
   roomToken,
   RoomRequestError,
 } from "../../lib/net/client";
-import { PLAYER_COLORS, type PlayerColor } from "../../lib/setup/validate";
+import {
+  checkingRoom,
+  rejoinRoom,
+  sortRecentRooms,
+  summarizeRoom,
+  unavailableRoom,
+  type RecentRoomSummary,
+} from "../../lib/presentation/recentRooms";
+import type { PlayerColor } from "../../lib/setup/validate";
+import { GraphicsQualityControl } from "../GraphicsQualityControl";
 import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
 import { FieldGuideButton } from "../help/HelpProvider";
+import { CodeInput } from "../site/CodeInput";
+import { RoomCode } from "../site/RoomCode";
+import { SiteHeader } from "../site/SiteHeader";
+import { TeamColorPicker } from "../site/TeamColorPicker";
+import { useGraphicsQuality } from "../site/useGraphicsQuality";
 
-const PixiArena = dynamic(
-  () => import("../../renderer/PixiArena").then((module) => module.PixiArena),
-  { ssr: false },
-);
+type Mode = "create" | "join";
 
-interface RememberedRoom {
-  readonly code: string;
-  readonly status: string;
-}
-
-interface HomeSetupProps {
-  readonly arena: Arena;
-}
-
-const roomStatus = (snapshot: RoomSnapshotMessage): string => {
-  const { room, matchStatus } = snapshot;
-  if (matchStatus?.status === "planning") return `Your turn · Turn ${matchStatus.turnNumber}`;
-  if (matchStatus?.status === "waiting") {
-    return matchStatus.waitingForPlayers === 1
-      ? "Waiting for 1 player"
-      : `Waiting for ${matchStatus.waitingForPlayers} players`;
+const summarizeRemembered = async (code: string): Promise<RecentRoomSummary> => {
+  const token = roomToken(code);
+  if (token === null) return rejoinRoom(code);
+  try {
+    const response = await requestOnce({
+      version: PROTOCOL_VERSION,
+      requestId: requestId(),
+      kind: "ResumeRoom",
+      code,
+      token,
+    });
+    return summarizeRoom(response);
+  } catch (caught) {
+    if (caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED") {
+      forgetRoom(code);
+      return rejoinRoom(code);
+    }
+    return unavailableRoom(code);
   }
-  if (matchStatus?.status === "turn-ready") return "Turn ready to watch";
-  if (matchStatus?.status === "finished") return "Finished";
-  if (room.phase === "active") return "Match started";
-  const ready = room.players.filter((player) => player.ready).length;
-  if (room.players.length < 2) return "Waiting for players";
-  if (ready === room.players.length) return "Ready to start";
-  return `${ready}/${room.players.length} ready`;
 };
 
-export function HomeSetup({ arena }: HomeSetupProps) {
+export function HomeSetup() {
   const router = useRouter();
-  const [mode, setMode] = useState<"create" | "join">("create");
+  const quality = useGraphicsQuality();
+  const [mode, setMode] = useState<Mode>("create");
   const [name, setName] = useState("Ember Unit");
   const [color, setColor] = useState<PlayerColor>("red");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [remembered, setRemembered] = useState<readonly RememberedRoom[]>([]);
+  const [remembered, setRemembered] = useState<readonly RecentRoomSummary[]>([]);
 
   useEffect(() => {
     let disposed = false;
     const rooms = recentRooms();
-    setRemembered(rooms.map((roomCode) => ({ code: roomCode, status: "Checking…" })));
-    void Promise.all(
-      rooms.map(async (roomCode): Promise<RememberedRoom> => {
-        const token = roomToken(roomCode);
-        if (token === null) return { code: roomCode, status: "Rejoin required" };
-        try {
-          const response = await requestOnce({
-            version: PROTOCOL_VERSION,
-            requestId: requestId(),
-            kind: "ResumeRoom",
-            code: roomCode,
-            token,
-          });
-          return { code: roomCode, status: roomStatus(response) };
-        } catch (caught) {
-          if (caught instanceof RoomRequestError && caught.code === "UNAUTHORIZED") {
-            forgetRoom(roomCode);
-            return { code: roomCode, status: "Rejoin required" };
-          }
-          return { code: roomCode, status: "Unavailable" };
-        }
-      }),
-    ).then((statuses) => {
-      if (!disposed) setRemembered(statuses);
+    setRemembered(rooms.map(checkingRoom));
+    void Promise.all(rooms.map(summarizeRemembered)).then((summaries) => {
+      if (!disposed) setRemembered(sortRecentRooms(summaries));
     });
     return () => {
       disposed = true;
@@ -96,6 +80,10 @@ export function HomeSetup({ arena }: HomeSetupProps) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (mode === "join" && code.length !== 6) {
+      setError("Room codes have six letters or numbers.");
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
@@ -106,7 +94,7 @@ export function HomeSetup({ arena }: HomeSetupProps) {
               version: PROTOCOL_VERSION,
               requestId: requestId(),
               kind: "JoinRoom",
-              code: code.toUpperCase(),
+              code,
               name,
               color,
             },
@@ -121,163 +109,182 @@ export function HomeSetup({ arena }: HomeSetupProps) {
     }
   };
 
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setError(undefined);
+  };
+
   return (
-    <main className="min-h-screen bg-[#0d100e] text-white">
-      <div className="ambient-grid" aria-hidden="true" />
-      <div className="home-shell relative mx-auto max-w-[1180px] px-8 py-10">
-        <header className="home-header flex items-center justify-between border-b border-white/8 pb-6">
-          <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-xl border border-lime-300/20 bg-lime-300/10">
-              <Gamepad2 className="size-5 text-lime-300" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="eyebrow">RoboArena</p>
-              <p className="mt-1 text-sm text-white/45">Private simultaneous robot tactics</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <BootCampLink />
-            <FieldGuideButton />
-            <Link className="secondary-link" href="/preview">
-              Terrain lab
-            </Link>
-            <Link className="secondary-link" href="/movie/demo">
-              <Film className="size-4" aria-hidden="true" />
-              Replay demo
-            </Link>
-          </div>
-        </header>
+    <main className="site-page site-home">
+      <div
+        className="site-hero"
+        data-motion={quality === "performance" ? "false" : "true"}
+        aria-hidden="true"
+      >
+        <div className="site-hero-image" />
+        <div className="site-hero-sweep" />
+      </div>
 
-        <div className="mt-6">
-          <BootCampPrompt />
-        </div>
+      <SiteHeader>
+        <BootCampLink />
+        <FieldGuideButton />
+      </SiteHeader>
 
-        <div className="home-main grid grid-cols-[1.05fr_0.95fr] gap-14 py-14">
-          <section className="home-intro pt-8">
-            <p className="eyebrow mb-5">Online free-for-all / 2–4 players</p>
-            <h1 className="max-w-xl text-6xl font-black leading-[0.92] tracking-[-0.07em]">
-              Program privately.<span className="block text-white/30">Watch together.</span>
-            </h1>
-            <p className="mt-7 max-w-lg text-lg leading-8 text-white/55">
-              Create a private room, invite up to three friends, and command one unique team each.
-              No account required.
-            </p>
-            <div className="mt-9 flex gap-7 text-sm text-white/45">
-              <span className="flex items-center gap-2">
-                <RadioTower className="size-4 text-emerald-300" aria-hidden="true" />
-                Live room state
-              </span>
-              <span className="flex items-center gap-2">
-                <Users className="size-4 text-emerald-300" aria-hidden="true" />
-                Separate devices
-              </span>
-            </div>
+      <div className="site-home-prompt">
+        <BootCampPrompt />
+      </div>
 
-            <figure className="home-arena-preview mt-9 w-fit max-w-full">
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <figcaption className="eyebrow">Battlefield · {arena.sizeName}</figcaption>
-                <Link className="secondary-link" href="/preview">
-                  Terrain lab
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </Link>
-              </div>
-              <div className="max-w-full overflow-auto rounded-[20px]">
-                <PixiArena arena={arena} />
-              </div>
-            </figure>
-          </section>
+      <div className="site-home-grid">
+        <section aria-labelledby="home-title">
+          <p className="site-label" data-tone="rail">
+            Online free-for-all · 2–4 players · no account
+          </p>
+          <h1 id="home-title" className="site-display site-home-title">
+            Program privately.<span>Watch together.</span>
+          </h1>
+          <p className="site-home-lede">
+            Each player secretly programs a robot team. Then everyone watches the same turn play out
+            at once.
+          </p>
+          <ol className="site-steps" aria-label="How a turn works">
+            <li>
+              <em>1</em>
+              <strong>Plan</strong>
+              <span>Order each robot’s next 15 seconds</span>
+            </li>
+            <li>
+              <em>2</em>
+              <strong>Lock</strong>
+              <span>Submit whenever you are ready</span>
+            </li>
+            <li>
+              <em>3</em>
+              <strong>Watch</strong>
+              <span>Every move plays out together</span>
+            </li>
+          </ol>
 
-          <section className="home-setup-card rounded-[28px] border border-white/10 bg-white/[0.045] p-6 shadow-[0_30px_90px_rgba(0,0,0,.35)]">
-            <div className="mb-6 grid grid-cols-2 rounded-xl bg-black/25 p-1">
-              {(["create", "join"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className="mode-button"
-                  data-active={mode === option ? "true" : "false"}
-                  onClick={() => setMode(option)}
-                >
-                  {option === "create" ? "Create room" : "Join room"}
-                </button>
-              ))}
-            </div>
-            <form className="space-y-5" onSubmit={(event) => void submit(event)}>
-              {mode === "join" ? (
-                <label className="setup-label">
-                  Room code
-                  <input
-                    className="setup-input font-mono uppercase tracking-[0.2em]"
-                    name="room-code"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={code}
-                    maxLength={6}
-                    onChange={(event) => setCode(event.currentTarget.value.toUpperCase())}
-                    placeholder="ABC123…"
-                    required
-                  />
-                </label>
-              ) : null}
-              <label className="setup-label">
-                Team name
-                <input
-                  className="setup-input"
-                  name="team-name"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={name}
-                  maxLength={24}
-                  onChange={(event) => setName(event.currentTarget.value)}
-                  required
-                />
-              </label>
-              <fieldset>
-                <legend className="setup-label">Team color</legend>
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {PLAYER_COLORS.map((choice) => (
-                    <button
-                      key={choice}
-                      type="button"
-                      className="color-choice"
-                      data-active={color === choice ? "true" : "false"}
-                      onClick={() => setColor(choice)}
-                      aria-label={`${choice} team`}
-                      aria-pressed={color === choice}
+          {remembered.length === 0 ? null : (
+            <section className="site-matches" aria-labelledby="home-matches">
+              <h2 id="home-matches" className="site-label">
+                Your matches
+              </h2>
+              <ul aria-live="polite">
+                {remembered.map((room) => (
+                  <li key={room.code}>
+                    <Link
+                      href={`/room/${room.code}`}
+                      className="site-match-row"
+                      data-tone={room.tone}
                     >
-                      <span className={`team-swatch team-swatch-${choice}`} />
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              {error === undefined ? null : (
-                <p
-                  className="rounded-xl border border-red-300/20 bg-red-300/8 px-4 py-3 text-sm text-red-200"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              )}
-              <button className="primary-action w-full" type="submit" disabled={busy}>
-                {busy ? "Connecting…" : mode === "create" ? "Create private room" : "Join room"}
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </button>
-            </form>
-            {remembered.length > 0 ? (
-              <div className="mt-6 border-t border-white/8 pt-5">
-                <p className="eyebrow mb-3">Recent rooms</p>
-                <div className="flex flex-wrap gap-2" aria-live="polite">
-                  {remembered.map((room) => (
-                    <Link key={room.code} href={`/room/${room.code}`} className="recent-room">
-                      <strong>{room.code}</strong>
-                      <span>{room.status}</span>
+                      <RoomCode code={room.code} size="sm" />
+                      <span className="site-match-copy">
+                        <strong>{room.headline}</strong>
+                        <span>{room.detail}</span>
+                      </span>
+                      {room.cta === undefined ? (
+                        <span className="site-pill" data-tone="muted">
+                          Open
+                        </span>
+                      ) : (
+                        <span className="site-match-cta" data-tone={room.tone}>
+                          {room.cta}
+                          <ArrowRight size={14} aria-hidden="true" />
+                        </span>
+                      )}
                     </Link>
-                  ))}
-                </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+
+        <section className="site-panel site-start" aria-label="Start a match">
+          <div className="site-tabs" role="tablist" aria-label="Start a match">
+            {(["create", "join"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                id={`home-tab-${option}`}
+                aria-controls="home-start-panel"
+                aria-selected={mode === option}
+                className="site-tab"
+                onClick={() => switchMode(option)}
+              >
+                {option === "create" ? "Create a room" : "Join with a code"}
+              </button>
+            ))}
+          </div>
+          <form
+            id="home-start-panel"
+            role="tabpanel"
+            aria-labelledby={`home-tab-${mode}`}
+            onSubmit={(event) => void submit(event)}
+          >
+            {mode === "join" ? (
+              <div className="site-field">
+                <label className="site-label" htmlFor="home-room-code">
+                  Room code
+                </label>
+                <CodeInput id="home-room-code" value={code} onChange={setCode} />
+                <p id="home-room-code-hint" className="site-fine">
+                  Six letters or numbers from the host. Pasting the code works too.
+                </p>
               </div>
             ) : null}
-          </section>
-        </div>
+            <div className="site-field">
+              <label className="site-label" htmlFor="home-team-name">
+                Team name
+              </label>
+              <input
+                id="home-team-name"
+                className="site-input"
+                name="team-name"
+                autoComplete="off"
+                spellCheck={false}
+                value={name}
+                maxLength={24}
+                onChange={(event) => setName(event.currentTarget.value)}
+                required
+              />
+            </div>
+            <TeamColorPicker value={color} onChange={setColor} />
+            {error === undefined ? null : (
+              <p className="site-alert" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="site-button"
+              data-variant="go"
+              data-size="lg"
+              type="submit"
+              disabled={busy}
+            >
+              {busy ? "Connecting…" : mode === "create" ? "Create private room" : "Join room"}
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+            <p className="site-fine">
+              {mode === "create"
+                ? "You get a six-letter code to share. Your seat is saved in this browser, so you can close the tab and come back."
+                : "Players can join any time before the host starts. Your seat is saved in this browser."}
+            </p>
+          </form>
+        </section>
       </div>
+
+      <footer className="site-explore">
+        <span className="site-label">Explore</span>
+        <Link href="/movie/demo">
+          <Film size={14} aria-hidden="true" /> Replay demo
+        </Link>
+        <Link href="/preview">
+          <MapIcon size={14} aria-hidden="true" /> Arena Lab
+        </Link>
+        <GraphicsQualityControl />
+      </footer>
     </main>
   );
 }

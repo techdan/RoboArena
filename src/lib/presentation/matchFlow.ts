@@ -70,6 +70,7 @@ export interface MatchFlowCopy {
   readonly primaryAction: string;
 }
 
+/** Status copy for the match shell. Async by design: nobody is named as holding a turn up. */
 export const matchFlowCopy = (
   status: MatchSnapshotMessage["status"],
   turnNumber: number,
@@ -78,30 +79,66 @@ export const matchFlowCopy = (
     case "planning":
       return {
         eyebrow: `Turn ${turnNumber}`,
-        heading: "Your Team is planning",
-        detail: "Program privately, then lock the Turn when you are ready.",
-        primaryAction: "Lock Turn",
+        heading: "Your turn",
+        detail: "Program privately, then lock the turn when you are ready.",
+        primaryAction: "Lock turn",
       };
     case "waiting":
       return {
         eyebrow: `Turn ${turnNumber}`,
-        heading: "Orders locked · Waiting",
-        detail: "Your orders are saved. Resolution begins when every active player locks.",
-        primaryAction: "Refresh status",
+        heading: "Orders locked",
+        detail: `Turn ${turnNumber} plays out as soon as every team has locked. This page updates by itself, and you can close it: your orders are saved.`,
+        primaryAction: "Check now",
       };
     case "turn-ready":
       return {
         eyebrow: `Turn ${turnNumber}`,
-        heading: "Turn movie ready",
-        detail: "Playback is local; the resolved Turn is already saved by the room service.",
-        primaryAction: `Acknowledge Turn ${turnNumber} and plan next`,
+        heading: `Turn ${turnNumber} is ready to watch`,
+        detail: "Playback runs on this device. The resolved turn is already saved on the server.",
+        primaryAction: `Done watching Turn ${turnNumber}`,
       };
     case "finished":
       return {
         eyebrow: "Finished",
-        heading: "Finished",
-        detail: "No further Turn action is required for this Team.",
+        heading: "Match finished",
+        detail: "No further turns are needed from your team.",
         primaryAction: "Return home",
       };
+  }
+};
+
+/**
+ * The movie hand-off. The server reveals the outcome only once the match is
+ * finished, so the next step is described without promising another turn.
+ */
+export const movieHandoffCopy = (
+  turnNumber: number,
+  spectating: boolean,
+): { readonly question: string; readonly detail: string; readonly action: string } => ({
+  question: `Finished watching Turn ${turnNumber}?`,
+  detail: spectating
+    ? "Your team is out. Continue to follow the remaining teams; other players move on independently."
+    : `Next comes your Turn ${turnNumber + 1} planner, or the results if the match is over. Other players continue on their own.`,
+  action: `Done watching Turn ${turnNumber}`,
+});
+
+/** Browser tab title for each match phase. */
+export const matchTabTitle = (
+  status: MatchSnapshotMessage["status"] | "checking" | "denied",
+  turnNumber: number,
+): string => {
+  switch (status) {
+    case "planning":
+      return `Turn ${turnNumber} · Plan`;
+    case "waiting":
+      return `Turn ${turnNumber} · Locked`;
+    case "turn-ready":
+      return `Turn ${turnNumber} · Movie`;
+    case "finished":
+      return "Results";
+    case "checking":
+      return "Match";
+    case "denied":
+      return "Match unavailable";
   }
 };

@@ -23,7 +23,7 @@ export function ObservedTurnExport({ turn }: { readonly turn: ParticipantTurnRes
     URL.revokeObjectURL(url);
   };
   return (
-    <button type="button" className="secondary-action" onClick={download}>
+    <button type="button" className="site-button" onClick={download}>
       <Download size={15} aria-hidden="true" /> Export observed turn
     </button>
   );

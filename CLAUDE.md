@@ -191,6 +191,14 @@ When working on an engine numerical value: **`src/engine/constants.ts` and `src/
 
 Commit messages: short imperative subject; body explains _why_ + lists tests added. Use a HEREDOC for multi-line; use `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` when AI-paired.
 
+## Player-facing copy
+
+The game is asynchronous. Players join a lobby whenever they like, plan turns
+on their own time, and the host starts once everyone seated is ready. Copy must
+never imply that someone is holding others up or that a screen is stuck
+waiting on a named player (avoid "Waiting for Azure Unit" as a headline).
+State what happens next and that more players may still join.
+
 ## Scope discipline
 
 This is a "fun game with friends" project, not a production-grade SaaS. Many things that look like obvious gaps are explicit non-goals — they're deferred in `docs/implementation-plan.md` §14:

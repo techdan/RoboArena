@@ -3,6 +3,21 @@
 Corrections from the user and the rules derived from them. Review at session
 start when working on related areas.
 
+## 2026-10-17 — Lobby copy must respect the async flow
+
+**Correction:** The lobby concept's ready bar read "1 of 2 ready. Waiting for
+Azure Unit." Manheim pointed out that this violates the game's async principle:
+players can join a lobby any time, and the host starts once everyone seated is
+ready. Naming who the room is "waiting for" implies a blocking, synchronous
+lobby.
+
+**Rules:**
+- Describe the state and the next step ("You can start once everyone seated is
+  ready. Players can still join."), not the person holding things up.
+- Between-turn screens may show who has locked, but frame it as async ("this
+  page updates by itself; you can close it").
+- Recorded in `CLAUDE.md` under "Player-facing copy".
+
 ## 2026-07-08 — Original's body color = TEAM, not class
 
 **Correction:** I proposed (and initially built) team identity as a ground ring

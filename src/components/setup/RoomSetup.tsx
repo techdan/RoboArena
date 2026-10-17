@@ -1,20 +1,22 @@
 "use client";
 
-import { Check, Clipboard, LoaderCircle, LockKeyhole, Play, Users } from "lucide-react";
+import { Check, Clipboard, Home, Link2, LockKeyhole, Play } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { PROTOCOL_VERSION, type PublicRoom, type ServerMessage } from "../../lib/net/protocol";
 import {
   forgetRoom,
   rememberMatch,
   rememberRoom,
   requestId,
-  resetLocalGameData,
   roomToken,
   RoomSocket,
 } from "../../lib/net/client";
 import { ROBOTS_PER_TEAM_BY_LENGTH } from "../../engine/constants";
-import { ARENA_CATALOG, ARENA_TOWNS, arenaCatalogEntry } from "../../lib/arenas/catalog";
+import type { Arena } from "../../engine/types";
+import { ARENA_CATALOG, ARENA_TOWNS, arenaCatalogEntry, loadArena } from "../../lib/arenas";
+import { terrainCounts, type Corner } from "../../lib/presentation/arenaSchematic";
 import {
   arenaThemeSchema,
   configForLength,
@@ -23,16 +25,23 @@ import {
   roomConfigSchema,
   HOME_CORNER_LABELS,
   HOME_SLOTS,
-  PLAYER_COLORS,
   type PlayerColor,
   type RoomConfig,
 } from "../../lib/setup/validate";
 import { ARENA_THEME_ORDER, ARENA_THEMES } from "../../renderer3d/themes";
-import { TeamRow } from "./TeamRow";
+import { ArenaSchematic, type SchematicHome } from "../site/ArenaSchematic";
+import { ResetLocalData } from "../site/ResetLocalData";
+import { RoomCode } from "../site/RoomCode";
+import { SiteHeader } from "../site/SiteHeader";
+import { TeamColorPicker } from "../site/TeamColorPicker";
+import { OpenSeat, TeamRow } from "./TeamRow";
 import { BootCampLink, BootCampPrompt } from "../help/BootCampPrompt";
 import { FieldGuideButton } from "../help/HelpProvider";
 
 const FORMATION_ORDER: readonly RoomConfig["formation"][] = ["beginner", "standard"];
+const GAME_LENGTHS = ["melee", "battle"] as const;
+const SEAT_COUNT = 4;
+const SLOW_REJOIN_MS = 6000;
 
 /** Lobby names and one-line rules summaries for the Quick Start formations. */
 const FORMATION_LABELS: Readonly<
@@ -45,6 +54,21 @@ const FORMATION_LABELS: Readonly<
   },
 };
 
+const LENGTH_LABELS: Readonly<Record<(typeof GAME_LENGTHS)[number], string>> = {
+  melee: "Melee",
+  battle: "Battle",
+};
+
+const CONNECTION_LABELS = {
+  connecting: { text: "Connecting", tone: "muted" },
+  connected: { text: "Live", tone: "live" },
+  resumed: { text: "Reconnected", tone: "live" },
+  retrying: { text: "Reconnecting", tone: "rail" },
+  "incompatible-protocol": { text: "Update needed", tone: "danger" },
+} as const;
+
+const hexColor = (value: number): string => `#${value.toString(16).padStart(6, "0")}`;
+
 export function RoomSetup({ code }: { readonly code: string }) {
   const router = useRouter();
   const socketRef = useRef<RoomSocket | undefined>(undefined);
@@ -55,10 +79,13 @@ export function RoomSetup({ code }: { readonly code: string }) {
   const [needsJoin, setNeedsJoin] = useState(false);
   const [name, setName] = useState("Azure Unit");
   const [color, setColor] = useState<PlayerColor>("blue");
+  const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState<PlayerColor>("red");
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [slowRejoin, setSlowRejoin] = useState(false);
+  const [arena, setArena] = useState<Arena>();
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "retrying" | "resumed" | "incompatible-protocol"
   >("connecting");
@@ -172,10 +199,15 @@ export function RoomSetup({ code }: { readonly code: string }) {
 
   const selfPlayer = room?.players.find((player) => player.id === selfPlayerId);
   useEffect(() => {
-    if (selfPlayer === undefined) return;
+    if (selfPlayer === undefined || editing) return;
     setEditName(selfPlayer.name);
     setEditColor(selfPlayer.color);
-  }, [selfPlayer?.color, selfPlayer?.id, selfPlayer?.name]);
+  }, [editing, selfPlayer?.color, selfPlayer?.id, selfPlayer?.name]);
+
+  // Readying up locks the seat; close an open editor rather than strand it.
+  useEffect(() => {
+    if (selfPlayer?.ready === true) setEditing(false);
+  }, [selfPlayer?.ready]);
 
   useEffect(() => {
     if (copyStatus === "idle") return;
@@ -183,16 +215,56 @@ export function RoomSetup({ code }: { readonly code: string }) {
     return () => clearTimeout(timer);
   }, [copyStatus]);
 
-  const copyInvite = async (url: string) => {
+  const waitingForRoom = room === undefined || selfPlayerId === undefined || token === undefined;
+  useEffect(() => {
+    if (!waitingForRoom || needsJoin) {
+      setSlowRejoin(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowRejoin(true), SLOW_REJOIN_MS);
+    return () => clearTimeout(timer);
+  }, [needsJoin, waitingForRoom]);
+
+  const arenaName = room?.config.arenaName;
+  useEffect(() => {
+    if (arenaName === undefined) return;
+    let cancelled = false;
+    void loadArena(arenaName).then((loaded) => {
+      if (!cancelled) setArena(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [arenaName]);
+
+  const players = room?.players;
+  const schematicHomes = useMemo(() => {
+    const homes: Partial<Record<Corner, SchematicHome>> = {};
+    for (const slot of HOME_SLOTS) {
+      const corner = HOME_CORNER_LABELS[slot] as Corner;
+      const occupant = players?.find((player) => player.homeSlot === slot);
+      homes[corner] =
+        occupant === undefined
+          ? {}
+          : {
+              color: occupant.color,
+              label: occupant.name,
+              self: occupant.id === selfPlayerId,
+            };
+    }
+    return homes;
+  }, [players, selfPlayerId]);
+
+  const copyText = async (text: string) => {
     try {
       if (navigator.clipboard?.writeText !== undefined) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(text);
       } else {
         // Clipboard API is unavailable outside a secure context (e.g. a plain
         // http:// LAN address during device testing). Fall back to the
         // legacy select-and-copy technique so the invite link still copies.
         const textarea = document.createElement("textarea");
-        textarea.value = url;
+        textarea.value = text;
         textarea.style.position = "fixed";
         textarea.style.opacity = "0";
         document.body.appendChild(textarea);
@@ -227,84 +299,82 @@ export function RoomSetup({ code }: { readonly code: string }) {
 
   if (needsJoin) {
     return (
-      <main className="min-h-screen bg-[#0d100e] text-white">
-        <div className="ambient-grid" aria-hidden="true" />
-        <div className="relative mx-auto max-w-lg px-8 py-24">
-          <p className="eyebrow mb-4">Join room {code}</p>
-          <h1 className="text-4xl font-black tracking-[-0.05em]">Claim your team seat</h1>
-          <form
-            className="mt-8 space-y-5 rounded-3xl border border-white/10 bg-white/[0.04] p-6"
-            onSubmit={join}
-          >
-            <label className="setup-label">
-              Team name
-              <input
-                className="setup-input"
-                name="team-name"
-                autoComplete="off"
-                spellCheck={false}
-                value={name}
-                maxLength={24}
-                onChange={(event) => setName(event.currentTarget.value)}
-                required
-              />
-            </label>
-            <fieldset>
-              <legend className="setup-label">Team color</legend>
-              <div className="mt-2 grid grid-cols-4 gap-2">
-                {PLAYER_COLORS.map((choice) => (
-                  <button
-                    key={choice}
-                    type="button"
-                    className="color-choice"
-                    data-active={color === choice ? "true" : "false"}
-                    onClick={() => setColor(choice)}
-                    aria-label={`${choice} team`}
-                    aria-pressed={color === choice}
-                  >
-                    <span className={`team-swatch team-swatch-${choice}`} />
-                  </button>
-                ))}
+      <main className="site-page site-center-page">
+        <div className="site-hero" data-blur="true" aria-hidden="true">
+          <div className="site-hero-image" />
+        </div>
+        <SiteHeader>
+          <BootCampLink returnTo={`/room/${code}`} />
+          <FieldGuideButton />
+        </SiteHeader>
+        <div className="site-center">
+          <section className="site-panel site-claim" aria-labelledby="claim-title">
+            <p className="site-label" data-tone="rail">
+              You’re invited
+            </p>
+            <RoomCode code={code} />
+            <h1 id="claim-title" className="site-display site-claim-title">
+              Claim your seat
+            </h1>
+            <form className="site-claim-form" onSubmit={join}>
+              <div className="site-field">
+                <label className="site-label" htmlFor="claim-team-name">
+                  Team name
+                </label>
+                <input
+                  id="claim-team-name"
+                  className="site-input"
+                  name="team-name"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={name}
+                  maxLength={24}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                  required
+                />
               </div>
-            </fieldset>
-            {error === undefined ? null : (
-              <div role="alert" className="space-y-3 text-sm text-red-200">
-                <p>{error}</p>
-                <button
-                  type="button"
-                  className="secondary-action w-full"
-                  onClick={() => {
-                    resetLocalGameData();
-                    window.location.assign("/");
-                  }}
-                >
-                  Reset saved room and planner data
-                </button>
-              </div>
-            )}
-            <button className="primary-action w-full" type="submit">
-              Join room
-            </button>
-          </form>
+              <TeamColorPicker value={color} onChange={setColor} />
+              {error === undefined ? null : (
+                <div className="site-claim-error">
+                  <p className="site-alert" role="alert">
+                    {error}
+                  </p>
+                  <ResetLocalData />
+                </div>
+              )}
+              <button className="site-button" data-variant="go" data-size="lg" type="submit">
+                Join room
+              </button>
+              <p className="site-fine">
+                Seats stay open until the host starts the match. Up to four teams can play.
+              </p>
+            </form>
+          </section>
         </div>
       </main>
     );
   }
 
-  if (room === undefined || selfPlayerId === undefined || token === undefined) {
+  if (waitingForRoom) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0d100e] text-white">
-        <div className="text-center">
-          <LoaderCircle
-            className="mx-auto size-7 animate-spin text-lime-300 motion-reduce:animate-none"
-            aria-hidden="true"
-          />
-          <p className="eyebrow mt-4">Rejoining room {code}…</p>
-          {error === undefined ? null : (
-            <p className="mt-4 text-sm text-red-200" role="alert">
-              {error}
-            </p>
-          )}
+      <main className="site-page site-center-page">
+        <div className="site-center">
+          <div className="site-loader" role="status">
+            <p className="site-label">Rejoining room</p>
+            <RoomCode code={code} />
+            <span className="site-scan" aria-hidden="true" />
+            <p className="site-fine">Restoring your seat from this browser…</p>
+            {error === undefined ? null : (
+              <p className="site-alert" role="alert">
+                {error}
+              </p>
+            )}
+            {slowRejoin || error !== undefined ? (
+              <Link className="site-button" href="/">
+                <Home size={15} aria-hidden="true" /> Back to home
+              </Link>
+            ) : null}
+          </div>
         </div>
       </main>
     );
@@ -312,394 +382,425 @@ export function RoomSetup({ code }: { readonly code: string }) {
 
   const self = room.players.find((player) => player.id === selfPlayerId)!;
   const isHost = self.isHost;
-  const allReady = room.players.length >= 2 && room.players.every((player) => player.ready);
+  const readyCount = room.players.filter((player) => player.ready).length;
+  const allReady = room.players.length >= 2 && readyCount === room.players.length;
+  const openSeats = Math.max(0, SEAT_COUNT - room.players.length);
   const inviteUrl =
     typeof window === "undefined" ? `/room/${code}` : `${window.location.origin}/room/${code}`;
+  const theme = room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID;
+  const connection = CONNECTION_LABELS[connectionStatus];
+  const counts = arena === undefined ? undefined : terrainCounts(arena);
+  const catalogEntry = arenaCatalogEntry(room.config.arenaName);
+
+  const updateConfig = (config: RoomConfig) =>
+    send({
+      version: PROTOCOL_VERSION,
+      requestId: requestId(),
+      kind: "UpdateConfig",
+      code,
+      token,
+      config,
+    });
+  const claimCorner = (slot: (typeof HOME_SLOTS)[number]) => {
+    if (self.ready) return;
+    send({
+      version: PROTOCOL_VERSION,
+      requestId: requestId(),
+      kind: "SetHomeSlot",
+      code,
+      token,
+      homeSlot: slot,
+    });
+  };
+  const saveTeam = (event: FormEvent) => {
+    event.preventDefault();
+    if (editName !== self.name || editColor !== self.color) {
+      send({
+        version: PROTOCOL_VERSION,
+        requestId: requestId(),
+        kind: "UpdatePlayer",
+        code,
+        token,
+        name: editName,
+        color: editColor,
+      });
+    }
+    setEditing(false);
+  };
+
+  const dockMessage =
+    room.players.length < 2
+      ? "A match needs at least two teams. Share the code; players can join any time before the start."
+      : allReady
+        ? isHost
+          ? "Everyone seated is ready. Start now, or wait for more players to join."
+          : "Everyone seated is ready. The host can start the match."
+        : isHost
+          ? "You can start once everyone seated is ready. Players can still join."
+          : "The host starts once everyone seated is ready. Players can still join.";
 
   return (
-    <main className="min-h-screen bg-[#0d100e] text-white">
-      <div className="ambient-grid" aria-hidden="true" />
-      <div className="room-setup-shell relative mx-auto max-w-[1080px] px-8 py-10">
-        <header className="room-setup-header flex items-end border-b border-white/8 pb-6">
-          <div>
-            <p className="eyebrow mb-3">Private room</p>
-            <div className="flex items-center gap-4">
-              <h1 className="font-mono text-4xl font-black tracking-[0.16em]">{code}</h1>
-              <button
-                type="button"
-                className="secondary-link"
-                onClick={() => void copyInvite(inviteUrl)}
-              >
-                <Clipboard className="size-4" aria-hidden="true" />
-                {copyStatus === "copied"
-                  ? "Copied"
-                  : copyStatus === "failed"
-                    ? "Couldn't copy"
-                    : "Copy invite"}
-              </button>
-              <span
-                className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-3 py-1 text-xs font-bold text-emerald-200"
-                role="status"
-              >
-                {connectionStatus === "connecting"
-                  ? "Connecting…"
-                  : connectionStatus === "retrying"
-                    ? "Retrying…"
-                    : connectionStatus === "incompatible-protocol"
-                      ? "Protocol mismatch"
-                      : connectionStatus === "resumed"
-                        ? "Setup resumed"
-                        : "Setup live"}
-              </span>
-            </div>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <BootCampLink returnTo={`/room/${code}`} />
-            <FieldGuideButton />
-          </div>
-        </header>
-        <div className="mt-6">
-          <BootCampPrompt returnTo={`/room/${code}`} />
+    <main className="site-page site-lobby">
+      <SiteHeader rail>
+        <BootCampLink returnTo={`/room/${code}`} />
+        <FieldGuideButton />
+        <Link className="site-button" data-variant="ghost" href="/">
+          <Home size={15} aria-hidden="true" /> Home
+        </Link>
+      </SiteHeader>
+
+      <div className="site-lobby-prompt">
+        <BootCampPrompt returnTo={`/room/${code}`} />
+      </div>
+
+      <section className="site-lobby-head" aria-labelledby="lobby-title">
+        <div className="site-field">
+          <h1 id="lobby-title" className="site-label">
+            Private room
+          </h1>
+          <RoomCode code={code} />
         </div>
-        <div className="room-setup-grid mt-7 grid grid-cols-[1fr_360px] gap-6">
-          <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="eyebrow">Teams</p>
-                <h2 className="mt-2 text-2xl font-bold">
-                  {room.players.length} / 4 claimed Team seats
-                </h2>
-              </div>
-              <Users className="size-5 text-emerald-300" aria-hidden="true" />
-            </div>
-            <ul className="space-y-3">
-              {room.players.map((player) => (
-                <TeamRow key={player.id} player={player} isSelf={player.id === selfPlayerId} />
-              ))}
-            </ul>
-            <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-4 text-center text-sm text-white/35">
-              Share <span className="font-mono text-white/60">{code}</span> with up to{" "}
-              {4 - room.players.length} more players.
-            </div>
-          </section>
-          <aside className="room-setup-aside space-y-5">
-            <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
-              <p className="eyebrow mb-5">Your team</p>
-              <label className="setup-label">
+        <div className="site-lobby-share">
+          <p>Send the code or invite link. Players can join until the host starts.</p>
+          <div className="site-lobby-share-actions">
+            <button type="button" className="site-button" onClick={() => void copyText(inviteUrl)}>
+              <Link2 size={15} aria-hidden="true" /> Copy invite link
+            </button>
+            <button
+              type="button"
+              className="site-button"
+              data-variant="ghost"
+              onClick={() => void copyText(code)}
+            >
+              <Clipboard size={15} aria-hidden="true" /> Copy code
+            </button>
+            <span className="site-fine" role="status">
+              {copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Couldn't copy" : ""}
+            </span>
+          </div>
+        </div>
+        <span className="site-pill" data-tone={connection.tone} role="status">
+          <span className="site-lamp" aria-hidden="true" />
+          {connection.text}
+        </span>
+      </section>
+
+      <ul
+        className="site-lineup"
+        aria-label={`Teams, ${room.players.length} of ${SEAT_COUNT} seats claimed`}
+      >
+        {room.players.map((player) => (
+          <TeamRow
+            key={player.id}
+            player={player}
+            isSelf={player.id === selfPlayerId}
+            editing={player.id === selfPlayerId && editing}
+            {...(player.id === selfPlayerId ? { onEdit: () => setEditing(true) } : {})}
+          >
+            <form className="site-seat-editor" onSubmit={saveTeam}>
+              <label className="site-label" htmlFor="lobby-team-name">
                 Team name
-                <input
-                  className="setup-input"
-                  name="team-name"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={editName}
-                  maxLength={24}
-                  disabled={self.ready}
-                  onChange={(event) => setEditName(event.currentTarget.value)}
-                />
               </label>
-              <div className="mt-3 grid grid-cols-4 gap-2">
-                {PLAYER_COLORS.map((choice) => (
-                  <button
-                    key={choice}
-                    type="button"
-                    className="color-choice"
-                    data-active={editColor === choice ? "true" : "false"}
-                    disabled={self.ready}
-                    onClick={() => setEditColor(choice)}
-                    aria-label={`Change to ${choice} team`}
-                    aria-pressed={editColor === choice}
-                  >
-                    <span className={`team-swatch team-swatch-${choice}`} />
-                  </button>
-                ))}
+              <input
+                id="lobby-team-name"
+                className="site-input"
+                name="team-name"
+                autoComplete="off"
+                spellCheck={false}
+                value={editName}
+                maxLength={24}
+                onChange={(event) => setEditName(event.currentTarget.value)}
+                required
+              />
+              <TeamColorPicker value={editColor} onChange={setEditColor} />
+              <div className="site-confirm-actions">
+                <button type="submit" className="site-button" data-variant="go">
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="site-button"
+                  data-variant="ghost"
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
               </div>
-              <button
-                type="button"
-                className="secondary-action mt-4 w-full"
-                disabled={self.ready || (editName === self.name && editColor === self.color)}
-                onClick={() =>
-                  send({
-                    version: PROTOCOL_VERSION,
-                    requestId: requestId(),
-                    kind: "UpdatePlayer",
-                    code,
-                    token,
-                    name: editName,
-                    color: editColor,
-                  })
-                }
+            </form>
+          </TeamRow>
+        ))}
+        {Array.from({ length: openSeats }, (_, index) => (
+          <OpenSeat key={`open-${index}`} code={code} first={index === 0} />
+        ))}
+      </ul>
+
+      <div className="site-lobby-setup">
+        <section className="site-panel site-map-card" aria-labelledby="lobby-map-title">
+          <div className="site-map-art">
+            {arena === undefined ? (
+              <div className="site-schematic site-schematic-placeholder" aria-hidden="true" />
+            ) : (
+              <ArenaSchematic
+                arena={arena}
+                theme={theme}
+                homes={schematicHomes}
+                label={`${catalogEntry.name} map with home corners`}
+                {...(self.ready
+                  ? {}
+                  : {
+                      onCornerSelect: (corner: Corner) => {
+                        const slot = HOME_SLOTS.find((s) => HOME_CORNER_LABELS[s] === corner);
+                        if (slot !== undefined) claimCorner(slot);
+                      },
+                    })}
+              />
+            )}
+          </div>
+          <div className="site-map-info">
+            <div className="site-field">
+              <label id="lobby-map-title" className="site-label" htmlFor="lobby-map">
+                Map
+              </label>
+              <select
+                id="lobby-map"
+                className="site-input site-select"
+                value={room.config.arenaName}
+                disabled={!isHost}
+                onChange={(event) => {
+                  const config = roomConfigSchema.safeParse({
+                    ...room.config,
+                    arenaName: event.currentTarget.value,
+                  });
+                  if (config.success) updateConfig(config.data);
+                }}
               >
-                Save team
-              </button>
-              <fieldset className="mt-5" disabled={self.ready}>
-                <legend className="setup-label">Home corner</legend>
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  {HOME_SLOTS.map((slot) => {
-                    const occupant = room.players.find(
-                      (player) => player.id !== selfPlayerId && player.homeSlot === slot,
-                    );
-                    const active = self.homeSlot === slot;
-                    // A held corner stays clickable: the server swaps the two seats.
-                    const label = occupant
-                      ? `Home corner ${HOME_CORNER_LABELS[slot]} (swap with ${occupant.name})`
-                      : `Home corner ${HOME_CORNER_LABELS[slot]}`;
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        className={`cursor-pointer rounded-xl border px-2 py-2 text-xs font-bold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-30 ${
-                          active
-                            ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100"
-                            : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/25"
-                        }`}
-                        data-active={active ? "true" : "false"}
-                        disabled={self.ready}
-                        aria-pressed={active}
-                        aria-label={label}
-                        title={label}
-                        onClick={() =>
-                          send({
-                            version: PROTOCOL_VERSION,
-                            requestId: requestId(),
-                            kind: "SetHomeSlot",
-                            code,
-                            token,
-                            homeSlot: slot,
-                          })
-                        }
-                      >
-                        {HOME_CORNER_LABELS[slot]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            </section>
-            <section className="room-setup-panel rounded-3xl border border-white/8 bg-white/[0.035] p-6">
-              <p className="eyebrow mb-5">Match setup</p>
-              <label className="setup-label">
-                Game length
-                <select
-                  className="setup-input"
-                  value={room.config.gameLength}
-                  disabled={!isHost}
-                  onChange={(event) => {
-                    const gameLength = event.currentTarget.value as "melee" | "battle";
+                {ARENA_TOWNS.map(({ town, label }) => (
+                  <optgroup key={town} label={label}>
+                    {ARENA_CATALOG.filter((entry) => entry.town === town).map((entry) => (
+                      <option key={entry.slug} value={entry.slug}>
+                        {entry.name} · {entry.width}×{entry.height}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <dl className="site-stats">
+              <div>
+                <dt className="site-label">Size</dt>
+                <dd>
+                  {catalogEntry.width}×{catalogEntry.height}
+                </dd>
+              </div>
+              <div>
+                <dt className="site-label">Walls</dt>
+                <dd>{counts === undefined ? "–" : counts.walls + counts.lowWalls}</dd>
+              </div>
+              <div>
+                <dt className="site-label">Bushes</dt>
+                <dd>{counts === undefined ? "–" : counts.bushes}</dd>
+              </div>
+            </dl>
+            <fieldset className="site-fieldset" disabled={self.ready}>
+              <legend className="site-label">Your home corner</legend>
+              <div className="site-corners">
+                {HOME_SLOTS.map((slot) => {
+                  const occupant = room.players.find((player) => player.homeSlot === slot);
+                  const mine = self.homeSlot === slot;
+                  const other = occupant !== undefined && !mine ? occupant : undefined;
+                  // A held corner stays clickable: the server swaps the two seats.
+                  const label = other
+                    ? `Home corner ${HOME_CORNER_LABELS[slot]} (swap with ${other.name})`
+                    : `Home corner ${HOME_CORNER_LABELS[slot]}`;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      className="site-corner"
+                      {...(occupant === undefined ? {} : { "data-team": occupant.color })}
+                      aria-pressed={mine}
+                      aria-label={label}
+                      title={label}
+                      onClick={() => claimCorner(slot)}
+                    >
+                      <strong>{HOME_CORNER_LABELS[slot]}</strong>
+                      <span>{mine ? "You" : (other?.name ?? "Open")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <p className="site-fine">
+              {self.ready
+                ? "Click Ready to change your corner."
+                : "Pick a corner here or on the map. Taking a held corner swaps seats with its owner."}
+            </p>
+          </div>
+        </section>
+
+        <section className="site-panel site-rules" aria-label="Match settings">
+          <fieldset className="site-fieldset" disabled={!isHost}>
+            <legend className="site-label">Game length</legend>
+            <div className="site-options" data-columns="2">
+              {GAME_LENGTHS.map((gameLength) => (
+                <button
+                  key={gameLength}
+                  type="button"
+                  className="site-option"
+                  aria-pressed={room.config.gameLength === gameLength}
+                  onClick={() => {
+                    if (room.config.gameLength === gameLength) return;
                     // Keep a map the host picked; follow the classic pairing otherwise.
                     const keepArena =
                       room.config.arenaName !== DEFAULT_ARENA_FOR_LENGTH[room.config.gameLength];
                     const next = configForLength(gameLength);
-                    send({
-                      version: PROTOCOL_VERSION,
-                      requestId: requestId(),
-                      kind: "UpdateConfig",
-                      code,
-                      token,
-                      config: {
-                        ...next,
-                        arenaName: keepArena ? room.config.arenaName : next.arenaName,
-                        formation: room.config.formation,
-                        arenaTheme: room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID,
-                      },
+                    updateConfig({
+                      ...next,
+                      arenaName: keepArena ? room.config.arenaName : next.arenaName,
+                      formation: room.config.formation,
+                      arenaTheme: room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID,
                     });
                   }}
                 >
-                  <option value="melee">
-                    Melee · {ROBOTS_PER_TEAM_BY_LENGTH.melee} robots each
-                  </option>
-                  <option value="battle">
-                    Battle · {ROBOTS_PER_TEAM_BY_LENGTH.battle} robots each
-                  </option>
-                </select>
-              </label>
-              <label className="setup-label mt-4">
-                Map
-                <select
-                  className="setup-input"
-                  value={room.config.arenaName}
-                  disabled={!isHost}
-                  onChange={(event) => {
-                    const config = roomConfigSchema.safeParse({
-                      ...room.config,
-                      arenaName: event.currentTarget.value,
-                    });
-                    if (!config.success) return;
-                    send({
-                      version: PROTOCOL_VERSION,
-                      requestId: requestId(),
-                      kind: "UpdateConfig",
-                      code,
-                      token,
-                      config: config.data,
-                    });
+                  <strong>{LENGTH_LABELS[gameLength]}</strong>
+                  <span>{ROBOTS_PER_TEAM_BY_LENGTH[gameLength]} robots per team</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="site-fieldset" disabled={!isHost}>
+            <legend className="site-label">Formation</legend>
+            <div className="site-options" data-columns="2">
+              {FORMATION_ORDER.map((formation) => (
+                <button
+                  key={formation}
+                  type="button"
+                  className="site-option"
+                  aria-pressed={room.config.formation === formation}
+                  onClick={() => {
+                    const config = roomConfigSchema.safeParse({ ...room.config, formation });
+                    if (config.success) updateConfig(config.data);
                   }}
                 >
-                  {ARENA_TOWNS.map(({ town, label }) => (
-                    <optgroup key={town} label={label}>
-                      {ARENA_CATALOG.filter((entry) => entry.town === town).map((entry) => (
-                        <option key={entry.slug} value={entry.slug}>
-                          {entry.name} · {entry.width}×{entry.height}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-              <label className="setup-label mt-4">
-                Formation
-                <select
-                  className="setup-input cursor-pointer"
-                  value={room.config.formation}
-                  disabled={!isHost}
-                  onChange={(event) => {
-                    const config = roomConfigSchema.safeParse({
-                      ...room.config,
-                      formation: event.currentTarget.value,
-                    });
-                    if (!config.success) return;
-                    send({
-                      version: PROTOCOL_VERSION,
-                      requestId: requestId(),
-                      kind: "UpdateConfig",
-                      code,
-                      token,
-                      config: config.data,
-                    });
-                  }}
-                >
-                  {FORMATION_ORDER.map((formation) => (
-                    <option key={formation} value={formation}>
-                      {FORMATION_LABELS[formation].name}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1.5 block text-[11px] font-normal normal-case tracking-normal text-white/40">
-                  {FORMATION_LABELS[room.config.formation].tagline}
-                </span>
-              </label>
-              <label className="setup-label mt-4">
-                Arena look
-                <select
-                  className="setup-input"
-                  value={room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID}
-                  disabled={!isHost}
-                  onChange={(event) => {
-                    const arenaTheme = arenaThemeSchema.safeParse(event.currentTarget.value);
-                    if (!arenaTheme.success) return;
-                    send({
-                      version: PROTOCOL_VERSION,
-                      requestId: requestId(),
-                      kind: "UpdateConfig",
-                      code,
-                      token,
-                      config: { ...room.config, arenaTheme: arenaTheme.data },
-                    });
-                  }}
-                >
-                  {ARENA_THEME_ORDER.map((id) => (
-                    <option key={id} value={id}>
-                      {ARENA_THEMES[id].name}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1.5 block text-[11px] font-normal normal-case tracking-normal text-white/40">
-                  {ARENA_THEMES[room.config.arenaTheme ?? DEFAULT_ARENA_THEME_ID].tagline}
-                </span>
-              </label>
-              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <div className="setup-stat">
-                  <span>Map</span>
-                  <strong>{arenaCatalogEntry(room.config.arenaName).name}</strong>
-                </div>
-                <div className="setup-stat">
-                  <span>Formation</span>
-                  <strong>{FORMATION_LABELS[room.config.formation].name}</strong>
-                </div>
-                <div className="setup-stat">
-                  <span>Sport</span>
-                  <strong>Survival</strong>
-                </div>
-                <div className="setup-stat">
-                  <span>Turn</span>
-                  <strong>{room.config.turnLengthSeconds}s</strong>
-                </div>
-              </div>
-              {isHost ? null : (
-                <p className="mt-4 flex gap-2 text-xs leading-5 text-white/35">
-                  <LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  The host controls match settings.
-                </p>
-              )}
-            </section>
-            {error === undefined ? null : (
-              <div
-                className="rounded-xl border border-red-300/20 bg-red-300/8 p-3 text-sm text-red-200"
-                role="alert"
-              >
-                <p>{error}</p>
-                {(connectionStatus === "incompatible-protocol" || needsJoin) && (
+                  <strong>{FORMATION_LABELS[formation].name}</strong>
+                  <span>{FORMATION_LABELS[formation].tagline}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="site-fieldset" disabled={!isHost}>
+            <legend className="site-label">Arena look</legend>
+            <div className="site-options" data-columns="4">
+              {ARENA_THEME_ORDER.map((id) => {
+                const look = ARENA_THEMES[id];
+                return (
                   <button
+                    key={id}
                     type="button"
-                    className="secondary-action mt-3 w-full"
+                    className="site-option site-look"
+                    aria-pressed={theme === id}
+                    title={look.tagline}
                     onClick={() => {
-                      resetLocalGameData();
-                      window.location.assign("/");
+                      const arenaTheme = arenaThemeSchema.safeParse(id);
+                      if (arenaTheme.success)
+                        updateConfig({ ...room.config, arenaTheme: arenaTheme.data });
                     }}
                   >
-                    Reset saved room and planner data
+                    <span
+                      className="site-look-swatch"
+                      aria-hidden="true"
+                      style={{
+                        background: `linear-gradient(180deg, ${look.sky[0]}, ${look.sky[1]} 45%, ${look.sky[2]} 70%, ${look.floor.base} 71%)`,
+                        boxShadow: `inset 0 -2px 0 ${hexColor(look.rim.color)}`,
+                      }}
+                    />
+                    <strong>{look.name}</strong>
                   </button>
-                )}
-              </div>
-            )}
-            <button
-              type="button"
-              className={self.ready ? "secondary-action w-full" : "primary-action w-full"}
-              onClick={() =>
-                send({
-                  version: PROTOCOL_VERSION,
-                  requestId: requestId(),
-                  kind: "SetReady",
-                  code,
-                  token,
-                  ready: !self.ready,
-                })
-              }
-            >
-              {self.ready ? (
-                <>
-                  <Check className="size-4" aria-hidden="true" />
-                  Ready — click to edit
-                </>
-              ) : (
-                "Ready up"
-              )}
-            </button>
-            {isHost ? (
-              <button
-                type="button"
-                className="primary-action w-full"
-                disabled={!allReady}
-                onClick={() =>
-                  send({
-                    version: PROTOCOL_VERSION,
-                    requestId: requestId(),
-                    kind: "StartMatch",
-                    code,
-                    token,
-                  })
-                }
-              >
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Start match
-              </button>
-            ) : (
-              <p className="text-center text-xs text-white/35">
-                The host starts when every team is ready.
-              </p>
-            )}
-          </aside>
+                );
+              })}
+            </div>
+            <p className="site-fine">{ARENA_THEMES[theme].tagline}</p>
+          </fieldset>
+          {isHost ? null : (
+            <p className="site-fine site-lock-note">
+              <LockKeyhole size={13} aria-hidden="true" />
+              The host sets the match. Changes appear here live.
+            </p>
+          )}
+        </section>
+      </div>
+
+      {error === undefined ? null : (
+        <div className="site-lobby-error">
+          <p className="site-alert" role="alert">
+            {error}
+          </p>
+          {connectionStatus === "incompatible-protocol" ? <ResetLocalData /> : null}
         </div>
+      )}
+
+      <div className="site-dock">
+        <div className="site-dock-meter" aria-hidden="true">
+          {room.players.map((player) => (
+            <span key={player.id} data-team={player.color} data-ready={player.ready} />
+          ))}
+        </div>
+        <p id="lobby-dock-status" className="site-dock-text" role="status">
+          <strong>
+            {readyCount} of {room.players.length} ready.
+          </strong>{" "}
+          {dockMessage}
+        </p>
+        <span className="site-fine site-dock-rules">
+          Survival · {room.config.turnLengthSeconds}s turns
+        </span>
+        <button
+          type="button"
+          className="site-button"
+          data-size="lg"
+          {...(self.ready ? {} : { "data-variant": "go" })}
+          onClick={() =>
+            send({
+              version: PROTOCOL_VERSION,
+              requestId: requestId(),
+              kind: "SetReady",
+              code,
+              token,
+              ready: !self.ready,
+            })
+          }
+        >
+          {self.ready ? (
+            <>
+              <Check size={16} aria-hidden="true" />
+              Ready · click to change
+            </>
+          ) : (
+            "Ready up"
+          )}
+        </button>
+        {isHost ? (
+          <button
+            type="button"
+            className="site-button"
+            data-variant="go"
+            data-size="lg"
+            disabled={!allReady}
+            aria-describedby="lobby-dock-status"
+            onClick={() =>
+              send({
+                version: PROTOCOL_VERSION,
+                requestId: requestId(),
+                kind: "StartMatch",
+                code,
+                token,
+              })
+            }
+          >
+            <Play size={15} className="fill-current" aria-hidden="true" />
+            Start match
+          </button>
+        ) : null}
       </div>
     </main>
   );

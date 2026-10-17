@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ceremonyPresentation, matchFlowCopy } from "../../lib/presentation/matchFlow";
+import {
+  ceremonyPresentation,
+  matchFlowCopy,
+  matchTabTitle,
+  movieHandoffCopy,
+} from "../../lib/presentation/matchFlow";
 import { HelpProvider } from "../help/HelpProvider";
 import { FinalCeremony } from "./FinalCeremony";
 import { MatchFlowHeader } from "./MatchFlowHeader";
@@ -64,17 +69,30 @@ describe("Final Ceremony presentation", () => {
 describe("match-flow phase copy", () => {
   it("names waiting, movie, and finished phases with one primary action each", () => {
     expect(matchFlowCopy("waiting", 4)).toMatchObject({
-      heading: "Orders locked · Waiting",
-      primaryAction: "Refresh status",
+      heading: "Orders locked",
+      primaryAction: "Check now",
     });
     expect(matchFlowCopy("turn-ready", 4)).toMatchObject({
-      heading: "Turn movie ready",
-      primaryAction: "Acknowledge Turn 4 and plan next",
+      heading: "Turn 4 is ready to watch",
+      primaryAction: "Done watching Turn 4",
     });
     expect(matchFlowCopy("finished", 5)).toMatchObject({
-      heading: "Finished",
+      heading: "Match finished",
       primaryAction: "Return home",
     });
+  });
+
+  it("never promises another turn before the server reveals the outcome", () => {
+    const handoff = movieHandoffCopy(3, false);
+    expect(handoff.action).toBe("Done watching Turn 3");
+    expect(handoff.detail).toContain("or the results if the match is over");
+    expect(movieHandoffCopy(3, true).detail).toContain("Your team is out");
+  });
+
+  it("names browser tabs by phase", () => {
+    expect(matchTabTitle("planning", 2)).toBe("Turn 2 · Plan");
+    expect(matchTabTitle("turn-ready", 2)).toBe("Turn 2 · Movie");
+    expect(matchTabTitle("finished", 9)).toBe("Results");
   });
 
   it("renders authorized Room, Team, Turn, saved-state, and Field Guide context", () => {

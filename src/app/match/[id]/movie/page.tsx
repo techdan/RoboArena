@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { MatchGate } from "../../../../components/setup/MatchGate";
+
+export const metadata: Metadata = { title: "Turn movie" };
 
 export default async function MatchMoviePage({
   params,

@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { PlannerConcept, type ConceptShot } from "../../components/concept/PlannerConcept";
 import { createPlannerConcept } from "../../lib/replays/plannerConcept";
 import { isArenaThemeId } from "../../renderer3d/themes";
+
+export const metadata: Metadata = { title: "Planner concept" };
 
 const SHOTS: readonly ConceptShot[] = ["overview", "command", "aim", "rehearse"];
 

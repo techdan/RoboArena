@@ -3,7 +3,7 @@ import { BootCamp } from "../../components/bootcamp/BootCamp";
 import { safeReturnPath } from "../../lib/help/bootCampStorage";
 
 export const metadata: Metadata = {
-  title: "RoboArena — Boot Camp",
+  title: "Boot Camp",
   description: "A two-minute quick-start: robot classes, weapons, cover, and your first turn.",
 };
 
