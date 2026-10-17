@@ -207,8 +207,16 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
 
 /** Art upgrade: robots against taller cover, with dimmer glow. Size is still
  * being chosen with the owner, so `?robotScale=` overrides it for comparison. */
-const ART_ROBOT_SCALE = 0.85;
+// 1.15 was the owner's preferred size; cropping the framing enlarges tiles by
+// ~11% on screen, so 1.05 keeps robots about as large while freeing floor.
+const ART_ROBOT_SCALE = 1.05;
 const ART_ROBOT_GLOW = 0.4;
+/** Art upgrade framing: negative margin crops into the board by half a tile on
+ * each side, so the board slightly overflows the view and tiles grow on screen. */
+const ART_BOARD_MARGIN = -1;
+/** Movie overview distance per board extent: 1.25 includes the stands; the art
+ * upgrade frames the board itself, with the far edge allowed to overflow. */
+const ART_OVERVIEW_DISTANCE = 1.05;
 const artRobotScale = (): number => {
   try {
     const requested = Number(new URLSearchParams(window.location.search).get("robotScale"));
@@ -1088,19 +1096,10 @@ export class BattleScene3D {
     controls.screenSpacePanning = true;
     const fov = view === "top" ? 30 : 34;
     this.setFov(fov);
-    const rect = this.host.getBoundingClientRect();
-    const insets = this.viewInsets;
-    const openWidth = Math.max(1, rect.width - insets.left - insets.right);
-    const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
-    const aspect = Math.max(0.3, openWidth / openHeight);
-    // The lens spans the full canvas height; only the open fraction may hold the arena.
-    const half =
-      Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
     const rotated = quarter % 2 === 1;
-    const spanX = (rotated ? height : width) + 1.5;
-    const spanZ = (rotated ? width : height) + 1.5;
     const distance =
-      Math.max(spanZ / 2 / half, spanX / 2 / (half * aspect)) * (view === "top" ? 1 : 1.08);
+      this.boardFitDistance(fov, rotated ? height : width, rotated ? width : height) *
+      (view === "top" ? 1 : 1.08);
     const polar = view === "top" ? 0.0005 : THREE.MathUtils.degToRad(35);
     const yaw = (quarter * Math.PI) / 2;
     const target = new THREE.Vector3(width / 2, 0, height / 2);
@@ -1112,6 +1111,25 @@ export class BattleScene3D {
     // Straight down, the tiny polar offset toward `yaw` keeps that edge at the
     // bottom of the screen, so board North stays up for quarter 0.
     this.moveCamera(position, target, animate);
+  }
+
+  /**
+   * Camera distance at which a board spanning `spanX` x `spanZ` tiles fills the
+   * view area not covered by overlaid UI. The shipped look keeps a 1.5-tile
+   * margin; the art upgrade crops to the board and lets it overflow by a tile
+   * (pan covers the rest), so tiles are larger on screen.
+   */
+  private boardFitDistance(fov: number, spanX: number, spanZ: number): number {
+    const rect = this.host.getBoundingClientRect();
+    const insets = this.viewInsets;
+    const openWidth = Math.max(1, rect.width - insets.left - insets.right);
+    const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
+    const aspect = Math.max(0.3, openWidth / openHeight);
+    // The lens spans the full canvas height; only the open fraction may hold the arena.
+    const half =
+      Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
+    const margin = this.art ? ART_BOARD_MARGIN : 1.5;
+    return Math.max((spanZ + margin) / 2 / half, (spanX + margin) / 2 / (half * aspect));
   }
 
   private moveCamera(position: THREE.Vector3, target: THREE.Vector3, animate: boolean): void {
@@ -1404,7 +1422,7 @@ export class BattleScene3D {
       }
       const overview = this.cameraMode === "overview" || weight === 0;
       const distance = overview
-        ? extent * 1.25
+        ? extent * (this.art ? ART_OVERVIEW_DISTANCE : 1.25)
         : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05);
       const elevation = overview ? 0.95 : 0.78;
       // A fixed heading from the south; the camera no longer orbits while idle.
