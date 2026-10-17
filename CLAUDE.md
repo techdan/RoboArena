@@ -178,6 +178,13 @@ RoboSport (1991)/          gitignored — original DOS distribution; local resea
 
 When working on an engine numerical value: **`src/engine/constants.ts` and `src/engine/catalog.ts` are the literal source of truth.** `docs/spec.md` documents what's there. If they disagree, the code wins and the spec gets updated to match.
 
+## Arena art
+
+Legibility beats mood: arena art changes must keep the board at least as bright
+as the shipped look, add grit through surface texture rather than dimmer
+lighting, avoid glossy/high-frequency floor sparkle, and be judged from the
+top-down planner camera first. See `tasks/lessons.md` (2026-10-17).
+
 ## Documentation conventions
 
 - Each `src/engine/*.ts` file has a top-of-file JSDoc block citing the spec section it implements.

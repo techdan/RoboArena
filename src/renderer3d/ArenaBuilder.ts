@@ -280,10 +280,9 @@ export const buildArena = (
   }
   if (art) {
     const detail = paintFloorDetail(arena, FLOOR_PX, {
-      roughness: Math.min(1, theme.floor.roughness + 0.06),
+      roughness: theme.floor.roughness,
       metalness: theme.floor.metalness,
-      wetness: theme.id === "coliseum" ? 0.85 : 0,
-      relief: 12,
+      relief: 7,
     });
     const normalMap = new THREE.CanvasTexture(detail.normal);
     const orm = new THREE.CanvasTexture(detail.orm);
@@ -296,6 +295,9 @@ export const buildArena = (
     floorMaterial.aoMap = orm;
     floorMaterial.aoMapIntensity = 1;
     floorMaterial.roughness = 1;
+    // Relief shading darkens the floor slightly; lift it back so the board
+    // stays at least as bright as the flat painted floor (legibility first).
+    floorMaterial.color.setScalar(1.06);
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
@@ -431,7 +433,7 @@ export const buildArena = (
   }
   instanceProps(library, placements, group);
   if (bushes.length > 0) {
-    const foliage = buildFoliage(bushes, ["#3f7a26", "#4f8c2c", "#64a034", "#78b040", "#335f20"]);
+    const foliage = buildFoliage(bushes, ["#5a9e36", "#6cb03e", "#82c24a", "#94cc58", "#4a8a2e"]);
     group.add(foliage.mesh);
     disposables.push(foliage);
   }

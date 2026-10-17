@@ -3,13 +3,15 @@
  *  Detail lives in textures and shaders rather than triangles, because the
  *  target GPU (integrated Iris Xe) is bound by scene geometry and AO passes:
  *  - the floor gains a generated normal map and a packed occlusion/roughness
- *    map (bevelled plates, pitting, hairline cracks, wet patches);
+ *    map (bevelled plates, pitting, hairline cracks);
  *  - masonry and metal props gain a world-space weathering hook (colour
  *    breakup, ground grime, roughness variation, micro-bump) at zero draw cost;
  *  - bushes become instanced alpha-card foliage, far fewer triangles than the
  *    faceted icosphere clusters they replace;
- *  - a theme-matched environment map lets wet and metal surfaces reflect the
- *    floodlights instead of a generic studio room.
+ *  - floodlight beams use a soft volumetric shader instead of flat cones.
+ *
+ *  Legibility comes first: detail adds grit through surface texture, never by
+ *  dimming the scene, and floors avoid glossy high-frequency sparkle.
  *
  *  All variation is hashed from tile coordinates, so every replay shows the
  *  identical arena.
@@ -40,8 +42,6 @@ export interface FloorDetailStyle {
   /** Baseline roughness of dry plates, 0..1. */
   readonly roughness: number;
   readonly metalness: number;
-  /** Share of the floor covered by wet, glossy patches, 0..1. */
-  readonly wetness: number;
   /** Normal strength; larger reads as deeper seams and rougher concrete. */
   readonly relief: number;
 }
@@ -83,7 +83,7 @@ export const paintFloorDetail = (
       hash01("fp-x", i) * width,
       hash01("fp-y", i) * height,
       0.8 + hash01("fp-r", i) * 1.6,
-      hash01("fp-d", i) > 0.35 ? -0.1 : 0.06,
+      hash01("fp-d", i) > 0.35 ? -0.05 : 0.03,
     );
 
   // Plates: bevelled edges falling into recessed seams.
@@ -95,7 +95,7 @@ export const paintFloorDetail = (
       const edge = Math.min(lx, ly, px - 1 - lx, px - 1 - ly);
       if (edge < bevel) {
         const t = edge / bevel;
-        h[y * width + x] = h[y * width + x]! * (0.55 + 0.45 * t * t * (3 - 2 * t));
+        h[y * width + x] = h[y * width + x]! * (0.85 + 0.15 * t * t * (3 - 2 * t));
         rough[y * width + x] = Math.min(1, rough[y * width + x]! + (1 - t) * 0.2);
       }
     }
@@ -136,24 +136,6 @@ export const paintFloorDetail = (
       }
     }
 
-  // Wet patches: low roughness pooling in the low spots between plates.
-  if (style.wetness > 0) {
-    const pools = arena.width * arena.height * 0.08 * style.wetness;
-    const wet = new Float32Array(width * height);
-    for (let i = 0; i < pools; i += 1)
-      stamp(
-        hash01("fw-x", i) * width,
-        hash01("fw-y", i) * height,
-        px * (0.5 + hash01("fw-r", i) * 1.4),
-        0.9,
-        wet,
-      );
-    for (let i = 0; i < wet.length; i += 1) {
-      const w = THREE.MathUtils.smoothstep(wet[i]!, 0.25, 0.75);
-      rough[i] = THREE.MathUtils.lerp(rough[i]!, 0.24, w);
-    }
-  }
-
   const normal = document.createElement("canvas");
   normal.width = width;
   normal.height = height;
@@ -175,7 +157,7 @@ export const paintFloorDetail = (
       nImage.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
       nImage.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
       nImage.data[i + 3] = 255;
-      const cavity = THREE.MathUtils.clamp(0.55 + h[y * width + x]! * 0.75, 0, 1);
+      const cavity = THREE.MathUtils.clamp(0.92 + h[y * width + x]! * 0.2, 0, 1);
       oImage.data[i] = cavity * 255;
       oImage.data[i + 1] = THREE.MathUtils.clamp(rough[y * width + x]!, 0.04, 1) * 255;
       oImage.data[i + 2] = style.metalness * 255;
@@ -210,9 +192,9 @@ const PROFILE_UNIFORMS: Readonly<
     { scale: number; tone: number; bump: number; grime: number; rough: number }
   >
 > = {
-  masonry: { scale: 7, tone: 0.26, bump: 0.02, grime: 0.5, rough: 0.12 },
-  soft: { scale: 12, tone: 0.16, bump: 0.008, grime: 0.4, rough: 0.05 },
-  metal: { scale: 4, tone: 0.08, bump: 0.003, grime: 0.4, rough: 0.22 },
+  masonry: { scale: 7, tone: 0.24, bump: 0.02, grime: 0.2, rough: 0.12 },
+  soft: { scale: 12, tone: 0.16, bump: 0.008, grime: 0.18, rough: 0.05 },
+  metal: { scale: 4, tone: 0.08, bump: 0.003, grime: 0.18, rough: 0.22 },
 };
 
 /** Tileable detail noise, generated once: R = fine grain, G = broad blotches,
@@ -445,7 +427,7 @@ const bushGeometry = (): THREE.BufferGeometry => {
       uvs.push(u, v);
       // Self-shadowing by depth inside the clump, standing in for AO.
       const shade = THREE.MathUtils.clamp(
-        0.55 + p.y * 0.9 + p.clone().setY(0).length() * 0.6,
+        0.72 + p.y * 0.7 + p.clone().setY(0).length() * 0.5,
         0,
         1,
       );
@@ -507,7 +489,7 @@ export const buildFoliage = (
   matrices.forEach((matrix, index) => {
     mesh.setMatrixAt(index, matrix);
     const t = hash01("bush-tint", index);
-    mesh.setColorAt(index, tint.setHSL(0.22 + (t - 0.5) * 0.08, 0.35, 0.82 + t * 0.15));
+    mesh.setColorAt(index, tint.setHSL(0.24 + (t - 0.5) * 0.08, 0.4, 0.9 + t * 0.1));
   });
   mesh.instanceMatrix.needsUpdate = true;
   mesh.castShadow = true;
@@ -524,69 +506,6 @@ export const buildFoliage = (
       mesh.dispose();
     },
   };
-};
-
-// ---------------------------------------------------------------------------
-// Environment: a night-stadium light probe for reflections and soft fill.
-
-export const stadiumEnvironment = (
-  renderer: THREE.WebGLRenderer,
-  options: {
-    readonly sky: readonly [string, string, string];
-    readonly lamp: number;
-    readonly stands: number;
-  },
-): THREE.WebGLRenderTarget => {
-  const scene = new THREE.Scene();
-  const disposables: { dispose(): void }[] = [];
-  const skyGeometry = new THREE.SphereGeometry(50, 32, 16);
-  const top = new THREE.Color(options.sky[0]);
-  const mid = new THREE.Color(options.sky[1]);
-  const horizon = new THREE.Color(options.sky[2]);
-  const colors: number[] = [];
-  const position = skyGeometry.getAttribute("position");
-  const c = new THREE.Color();
-  for (let i = 0; i < position.count; i += 1) {
-    const y = position.getY(i) / 50;
-    if (y > 0) c.copy(mid).lerp(top, Math.min(1, y * 1.6));
-    else c.copy(horizon).multiplyScalar(0.25);
-    if (Math.abs(y) < 0.12) c.lerp(horizon, 1 - Math.abs(y) / 0.12);
-    colors.push(c.r, c.g, c.b);
-  }
-  skyGeometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  const skyMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide });
-  scene.add(new THREE.Mesh(skyGeometry, skyMaterial));
-  disposables.push(skyGeometry, skyMaterial);
-
-  // A warm band of stand lighting around the horizon.
-  const ringGeometry = new THREE.CylinderGeometry(40, 40, 6, 48, 1, true);
-  const ringMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(options.stands).multiplyScalar(1.6),
-    side: THREE.BackSide,
-  });
-  const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-  ring.position.y = 4;
-  scene.add(ring);
-  disposables.push(ringGeometry, ringMaterial);
-
-  // Four floodlight banks high in the corners: the hot spots wet floors catch.
-  const lampGeometry = new THREE.PlaneGeometry(9, 4);
-  const lampMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(options.lamp).multiplyScalar(7),
-    side: THREE.DoubleSide,
-  });
-  disposables.push(lampGeometry, lampMaterial);
-  for (const angle of [0.25, 0.75, 1.25, 1.75]) {
-    const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
-    lamp.position.set(Math.cos(angle * Math.PI) * 36, 22, Math.sin(angle * Math.PI) * 36);
-    lamp.lookAt(0, 0, 0);
-    scene.add(lamp);
-  }
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const target = pmrem.fromScene(scene, 0.02);
-  pmrem.dispose();
-  for (const item of disposables) item.dispose();
-  return target;
 };
 
 // ---------------------------------------------------------------------------

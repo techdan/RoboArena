@@ -10,13 +10,12 @@ and per-view pairs in the same folder (close-up, low angle, overview, top-down, 
 
 ## What changed (all in `src/renderer3d/arenaArt.ts`)
 
-| Element  | Before                               | Prototype                                                                                                      |
-| -------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Floor    | Canvas colour map only               | Generated normal map + packed ORM map: bevelled plates, pitting, hairline cracks, wet low-roughness pools      |
-| Walls    | Flat-colour Blender primitives       | Shared weathering hook: colour breakup, ground grime, roughness variation, micro-bump; one noise-texture fetch |
-| Bush     | 9 faceted icospheres (~720 tris)     | 27 instanced alpha cards (54 tris), volumetric normals, mip-aware alpha so it survives the top-down view       |
-| Lighting | Generic RoomEnvironment probe        | Night-stadium probe (sky, stand glow, four floodlight banks) so wet floor and metal reflect the lamps          |
-| Beams    | Flat translucent cones (grey wedges) | Soft-edged volumetric shader, brightest at the lamp                                                            |
+| Element | Before                               | Prototype                                                                                                      |
+| ------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Floor   | Canvas colour map only               | Generated normal map + packed ORM map: bevelled plates, pitting, hairline cracks                               |
+| Walls   | Flat-colour Blender primitives       | Shared weathering hook: colour breakup, ground grime, roughness variation, micro-bump; one noise-texture fetch |
+| Bush    | 9 faceted icospheres (~720 tris)     | 27 instanced alpha cards (54 tris), volumetric normals, mip-aware alpha so it survives the top-down view       |
+| Beams   | Flat translucent cones (grey wedges) | Soft-edged volumetric shader, brightest at the lamp                                                            |
 
 Foliage is hidden from GTAO's normal pass (`userData.noAO`), because that pass's
 override material ignores `alphaTest`. The AO depth-reuse path from the
@@ -39,7 +38,18 @@ Machine-wide timing drifted between sessions (baseline 36 → 42–50 ms), so on
 paired deltas are meaningful. Not yet measured: the two-player planner,
 Balanced, physical iPad.
 
-## Open questions for the owner
+## Revision 2 (owner feedback)
+
+The owner liked the shrubs but rejected the "sparkling tiles" and the darker
+scene: legibility comes first. Revision 2 removes the wet floor pools and the
+night-stadium environment probe (back to the shipped RoomEnvironment), halves
+the floor relief, lightens cavity shading and wall grime, and brightens the
+shrubs. Mean luminance of the board views is now within 1–2% of the shipped
+look (overview 70.2 vs 71.2, top-down 66.8 vs 68.0). The remaining gap at low
+angles comes from the old flat beam cones, whose grey haze the soft beams
+deliberately drop. Rule recorded in `tasks/lessons.md`.
+
+## Open questions for the owner (concept round 1, answered)
 
 - Bushes are darker and more natural than the old vivid green blobs. Is that
   the right trade, or should cover stay louder for tactical readability?

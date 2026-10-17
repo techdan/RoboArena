@@ -16,7 +16,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { artPreviewEnabled, beamMaterial, stadiumEnvironment } from "./arenaArt";
+import { artPreviewEnabled, beamMaterial } from "./arenaArt";
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import type {
   Heading,
@@ -376,23 +376,13 @@ export class BattleScene3D {
       Math.max(theme.fog.near, Math.max(width, height) * 1.1),
       Math.max(theme.fog.far, Math.max(width, height) * 3),
     );
-    if (this.art && theme.id === "coliseum") {
-      this.environmentTarget = stadiumEnvironment(this.renderer, {
-        sky: theme.sky,
-        lamp: theme.floodlights?.color ?? 0xffffff,
-        stands: 0xff8a3a,
-      });
-      this.scene.environment = this.environmentTarget.texture;
-      this.scene.environmentIntensity = 1.1;
-    } else {
-      const pmrem = new THREE.PMREMGenerator(this.renderer);
-      const environment = new RoomEnvironment();
-      this.environmentTarget = pmrem.fromScene(environment, 0.04);
-      this.scene.environment = this.environmentTarget.texture;
-      environment.dispose();
-      this.scene.environmentIntensity = theme.environment;
-      pmrem.dispose();
-    }
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const environment = new RoomEnvironment();
+    this.environmentTarget = pmrem.fromScene(environment, 0.04);
+    this.scene.environment = this.environmentTarget.texture;
+    environment.dispose();
+    this.scene.environmentIntensity = theme.environment;
+    pmrem.dispose();
 
     const hemi = new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity);
     this.scene.add(hemi);
