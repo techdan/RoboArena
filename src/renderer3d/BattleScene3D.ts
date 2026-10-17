@@ -80,6 +80,11 @@ export interface RenderOptions {
   readonly reducedMotion: boolean;
 }
 
+/** How long a deploying robot falls from the sky, at 1x playback. */
+const DEPLOY_DROP_SECONDS = 0.7;
+/** The planner's quicker drop when a robot is first placed or rehearsed in. */
+const PLANNER_DROP_SECONDS = 0.45;
+
 const EXPLOSIVES: ReadonlySet<WeaponId> = new Set(["missile-launcher", "grenade-launcher"]);
 
 const VignetteShader = {
@@ -170,6 +175,9 @@ class AntialiasedScenePass extends RenderPass {
   }
 }
 
+/** Frame rate for pulsing route and target overlays while planning. */
+const PLANNING_AMBIENT_FPS = 20;
+
 export class BattleScene3D {
   readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
@@ -183,6 +191,8 @@ export class BattleScene3D {
   private readonly effects = new Effects3D();
   private readonly rigs = new Map<string, RobotRig>();
   private readonly posed = new Map<string, TileCoord>();
+  /** Planner robots last shown in the dock, so their deploy can drop in. */
+  private readonly docked = new Set<string>();
   private readonly sun: THREE.DirectionalLight;
   private arena: ArenaBuild | null = null;
   private library: ModelLibrary | null = null;
@@ -242,6 +252,18 @@ export class BattleScene3D {
   private readonly raycaster = new THREE.Raycaster();
   private viewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   private readonly floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  /**
+   * While planning nothing moves on its own, so frames are drawn on demand:
+   * after input, overlay or robot changes, camera motion, and at a low
+   * ambient rate for pulsing overlays. Drawing every frame kept integrated
+   * GPUs saturated, which queued pointer input and made the cursor trail.
+   */
+  private planning = false;
+  private drawRequested = true;
+  private drawUntil = 0;
+  private shadowsUntil = 0;
+  private lastDraw = -Infinity;
+  private overlayVersion = -1;
   /** Planner overlays (routes, heatmaps, wedges) projected onto the floor. */
   readonly overlays = new PlannerOverlays3D();
   readonly targetingOverlays = new PlannerOverlays3D();
@@ -260,7 +282,6 @@ export class BattleScene3D {
       powerPreference: "high-performance",
       preserveDrawingBuffer: new URLSearchParams(window.location.search).has("capture"),
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     // RenderPass and GTAO both render the scene. Refresh shadows once per frame,
     // then reuse that identical map for the normal/AO pass.
@@ -394,8 +415,15 @@ export class BattleScene3D {
     this.controls.maxDistance = Math.max(width, height) * 2.2;
     this.controls.target.copy(this.lookCurrent);
     this.controls.addEventListener("start", () => this.setCameraMode("free"));
+    this.controls.addEventListener("change", () => this.requestDraw());
     window.addEventListener(GRAPHICS_QUALITY_EVENT, this.qualityChanged);
     window.addEventListener("storage", this.qualityChanged);
+  }
+
+  /** Asks for a fresh frame, and keeps drawing for `seconds` while things settle. */
+  private requestDraw(seconds = 0): void {
+    this.drawRequested = true;
+    this.drawUntil = Math.max(this.drawUntil, this.now + seconds);
   }
 
   /** Loads models, builds the arena and starts the render loop. */
@@ -524,6 +552,7 @@ export class BattleScene3D {
       this.controls.maxDistance,
     );
     this.camera.position.copy(this.controls.target).add(offset.setLength(distance));
+    this.requestDraw();
   }
 
   get mode(): CameraMode {
@@ -564,6 +593,7 @@ export class BattleScene3D {
       );
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
+    this.requestDraw();
   }
 
   /** CSS pixels of the canvas hidden behind overlaid UI; framing avoids them. */
@@ -686,6 +716,20 @@ export class BattleScene3D {
 
     if (options.reducedMotion) return;
     this.playEvents(this.timeline.eventsByTick.get(snapshot.tick) ?? [], snapshot, animate, secs);
+  }
+
+  /**
+   * Plays the opening snapshot's beat when playback starts on it. The first
+   * snapshot is shown statically on load, so without this its tick-0 events
+   * (every robot deploying, under rules revision 5) would never animate.
+   */
+  playOpening(speed: number): void {
+    if (this.renderedIndex !== 0 || this.reducedMotion) return;
+    const snapshot = this.timeline.snapshots[0];
+    if (snapshot === undefined) return;
+    this.speed = Math.max(0.01, speed);
+    const secs = (seconds: number) => seconds / this.speed;
+    this.playEvents(this.timeline.eventsByTick.get(snapshot.tick) ?? [], snapshot, true, secs);
   }
 
   private playEvents(
@@ -854,11 +898,14 @@ export class BattleScene3D {
         case "deployed": {
           const rig = rigOf(event.robotId);
           if (rig !== undefined && animate) {
-            // Drop-in from above with a heavy landing.
+            // Drop-in from the sky through a beacon, with a heavy landing.
             const at = this.worldOf(event.to, 0);
-            rig.place(event.to, this.now);
-            this.effects.footfall(at, true);
-            this.effects.lockOn(at.setY(0.03), 0x6fe0ff);
+            const color = snapshot.robots[event.robotId]?.teamColor ?? 0x6fe0ff;
+            const fall = secs(DEPLOY_DROP_SECONDS);
+            rig.dropIn(event.to, fall, this.now);
+            this.effects.deployBeam(at, color, fall);
+            this.focus(at, 0.6, fall + secs(0.5));
+            this.after(fall, () => this.effects.deployLanding(at, color));
           }
           break;
         }
@@ -993,6 +1040,7 @@ export class BattleScene3D {
       this.camera.position.copy(position);
       this.controls.target.copy(target);
       this.controls.update();
+      this.requestDraw();
       return;
     }
     this.cameraTween = {
@@ -1035,6 +1083,9 @@ export class BattleScene3D {
    * Robots absent from the list are hidden.
    */
   syncRobots(robots: readonly PlannedRobotPose[], animate: boolean): void {
+    // Robots step, settle their posture and kick up dust for a moment.
+    this.requestDraw(1.5);
+    this.shadowsUntil = this.now + 1.5;
     const seen = new Set<string>();
     for (const robot of robots) {
       const rig = this.rigFor(robot.id, { robotClass: robot.robotClass, teamColor: robot.color });
@@ -1042,7 +1093,11 @@ export class BattleScene3D {
       seen.add(robot.id);
       rig.visible = robot.position !== "dock";
       rig.root.visible = rig.visible;
-      if (robot.position === "dock") continue;
+      if (robot.position === "dock") {
+        this.docked.add(robot.id);
+        this.posed.delete(robot.id);
+        continue;
+      }
       if (robot.hp !== 0) rig.setPosture(robot.posture, animate);
       rig.setScanYaw(headingYaw(robot.scanHeading), animate);
       const previous = this.posed.get(robot.id);
@@ -1052,7 +1107,15 @@ export class BattleScene3D {
         previous.y !== robot.position.y;
       if (moved) {
         if (animate && previous !== undefined) rig.moveTo(robot.position, 0.22, false, this.now);
-        else rig.place(robot.position, this.now);
+        else if (animate && this.docked.has(robot.id)) {
+          rig.dropIn(robot.position, PLANNER_DROP_SECONDS, this.now, 3);
+          this.effects.deployBeam(
+            this.worldOf(robot.position, 0),
+            robot.color,
+            PLANNER_DROP_SECONDS,
+          );
+        } else rig.place(robot.position, this.now);
+        this.docked.delete(robot.id);
         this.posed.set(robot.id, robot.position);
       }
       if (!animate || previous === undefined) rig.faceYaw(headingYaw(robot.scanHeading), false);
@@ -1069,6 +1132,10 @@ export class BattleScene3D {
 
   /** Planning look: drops the floodlight haze and dust so the floor reads cleanly. */
   setPlanningLook(on: boolean): void {
+    this.planning = on;
+    // Shadows refresh manually; draw one fresh shadow map for the new look.
+    this.renderer.shadowMap.needsUpdate = true;
+    this.requestDraw();
     for (const beam of this.beams) beam.visible = !on;
     if (this.motes !== null) this.motes.visible = !on;
     // Floodlight glare is drama for the movie; while planning it hides the board.
@@ -1186,22 +1253,42 @@ export class BattleScene3D {
     this.stepCameraTween();
     this.effects.update(dt * Math.min(2, Math.max(0.5, this.speed)));
     this.updateCamera(dt);
-    if (draw) {
-      if (this.diagnostics) this.renderer.info.reset();
-      this.renderer.shadowMap.needsUpdate = true;
-      this.composer.render(dt);
-      if (fixedDt === undefined) {
-        this.gpuFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-        this.submittedCursorAt = this.pendingCursorAt;
-        this.pendingCursorAt = undefined;
-        gl.flush();
-      }
-      if (this.diagnostics) {
-        this.canvas.dataset.drawCalls = String(this.renderer.info.render.calls);
-        this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
-        this.canvas.dataset.cpuFrameMs = (performance.now() - cpuStart).toFixed(1);
-      }
+    if (!draw || (fixedDt === undefined && !this.wantsDraw())) return;
+    if (this.diagnostics) this.renderer.info.reset();
+    // Shadows refresh manually (see the constructor). The arena never moves while
+    // planning, so there they re-render only while robots settle.
+    if (!this.planning || this.now < this.shadowsUntil) this.renderer.shadowMap.needsUpdate = true;
+    this.drawRequested = false;
+    this.lastDraw = this.now;
+    this.composer.render(dt);
+    if (fixedDt === undefined) {
+      this.gpuFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      this.submittedCursorAt = this.pendingCursorAt;
+      this.pendingCursorAt = undefined;
+      gl.flush();
     }
+    if (this.diagnostics) {
+      this.canvas.dataset.drawCalls = String(this.renderer.info.render.calls);
+      this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
+      this.canvas.dataset.cpuFrameMs = (performance.now() - cpuStart).toFixed(1);
+    }
+  }
+
+  /** Movie frames always draw; planning frames only when something changed. */
+  private wantsDraw(): boolean {
+    if (!this.planning) return true;
+    const layers = [this.overlays, this.targetingOverlays, this.aimOverlays];
+    const overlayVersion = layers.reduce((sum, layer) => sum + layer.version, 0);
+    if (overlayVersion !== this.overlayVersion) {
+      this.overlayVersion = overlayVersion;
+      return true;
+    }
+    if (this.drawRequested || this.now < this.drawUntil || this.cameraTween !== null) return true;
+    if (this.effects.particleCount > 0) return true;
+    return (
+      layers.some((layer) => layer.animating) &&
+      this.now - this.lastDraw >= 1 / PLANNING_AMBIENT_FPS
+    );
   }
 
   private updateCamera(dt: number): void {

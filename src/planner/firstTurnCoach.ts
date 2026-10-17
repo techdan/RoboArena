@@ -9,7 +9,8 @@
 
 import type { RobotCommandSegment } from "../engine/types";
 
-export type CoachStepId = "deploy" | "move" | "orders" | "aim" | "squad" | "rehearse" | "lock";
+export type CoachStepId =
+  "deploy" | "move" | "orders" | "facing" | "aim" | "squad" | "rehearse" | "lock";
 
 export interface CoachStep {
   readonly id: CoachStepId;
@@ -37,6 +38,12 @@ export const COACH_STEPS: readonly CoachStep[] = [
     title: "Open its orders",
     body: "Tap the robot itself. Its orders open around it: move, aim, scan & fire, posture and facing.",
     skippable: false,
+  },
+  {
+    id: "facing",
+    title: "Point it the right way",
+    body: "In its orders, choose Face, then pick one of the eight compass points. A robot only spots and shoots at enemies inside the cone it faces.",
+    skippable: true,
   },
   {
     id: "aim",
@@ -85,6 +92,8 @@ export const isCoachStepDone = (id: CoachStepId, facts: CoachFacts): boolean => 
       return anySegment(facts, ["move"]);
     case "orders":
       return facts.ordersOpened;
+    case "facing":
+      return anySegment(facts, ["set-scan-direction"]);
     case "aim":
       return anySegment(facts, ["aim-and-fire", "scan-and-fire"]);
     case "squad":

@@ -128,14 +128,25 @@ export class PlannerOverlays3D {
   private cursorMesh: THREE.Mesh | null = null;
   private readonly animated: THREE.ShaderMaterial[] = [];
   private readonly pulses: { mesh: THREE.Object3D; phase: number }[] = [];
+  /** Bumped whenever what the overlays show changes, so the board knows to redraw. */
+  version = 0;
 
   constructor() {
     this.group.name = "PlannerOverlays";
     this.group.add(this.cursorGroup);
+    this.group.addEventListener("childadded", () => {
+      this.version += 1;
+    });
+  }
+
+  /** Whether anything on the floor pulses or flows and needs ambient frames. */
+  get animating(): boolean {
+    return this.animated.length > 0 || this.pulses.length > 0;
   }
 
   /** Square outline on the hovered tile; null hides it. */
   setCursor(tile: TileCoord | null, color: string): void {
+    this.version += 1;
     if (this.cursorMesh === null) {
       const outer = new THREE.Shape();
       outer
@@ -180,6 +191,7 @@ export class PlannerOverlays3D {
   }
 
   clear(): void {
+    this.version += 1;
     for (const child of [...this.group.children]) {
       if (child === this.cursorGroup) continue;
       this.group.remove(child);

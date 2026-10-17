@@ -101,6 +101,15 @@ export const ORIGINAL_FORMATIONS_RULES_REVISION = 3;
 export const ORIGINAL_TIMING_RULES_REVISION = 4;
 
 /**
+ * Rules revision 5 keeps revision 4 and places a deploying robot on its tile
+ * when the Deploy record dispatches, not when it ends. Deploy (selector 74)
+ * does not set the re-dispatch bit, so its handler seg6:0x2ECF runs once at
+ * the record's start and calls the map placement seg6:0x11B3(x,y); the robot
+ * then stays busy for the remaining 120 ticks (seg6:0x4ABB, docs/re-map).
+ */
+export const ORIGINAL_DEPLOY_RULES_REVISION = 5;
+
+/**
  * A 1-tile move occupies its destination 15 ticks in; a 2-tile move occupies
  * the floored midpoint at 15 and the destination at 25 (seg6:0x2D8E,
  * seg6:0x2E41..0x2EA9).

@@ -5802,13 +5802,38 @@ a.planner-menu-item:focus-visible {
 .first-turn-coach-dots li[data-state="now"] {
   background: #fde047;
 }
+.first-turn-coach-dots li[data-shown] {
+  box-shadow: 0 0 0 2px rgb(253 224 71 / 30%);
+}
+.first-turn-coach-dots li button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* A taller hit area than the thin bar it sits on. */
+  padding: 0.5rem 0;
+  margin-top: -0.5rem;
+  box-sizing: content-box;
+}
+.first-turn-coach-done {
+  margin-left: 0.3rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: rgb(253 224 71 / 15%);
+  font-size: 0.65rem;
+}
+.first-turn-coach-spacer {
+  flex: 1;
+}
 .first-turn-coach footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 0.5rem;
   margin-top: 0.7rem;
 }
 .first-turn-coach footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   min-height: 2rem;
   padding: 0 0.8rem;
   border: 1px solid rgb(255 255 255 / 14%);
@@ -5841,6 +5866,7 @@ a.planner-menu-item:focus-visible {
 .tactical-planner[data-coach="squad"] .squad-card,
 .tactical-planner[data-coach="rehearse"] .turn-track-rehearse,
 .tactical-planner[data-coach="lock"] .planner-lock-action,
+.tactical-planner[data-coach="facing"] .radial-orders-item:nth-of-type(5),
 .tactical-planner[data-coach="aim"] .radial-orders-item:nth-of-type(2) {
   animation: coach-pulse 1.6s ease-in-out infinite;
 }

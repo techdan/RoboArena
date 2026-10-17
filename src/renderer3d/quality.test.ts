@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { graphicsPixelRatio, isGraphicsQuality } from "./quality";
+import { describe, expect, it, vi } from "vitest";
+import { graphicsPixelRatio, isGraphicsQuality, preferredGraphicsQuality } from "./quality";
 
 describe("explicit graphics quality", () => {
   it("keeps native full resolution and the existing DPR cap in Cinematic", () => {
@@ -20,5 +20,12 @@ describe("explicit graphics quality", () => {
     expect(isGraphicsQuality("performance")).toBe(true);
     expect(isGraphicsQuality("unknown")).toBe(false);
     expect(isGraphicsQuality(null)).toBe(false);
+  });
+  it("starts on Cinematic, including over a retired Full/Light choice", () => {
+    for (const stored of [null, "light", "full"]) {
+      vi.stubGlobal("window", { localStorage: { getItem: () => stored } });
+      expect(preferredGraphicsQuality()).toBe("cinematic");
+    }
+    vi.unstubAllGlobals();
   });
 });
