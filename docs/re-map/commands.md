@@ -157,6 +157,9 @@ Menu build `seg79:0x1044..0x10B5` (jt `0x11B3`); WM_COMMAND routing `seg79:0x04C
 | Move offsets | DGROUP `0x0B14` 5×5 words, index `(dy+2)·5+(dx+2)`: row −2 `63 64 49 50 51`; −1 `62 48 41 42 52`; 0 `61 47 0 43 53`; +1 `60 46 45 44 54`; +2 `59 58 57 56 55`. | `seg14:0x0788` | C |
 | 74 Deploy | `seg6:0x2ECF` → `seg6:0x11B3(x,y)` + FX 8. | | C |
 
+Deploy placement: sel 74 is not in the re-dispatch set (`0x4D3B..0x4E35`), so `0x2ECF` runs once at the
+record's start. The robot is on the board from tick 0 and stays busy until tick 120 (engine rules revision 5). **C**
+
 ## 9. Stepped heading/posture emission (planner + AI)
 
 - Heading (`seg80:0x0422`, `seg30:0x13A2`): if current heading is 0 (unset) emit `23+target` once.

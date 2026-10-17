@@ -277,6 +277,36 @@ describe("resolveTurn", () => {
     expect(result.nextState.teams[0]?.robots[0]).toMatchObject({ position: { x: 0, y: 0 } });
   });
 
+  it("lands a deploying robot when Deploy starts under rules revision 5 (seg6:0x2ECF)", () => {
+    const robot = makeRobot("r1", "team-1", "rifle", "dock");
+    const base = makeMatch({ teamOneRobots: [robot] });
+    const state = { ...base, config: { ...base.config, rulesRevision: 5 as const } };
+    const result = requireResolved(
+      resolveTurn({
+        state,
+        seed: "deploy",
+        orders: ordersFor(state, [
+          {
+            robotId: "r1",
+            segments: [
+              { kind: "deploy", to: { x: 0, y: 0 } },
+              { kind: "set-scan-direction", heading: "S" },
+            ],
+          },
+        ]),
+      }),
+    );
+    expect(eventsOf(result.events, "deployed")).toMatchObject([
+      { tick: 0, robotId: "r1", to: { x: 0, y: 0 } },
+    ]);
+    // The robot is on the board but stays busy for Deploy's full 120 ticks.
+    expect(eventsOf(result.events, "command-start")).toMatchObject([
+      { tick: 0, commandKind: "deploy" },
+      { tick: 120, commandKind: "set-scan-direction" },
+    ]);
+    expect(result.nextState.teams[0]?.robots[0]).toMatchObject({ position: { x: 0, y: 0 } });
+  });
+
   it("returns MalformedOrders for a deploy onto an impassable home-area tile", () => {
     // Regression: real Home rectangles (e.g. Rubble Two NW) contain Wall tiles,
     // and the resolver accepted a deploy that placed a robot inside a Wall.

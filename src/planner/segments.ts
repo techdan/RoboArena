@@ -209,7 +209,12 @@ export const projectRobotAtTick = (
     }
     const duration = segmentDuration(segment, projected);
     const endTick = projected.tick + duration;
-    if (endTick > previewTick) return projected;
+    if (endTick > previewTick) {
+      // Deploy puts the robot on its tile as the command starts (rules revision 5).
+      return segment.kind === "deploy" && previewTick >= projected.tick
+        ? { ...projected, position: segment.to }
+        : projected;
+    }
     projected = applySegment(projected, segment, endTick);
   }
   return projected;

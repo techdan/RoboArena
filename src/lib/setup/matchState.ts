@@ -6,7 +6,7 @@
  */
 
 import { ROBOT_DEFINITIONS, WEAPONS } from "../../engine/catalog";
-import { ORIGINAL_TIMING_RULES_REVISION } from "../../engine/constants";
+import { ORIGINAL_DEPLOY_RULES_REVISION } from "../../engine/constants";
 import {
   FORMATION_SETUPS,
   isSupportedFormation,
@@ -104,7 +104,7 @@ export const createSurvivalMatchState = (input: {
       arenaType: input.arena.type,
       arenaSizeName: input.arena.sizeName,
       turnLengthSeconds: input.turnLengthSeconds,
-      rulesRevision: ORIGINAL_TIMING_RULES_REVISION,
+      rulesRevision: ORIGINAL_DEPLOY_RULES_REVISION,
       ...(formation?.showEnemyPositions === true ? { showEnemyPositions: true as const } : {}),
       ...(formation?.zapArmed === true ? { zapArmed: true as const } : {}),
     },

@@ -394,6 +394,13 @@ First action of each robot: deploy from Dock into Home Area. Cost:
 **2.0 s = 120 ticks** ✅ (selector 74).
 First move out of the Dock must enter the Home Area. ✅
 
+The robot lands on its tile when Deploy **starts**, then stays busy for the
+rest of the 120 ticks. Deploy does not set the re-dispatch bit, so its handler
+`seg6:0x2ECF` runs once at the record's start and places the robot through
+`seg6:0x11B3(x,y)` with FX 8 (`docs/re-map/timing.md` §0). Rules revision 5
+(`ORIGINAL_DEPLOY_RULES_REVISION`) adopts this; revisions 4 and earlier keep
+the robot in the Dock until tick 120. New matches start on revision 5.
+
 ---
 
 ## 6. Combat resolution
@@ -724,8 +731,8 @@ Neither model rerolls at impact or lets the renderer decide anything.
 
 Rules revision 4 (`ORIGINAL_TIMING_RULES_REVISION`) keeps revision 3 and
 replays the original movie loop (`seg6:0x47DE..0x4853`). The findings, with
-addresses and confidence tags, are in `docs/re-map/timing.md`. New matches
-start on revision 4.
+addresses and confidence tags, are in `docs/re-map/timing.md`. Revision 5
+adds the deploy placement described under Deployment.
 
 **The step loop.** Time advances in 5-tick steps from tick 0. Each step:
 

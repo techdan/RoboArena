@@ -70,6 +70,11 @@ export interface RenderOptions {
   readonly reducedMotion: boolean;
 }
 
+/** How long a deploying robot falls from the sky, at 1x playback. */
+const DEPLOY_DROP_SECONDS = 0.7;
+/** The planner's quicker drop when a robot is first placed or rehearsed in. */
+const PLANNER_DROP_SECONDS = 0.45;
+
 const EXPLOSIVES: ReadonlySet<WeaponId> = new Set(["missile-launcher", "grenade-launcher"]);
 
 const VignetteShader = {
@@ -137,6 +142,8 @@ export class BattleScene3D {
   private readonly effects = new Effects3D();
   private readonly rigs = new Map<string, RobotRig>();
   private readonly posed = new Map<string, TileCoord>();
+  /** Planner robots last shown in the dock, so their deploy can drop in. */
+  private readonly docked = new Set<string>();
   private readonly sun: THREE.DirectionalLight;
   private arena: ArenaBuild | null = null;
   private library: ModelLibrary | null = null;
@@ -621,6 +628,20 @@ export class BattleScene3D {
     this.playEvents(this.timeline.eventsByTick.get(snapshot.tick) ?? [], snapshot, animate, secs);
   }
 
+  /**
+   * Plays the opening snapshot's beat when playback starts on it. The first
+   * snapshot is shown statically on load, so without this its tick-0 events
+   * (every robot deploying, under rules revision 5) would never animate.
+   */
+  playOpening(speed: number): void {
+    if (this.renderedIndex !== 0 || this.reducedMotion) return;
+    const snapshot = this.timeline.snapshots[0];
+    if (snapshot === undefined) return;
+    this.speed = Math.max(0.01, speed);
+    const secs = (seconds: number) => seconds / this.speed;
+    this.playEvents(this.timeline.eventsByTick.get(snapshot.tick) ?? [], snapshot, true, secs);
+  }
+
   private playEvents(
     events: readonly ParticipantResolutionEvent[],
     snapshot: MovieSnapshot,
@@ -787,11 +808,14 @@ export class BattleScene3D {
         case "deployed": {
           const rig = rigOf(event.robotId);
           if (rig !== undefined && animate) {
-            // Drop-in from above with a heavy landing.
+            // Drop-in from the sky through a beacon, with a heavy landing.
             const at = this.worldOf(event.to, 0);
-            rig.place(event.to, this.now);
-            this.effects.footfall(at, true);
-            this.effects.lockOn(at.setY(0.03), 0x6fe0ff);
+            const color = snapshot.robots[event.robotId]?.teamColor ?? 0x6fe0ff;
+            const fall = secs(DEPLOY_DROP_SECONDS);
+            rig.dropIn(event.to, fall, this.now);
+            this.effects.deployBeam(at, color, fall);
+            this.focus(at, 0.6, fall + secs(0.5));
+            this.after(fall, () => this.effects.deployLanding(at, color));
           }
           break;
         }
@@ -978,7 +1002,11 @@ export class BattleScene3D {
       seen.add(robot.id);
       rig.visible = robot.position !== "dock";
       rig.root.visible = rig.visible;
-      if (robot.position === "dock") continue;
+      if (robot.position === "dock") {
+        this.docked.add(robot.id);
+        this.posed.delete(robot.id);
+        continue;
+      }
       rig.setPosture(robot.posture, animate);
       rig.setScanYaw(headingYaw(robot.scanHeading), animate);
       const previous = this.posed.get(robot.id);
@@ -988,7 +1016,15 @@ export class BattleScene3D {
         previous.y !== robot.position.y;
       if (moved) {
         if (animate && previous !== undefined) rig.moveTo(robot.position, 0.22, false, this.now);
-        else rig.place(robot.position, this.now);
+        else if (animate && this.docked.has(robot.id)) {
+          rig.dropIn(robot.position, PLANNER_DROP_SECONDS, this.now, 3);
+          this.effects.deployBeam(
+            this.worldOf(robot.position, 0),
+            robot.color,
+            PLANNER_DROP_SECONDS,
+          );
+        } else rig.place(robot.position, this.now);
+        this.docked.delete(robot.id);
         this.posed.set(robot.id, robot.position);
       }
       if (!animate || previous === undefined) rig.faceYaw(headingYaw(robot.scanHeading), false);
