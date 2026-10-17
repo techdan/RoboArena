@@ -14,7 +14,9 @@ import { headingYaw } from "../../renderer3d/kinematics";
 import {
   PLANNER_2D_CHOICE_ENABLED,
   preferredPlannerView,
+  rememberGraphicsQuality,
   rememberPlannerView,
+  type GraphicsQuality,
   type PlannerView,
 } from "../../renderer3d/support";
 import type { ArenaThemeId } from "../../renderer3d/themes";
@@ -87,6 +89,7 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [view, setView] = useState<PlannerView>("top");
   const [quarter, setQuarter] = useState(0);
+  const [quality, setQuality] = useState<GraphicsQuality>("full");
   const pressRef = useRef<{ x: number; y: number; id: number } | null>(null);
   const hoverRef = useRef<string | null>(null);
 
@@ -118,6 +121,7 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
         scene.resize();
         scene.planView(initialView, 0, false);
         sceneRef.current = scene;
+        setQuality(scene.graphicsQuality);
         // Automated visual checks find tiles on screen through this handle.
         if (new URLSearchParams(window.location.search).has("capture"))
           (window as unknown as { __plannerBoard?: BattleScene3D }).__plannerBoard = scene;
@@ -256,6 +260,13 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
     setQuarter(nextQuarter);
     rememberPlannerView(next);
     sceneRef.current?.planView(next, nextQuarter, true);
+  };
+
+  const toggleQuality = () => {
+    const next: GraphicsQuality = quality === "light" ? "full" : "light";
+    setQuality(next);
+    rememberGraphicsQuality(next);
+    sceneRef.current?.setGraphicsQuality(next);
   };
 
   const tileAt = (event: PointerEvent<HTMLDivElement>): TileCoord | null =>
@@ -412,6 +423,16 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
             onClick={() => changeView(view)}
           >
             Fit
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer"
+            aria-pressed={quality === "light"}
+            title="Light graphics: no glow or soft shading, smoother on laptops"
+            disabled={status !== "ready"}
+            onClick={toggleQuality}
+          >
+            Light
           </button>
           {PLANNER_2D_CHOICE_ENABLED ? (
             <button type="button" className="cursor-pointer" onClick={onUse2D}>
