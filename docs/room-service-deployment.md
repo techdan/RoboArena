@@ -34,11 +34,12 @@ Worker (10 ms CPU per request on the Free plan).
 ```sh
 npx wrangler login                 # once, opens the Cloudflare dashboard
 npm run deploy:rooms               # prints https://roboarena-rooms.<you>.workers.dev
-NEXT_PUBLIC_ROOM_WS_URL=wss://roboarena-rooms.<you>.workers.dev npm run deploy
+npm run deploy                     # site; see scripts/deploy-site.mjs
 ```
 
-`NEXT_PUBLIC_ROOM_WS_URL` is baked into the client at build time, so set it for
-every site deploy. No secrets are needed: each room keeps its own idempotency
+`NEXT_PUBLIC_ROOM_WS_URL` is baked into the client at build time.
+`npm run deploy` defaults it to `wss://roboarena-rooms.manheim.workers.dev`
+(`scripts/deploy-site.mjs`); export it to target a different room worker. No secrets are needed: each room keeps its own idempotency
 secret in its SQLite.
 
 ## Local Cloudflare run
