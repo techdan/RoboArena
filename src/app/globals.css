@@ -5808,6 +5808,7 @@ a.planner-menu-item:focus-visible {
 .tactical-planner[data-coach="squad"] .squad-card,
 .tactical-planner[data-coach="rehearse"] .turn-track-rehearse,
 .tactical-planner[data-coach="lock"] .planner-lock-action,
+.tactical-planner[data-coach="facing"] .radial-orders-item:nth-of-type(5),
 .tactical-planner[data-coach="aim"] .radial-orders-item:nth-of-type(2) {
   animation: coach-pulse 1.6s ease-in-out infinite;
 }
