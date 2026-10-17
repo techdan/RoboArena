@@ -12,6 +12,7 @@ import type { Arena, Terrain } from "../engine/types";
 import { hash01 } from "./kinematics";
 import type { ModelLibrary, PropName } from "./models";
 import type { ArenaTheme, FloorPalette } from "./themes";
+import { buildFoliage, paintFloorDetail, weatherMaterial } from "./arenaArt";
 
 const FLOOR_PX = 64;
 
@@ -251,6 +252,7 @@ export const buildArena = (
   library: ModelLibrary,
   renderer: THREE.WebGLRenderer,
   theme: ArenaTheme,
+  art = false,
 ): ArenaBuild => {
   const group = new THREE.Group();
   group.name = "arena";
@@ -276,6 +278,25 @@ export const buildArena = (
     floorMaterial.emissiveIntensity = theme.floor.glowIntensity;
     disposables.push(glowTexture);
   }
+  if (art) {
+    const detail = paintFloorDetail(arena, FLOOR_PX, {
+      roughness: Math.min(1, theme.floor.roughness + 0.06),
+      metalness: theme.floor.metalness,
+      wetness: theme.id === "coliseum" ? 0.85 : 0,
+      relief: 12,
+    });
+    const normalMap = new THREE.CanvasTexture(detail.normal);
+    const orm = new THREE.CanvasTexture(detail.orm);
+    for (const texture of [normalMap, orm]) {
+      texture.anisotropy = floorTexture.anisotropy;
+      disposables.push(texture);
+    }
+    floorMaterial.normalMap = normalMap;
+    floorMaterial.roughnessMap = orm;
+    floorMaterial.aoMap = orm;
+    floorMaterial.aoMapIntensity = 1;
+    floorMaterial.roughness = 1;
+  }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(arena.width / 2, 0, arena.height / 2);
@@ -296,6 +317,7 @@ export const buildArena = (
 
   const placements: Placement[] = [];
   const crevices: THREE.Matrix4[] = [];
+  const bushes: THREE.Matrix4[] = [];
   for (let y = 0; y < arena.height; y += 1) {
     for (let x = 0; x < arena.width; x += 1) {
       const terrain = arena.tiles[y]?.[x]?.terrain;
@@ -326,6 +348,10 @@ export const buildArena = (
         }
         case "bush": {
           const s = 0.9 + hash01(key, 3) * 0.3;
+          if (art && theme.id === "coliseum") {
+            bushes.push(tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }));
+            break;
+          }
           placements.push({
             prop: "Bush",
             matrix: tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }),
@@ -396,7 +422,19 @@ export const buildArena = (
     });
     floodlights.push(new THREE.Vector3(fx, 6.6, fz));
   }
+  if (art) {
+    for (const template of library.props.values())
+      template.traverse((child) => {
+        if (child instanceof THREE.Mesh && !Array.isArray(child.material))
+          weatherMaterial(child.material);
+      });
+  }
   instanceProps(library, placements, group);
+  if (bushes.length > 0) {
+    const foliage = buildFoliage(bushes, ["#3f7a26", "#4f8c2c", "#64a034", "#78b040", "#335f20"]);
+    group.add(foliage.mesh);
+    disposables.push(foliage);
+  }
 
   // Crevices: a dark sunken slot with a faint magma glow at the bottom.
   if (crevices.length > 0) {

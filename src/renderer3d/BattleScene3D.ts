@@ -16,6 +16,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { artPreviewEnabled, beamMaterial, stadiumEnvironment } from "./arenaArt";
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import type {
   Heading,
@@ -175,6 +176,35 @@ class AntialiasedScenePass extends RenderPass {
   }
 }
 
+/** GTAO's normal pass ignores alphaTest, so alpha-card foliage would occlude as
+ * solid quads. Objects flagged `userData.noAO` are hidden from that pass only.
+ * Wraps the installed pass's runtime visibility hooks (`_overrideVisibility`
+ * in three r186; the bundled typings still name them without the underscore). */
+const hideFlaggedFromAO = (pass: GTAOPass): void => {
+  const hooks = pass as unknown as {
+    _overrideVisibility?: () => void;
+    _restoreVisibility?: () => void;
+  };
+  const override = hooks._overrideVisibility?.bind(pass);
+  const restore = hooks._restoreVisibility?.bind(pass);
+  if (override === undefined || restore === undefined) return;
+  const hidden: THREE.Object3D[] = [];
+  hooks._overrideVisibility = () => {
+    override();
+    pass.scene.traverse((object) => {
+      if (object.userData["noAO"] === true && object.visible) {
+        object.visible = false;
+        hidden.push(object);
+      }
+    });
+  };
+  hooks._restoreVisibility = () => {
+    restore();
+    for (const object of hidden) object.visible = true;
+    hidden.length = 0;
+  };
+};
+
 /** Frame rate for pulsing route and target overlays while planning. */
 const PLANNING_AMBIENT_FPS = 20;
 
@@ -225,6 +255,8 @@ export class BattleScene3D {
   private reducedMotion = false;
   private renderedIndex: number | null = null;
   private cameraMode: CameraMode = "director";
+  /** Concept preview of the arena art upgrade (`?art=next`). */
+  private readonly art = artPreviewEnabled();
   private readonly focuses: Focus[] = [];
   private readonly cameraGoal = new THREE.Vector3();
   private readonly lookGoal = new THREE.Vector3();
@@ -344,13 +376,23 @@ export class BattleScene3D {
       Math.max(theme.fog.near, Math.max(width, height) * 1.1),
       Math.max(theme.fog.far, Math.max(width, height) * 3),
     );
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const environment = new RoomEnvironment();
-    this.environmentTarget = pmrem.fromScene(environment, 0.04);
-    this.scene.environment = this.environmentTarget.texture;
-    environment.dispose();
-    this.scene.environmentIntensity = theme.environment;
-    pmrem.dispose();
+    if (this.art && theme.id === "coliseum") {
+      this.environmentTarget = stadiumEnvironment(this.renderer, {
+        sky: theme.sky,
+        lamp: theme.floodlights?.color ?? 0xffffff,
+        stands: 0xff8a3a,
+      });
+      this.scene.environment = this.environmentTarget.texture;
+      this.scene.environmentIntensity = 1.1;
+    } else {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const environment = new RoomEnvironment();
+      this.environmentTarget = pmrem.fromScene(environment, 0.04);
+      this.scene.environment = this.environmentTarget.texture;
+      environment.dispose();
+      this.scene.environmentIntensity = theme.environment;
+      pmrem.dispose();
+    }
 
     const hemi = new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity);
     this.scene.add(hemi);
@@ -391,6 +433,7 @@ export class BattleScene3D {
     this.composer.addPass(new AntialiasedScenePass(this.scene, this.camera));
     // Ambient occlusion grounds robots and props: contact shadows in every crease.
     this.ao = new GTAOPass(this.scene, this.camera, 1, 1);
+    hideFlaggedFromAO(this.ao);
     this.ao.blendIntensity = 0.9;
     this.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.5, thickness: 1, scale: 1 });
     this.composer.addPass(this.ao);
@@ -452,7 +495,7 @@ export class BattleScene3D {
   private async initialize(): Promise<void> {
     this.library = await loadModelLibrary(this.theme.id, this.robotFamily);
     if (this.disposed) return;
-    this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme);
+    this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme, this.art);
     this.scene.add(this.arena.group);
     if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
     this.addMotes();
@@ -480,14 +523,16 @@ export class BattleScene3D {
       const geometry = new THREE.ConeGeometry(2.6, length, 24, 1, true);
       geometry.translate(0, -length / 2, 0);
       const flood = this.theme.floodlights;
-      const material = new THREE.MeshBasicMaterial({
-        color: flood?.color ?? 0xfff1d0,
-        transparent: true,
-        opacity: flood?.beam ?? 0.022,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
+      const material = this.art
+        ? beamMaterial(flood?.color ?? 0xfff1d0, flood?.beam ?? 0.022)
+        : new THREE.MeshBasicMaterial({
+            color: flood?.color ?? 0xfff1d0,
+            transparent: true,
+            opacity: flood?.beam ?? 0.022,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
       const beam = new THREE.Mesh(geometry, material);
       beam.position.copy(light);
       beam.lookAt(center);
@@ -1359,8 +1404,10 @@ export class BattleScene3D {
       positions.needsUpdate = true;
     }
     for (const beam of this.beams) {
-      (beam.material as THREE.MeshBasicMaterial).opacity =
-        0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      const opacity = 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      const material = beam.material as THREE.MeshBasicMaterial | THREE.ShaderMaterial;
+      if (material instanceof THREE.ShaderMaterial) material.uniforms["uOpacity"]!.value = opacity;
+      else material.opacity = opacity;
     }
   }
 
