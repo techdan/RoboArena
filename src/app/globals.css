@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+.graphics-quality-control {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  color: #e5e7eb;
+  font-size: 0.75rem;
+}
+
+.graphics-quality-control select {
+  min-height: 44px;
+  max-width: 10rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #626c67;
+  border-radius: 0.5rem;
+  background: #131b19;
+  color: #fff;
+  cursor: pointer;
+}
+
+.graphics-quality-control select:focus-visible {
+  outline: 2px solid #a3e635;
+  outline-offset: 2px;
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -5210,11 +5236,43 @@ a.planner-menu-item:focus-visible {
   width: 14.5rem;
   flex-direction: column;
   gap: 0.5rem;
+  max-height: calc(100% - var(--tactical-track-h, 14rem) - 6rem);
 }
 .squad-rail {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+.squad-rail > .squad-card {
+  /* The Field Guide also uses squad-card; its article padding made the
+     fourth robot and history controls fall behind the timeline. */
+  padding: 0;
+  border: 0;
+  background: none;
+  flex: none;
+}
+.squad-rail > .squad-card::before {
+  display: none;
+}
+.tactical-history {
+  flex-shrink: 0;
+}
+.planner-board-3d:focus-visible {
+  outline: 2px solid #bef264;
+  outline-offset: -3px;
+}
+.tactical-planner .tactical-card {
+  max-height: calc(100% - var(--tactical-track-h, 14rem) - 13rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tactical-planner .shot-card footer {
+  position: sticky;
+  bottom: 0;
+  background: #0a0c10;
+  z-index: 1;
 }
 .squad-card {
   position: relative;

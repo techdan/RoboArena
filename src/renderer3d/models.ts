@@ -8,6 +8,69 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { RobotClass } from "../engine/types";
 import type { ArenaThemeId } from "./themes";
 
+/** Instance repeated rigid pieces (legs/feet), retaining their joint transforms.
+ * The invisible source meshes remain in the rig for animation and material changes.
+ */
+export function instanceRigidParts(root: THREE.Object3D): { update(): void; dispose(): void } {
+  const groups = new Map<string, THREE.Mesh[]>();
+  root.traverse((node) => {
+    if (
+      !(node instanceof THREE.Mesh) ||
+      node instanceof THREE.InstancedMesh ||
+      node instanceof THREE.SkinnedMesh ||
+      node.children.length > 0 ||
+      Array.isArray(node.material) ||
+      node.material.transparent ||
+      node.morphTargetInfluences !== undefined ||
+      !node.visible
+    )
+      return;
+    const key = `${node.geometry.uuid}:${node.material.uuid}:${node.castShadow}:${node.receiveShadow}:${node.renderOrder}:${node.layers.mask}`;
+    const group = groups.get(key) ?? [];
+    group.push(node);
+    groups.set(key, group);
+  });
+  const batches: { mesh: THREE.InstancedMesh; sources: THREE.Mesh[] }[] = [];
+  for (const sources of groups.values()) {
+    if (sources.length < 2) continue;
+    const first = sources[0]!;
+    const mesh = new THREE.InstancedMesh(first.geometry, first.material, sources.length);
+    mesh.name = "rig-instances";
+    mesh.castShadow = first.castShadow;
+    mesh.receiveShadow = first.receiveShadow;
+    mesh.renderOrder = first.renderOrder;
+    mesh.layers.mask = first.layers.mask;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (const source of sources) source.visible = false;
+    root.add(mesh);
+    batches.push({ mesh, sources });
+  }
+  const inverse = new THREE.Matrix4();
+  const matrix = new THREE.Matrix4();
+  return {
+    update: () => {
+      root.updateMatrixWorld(true);
+      inverse.copy(root.matrixWorld).invert();
+      for (const { mesh, sources } of batches) {
+        mesh.material = sources[0]!.material;
+        mesh.castShadow = sources[0]!.castShadow;
+        mesh.receiveShadow = sources[0]!.receiveShadow;
+        sources.forEach((source, index) =>
+          mesh.setMatrixAt(index, matrix.multiplyMatrices(inverse, source.matrixWorld)),
+        );
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingSphere();
+      }
+    },
+    dispose: () => {
+      for (const { mesh } of batches) {
+        mesh.removeFromParent();
+        mesh.dispose();
+      }
+    },
+  };
+}
+
 /** Robot design families: same classes and weapons, different locomotion.
  *  The shipped "mixed" roster gives each class its own chassis (strider Rifle,
  *  hound Burst, crab Machine gun, titan Missile); the rest are concept sets. */
@@ -228,6 +291,7 @@ export interface MaterialSet {
   /** Per-team paint and glow are cloned; everything else is shared. */
   readonly resolve: (material: THREE.Material) => THREE.Material;
   readonly charred: THREE.MeshStandardMaterial;
+  readonly dispose: () => void;
 }
 
 /** Builds the material remapping for one team: `TeamPaint` and `Glow` take the team colour. */
@@ -241,6 +305,11 @@ export const teamMaterials = (teamColor: string, glowIntensity = 1.8): MaterialS
   });
   return {
     charred,
+    dispose: () => {
+      for (const [original, resolved] of cache) if (resolved !== original) resolved.dispose();
+      cache.clear();
+      charred.dispose();
+    },
     resolve: (material) => {
       const cached = cache.get(material);
       if (cached !== undefined) return cached;

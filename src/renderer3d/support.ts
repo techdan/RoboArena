@@ -3,12 +3,20 @@
 export type MovieRendererKind = "3d" | "2d";
 
 const STORAGE_KEY = "roboarena.movieRenderer";
+const webGl2Support = new WeakMap<Document, boolean>();
 
 /** WebGL2 is the floor for the 3D movie (MSAA render targets, instancing). */
 export const supportsWebGl2 = (): boolean => {
   try {
+    const cached = webGl2Support.get(document);
+    if (cached !== undefined) return cached;
     const canvas = document.createElement("canvas");
-    return canvas.getContext("webgl2") !== null;
+    const context = canvas.getContext("webgl2");
+    const supported = context !== null;
+    webGl2Support.set(document, supported);
+    // A capability probe must not retain an otherwise unused GPU context.
+    context?.getExtension("WEBGL_lose_context")?.loseContext();
+    return supported;
   } catch {
     return false;
   }

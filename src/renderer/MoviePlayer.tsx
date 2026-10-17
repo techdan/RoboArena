@@ -6,6 +6,7 @@ import { Box, Clapperboard, Map as MapIcon, Move3d, Square } from "lucide-react"
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
 import type { BattleScene3D, CameraMode } from "../renderer3d/BattleScene3D";
 import { preferredMovieRenderer, type MovieRendererKind } from "../renderer3d/support";
+import { GraphicsQualityControl } from "../components/GraphicsQualityControl";
 import { DEFAULT_ARENA_THEME, isArenaThemeId, type ArenaThemeId } from "../renderer3d/themes";
 import type { MatchState, Terrain, TileCoord } from "../engine/types";
 import type { ParticipantResolutionEvent } from "../lib/net/protocol";
@@ -84,7 +85,9 @@ export function MoviePlayer({
   renderer: rendererOverride,
   arenaTheme: roomArenaTheme,
 }: MoviePlayerProps) {
-  const [rendererKind, setRendererKind] = useState<MovieRendererKind>(rendererOverride ?? "2d");
+  const [rendererKind, setRendererKind] = useState<MovieRendererKind | null>(
+    rendererOverride ?? null,
+  );
   const [cameraMode, setCameraMode] = useState<CameraMode>("director");
   const [arenaTheme, setArenaTheme] = useState<ArenaThemeId>(roomArenaTheme ?? DEFAULT_ARENA_THEME);
   const sceneRef = useRef<BattleScene3D | null>(null);
@@ -94,7 +97,7 @@ export function MoviePlayer({
   // The 3D movie is the default wherever WebGL2 is available; the choice is
   // remembered per browser. Decided after mount so server HTML stays stable.
   useEffect(() => {
-    if (rendererOverride === undefined) setRendererKind(preferredMovieRenderer());
+    setRendererKind(rendererOverride ?? preferredMovieRenderer());
   }, [rendererOverride]);
   // The room host picks the arena look in the lobby; `?theme=` lets art-review
   // links on the debug movie routes preview the others.
@@ -358,9 +361,10 @@ export function MoviePlayer({
   }, [is3d, initialState, timeline, arenaTheme]);
 
   useEffect(() => {
-    if (is3d) return;
+    if (rendererKind !== "2d") return;
     let disposed = false;
     let app: Application | undefined;
+    let destroyApp: (() => void) | undefined;
     setRendererStatus("loading");
     setPlaying(false);
     setCurrentIndex(initialIndex);
@@ -379,7 +383,12 @@ export function MoviePlayer({
         preserveDrawingBuffer: true,
         resolution: Math.min(window.devicePixelRatio, 2),
       });
-      if (disposed) return;
+      if (disposed) {
+        app.destroy(true);
+        return;
+      }
+      const initializedApp = app;
+      destroyApp = () => initializedApp.destroy(true);
       appRef.current = app;
       const canvas = app.canvas as HTMLCanvasElement;
       canvas.dataset.movieCanvas = "true";
@@ -401,6 +410,7 @@ export function MoviePlayer({
           Assets.load<Texture>(highResSvg(url)),
         ),
       );
+      if (disposed) return;
       for (let y = 0; y < initialState.arena.height; y += 1) {
         for (let x = 0; x < initialState.arena.width; x += 1) {
           const terrain = initialState.arena.tiles[y]?.[x]?.terrain;
@@ -515,9 +525,9 @@ export function MoviePlayer({
       disposed = true;
       renderSnapshotRef.current = () => undefined;
       appRef.current = null;
-      app?.destroy(true);
+      destroyApp?.();
     };
-  }, [initialIndex, initialState, timeline, is3d]);
+  }, [initialIndex, initialState, timeline, rendererKind]);
 
   // The CSS zoom transform stretches the finished canvas bitmap, so the
   // backing store must grow with zoom or the movie goes blocky. Follow the
@@ -572,6 +582,10 @@ export function MoviePlayer({
         }
         onPointerDown={(event) => {
           if (is3d) return;
+          // Capturing a toolbar pointer retargets its click to the viewport,
+          // swallowing the renderer button instead of switching back to 3D.
+          if (event.target instanceof Element && event.target.closest(".movie-view-toolbar"))
+            return;
           // Mouse: only the primary button drags. Touch/pen: always pan/pinch.
           if (event.pointerType === "mouse" && event.button !== 0) return;
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -668,6 +682,7 @@ export function MoviePlayer({
           <div ref={hostRef} className="absolute inset-0" />
         </div>
         <div className="movie-view-toolbar" role="toolbar" aria-label="Movie view">
+          {is3d ? <GraphicsQualityControl /> : null}
           <div className="movie-view-group" role="group" aria-label="Renderer">
             <button
               type="button"

@@ -22,6 +22,7 @@ export interface ShotCardProps {
   readonly weapons: readonly WeaponId[];
   readonly shots: number;
   readonly maxShots: number;
+  readonly ammo: number | "unlimited";
   readonly firingIntervalTicks: number;
   readonly assumedPosture: Posture;
   readonly authorizedContacts: readonly AuthorizedContact[];
@@ -97,6 +98,11 @@ export function ShotCard(props: ShotCardProps) {
           ))}
         </div>
       ) : null}
+      <p className="shot-card-empty">
+        {props.ammo === "unlimited"
+          ? "Unlimited ammo"
+          : `${props.ammo} shots available before this action`}
+      </p>
       {target === null || preview === null ? (
         <p className="shot-card-empty">Tap any lit tile to aim. Brighter tiles are better shots.</p>
       ) : (

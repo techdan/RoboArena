@@ -27,6 +27,36 @@ export const tileAt = (arena: Arena, coord: TileCoord) => arena.tiles[coord.y]?.
 export const isInBounds = (arena: Arena, { x, y }: TileCoord): boolean =>
   x >= 0 && y >= 0 && x < arena.width && y < arena.height;
 
+/** Reachability for hover validation. Compute once per origin/posture rather
+ * than running tick-cost A* for every tile crossed by the pointer. Actual
+ * movement still uses findPath, with its exact cost and tie-breaking rules. */
+export const reachableTiles = (
+  arena: Arena,
+  start: TileCoord,
+  posture: Posture,
+): ReadonlySet<string> => {
+  const reached = new Set<string>([tileKey(start)]);
+  const pending = [start];
+  for (let index = 0; index < pending.length; index += 1) {
+    const from = pending[index]!;
+    for (const direction of DIRECTIONS) {
+      const next = { x: from.x + direction.x, y: from.y + direction.y };
+      const key = tileKey(next);
+      const tile = tileAt(arena, next);
+      if (
+        reached.has(key) ||
+        !isInBounds(arena, next) ||
+        tile === undefined ||
+        !canTraverse(posture, tile.terrain)
+      )
+        continue;
+      reached.add(key);
+      pending.push(next);
+    }
+  }
+  return reached;
+};
+
 const chebyshev = (from: TileCoord, to: TileCoord): number =>
   Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y));
 

@@ -12,7 +12,15 @@ import {
   UploadCloud,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { TICKS_PER_SECOND, TIME_BOMB_BLAST, WEAPON_TIMING } from "../../engine/constants";
 import { canTraverse } from "../../engine/traversal";
 import type {
@@ -42,7 +50,7 @@ import {
   timelineTiming,
   validatedTimelinePrefix,
 } from "../../planner/segments";
-import { tileAt } from "../../planner/pathfind";
+import { reachableTiles, tileAt } from "../../planner/pathfind";
 import {
   availableWeapons,
   defaultScanSettings,
@@ -50,6 +58,7 @@ import {
   previewTargetingTiles,
   projectedWeaponAmmo,
   targetingOpportunityTicks,
+  WEAPON_LABELS,
   type AuthorizedContact,
 } from "../../planner/firingHelpers";
 import { fireActionCount } from "../../planner/combatPresentation";
@@ -62,6 +71,7 @@ import { AimAndFireDialog } from "./AimAndFireDialog";
 import { AllProgramsOverlay } from "./AllProgramsOverlay";
 import {
   ArenaCanvas,
+  type ArenaCanvasProps,
   type PlannerBombView,
   type PlannerContactView,
   type PlannerGhostView,
@@ -71,6 +81,7 @@ import {
 import { AimFireControls, ScanFireControls, SpecialCommandControls } from "./FireControlStrip";
 import { PlannerActionStrip } from "./PlannerActionStrip";
 import { PlannerMenu } from "./PlannerMenu";
+import { GraphicsQualityControl } from "../GraphicsQualityControl";
 import { FirstTurnCoach } from "./FirstTurnCoach";
 import {
   coachFinished,
@@ -252,6 +263,7 @@ export function PlannerExperience({
     defaultSelectableRobot(team.robots)?.id ?? "",
   );
   const [aimTool, setAimTool] = useState(false);
+  const [moveTool, setMoveTool] = useState(false);
   const [aimDialog, setAimDialog] = useState<AimDialogState | null>(null);
   const [aimShots, setAimShots] = useState(1);
   const [aimReviewOpen, setAimReviewOpen] = useState(false);
@@ -272,8 +284,8 @@ export function PlannerExperience({
   const [coachRehearsed, setCoachRehearsed] = useState(false);
   const [coachSkipped, setCoachSkipped] = useState<ReadonlySet<CoachStepId>>(new Set());
   useEffect(() => {
-    setCoachActive(!coachFinished(window.localStorage));
-  }, []);
+    setCoachActive(match.turnNumber === 1 && !coachFinished(window.localStorage));
+  }, [match.turnNumber]);
   useEffect(() => {
     if (ordersOpen) setCoachOrdersOpened(true);
   }, [ordersOpen]);
@@ -353,7 +365,10 @@ export function PlannerExperience({
     previewParkingTick(selectedRobot, selectedTimeline.segments, budgetTicks),
   );
   const commandPrefix = selectedTimeline.segments;
-  const projected = projectRobotAtTick(selectedRobot, commandPrefix);
+  const projected = useMemo(
+    () => projectRobotAtTick(selectedRobot, commandPrefix),
+    [selectedRobot, commandPrefix],
+  );
   const projectedShooter = useMemo(
     () => ({
       ...selectedRobot,
@@ -421,10 +436,13 @@ export function PlannerExperience({
       }),
     [match.arena.homeAreas, match.teams],
   );
-  const hoverPlan = useMemo(() => {
-    if (cursor === null || projected.position === "dock") return null;
-    return planMovement(match.arena, projected.position, cursor, projected.posture);
-  }, [cursor, match.arena, projected.position, projected.posture]);
+  const reachable = useMemo(
+    () =>
+      projected.position === "dock"
+        ? null
+        : reachableTiles(match.arena, projected.position, projected.posture),
+    [match.arena, projected.position, projected.posture],
+  );
   useEffect(() => {
     const storage = browserLocalStorage();
     const saved =
@@ -456,6 +474,8 @@ export function PlannerExperience({
   }, [authoritativeOrders, revision, saveAcknowledgement]);
 
   const edit = (next: TurnOrders, message: string, parkTick?: number) => {
+    setMoveTool(false);
+    setRehearsing(false);
     dispatch({ type: "edit", orders: next });
     setAimTool(false);
     setAimDialog(null);
@@ -520,8 +540,10 @@ export function PlannerExperience({
     );
   };
   const selectRobot = (robotId: string) => {
+    setMoveTool(false);
     const robot = team.robots.find((candidate) => candidate.id === robotId);
     if (robot === undefined || robot.hp <= 0) return;
+    setRehearsing(false);
     setSelectedRobotId(robotId);
     setAimTool(false);
     setAimDialog(null);
@@ -537,6 +559,8 @@ export function PlannerExperience({
   /** Tapping a robot on the board selects it and opens its orders ring. */
   const pickRobotOnBoard = (robotId: string) => {
     if (robotId === selectedRobot.id) {
+      setRehearsing(false);
+      setPreviewTick(selectedEndTick);
       setOrdersOpen((open) => !open);
       return;
     }
@@ -547,15 +571,21 @@ export function PlannerExperience({
     tile: TileCoord,
     modifiers: { readonly ctrl: boolean; readonly shift: boolean },
   ) => {
+    setMoveTool(false);
     setOrdersOpen(false);
     setRehearsing(false);
     chooseTile(tile, modifiers);
   };
   const selectCommand = (robotId: string, _index: number, endTick: number) => {
+    setRehearsing(false);
+    setOrdersOpen(false);
     if (robotId !== selectedRobot.id) selectRobot(robotId);
     setPreviewTick(endTick);
   };
   const changeHistory = (type: "undo" | "redo") => {
+    setMoveTool(false);
+    setRehearsing(false);
+    setNotice(type === "undo" ? "Last edit undone." : "Last edit redone.");
     const nextOrders =
       type === "undo" ? (state.history.past.at(-1) ?? orders) : (state.history.future[0] ?? orders);
     dispatch({ type });
@@ -652,6 +682,7 @@ export function PlannerExperience({
     );
   };
   const cancelFire = (message: string) => {
+    setMoveTool(false);
     setAimTool(false);
     setAimDialog(null);
     setAimShots(1);
@@ -661,10 +692,13 @@ export function PlannerExperience({
     setNotice(message);
   };
   const startAim = () => {
+    setMoveTool(false);
     if (aimTool || aimDialog !== null) {
       cancelFire("Aim & Fire canceled.");
       return;
     }
+    setRehearsing(false);
+    setPreviewTick(selectedEndTick);
     setAimTool(true);
     setScanDialog(null);
     setSpecialDialog(null);
@@ -673,11 +707,14 @@ export function PlannerExperience({
     setNotice("Aim & Fire active — choose a target tile.");
   };
   const startScan = () => {
+    setMoveTool(false);
     if (scanDialog !== null) {
       cancelFire("Scan & Fire canceled.");
       return;
     }
     const defaults = defaultScanSettings(selectedWeapon, budgetTicks - selectedEndTick);
+    setRehearsing(false);
+    setPreviewTick(selectedEndTick);
     setAimTool(false);
     setAimDialog(null);
     setAimShots(1);
@@ -691,6 +728,7 @@ export function PlannerExperience({
     setNotice("Configure Scan & Fire distance and duration.");
   };
   const startSpecial = (kind: SpecialDialogState["kind"]) => {
+    setMoveTool(false);
     const name = SPECIAL_COMMAND_NAMES[kind];
     if (specialDialog?.kind === kind) {
       cancelFire(`${name} canceled.`);
@@ -714,6 +752,8 @@ export function PlannerExperience({
     setAimReviewOpen(false);
     setScanDialog(null);
     const remainingSeconds = Math.floor((budgetTicks - selectedEndTick) / TICKS_PER_SECOND);
+    setRehearsing(false);
+    setPreviewTick(selectedEndTick);
     setSpecialDialog({
       kind,
       seconds:
@@ -776,6 +816,8 @@ export function PlannerExperience({
               ? headingPreview
               : view.scanHeading,
           selected: robot.id === selectedRobot.id,
+          hp: robot.hp,
+          armor: robot.definition.armor,
         };
       }),
     [headingPreview, orders, previewTick, robotNames, selectedRobot.id, team.color, team.robots],
@@ -885,28 +927,25 @@ export function PlannerExperience({
     targetingPosture,
     selectedWeapon,
   ]);
-  const cursorTargetingPreview =
-    targetingBase === null || targetingBase.previewOnly || cursor === null
-      ? null
-      : (targetingBase.tiles[cursor.y * match.arena.width + cursor.x] ?? null);
-  const cursorState =
-    cursor === null
-      ? "out-of-bounds"
-      : cursorTargetingPreview !== null
-        ? cursorTargetingPreview.status === "eligible"
+  const cursorStateAt = useCallback(
+    (tile: TileCoord | null): ArenaCanvasProps["cursorState"] => {
+      if (tile === null) return "out-of-bounds";
+      const target =
+        targetingBase === null || targetingBase.previewOnly
+          ? null
+          : targetingBase.tiles[tile.y * match.arena.width + tile.x];
+      if (target != null) return target.status === "eligible" ? "valid" : "blocked";
+      if (projected.position === "dock") {
+        if (!homeTiles.has(`${tile.x},${tile.y}`)) return "out-of-home";
+        return canTraverse(projected.posture, tileAt(match.arena, tile)?.terrain ?? "wall")
           ? "valid"
-          : "blocked"
-        : projected.position === "dock"
-          ? !homeTiles.has(`${cursor.x},${cursor.y}`)
-            ? "out-of-home"
-            : canTraverse(projected.posture, tileAt(match.arena, cursor)?.terrain ?? "wall")
-              ? "valid"
-              : "blocked"
-          : hoverPlan?.kind === "error"
-            ? hoverPlan.reason === "unreachable"
-              ? "blocked"
-              : hoverPlan.reason
-            : "valid";
+          : "blocked";
+      }
+      return reachable?.has(`${tile.x},${tile.y}`) ? "valid" : "blocked";
+    },
+    [targetingBase, match.arena, projected.position, projected.posture, homeTiles, reachable],
+  );
+  const cursorState = cursorStateAt(cursor);
   const targetingOverlay = useMemo<PlannerTargetingOverlay | null>(
     () =>
       targetingBase === null
@@ -1035,12 +1074,16 @@ export function PlannerExperience({
     return () => cancelAnimationFrame(frame);
   }, [budgetTicks, rehearsing]);
   const toggleRehearse = () => {
+    setMoveTool(false);
     if (rehearsing) {
       setRehearsing(false);
       return;
     }
     setOrdersOpen(false);
-    if (previewTick >= budgetTicks - 1) setPreviewTick(0);
+    // Edits park at the program's end. Rehearse must show the whole plan,
+    // rather than silently playing only its final fraction of a second.
+    previewTickRef.current = 0;
+    setPreviewTick(0);
     setRehearsing(true);
   };
   const cyclePosture = () => {
@@ -1051,7 +1094,12 @@ export function PlannerExperience({
     aim: startAim,
     scan: startScan,
     posture: cyclePosture,
-    orders: () => setOrdersOpen(true),
+    orders: () => {
+      setMoveTool(false);
+      setRehearsing(false);
+      setPreviewTick(selectedEndTick);
+      setOrdersOpen(true);
+    },
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
@@ -1061,7 +1109,12 @@ export function PlannerExperience({
     aim: startAim,
     scan: startScan,
     posture: cyclePosture,
-    orders: () => setOrdersOpen(true),
+    orders: () => {
+      setMoveTool(false);
+      setRehearsing(false);
+      setPreviewTick(selectedEndTick);
+      setOrdersOpen(true);
+    },
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
@@ -1074,16 +1127,17 @@ export function PlannerExperience({
     const onKey = (event: KeyboardEvent) => {
       if (
         event.key === "Escape" &&
-        (aimTool || aimDialog !== null || scanDialog !== null || specialDialog !== null)
+        (moveTool || aimTool || aimDialog !== null || scanDialog !== null || specialDialog !== null)
       ) {
         event.preventDefault();
+        setMoveTool(false);
         setAimTool(false);
         setAimDialog(null);
         setAimShots(1);
         setAimReviewOpen(false);
         setScanDialog(null);
         setSpecialDialog(null);
-        setNotice("Firing action canceled.");
+        setNotice(moveTool ? "Move canceled." : "Firing action canceled.");
         return;
       }
       const target = event.target;
@@ -1145,7 +1199,7 @@ export function PlannerExperience({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aimDialog, aimTool, scanDialog, specialDialog, selectedRobot.id, team.robots]);
+  }, [aimDialog, aimTool, moveTool, scanDialog, specialDialog, selectedRobot.id, team.robots]);
 
   const confirmAim = () => {
     if (aimDialog === null) return;
@@ -1166,6 +1220,15 @@ export function PlannerExperience({
     );
   };
   const chooseWeapon = (weapon: WeaponId) => {
+    const ammo = projectedWeaponAmmo(selectedRobot, commandPrefix, weapon);
+    const limit = Math.max(
+      1,
+      Math.min(
+        Math.floor((budgetTicks - projected.tick) / WEAPON_TIMING[weapon].firingIntervalTicks),
+        ammo === "unlimited" ? Number.POSITIVE_INFINITY : ammo,
+      ),
+    );
+    setAimShots((shots) => Math.min(shots, limit));
     setWeaponChoiceByRobot((current) => ({ ...current, [selectedRobot.id]: weapon }));
     setAimDialog((current) => (current === null ? null : { ...current, weapon }));
     setScanDialog((current) =>
@@ -1200,6 +1263,7 @@ export function PlannerExperience({
     ) : null;
   const plannerMenu = (
     <PlannerMenu alert={draftStorageStatus === "error"}>
+      <GraphicsQualityControl />
       <FieldGuideButton />
       {boardKind === "3d" ? (
         <button type="button" className="planner-menu-item cursor-pointer" onClick={replayCoach}>
@@ -1292,8 +1356,10 @@ export function PlannerExperience({
           route={selectedRoute}
           cursor={cursor}
           cursorState={cursorState}
+          cursorStateAt={cursorStateAt}
           targetingOverlay={targetingOverlay}
           firingInteractionActive={fireActive}
+          movingInteractionActive={moveTool}
           onAssumedPosture={setTargetingPosture}
           onCursor={setCursor}
           onChooseTile={chooseBoardTile}
@@ -1311,6 +1377,7 @@ export function PlannerExperience({
               heading={projected.scanHeading}
               onMove={() => {
                 setOrdersOpen(false);
+                setMoveTool(true);
                 setNotice(`Tap the floor to move ${selectedName}.`);
               }}
               onAim={() => {
@@ -1422,7 +1489,22 @@ export function PlannerExperience({
           </div>
         ) : !ordersOpen && !fireActive && !rehearsing ? (
           <div className="tactical-hint" role="status">
-            Tap the floor to move <strong>{selectedName}</strong>, or tap it for orders.
+            {moveTool ? (
+              <>
+                Choose a destination for <strong>{selectedName}</strong>, including occupied tiles.
+                <button
+                  type="button"
+                  className="cursor-pointer underline min-h-11 px-2"
+                  onClick={() => setMoveTool(false)}
+                >
+                  Cancel move
+                </button>
+              </>
+            ) : (
+              <>
+                Tap the floor to move <strong>{selectedName}</strong>, or tap it for orders.
+              </>
+            )}
           </div>
         ) : null}
         {aimTool || aimDialog !== null ? (
@@ -1436,6 +1518,7 @@ export function PlannerExperience({
             weapons={weapons}
             shots={aimShots}
             maxShots={aimMaxShots}
+            ammo={aimAmmo}
             firingIntervalTicks={WEAPON_TIMING[aimWeapon].firingIntervalTicks}
             assumedPosture={targetingPosture}
             authorizedContacts={authorizedContacts}
@@ -1449,6 +1532,26 @@ export function PlannerExperience({
             <header>
               <p className="eyebrow">Scan &amp; fire · {selectedName}</p>
             </header>
+            {weapons.length > 1 ? (
+              <div className="shot-card-weapons" role="group" aria-label="Scan weapon">
+                {weapons.map((weapon) => (
+                  <button
+                    key={weapon}
+                    type="button"
+                    className="cursor-pointer"
+                    aria-pressed={scanDialog.weapon === weapon}
+                    onClick={() => chooseWeapon(weapon)}
+                  >
+                    {WEAPON_LABELS[weapon]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <p className="shot-card-empty">
+              {projectedWeaponAmmo(selectedRobot, commandPrefix, scanDialog.weapon) === "unlimited"
+                ? "Unlimited ammo"
+                : `${projectedWeaponAmmo(selectedRobot, commandPrefix, scanDialog.weapon)} shots available before this action`}
+            </p>
             <p className="shot-card-empty">
               {selectedName} fires at any enemy that enters the lit arc within range.
             </p>

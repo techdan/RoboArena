@@ -2033,6 +2033,12 @@ evidence remains Phase 12.2.
 
 ### Phase 12.2 — local v1 release-candidate evidence gate [⬜ MANUAL GATE]
 
+**2026-10-17 3D functional audit**: planner/movie usability and full-fidelity
+performance fixes plus a complete local two-player turn are recorded in
+[`ui-audit-2026-10-17.md`](ui-audit-2026-10-17.md). Visual-only observations are
+in [`visual-handoff-2026-10-17.md`](visual-handoff-2026-10-17.md). This does not
+close the physical-iPad, four-player, restart, or deployed acceptance gates.
+
 **2026-10-01 audit follow-up**: A03–A08 in `docs/audit-2026-10-01.md` have
 implementation fixes for projection privacy, conditional-ammo validation and
 legacy recovery, eliminated-seat gating, draft-save acknowledgement, polling

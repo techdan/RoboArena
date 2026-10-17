@@ -30,7 +30,13 @@ import {
   wrapAngle,
   yawToward,
 } from "./kinematics";
-import { instantiatePart, teamMaterials, teamPaint, type RobotModel } from "./models";
+import {
+  instanceRigidParts,
+  instantiatePart,
+  teamMaterials,
+  teamPaint,
+  type RobotModel,
+} from "./models";
 
 const POSTURE_HEIGHT: Readonly<Record<Posture, number>> = {
   upright: 1,
@@ -95,6 +101,9 @@ export class RobotRig {
     original: THREE.Material | THREE.Material[];
   }[] = [];
   private readonly charred: THREE.Material;
+  private readonly disposeTeamMaterials: () => void;
+  private readonly ownedMaterials = new Set<THREE.Material>();
+  private readonly instances: ReturnType<typeof instanceRigidParts>;
   private readonly spin: boolean;
 
   private position = new THREE.Vector2();
@@ -130,6 +139,7 @@ export class RobotRig {
     glowIntensity = 1.8,
   ) {
     const materials = teamMaterials(teamColor, glowIntensity);
+    this.disposeTeamMaterials = materials.dispose;
     this.charred = materials.charred;
     this.spin = model.robotClass === "auto";
     this.idlePhase = hash01(id) * Math.PI * 2;
@@ -217,6 +227,7 @@ export class RobotRig {
       }),
     );
     this.ring.rotation.x = -Math.PI / 2;
+    this.ownedMaterials.add(this.ring.material as THREE.Material);
     this.ring.position.y = 0.015;
     this.ring.renderOrder = 2;
     this.root.add(this.ring);
@@ -232,6 +243,7 @@ export class RobotRig {
     this.hpBar.scale.set(0.46, 0.072, 1);
     this.hpBar.renderOrder = 10;
     this.root.add(this.hpBar);
+    this.instances = instanceRigidParts(this.root);
   }
 
   /** World position of the robot's ground anchor. */
@@ -300,6 +312,7 @@ export class RobotRig {
       depthWrite: false,
       toneMapped: false,
     });
+    this.ownedMaterials.add(material);
     this.root.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.material = material;
@@ -636,13 +649,17 @@ export class RobotRig {
       leg.knee.rotation.set(0, 0, solution.kneePitch);
       leg.foot.rotation.set(0, 0, solution.footPitch);
     }
+    this.instances.update();
   }
 
   dispose(): void {
     this.root.removeFromParent();
+    this.instances.dispose();
     this.hpTexture.dispose();
     (this.hpBar.material as THREE.SpriteMaterial).dispose();
     this.ring.geometry.dispose();
-    (this.ring.material as THREE.Material).dispose();
+    for (const material of this.ownedMaterials) material.dispose();
+    this.ownedMaterials.clear();
+    this.disposeTeamMaterials();
   }
 }

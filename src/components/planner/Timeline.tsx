@@ -116,6 +116,22 @@ export function TimelineLane({
     () => timelineTiming(robot, timelineForRobot(orders, robot.id).segments, budgetTicks),
     [budgetTicks, orders, robot],
   );
+  const presentations = useMemo(() => {
+    const segments = timelineForRobot(orders, robot.id).segments;
+    return timing.map((entry) =>
+      commandPresentation(
+        entry.segment,
+        projectRobotAtTick(robot, segments.slice(0, entry.index)).position,
+      ),
+    );
+  }, [timing, orders, robot]);
+  useEffect(
+    () => () => {
+      if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
 
   const clearLongPress = () => {
     if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
@@ -181,12 +197,8 @@ export function TimelineLane({
       {timing.length === 0 ? (
         <span className="timeline-empty">No actions yet</span>
       ) : (
-        timing.map((entry) => {
-          const priorSegments = timelineForRobot(orders, robot.id).segments.slice(0, entry.index);
-          const presentation = commandPresentation(
-            entry.segment,
-            projectRobotAtTick(robot, priorSegments).position,
-          );
+        timing.map((entry, timingIndex) => {
+          const presentation = presentations[timingIndex]!;
           const key = `${robot.id}:${entry.index}`;
           const widthPercent = (entry.durationTicks / Math.max(1, longestTick)) * 100;
           return (
@@ -270,7 +282,10 @@ export function TimelineLane({
                         className="timeline-remove"
                         aria-label={`Remove ${presentation.label} and every later action`}
                         title="Remove this action and everything after it"
-                        onClick={() => onRemoveFrom(robot.id, entry.index)}
+                        onClick={() => {
+                          closeDetail();
+                          onRemoveFrom(robot.id, entry.index);
+                        }}
                       >
                         <Trash2 size={15} aria-hidden="true" />
                       </button>

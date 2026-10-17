@@ -185,6 +185,7 @@ export class PlannerOverlays3D {
       this.group.remove(child);
       child.traverse((node) => {
         if (node instanceof THREE.Mesh || node instanceof THREE.Line) {
+          if (node instanceof THREE.InstancedMesh) node.dispose();
           node.geometry.dispose();
           const materials = Array.isArray(node.material) ? node.material : [node.material];
           for (const material of materials) material.dispose();
@@ -200,6 +201,16 @@ export class PlannerOverlays3D {
     for (const { mesh, phase } of this.pulses) {
       const s = 1 + 0.08 * Math.sin(time * 3 + phase);
       mesh.scale.set(s, s, s);
+    }
+  }
+
+  dispose(): void {
+    this.clear();
+    if (this.cursorMesh !== null) {
+      this.cursorMesh.geometry.dispose();
+      (this.cursorMesh.material as THREE.Material).dispose();
+      this.cursorGroup.clear();
+      this.cursorMesh = null;
     }
   }
 
@@ -342,12 +353,11 @@ export class PlannerOverlays3D {
       0,
     );
     group.add(fill, arc);
-    const rayMaterial = additive(color, 0.9);
     for (const side of [-1, 1]) {
       const angle = yaw + side * halfAngle;
       // Laid flat, local (x, y) lands on world (x, -y).
       const tip = new THREE.Vector2(Math.sin(angle), -Math.cos(angle)).multiplyScalar(range + 0.5);
-      group.add(flat(stripGeometry([new THREE.Vector2(0, 0), tip], 0.05), rayMaterial.clone(), 0));
+      group.add(flat(stripGeometry([new THREE.Vector2(0, 0), tip], 0.05), additive(color, 0.9), 0));
     }
     this.group.add(group);
   }

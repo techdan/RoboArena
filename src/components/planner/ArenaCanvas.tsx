@@ -72,6 +72,8 @@ export interface PlannerRobotView {
   readonly posture: Posture;
   readonly scanHeading: Heading;
   readonly selected: boolean;
+  readonly hp?: number;
+  readonly armor?: number;
 }
 
 /** A currently-visible enemy robot (drawn solid with an enemy ring). */

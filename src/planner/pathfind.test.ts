@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Arena, Terrain } from "../engine/types";
-import { findPath } from "./pathfind";
+import { findPath, reachableTiles, tileKey } from "./pathfind";
 
 const arenaWith = (rows: readonly (readonly Terrain[])[]): Arena => ({
   type: "rubble",
@@ -12,6 +12,26 @@ const arenaWith = (rows: readonly (readonly Terrain[])[]): Arena => ({
 });
 
 describe("planner A*", () => {
+  it("cached hover reachability agrees with routing across blocked, slow and diagonal terrain", () => {
+    const arena = arenaWith([
+      ["open", "wall", "open", "wall", "open"],
+      ["wall", "open", "rough", "wall", "open"],
+      ["open", "bush", "open", "wall", "open"],
+      ["open", "open", "open", "wall", "open"],
+    ]);
+    for (const posture of ["upright", "ducking", "crouching"] as const) {
+      const start = { x: 0, y: 0 };
+      const reached = reachableTiles(arena, start, posture);
+      for (let y = 0; y < arena.height; y += 1) {
+        for (let x = 0; x < arena.width; x += 1) {
+          const goal = { x, y };
+          expect(reached.has(tileKey(goal))).toBe(
+            findPath(arena, start, goal, posture).kind === "path",
+          );
+        }
+      }
+    }
+  });
   it("finds a deterministic direct route across open ground", () => {
     const arena = arenaWith(Array.from({ length: 5 }, () => Array<Terrain>(5).fill("open")));
     expect(findPath(arena, { x: 0, y: 0 }, { x: 4, y: 4 }, "upright")).toEqual({

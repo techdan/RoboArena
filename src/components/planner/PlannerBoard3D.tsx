@@ -45,6 +45,10 @@ const VIEWS: readonly { readonly id: PlannerView; readonly label: string }[] = [
 export interface PlannerBoard3DProps extends ArenaCanvasProps {
   readonly match: MatchState;
   readonly theme: ArenaThemeId;
+  /** Cached legality lookup lets ordinary hover stay local to the board. */
+  readonly cursorStateAt: (tile: TileCoord | null) => ArenaCanvasProps["cursorState"];
+  /** An explicit Move command may target an occupied tile without selecting its robot. */
+  readonly movingInteractionActive: boolean;
   /** Falls back to the 2D board (renderer failure or the player's choice). */
   readonly onUse2D: () => void;
   /** CSS pixels of the board covered by overlaid UI; the camera frames around them. */
@@ -67,10 +71,10 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
     bombs,
     homeAreas,
     route,
-    cursor,
-    cursorState,
+    cursorStateAt,
     targetingOverlay,
     firingInteractionActive,
+    movingInteractionActive,
     onAssumedPosture,
     onCursor,
     onChooseTile,
@@ -88,7 +92,20 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
   const [view, setView] = useState<PlannerView>("top");
   const [quarter, setQuarter] = useState(0);
   const pressRef = useRef<{ x: number; y: number; id: number } | null>(null);
+  const activePointers = useRef(new Set<number>());
   const hoverRef = useRef<string | null>(null);
+  const [cursor, setCursor] = useState(props.cursor);
+  const cursorState = cursorStateAt(cursor);
+  const moveCursor = (tile: TileCoord | null, at = performance.now()) => {
+    // Put the marker in the next GPU frame immediately. Normal hover does not
+    // need to rerender the whole planner, squad rail, or every timeline lane.
+    sceneRef.current?.overlays.setCursor(tile, CURSOR_HEX[cursorStateAt(tile)]);
+    sceneRef.current?.recordCursorInput(at);
+    setCursor(tile);
+  };
+  useEffect(() => {
+    if (firingInteractionActive) onCursor(cursor);
+  }, [cursor, firingInteractionActive, onCursor]);
 
   // The scene is built once per arena and theme; everything else is synced.
   const sceneKey = `${arena.sizeName}:${arena.width}x${arena.height}:${theme}`;
@@ -146,6 +163,8 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
         position: robot.position,
         posture: robot.posture,
         scanHeading: robot.scanHeading,
+        ...(robot.hp === undefined ? {} : { hp: robot.hp }),
+        ...(robot.armor === undefined ? {} : { armor: robot.armor }),
       })),
       ...contacts.map((contact) => ({
         id: contact.id,
@@ -158,49 +177,30 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
     ],
     [robots, contacts],
   );
+  const poseKey = poses
+    .map(
+      (pose) =>
+        `${pose.id}:${pose.robotClass}:${pose.color}:${pose.posture}:${pose.scanHeading}:${pose.hp}:${pose.armor}:${pose.position === "dock" ? "dock" : `${pose.position.x},${pose.position.y}`}`,
+    )
+    .join(";");
   useEffect(() => {
     if (status !== "ready") return;
     sceneRef.current?.syncRobots(poses, true);
-  }, [poses, status]);
+    // Rehearsal ticks often have identical poses; do not restart rig tweens
+    // just because React produced another array.
+  }, [poseKey, status]);
 
   // Floor overlays.
   const selected = robots.find((robot) => robot.selected);
+  const targeting = targetingOverlay;
   useEffect(() => {
     const scene = sceneRef.current;
     if (status !== "ready" || scene === null) return;
     const overlays = scene.overlays;
     overlays.clear();
-    const targeting = targetingOverlay;
     if (targeting === null) {
       for (const area of homeAreas)
         overlays.homeArea(area.tiles, TEAM_HEX[area.color] ?? area.color);
-    } else {
-      overlays.heatmap(
-        targeting.tiles.map((tile) => {
-          const visual = targetingTileVisual(tile);
-          return {
-            tile: tile.tile,
-            color: visual.color,
-            alpha: visual.alpha,
-            pattern: visual.pattern,
-          };
-        }),
-      );
-      const color = targeting.mode === "aim" ? "#fde68a" : "#67e8f9";
-      overlays.wedge(
-        targeting.origin,
-        headingYaw(targeting.heading),
-        Math.PI / 2,
-        targeting.maxDistance,
-        color,
-      );
-      if (targeting.target !== null)
-        overlays.aim(
-          targeting.origin,
-          targeting.target,
-          "#fde047",
-          targeting.resolution === "blast",
-        );
     }
     const teamHex = selected === undefined ? "#ffffff" : (TEAM_HEX[selected.color] ?? "#ffffff");
     if (route.length > 1)
@@ -215,7 +215,59 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
     for (const contact of contacts) overlays.contact(contact.position);
     for (const ghost of ghosts) overlays.lastKnown(ghost.at);
     for (const bomb of bombs ?? []) overlays.armedBomb(bomb.at);
-  }, [status, targetingOverlay, homeAreas, route, selected, contacts, ghosts, bombs]);
+  }, [
+    status,
+    targeting === null,
+    homeAreas,
+    route,
+    selected?.color,
+    selected?.position === "dock" ? "dock" : selected?.position.x,
+    selected?.position === "dock" ? "dock" : selected?.position.y,
+    contacts,
+    ghosts,
+    bombs,
+  ]);
+
+  // Hover changes only the aim marker, never the heatmap or squad overlays.
+  useEffect(() => {
+    const overlays = sceneRef.current?.targetingOverlays;
+    if (status !== "ready" || overlays === undefined) return;
+    overlays.clear();
+    if (targeting === null) return;
+    overlays.heatmap(
+      targeting.tiles.map((tile) => {
+        const visual = targetingTileVisual(tile);
+        return {
+          tile: tile.tile,
+          color: visual.color,
+          alpha: visual.alpha,
+          pattern: visual.pattern,
+        };
+      }),
+    );
+    overlays.wedge(
+      targeting.origin,
+      headingYaw(targeting.heading),
+      Math.PI / 2,
+      targeting.maxDistance,
+      targeting.mode === "aim" ? "#fde68a" : "#67e8f9",
+    );
+  }, [
+    status,
+    targeting?.tiles,
+    targeting?.origin,
+    targeting?.heading,
+    targeting?.maxDistance,
+    targeting?.mode,
+  ]);
+
+  useEffect(() => {
+    const overlays = sceneRef.current?.aimOverlays;
+    if (status !== "ready" || overlays === undefined) return;
+    overlays.clear();
+    if (targeting?.target != null)
+      overlays.aim(targeting.origin, targeting.target, "#fde047", targeting.resolution === "blast");
+  }, [status, targeting?.origin, targeting?.target, targeting?.resolution]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -243,13 +295,24 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
       const element = anchorRef.current;
       if (scene !== null && element !== null) {
         const point = scene.screenOf(anchorTile, 0.6);
-        element.style.transform = `translate(${point.x}px, ${point.y}px)`;
+        const host = hostRef.current;
+        if (host !== null) {
+          // Home-corner robots and panned tiles can otherwise put orders under
+          // the header, squad rail, or timeline. Keep every button reachable.
+          const left = (insets?.left ?? 0) + 160;
+          const right = Math.max(left, host.clientWidth - (insets?.right ?? 0) - 160);
+          const top = (insets?.top ?? 0) + 115;
+          const bottom = Math.max(top, host.clientHeight - (insets?.bottom ?? 0) - 115);
+          const x = Math.max(left, Math.min(right, point.x));
+          const y = Math.max(top, Math.min(bottom, point.y));
+          element.style.transform = `translate(${x}px, ${y}px)`;
+        }
       }
       frame = requestAnimationFrame(follow);
     };
     follow();
     return () => cancelAnimationFrame(frame);
-  }, [anchorTile, status]);
+  }, [anchorTile, status, insetKey]);
 
   const changeView = (next: PlannerView, nextQuarter = quarter) => {
     setView(next);
@@ -264,11 +327,19 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
   const choose = (tile: TileCoord, modifiers: { ctrl: boolean; shift: boolean }) => {
     const robot = robots.find(
       (candidate) =>
+        candidate.hp !== 0 &&
         candidate.position !== "dock" &&
         candidate.position.x === tile.x &&
         candidate.position.y === tile.y,
     );
-    if (robot !== undefined && !firingInteractionActive) onChooseRobot(robot.id);
+    if (
+      robot !== undefined &&
+      selected?.position !== "dock" &&
+      !firingInteractionActive &&
+      !movingInteractionActive &&
+      !(modifiers.ctrl && modifiers.shift)
+    )
+      onChooseRobot(robot.id);
     else onChooseTile(tile, modifiers);
   };
 
@@ -277,34 +348,86 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
       <div
         className="planner-canvas planner-board-3d"
         role="application"
-        aria-label={`${arena.sizeName} planning board, 3D view. Click or tap a tile to choose it.`}
+        tabIndex={0}
+        aria-label={`${arena.sizeName} planning board, 3D view. Click or tap a tile, or use arrow keys and Enter to choose it.`}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const delta =
+            event.key === "ArrowUp"
+              ? [0, -1]
+              : event.key === "ArrowDown"
+                ? [0, 1]
+                : event.key === "ArrowLeft"
+                  ? [-1, 0]
+                  : event.key === "ArrowRight"
+                    ? [1, 0]
+                    : null;
+          if (delta !== null) {
+            event.preventDefault();
+            const origin = cursor ??
+              (selected?.position !== "dock" ? selected?.position : null) ?? { x: 0, y: 0 };
+            moveCursor(
+              {
+                x: Math.max(0, Math.min(arena.width - 1, origin.x + delta[0]!)),
+                y: Math.max(0, Math.min(arena.height - 1, origin.y + delta[1]!)),
+              },
+              event.timeStamp,
+            );
+          } else if ((event.key === "Enter" || event.key === " ") && cursor !== null) {
+            event.preventDefault();
+            choose(cursor, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
+          }
+        }}
         data-cursor-state={cursorState}
         data-targeting-active={firingInteractionActive ? "true" : "false"}
         onPointerDown={(event) => {
+          if (event.target !== sceneRef.current?.canvas) return;
+          activePointers.current.add(event.pointerId);
+          if (activePointers.current.size > 1) {
+            pressRef.current = null;
+            return;
+          }
+          if (event.button !== 0) return;
           pressRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
         }}
         onPointerMove={(event) => {
+          const press = pressRef.current;
+          if (
+            press !== null &&
+            Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_SLOP_PX
+          )
+            pressRef.current = null;
+          // Ignore DOM controls over the canvas; they must not move the board
+          // cursor or trigger an expensive path preview behind an orders menu.
+          if (event.target !== sceneRef.current?.canvas) return;
           if (event.pointerType !== "mouse") return;
           const tile = tileAt(event);
           const key = tile === null ? null : `${tile.x},${tile.y}`;
           if (key === hoverRef.current) return;
           hoverRef.current = key;
-          onCursor(tile);
+          moveCursor(tile, event.timeStamp);
         }}
         onPointerLeave={(event) => {
+          activePointers.current.delete(event.pointerId);
+          pressRef.current = null;
           if (event.pointerType !== "mouse") return;
           hoverRef.current = null;
-          onCursor(null);
+          moveCursor(null, event.timeStamp);
         }}
         onPointerUp={(event) => {
+          activePointers.current.delete(event.pointerId);
           const press = pressRef.current;
           pressRef.current = null;
           if (press === null || press.id !== event.pointerId || event.button !== 0) return;
           if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_SLOP_PX) return;
           const tile = tileAt(event);
           if (tile === null) return;
-          if (event.pointerType !== "mouse") onCursor(tile);
+          if (event.pointerType !== "mouse") moveCursor(tile, event.timeStamp);
           choose(tile, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey });
+        }}
+        onPointerCancel={(event) => {
+          activePointers.current.delete(event.pointerId);
+          pressRef.current = null;
         }}
       >
         <div ref={hostRef} className="absolute inset-0" />
@@ -334,7 +457,7 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
           <TargetingLegend
             overlay={targetingOverlay}
             onAssumedPosture={onAssumedPosture}
-            onBlockBoardHover={() => onCursor(null)}
+            onBlockBoardHover={() => moveCursor(null)}
           />
         )}
         {status !== "ready" ? (

@@ -16,6 +16,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import type {
   Heading,
   MatchState,
@@ -49,6 +50,14 @@ import {
   type RobotFamily,
 } from "./models";
 import { RobotRig } from "./RobotRig";
+import {
+  GRAPHICS_QUALITIES,
+  GRAPHICS_QUALITY_EVENT,
+  GRAPHICS_QUALITY_KEY,
+  graphicsPixelRatio,
+  isGraphicsQuality,
+  preferredGraphicsQuality,
+} from "./quality";
 import { ARENA_THEMES, DEFAULT_ARENA_THEME, type ArenaTheme, type ArenaThemeId } from "./themes";
 
 /** A robot pose for the planner board (see `syncRobots`). */
@@ -59,6 +68,8 @@ export interface PlannedRobotPose {
   readonly position: TileCoord | "dock";
   readonly posture: Posture;
   readonly scanHeading: Heading;
+  readonly hp?: number;
+  readonly armor?: number;
 }
 
 export type CameraMode = "director" | "free" | "overview";
@@ -121,6 +132,44 @@ const skyTexture = (stops: readonly [string, string, string]): THREE.Texture => 
   return texture;
 };
 
+/** Keep 4x MSAA on geometry, resolving it once before full-screen image passes.
+ * Multisampling bloom/AO/vignette quads adds bandwidth without adding edge detail.
+ */
+class AntialiasedScenePass extends RenderPass {
+  private readonly target = new THREE.WebGLRenderTarget(1, 1, {
+    samples: 4,
+    type: THREE.HalfFloatType,
+  });
+  private readonly copy = new ShaderPass(CopyShader);
+
+  constructor(scene: THREE.Scene, camera: THREE.Camera) {
+    super(scene, camera);
+    this.copy.material.blending = THREE.NoBlending;
+    this.copy.material.depthTest = false;
+    this.copy.material.depthWrite = false;
+  }
+
+  override setSize(width: number, height: number): void {
+    this.target.setSize(width, height);
+  }
+
+  override render(
+    renderer: THREE.WebGLRenderer,
+    writeBuffer: THREE.WebGLRenderTarget,
+    readBuffer: THREE.WebGLRenderTarget,
+    deltaTime: number,
+    maskActive: boolean,
+  ): void {
+    super.render(renderer, writeBuffer, this.target, deltaTime, maskActive);
+    this.copy.render(renderer, readBuffer, this.target, deltaTime, maskActive);
+  }
+
+  override dispose(): void {
+    this.target.dispose();
+    this.copy.dispose();
+  }
+}
+
 export class BattleScene3D {
   readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
@@ -129,6 +178,7 @@ export class BattleScene3D {
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
   private readonly ao: GTAOPass;
+  private readonly environmentTarget: THREE.WebGLRenderTarget;
   private readonly controls: OrbitControls;
   private readonly effects = new Effects3D();
   private readonly rigs = new Map<string, RobotRig>();
@@ -138,6 +188,28 @@ export class BattleScene3D {
   private library: ModelLibrary | null = null;
   private frame = 0;
   private lastTime = 0;
+  /** Opt-in local diagnostics, readable without accessing private match data. */
+  private readonly diagnostics =
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).has("capture") ||
+      new URLSearchParams(window.location.search).has("profile"));
+  private frameSamples: number[] = [];
+  private disposeGpuProfile: (() => void) | undefined;
+  private interactionObserver: PerformanceObserver | undefined;
+  private gpuFence: WebGLSync | null = null;
+  private pendingCursorAt: number | undefined;
+  private submittedCursorAt: number | undefined;
+  private quality = preferredGraphicsQuality();
+  private readonly qualityChanged = (event: Event) => {
+    if (event instanceof StorageEvent && event.key !== null && event.key !== GRAPHICS_QUALITY_KEY)
+      return;
+    const requested = event instanceof CustomEvent ? event.detail : null;
+    const next = isGraphicsQuality(requested) ? requested : preferredGraphicsQuality();
+    if (next === this.quality) return;
+    this.quality = next;
+    this.frameSamples = [];
+    this.resize();
+  };
   private now = 0;
   private speed = 1;
   private reducedMotion = false;
@@ -172,6 +244,8 @@ export class BattleScene3D {
   private readonly floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   /** Planner overlays (routes, heatmaps, wedges) projected onto the floor. */
   readonly overlays = new PlannerOverlays3D();
+  readonly targetingOverlays = new PlannerOverlays3D();
+  readonly aimOverlays = new PlannerOverlays3D();
 
   private constructor(
     private readonly host: HTMLElement,
@@ -184,16 +258,52 @@ export class BattleScene3D {
     this.renderer = new THREE.WebGLRenderer({
       antialias: false,
       powerPreference: "high-performance",
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: new URLSearchParams(window.location.search).has("capture"),
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
+    // RenderPass and GTAO both render the scene. Refresh shadows once per frame,
+    // then reuse that identical map for the normal/AO pass.
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = theme.exposure;
     this.canvas = this.renderer.domElement;
     this.canvas.dataset.movieCanvas = "true";
     this.canvas.dataset.movieRenderer = "3d";
+    if (this.diagnostics) {
+      const gl = this.renderer.getContext();
+      const debug = gl.getExtension("WEBGL_debug_renderer_info");
+      this.canvas.dataset.gpu = String(
+        gl.getParameter(debug?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER),
+      );
+      this.renderer.info.autoReset = false;
+      if (
+        typeof PerformanceObserver !== "undefined" &&
+        PerformanceObserver.supportedEntryTypes.includes("event")
+      ) {
+        this.interactionObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.name !== "keydown" && entry.name !== "click") continue;
+            // Event Timing includes browser input delay, handling, and the next
+            // presentation. Browsers quantize duration to 8 ms for privacy.
+            this.canvas.dataset.inputPaintMs = String(entry.duration);
+            this.canvas.dataset.inputEvent = entry.name;
+            const timing = entry as PerformanceEventTiming;
+            this.canvas.dataset.inputDelayMs = (timing.processingStart - timing.startTime).toFixed(
+              1,
+            );
+            this.canvas.dataset.inputHandlerMs = (
+              timing.processingEnd - timing.processingStart
+            ).toFixed(1);
+          }
+        });
+        this.interactionObserver.observe({
+          type: "event",
+          durationThreshold: 16,
+        } as PerformanceObserverInit);
+      }
+    }
     this.canvas.setAttribute("aria-label", "RoboArena 3D turn movie");
     this.canvas.setAttribute("role", "img");
     this.canvas.style.display = "block";
@@ -214,7 +324,10 @@ export class BattleScene3D {
       Math.max(theme.fog.far, Math.max(width, height) * 3),
     );
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const environment = new RoomEnvironment();
+    this.environmentTarget = pmrem.fromScene(environment, 0.04);
+    this.scene.environment = this.environmentTarget.texture;
+    environment.dispose();
     this.scene.environmentIntensity = theme.environment;
     pmrem.dispose();
 
@@ -248,12 +361,13 @@ export class BattleScene3D {
     this.scene.add(rim, rim.target);
     this.scene.add(this.effects.group);
     this.scene.add(this.overlays.group);
+    this.scene.add(this.targetingOverlays.group, this.aimOverlays.group);
 
     this.composer = new EffectComposer(
       this.renderer,
-      new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType }),
+      new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }),
     );
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new AntialiasedScenePass(this.scene, this.camera));
     // Ambient occlusion grounds robots and props: contact shadows in every crease.
     this.ao = new GTAOPass(this.scene, this.camera, 1, 1);
     this.ao.blendIntensity = 0.9;
@@ -270,6 +384,7 @@ export class BattleScene3D {
     vignette.uniforms["strength"]!.value = theme.vignette;
     this.composer.addPass(vignette);
     this.composer.addPass(new OutputPass());
+    if (new URLSearchParams(window.location.search).has("gpuProfile")) this.profileGpuPasses();
 
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
@@ -279,6 +394,8 @@ export class BattleScene3D {
     this.controls.maxDistance = Math.max(width, height) * 2.2;
     this.controls.target.copy(this.lookCurrent);
     this.controls.addEventListener("start", () => this.setCameraMode("free"));
+    window.addEventListener(GRAPHICS_QUALITY_EVENT, this.qualityChanged);
+    window.addEventListener("storage", this.qualityChanged);
   }
 
   /** Loads models, builds the arena and starts the render loop. */
@@ -311,9 +428,12 @@ export class BattleScene3D {
     this.scene.add(this.arena.group);
     if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
     this.addMotes();
-    // Warm up shaders so the first explosion does not hitch.
+    // Warm up the hover material too: first input must not compile its shader.
     this.resize();
-    this.renderer.compile(this.scene, this.camera);
+    this.overlays.setCursor({ x: 0, y: 0 }, "#e8ffd0");
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.overlays.setCursor(null, "#e8ffd0");
+    if (this.disposed) return;
     this.lastTime = performance.now() / 1000;
     if (this.manualClock) return;
     const loop = () => {
@@ -410,12 +530,25 @@ export class BattleScene3D {
     return this.cameraMode;
   }
 
+  /** Opt-in latency evidence for the cursor's submitted GPU frame. */
+  recordCursorInput(at: number): void {
+    if (this.diagnostics) this.pendingCursorAt = at;
+  }
+
   resize(): void {
     const width = Math.max(1, this.host.clientWidth);
     const height = Math.max(1, this.host.clientHeight);
+    const ratio = graphicsPixelRatio(this.quality, width, height, window.devicePixelRatio);
+    this.renderer.setPixelRatio(ratio);
+    this.composer.setPixelRatio(ratio);
     this.renderer.setSize(width, height, false);
     this.composer.setSize(width, height);
-    this.ao.setSize(width, height);
+    const aoScale = GRAPHICS_QUALITIES[this.quality].aoScale;
+    this.ao.setSize(
+      Math.max(1, Math.floor(width * ratio * aoScale)),
+      Math.max(1, Math.floor(height * ratio * aoScale)),
+    );
+    this.canvas.dataset.graphicsQuality = this.quality;
     this.bloom.resolution.set(width, height);
     this.camera.aspect = width / height;
     const { top, right, bottom, left } = this.viewInsets;
@@ -507,7 +640,7 @@ export class BattleScene3D {
       rig.root.visible = rig.visible;
       if (robot.position === "dock") continue;
       rig.setHp(robot.hp, robot.armor);
-      rig.setPosture(robot.posture, animate);
+      if (robot.hp !== 0) rig.setPosture(robot.posture, animate);
       rig.setScanYaw(headingYaw(robot.scanHeading), animate);
       const from = before?.position;
       const plan =
@@ -748,6 +881,7 @@ export class BattleScene3D {
 
   advance(seconds: number, step = 1 / 60): void {
     for (let t = 0; t < seconds - 1e-6; t += step) this.tick(step, false);
+    this.renderer.shadowMap.needsUpdate = true;
     this.composer.render(step);
   }
 
@@ -785,7 +919,7 @@ export class BattleScene3D {
   }
 
   clearGhosts(): void {
-    for (const ghost of this.ghosts) this.scene.remove(ghost.root);
+    for (const ghost of this.ghosts) ghost.dispose();
     this.ghosts.length = 0;
   }
 
@@ -909,7 +1043,7 @@ export class BattleScene3D {
       rig.visible = robot.position !== "dock";
       rig.root.visible = rig.visible;
       if (robot.position === "dock") continue;
-      rig.setPosture(robot.posture, animate);
+      if (robot.hp !== 0) rig.setPosture(robot.posture, animate);
       rig.setScanYaw(headingYaw(robot.scanHeading), animate);
       const previous = this.posed.get(robot.id);
       const moved =
@@ -922,6 +1056,8 @@ export class BattleScene3D {
         this.posed.set(robot.id, robot.position);
       }
       if (!animate || previous === undefined) rig.faceYaw(headingYaw(robot.scanHeading), false);
+      if (robot.hp !== undefined && robot.armor !== undefined) rig.setHp(robot.hp, robot.armor);
+      rig.setDestroyed(robot.hp === 0, false);
     }
     for (const [id, rig] of this.rigs) {
       if (seen.has(id)) continue;
@@ -961,10 +1097,75 @@ export class BattleScene3D {
     this.controls.update();
   }
 
+  /** Optional pass timing. Use ?gpuProfile separately: queries can perturb frame pacing. */
+  private profileGpuPasses(): void {
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2") as {
+      TIME_ELAPSED_EXT: number;
+      GPU_DISJOINT_EXT: number;
+    } | null;
+    if (ext === null) return;
+    const queries = new Set<WebGLQuery>();
+    const labels = ["geometry", "ao", "bloom", "vignette", "output"];
+    this.composer.passes.forEach((pass, index) => {
+      const render = pass.render.bind(pass);
+      let pending: WebGLQuery | null = null;
+      pass.render = (...args) => {
+        if (pending !== null && gl.getQueryParameter(pending, gl.QUERY_RESULT_AVAILABLE)) {
+          if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) {
+            this.canvas.dataset[`gpu${labels[index]}`] = (
+              Number(gl.getQueryParameter(pending, gl.QUERY_RESULT)) / 1e6
+            ).toFixed(2);
+          }
+          queries.delete(pending);
+          gl.deleteQuery(pending);
+          pending = null;
+        }
+        const query = pending === null ? gl.createQuery() : null;
+        if (query !== null) gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+        render(...args);
+        if (query !== null) {
+          gl.endQuery(ext.TIME_ELAPSED_EXT);
+          queries.add(query);
+          pending = query;
+        }
+      };
+    });
+    this.disposeGpuProfile = () => {
+      for (const query of queries) gl.deleteQuery(query);
+      queries.clear();
+    };
+  }
+
   private tick(fixedDt?: number, draw = true): void {
+    // Do not queue stale frames faster than an older GPU can finish them.
+    // A zero-timeout fence poll yields to input instead of blocking or building
+    // a backlog. The next submitted frame uses the latest cursor and camera.
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    if (draw && fixedDt === undefined && this.gpuFence !== null) {
+      if (gl.clientWaitSync(this.gpuFence, 0, 0) === gl.TIMEOUT_EXPIRED) return;
+      if (this.submittedCursorAt !== undefined) {
+        this.canvas.dataset.cursorGpuReadyMs = (performance.now() - this.submittedCursorAt).toFixed(
+          1,
+        );
+        this.submittedCursorAt = undefined;
+      }
+      gl.deleteSync(this.gpuFence);
+      this.gpuFence = null;
+    }
+    const cpuStart = this.diagnostics ? performance.now() : 0;
     let dt = fixedDt ?? 0;
     if (fixedDt === undefined) {
       const wall = performance.now() / 1000;
+      if (this.diagnostics) {
+        this.frameSamples.push((wall - this.lastTime) * 1000);
+        if (this.frameSamples.length >= 60) {
+          const samples = this.frameSamples.sort((a, b) => a - b);
+          this.canvas.dataset.frameMedianMs = samples[30]!.toFixed(1);
+          this.canvas.dataset.frameP95Ms = samples[57]!.toFixed(1);
+          this.frameSamples = [];
+        }
+      }
       dt = Math.min(0.1, Math.max(0, wall - this.lastTime));
       this.lastTime = wall;
     }
@@ -980,10 +1181,27 @@ export class BattleScene3D {
     for (const rig of this.rigs.values()) rig.update(this.now, dt, this.speed);
     for (const ghost of this.ghosts) ghost.update(this.now, dt, this.speed);
     this.overlays.update(this.now);
+    this.targetingOverlays.update(this.now);
+    this.aimOverlays.update(this.now);
     this.stepCameraTween();
     this.effects.update(dt * Math.min(2, Math.max(0.5, this.speed)));
     this.updateCamera(dt);
-    if (draw) this.composer.render(dt);
+    if (draw) {
+      if (this.diagnostics) this.renderer.info.reset();
+      this.renderer.shadowMap.needsUpdate = true;
+      this.composer.render(dt);
+      if (fixedDt === undefined) {
+        this.gpuFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        this.submittedCursorAt = this.pendingCursorAt;
+        this.pendingCursorAt = undefined;
+        gl.flush();
+      }
+      if (this.diagnostics) {
+        this.canvas.dataset.drawCalls = String(this.renderer.info.render.calls);
+        this.canvas.dataset.triangles = String(this.renderer.info.render.triangles);
+        this.canvas.dataset.cpuFrameMs = (performance.now() - cpuStart).toFixed(1);
+      }
+    }
   }
 
   private updateCamera(dt: number): void {
@@ -1070,14 +1288,35 @@ export class BattleScene3D {
   }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
+    window.removeEventListener(GRAPHICS_QUALITY_EVENT, this.qualityChanged);
+    window.removeEventListener("storage", this.qualityChanged);
     cancelAnimationFrame(this.frame);
     this.controls.dispose();
     for (const rig of this.rigs.values()) rig.dispose();
     this.rigs.clear();
+    this.clearGhosts();
+    for (const beam of this.beams) {
+      beam.geometry.dispose();
+      (beam.material as THREE.Material).dispose();
+    }
+    this.motes?.geometry.dispose();
+    (this.motes?.material as THREE.Material | undefined)?.dispose();
     this.effects.dispose();
+    this.overlays.dispose();
+    this.targetingOverlays.dispose();
+    this.aimOverlays.dispose();
     this.arena?.dispose();
+    this.disposeGpuProfile?.();
+    this.interactionObserver?.disconnect();
+    if (this.gpuFence !== null)
+      (this.renderer.getContext() as WebGL2RenderingContext).deleteSync(this.gpuFence);
+    for (const pass of this.composer.passes) pass.dispose();
     this.composer.dispose();
+    this.sun.shadow.dispose();
+    if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose();
+    this.environmentTarget.dispose();
     this.renderer.dispose();
     this.canvas.remove();
   }
