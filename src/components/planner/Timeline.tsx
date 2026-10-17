@@ -2,6 +2,7 @@
 
 import { Bomb, Crosshair, MapPin, Radar, Skull, Trash2, Zap } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
 import { commandPresentation } from "../../planner/presentation";
@@ -106,6 +107,7 @@ export function TimelineLane({
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [detailPosition, setDetailPosition] = useState({ left: 0, top: 0 });
   const laneRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -151,7 +153,8 @@ export function TimelineLane({
       if (
         laneRef.current !== null &&
         event.target instanceof Node &&
-        !laneRef.current.contains(event.target)
+        !laneRef.current.contains(event.target) &&
+        !(detailRef.current?.contains(event.target) ?? false)
       ) {
         cancelClose();
         pinnedRef.current = false;
@@ -211,7 +214,10 @@ export function TimelineLane({
                   const related = event.relatedTarget;
                   if (
                     !(related instanceof Node) ||
-                    !event.currentTarget.parentElement?.contains(related)
+                    !(
+                      (event.currentTarget.parentElement?.contains(related) ?? false) ||
+                      (detailRef.current?.contains(related) ?? false)
+                    )
                   )
                     closeDetail();
                 }}
@@ -240,31 +246,38 @@ export function TimelineLane({
               >
                 <CommandGlyph segment={entry.segment} />
               </button>
-              {detailKey === key ? (
-                <div
-                  className="timeline-command-detail"
-                  role="tooltip"
-                  style={detailPosition}
-                  onPointerEnter={cancelClose}
-                  onPointerLeave={scheduleClose}
-                >
-                  <strong>{presentation.label}</strong>
-                  <span>{presentation.detail}</span>
-                  <small>
-                    {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
-                    {formatGameTime(entry.durationTicks)}
-                  </small>
-                  <button
-                    type="button"
-                    className="timeline-remove"
-                    aria-label={`Remove ${presentation.label} and every later action`}
-                    title="Remove this action and everything after it"
-                    onClick={() => onRemoveFrom(robot.id, entry.index)}
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </button>
-                </div>
-              ) : null}
+              {/* Portaled to <body>: the track's backdrop-filter would otherwise
+                  become the containing block for this position: fixed popover
+                  and push it below the viewport. */}
+              {detailKey === key
+                ? createPortal(
+                    <div
+                      ref={detailRef}
+                      className="timeline-command-detail"
+                      role="tooltip"
+                      style={detailPosition}
+                      onPointerEnter={cancelClose}
+                      onPointerLeave={scheduleClose}
+                    >
+                      <strong>{presentation.label}</strong>
+                      <span>{presentation.detail}</span>
+                      <small>
+                        {formatGameTime(entry.startTick)} → {formatGameTime(entry.endTick)} ·{" "}
+                        {formatGameTime(entry.durationTicks)}
+                      </small>
+                      <button
+                        type="button"
+                        className="timeline-remove"
+                        aria-label={`Remove ${presentation.label} and every later action`}
+                        title="Remove this action and everything after it"
+                        onClick={() => onRemoveFrom(robot.id, entry.index)}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    </div>,
+                    document.body,
+                  )
+                : null}
             </div>
           );
         })
