@@ -6,7 +6,7 @@
 // public/ so the owner can open it from the dev server. Output PNGs are review
 // artefacts: do not commit them.
 //
-//   node tools/visual/compare-arena.mjs <out-name> "<label>|<query>" ...
+//   node tools/visual/compare-arena.mjs <out-name> "<label>|<query>[|<height>]" ...
 //   node tools/visual/compare-arena.mjs compare-white-space \
 //     "Today|" "New, robots 1.15|&art=next&wallInset=0.1" \
 //     "New, robots 1.15, step-back 0.15|&art=next"
@@ -40,7 +40,9 @@ const browser = await chromium.launch({
 });
 const shots = [];
 for (const [index, spec] of specs.entries()) {
-  const [label, query = ""] = spec.split("|");
+  const [label, query = "", panelHeight] = spec.split("|");
+  // A per-panel camera height lets a closer camera match on-screen robot size.
+  const cameraHeight = panelHeight === undefined ? height : Number(panelHeight);
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   await page.goto(`http://localhost:3000/movie/showcase?capture&theme=${theme}&t=${tick}${query}`);
   await page.waitForFunction(() => window.__movie3d !== undefined, null, { timeout: 120000 });
@@ -61,7 +63,7 @@ for (const [index, spec] of specs.entries()) {
       scene.lookFrom({ x: cx, y: height, z: cz + 0.1 }, { x: cx, y: 0, z: cz });
       scene.advance(0.2);
     },
-    { tick, cx, cz, height, overview },
+    { tick, cx, cz, height: cameraHeight, overview },
   );
   const file = path.join(work, `${index}.png`);
   await canvas.screenshot({ path: file });

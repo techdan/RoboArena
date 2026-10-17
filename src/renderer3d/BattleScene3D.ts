@@ -205,26 +205,26 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
   };
 };
 
-/** Art upgrade: robots against taller cover, with dimmer glow. Size is still
- * being chosen with the owner, so `?robotScale=` overrides it for comparison. */
-// 1.15 was the owner's preferred size; cropping the framing enlarges tiles by
-// ~11% on screen, so 1.05 keeps robots about as large while freeing floor.
-const ART_ROBOT_SCALE = 1.05;
+/**
+ * Art upgrade: tiles are 50% larger relative to robots, so every robot stands
+ * in clear floor. The board stays in tile units; robots are drawn at 1/1.5 of
+ * their tile size and every default camera stands 1.5x closer, so robots keep
+ * the owner's preferred 1.15 on-screen size and the arena grows past the
+ * viewport (pan and zoom reach the rest). For review, `?tile=` sets the
+ * growth and `?robotScale=` the on-screen robot size in today's units.
+ */
+const ART_TILE_ROOM = 1.5;
+const ART_ROBOT_SIZE = 1.15;
 const ART_ROBOT_GLOW = 0.4;
-/** Art upgrade framing: negative margin crops into the board by half a tile on
- * each side, so the board slightly overflows the view and tiles grow on screen. */
-const ART_BOARD_MARGIN = -1;
-/** Movie overview distance per board extent: 1.25 includes the stands; the art
- * upgrade frames the board itself, with the far edge allowed to overflow. */
-const ART_OVERVIEW_DISTANCE = 1.05;
-const artRobotScale = (): number => {
+/** Review dial: `?name=` within [min, max], else the default. */
+const urlNumber = (name: string, fallback: number, min: number, max: number): number => {
   try {
-    const requested = Number(new URLSearchParams(window.location.search).get("robotScale"));
-    if (Number.isFinite(requested) && requested >= 0.8 && requested <= 1.5) return requested;
+    const requested = Number(new URLSearchParams(window.location.search).get(name) ?? "");
+    if (Number.isFinite(requested) && requested >= min && requested <= max) return requested;
   } catch {
     // No URL: use the default.
   }
-  return ART_ROBOT_SCALE;
+  return fallback;
 };
 /** Optic lenses and eyes are a few pixels tall; far above the bloom threshold
  * they flare on frames that sample them and vanish on frames that miss them.
@@ -307,6 +307,8 @@ export class BattleScene3D {
   private cameraMode: CameraMode = "director";
   /** Concept preview of the arena art upgrade (`?art=next`). */
   private readonly art = artPreviewEnabled();
+  private readonly tileRoom = urlNumber("tile", ART_TILE_ROOM, 1, 2);
+  private readonly robotSize = urlNumber("robotScale", ART_ROBOT_SIZE, 0.5, 2);
   private readonly focuses: Focus[] = [];
   private readonly cameraGoal = new THREE.Vector3();
   private readonly lookGoal = new THREE.Vector3();
@@ -494,7 +496,7 @@ export class BattleScene3D {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.maxPolarAngle = Math.PI * 0.46;
-    this.controls.minDistance = 3;
+    this.controls.minDistance = 3 / (this.art ? this.tileRoom : 1);
     this.controls.maxDistance = Math.max(width, height) * 2.2;
     this.controls.target.copy(this.lookCurrent);
     this.controls.addEventListener("start", () => this.setCameraMode("free"));
@@ -708,7 +710,7 @@ export class BattleScene3D {
         onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
       },
       this.art ? this.theme.robotGlow * ART_ROBOT_GLOW : this.theme.robotGlow,
-      this.art ? artRobotScale() : undefined,
+      this.art ? this.robotSize / this.tileRoom : undefined,
     );
     this.rigs.set(id, rig);
     this.scene.add(rig.root);
@@ -1115,9 +1117,9 @@ export class BattleScene3D {
 
   /**
    * Camera distance at which a board spanning `spanX` x `spanZ` tiles fills the
-   * view area not covered by overlaid UI. The shipped look keeps a 1.5-tile
-   * margin; the art upgrade crops to the board and lets it overflow by a tile
-   * (pan covers the rest), so tiles are larger on screen.
+   * view area not covered by overlaid UI, with a 1.5-tile margin. The art
+   * upgrade stands `tileRoom` times closer: tiles grow on screen and the board
+   * overflows the view (pan covers the rest).
    */
   private boardFitDistance(fov: number, spanX: number, spanZ: number): number {
     const rect = this.host.getBoundingClientRect();
@@ -1128,8 +1130,8 @@ export class BattleScene3D {
     // The lens spans the full canvas height; only the open fraction may hold the arena.
     const half =
       Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
-    const margin = this.art ? ART_BOARD_MARGIN : 1.5;
-    return Math.max((spanZ + margin) / 2 / half, (spanX + margin) / 2 / (half * aspect));
+    const fit = Math.max((spanZ + 1.5) / 2 / half, (spanX + 1.5) / 2 / (half * aspect));
+    return this.art ? fit / this.tileRoom : fit;
   }
 
   private moveCamera(position: THREE.Vector3, target: THREE.Vector3, animate: boolean): void {
@@ -1421,9 +1423,9 @@ export class BattleScene3D {
         spread = extent * 0.6;
       }
       const overview = this.cameraMode === "overview" || weight === 0;
-      const distance = overview
-        ? extent * (this.art ? ART_OVERVIEW_DISTANCE : 1.25)
-        : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05);
+      const distance =
+        (overview ? extent * 1.25 : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05)) /
+        (this.art ? this.tileRoom : 1);
       const elevation = overview ? 0.95 : 0.78;
       // A fixed heading from the south; the camera no longer orbits while idle.
       this.cameraGoal.set(
