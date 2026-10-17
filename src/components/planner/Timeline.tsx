@@ -84,6 +84,8 @@ interface TimelineLaneProps {
 }
 
 const CLOSE_DELAY_MS = 260;
+/** Space the popover needs below an action before it flips above instead. */
+const DETAIL_ROOM_PX = 120;
 
 /**
  * One robot's command lane: glyph-only cells whose widths are proportional to
@@ -105,7 +107,11 @@ export function TimelineLane({
   onRemoveFrom,
 }: TimelineLaneProps) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
-  const [detailPosition, setDetailPosition] = useState({ left: 0, top: 0 });
+  const [detailPosition, setDetailPosition] = useState<{
+    left: number;
+    top: number;
+    transform?: string;
+  }>({ left: 0, top: 0 });
   const laneRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<number | null>(null);
@@ -138,10 +144,14 @@ export function TimelineLane({
   const openDetail = (key: string, anchor: HTMLElement, pinned: boolean) => {
     cancelClose();
     const bounds = anchor.getBoundingClientRect();
-    setDetailPosition({
-      left: Math.max(8, Math.min(bounds.left, window.innerWidth - 260)),
-      top: Math.min(bounds.bottom + 5, window.innerHeight - 160),
-    });
+    const left = Math.max(8, Math.min(bounds.left, window.innerWidth - 260));
+    // Open above the action when there is no room below (the turn track sits
+    // at the bottom of the screen), so the popover never covers its own cell.
+    setDetailPosition(
+      bounds.bottom + 5 + DETAIL_ROOM_PX <= window.innerHeight
+        ? { left, top: bounds.bottom + 5 }
+        : { left, top: bounds.top - 5, transform: "translateY(-100%)" },
+    );
     pinnedRef.current = pinned;
     setDetailKey(key);
   };

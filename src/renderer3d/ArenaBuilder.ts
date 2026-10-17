@@ -20,6 +20,24 @@ interface Placement {
   readonly matrix: THREE.Matrix4;
 }
 
+/**
+ * The grandstand canopy is a broad, flat slab of polished steel; seen from the
+ * top-down planning camera it mirrors the floodlights into a blinding white
+ * bar along each stand. Stands get a brushed, mostly matte steel instead.
+ */
+const standSteel = new WeakMap<THREE.Material, THREE.Material>();
+const matteStandSteel = (material: THREE.Material | THREE.Material[]) => {
+  if (Array.isArray(material) || !(material instanceof THREE.MeshStandardMaterial)) return material;
+  if (material.name !== "ArenaSteel") return material;
+  const cached = standSteel.get(material);
+  if (cached !== undefined) return cached;
+  const matte = material.clone();
+  matte.metalness = 0.35;
+  matte.roughness = 0.85;
+  standSteel.set(material, matte);
+  return matte;
+};
+
 /** Collects one instanced batch per (prop, mesh primitive). */
 const instanceProps = (
   library: ModelLibrary,
@@ -38,7 +56,8 @@ const instanceProps = (
     template.updateMatrixWorld(true);
     template.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-      const mesh = new THREE.InstancedMesh(child.geometry, child.material, matrices.length);
+      const material = prop === "Grandstand" ? matteStandSteel(child.material) : child.material;
+      const mesh = new THREE.InstancedMesh(child.geometry, material, matrices.length);
       const local = child.matrixWorld;
       matrices.forEach((matrix, index) =>
         mesh.setMatrixAt(index, new THREE.Matrix4().multiplyMatrices(matrix, local)),
