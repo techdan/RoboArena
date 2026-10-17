@@ -72,3 +72,27 @@ export const preferredPlannerView = (): PlannerView => {
 };
 
 export const rememberPlannerView = (view: PlannerView): void => write(PLANNER_VIEW_KEY, view);
+
+/**
+ * Full adds ambient occlusion, bloom, MSAA, sharp shadows and a high-DPI
+ * canvas; Light drops them so integrated GPUs keep the board responsive.
+ */
+export type GraphicsQuality = "full" | "light";
+
+const GRAPHICS_QUALITY_KEY = "roboarena.graphicsQuality";
+
+/** Integrated and software GPUs that struggle with the full post-processing stack. */
+const LIGHT_GPU = /intel|swiftshader|llvmpipe|software|basic render|mali|adreno|powervr/i;
+
+/** Default for a GPU with no remembered choice: Light on integrated or software GPUs. */
+export const graphicsQualityFor = (gpu: string | null): GraphicsQuality =>
+  gpu !== null && LIGHT_GPU.test(gpu) ? "light" : "full";
+
+/** A remembered choice wins; otherwise the default for this GPU. */
+export const preferredGraphicsQuality = (gpu: string | null): GraphicsQuality => {
+  const stored = read(GRAPHICS_QUALITY_KEY);
+  return stored === "full" || stored === "light" ? stored : graphicsQualityFor(gpu);
+};
+
+export const rememberGraphicsQuality = (quality: GraphicsQuality): void =>
+  write(GRAPHICS_QUALITY_KEY, quality);
