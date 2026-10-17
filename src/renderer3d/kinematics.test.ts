@@ -5,6 +5,7 @@ import {
   hash01,
   headingYaw,
   hopArc,
+  pickStepGroup,
   solveLeg,
   Spring,
   tileCenter,
@@ -90,5 +91,17 @@ describe("gait and motion helpers", () => {
     expect(hash01("robot-a")).not.toBe(hash01("robot-b"));
     expect(hash01("x", 3)).toBeGreaterThanOrEqual(0);
     expect(hash01("x", 3)).toBeLessThan(1);
+  });
+});
+
+describe("step group selection", () => {
+  it("lifts the group that has fallen furthest behind", () => {
+    expect(pickStepGroup([0.5, 0.9], [0, 1], 0.12)).toBe(1);
+    expect(pickStepGroup([0.9, 0.5], [0, 1], 0.12)).toBe(0);
+    expect(pickStepGroup([0.05, 0.1], [0, 1], 0.12)).toBeNull();
+  });
+
+  it("lets only the group already mid-step lift more feet", () => {
+    expect(pickStepGroup([null, 2, 2, 0.5], [0, 1, 1, 0], 0.12)).toBe(0);
   });
 });
