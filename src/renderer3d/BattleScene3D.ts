@@ -205,9 +205,23 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
   };
 };
 
-/** Art upgrade: robots at true scale against taller cover, with dimmer glow. */
-const ART_ROBOT_SCALE = 1.0;
+/** Art upgrade: robots against taller cover, with dimmer glow. Size is still
+ * being chosen with the owner, so `?robotScale=` overrides it for comparison. */
+const ART_ROBOT_SCALE = 1.15;
 const ART_ROBOT_GLOW = 0.4;
+const artRobotScale = (): number => {
+  try {
+    const requested = Number(new URLSearchParams(window.location.search).get("robotScale"));
+    if (Number.isFinite(requested) && requested >= 0.8 && requested <= 1.5) return requested;
+  } catch {
+    // No URL: use the default.
+  }
+  return ART_ROBOT_SCALE;
+};
+/** Optic lenses and eyes are a few pixels tall; far above the bloom threshold
+ * they flare on frames that sample them and vanish on frames that miss them.
+ * Below the threshold they read as steady coloured slits. */
+const ART_OPTIC_EMISSION = 0.9;
 
 /** Art upgrade: mirror-like robot steel catches every floodlight as glare;
  * a satin finish keeps form shading without hot specular flashes. */
@@ -227,6 +241,8 @@ const satinRobotMetal = (library: ModelLibrary | null): void => {
               material.roughness = Math.max(material.roughness, 0.5);
             if (material.name === "TeamPaint")
               material.roughness = Math.max(material.roughness, 0.5);
+            if (material.name === "Optic")
+              material.emissiveIntensity = Math.min(material.emissiveIntensity, ART_OPTIC_EMISSION);
           }
         });
 };
@@ -685,7 +701,7 @@ export class BattleScene3D {
         onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
       },
       this.art ? this.theme.robotGlow * ART_ROBOT_GLOW : this.theme.robotGlow,
-      this.art ? ART_ROBOT_SCALE : undefined,
+      this.art ? artRobotScale() : undefined,
     );
     this.rigs.set(id, rig);
     this.scene.add(rig.root);

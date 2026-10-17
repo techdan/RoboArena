@@ -40,9 +40,9 @@ const matteStandSteel = (material: THREE.Material | THREE.Material[]) => {
 };
 
 /**
- * Art upgrade: the stands are window dressing. Every stand material fades to a
- * dark, matte near-silhouette and the LED ribbons, seat strips and canopy
- * lamps go out, so nothing at the board's edge glows or draws the eye.
+ * Art upgrade: the stands are window dressing. The crowd stays recognisable
+ * but dim, the structure recedes, the canopy lamps glow faintly over the seats
+ * and the LED ribbons and seat strips go out, so the edge never shimmers.
  */
 const quietStands = new WeakMap<THREE.Material, THREE.Material>();
 const quietStand = (material: THREE.Material | THREE.Material[]) => {
@@ -50,8 +50,10 @@ const quietStand = (material: THREE.Material | THREE.Material[]) => {
   const cached = quietStands.get(material);
   if (cached !== undefined) return cached;
   const quiet = material.clone();
-  quiet.color.multiplyScalar(0.09);
-  quiet.emissiveIntensity = 0;
+  const name = material.name;
+  const crowd = name.startsWith("Crowd") || name.startsWith("Banner");
+  quiet.color.multiplyScalar(crowd ? 0.5 : 0.28);
+  quiet.emissiveIntensity = name === "CanopyLight" ? material.emissiveIntensity * 0.2 : 0;
   quiet.metalness = 0;
   quiet.roughness = 1;
   quiet.onBeforeCompile = () => undefined;

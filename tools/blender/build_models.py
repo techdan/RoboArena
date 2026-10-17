@@ -315,7 +315,6 @@ def build_robot(kind: str, family: str = "mixed") -> None:
             box("h_strip", (0.012, 0.18, 0.012), (0, -0.05, 0.095), m["glow"], bevel=0),
             box("h_pack", (0.13, 0.08, 0.08), (0, 0.27, 0.0), m["metal"], bevel=0.02),
             cyl("h_ant", 0.006, 0.28, (0.1, 0.28, 0.17), m["steel"], verts=6),
-            sphere("h_ant_tip", 0.014, (0.1, 0.28, 0.31), m["optic"]),
             box("h_stripe", (0.05, 0.2, 0.005), (0.09, -0.02, 0.093), m["hazard"], bevel=0.002),
             box("h_side_l", (0.012, 0.16, 0.05), (0.205, -0.02, -0.02), m["metal"], bevel=0.004),
             box("h_side_r", (0.012, 0.16, 0.05), (-0.205, -0.02, -0.02), m["metal"], bevel=0.004),
@@ -444,7 +443,6 @@ def build_robot(kind: str, family: str = "mixed") -> None:
             *bolts("h_bolt", m, [(0.2, -0.22, 0.09), (-0.2, -0.22, 0.09), (0.2, 0.22, 0.09),
                                  (-0.2, 0.22, 0.09)], radius=0.01),
             cyl("h_ant", 0.006, 0.22, (-0.17, 0.24, 0.2), m["steel"], verts=6),
-            sphere("h_ant_tip", 0.013, (-0.17, 0.24, 0.31), m["optic"]),
         ]
         hips = [(0.21, -0.17), (-0.21, -0.17), (0.21, 0.17), (-0.21, 0.17)]
         turret = [
