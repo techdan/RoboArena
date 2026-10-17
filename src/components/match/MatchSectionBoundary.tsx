@@ -39,25 +39,35 @@ export class MatchSectionBoundary extends Component<
     if (this.state.error === null) return this.props.children;
     const label = this.props.section === "planner" ? "planner" : "turn movie";
     return (
-      <section className="match-recovery-panel" role="alert">
-        <TriangleAlert aria-hidden="true" />
-        <p className="eyebrow">{label} recovery</p>
-        <h1>The {label} stopped unexpectedly.</h1>
-        <p>
-          Your canonical room state remains on the room service. Reload it to recover this section;
-          planner recovery also clears the local draft that may have caused the failure.
-        </p>
-        <button
-          type="button"
-          className="primary-action"
-          onClick={() => {
-            this.setState({ error: null });
-            this.props.onRecover();
-          }}
-        >
-          <RefreshCw size={16} aria-hidden="true" /> Recover from room state
-        </button>
-      </section>
+      <div className="site-center">
+        <section className="site-panel site-message" role="alert">
+          <TriangleAlert className="site-message-icon" aria-hidden="true" />
+          <p className="site-label" data-tone="rail">
+            Something went wrong
+          </p>
+          <h1 className="site-display site-message-title">The {label} stopped unexpectedly</h1>
+          <p>
+            Your match is safe on the server. Reload this section to carry on.
+            {this.props.section === "planner"
+              ? " This also clears the local draft that may have caused the problem."
+              : ""}
+          </p>
+          <div className="site-confirm-actions">
+            <button
+              type="button"
+              className="site-button"
+              data-variant="go"
+              data-size="lg"
+              onClick={() => {
+                this.setState({ error: null });
+                this.props.onRecover();
+              }}
+            >
+              <RefreshCw size={16} aria-hidden="true" /> Reload the {label}
+            </button>
+          </div>
+        </section>
+      </div>
     );
   }
 }

@@ -1,48 +1,40 @@
-import { Check, Clock3 } from "lucide-react";
 import type { MatchState } from "../../engine/types";
 
+/**
+ * One status light per team for the current turn. Only locked / planning is
+ * shared; orders stay private.
+ */
 export function ReadyPanel({
   match,
   lockedPlayerIds,
   requiredPlayerIds,
+  selfPlayerId,
 }: {
   readonly match: MatchState;
   readonly lockedPlayerIds: readonly string[];
   readonly requiredPlayerIds: readonly string[];
+  readonly selfPlayerId: string;
 }) {
   const locked = new Set(lockedPlayerIds);
   const required = new Set(requiredPlayerIds);
   return (
-    <section className="match-panel">
-      <p className="eyebrow">Turn {match.turnNumber} readiness</p>
-      <h2>Waiting for {requiredPlayerIds.filter((id) => !locked.has(id)).length}</h2>
-      <ul className="ready-list">
-        {match.teams.map((team) => (
-          <li key={team.id}>
-            <span
-              className="team-color-dot"
-              style={{ backgroundColor: team.color }}
-              aria-hidden="true"
-            />
-            <span>{team.name}</span>
-            <span data-ready={!required.has(team.id) || locked.has(team.id)}>
-              {!required.has(team.id) || locked.has(team.id) ? (
-                <Check size={14} aria-hidden="true" />
-              ) : (
-                <Clock3 size={14} aria-hidden="true" />
-              )}
-              {!required.has(team.id)
-                ? "Not required"
-                : locked.has(team.id)
-                  ? "Locked"
-                  : "Planning"}
+    <ul className="site-lights" aria-label={`Turn ${match.turnNumber} readiness`}>
+      {match.teams.map((team) => {
+        const state = !required.has(team.id) ? "out" : locked.has(team.id) ? "locked" : "planning";
+        return (
+          <li key={team.id} className="site-light" data-team={team.color} data-state={state}>
+            <span className="site-light-lamp" aria-hidden="true" />
+            <strong>
+              <span className="site-lamp" aria-hidden="true" />
+              {team.name}
+            </strong>
+            <span>
+              {state === "out" ? "Not required" : state === "locked" ? "Locked" : "Planning…"}
+              {team.id === selfPlayerId ? " · you" : ""}
             </span>
           </li>
-        ))}
-      </ul>
-      <p className="match-privacy-note">
-        Only ready/not-ready status is shared. Orders remain private.
-      </p>
-    </section>
+        );
+      })}
+    </ul>
   );
 }

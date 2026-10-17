@@ -1,48 +1,56 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
-import { matchFlowCopy } from "../../lib/presentation/matchFlow";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import type { MatchSnapshotMessage } from "../../lib/net/protocol";
 import { FieldGuideButton } from "../help/HelpProvider";
-import { RoomStatus } from "./RoomStatus";
 
+/** Slim match bar: who you are, which room, which turn, and that the server holds the state. */
 export function MatchFlowHeader({
   roomCode,
   matchId,
   team,
   turnNumber,
   status,
-  spectating = false,
+  children,
 }: {
   readonly roomCode: string;
   readonly matchId: string;
   readonly team: { readonly name: string; readonly color: string };
   readonly turnNumber: number;
   readonly status: MatchSnapshotMessage["status"];
-  readonly spectating?: boolean;
+  /** Extra controls for this phase, such as the rewatch reel. */
+  readonly children?: ReactNode;
 }) {
-  const copy = matchFlowCopy(status, turnNumber);
+  const turn = String(turnNumber).padStart(2, "0");
   return (
-    <header className="match-flow-header">
-      <div className="match-flow-context">
-        <p className="eyebrow">Room {roomCode}</p>
-        <div className="match-flow-identity">
-          <span className={`team-swatch team-swatch-${team.color}`} aria-hidden="true" />
-          <strong>{team.name}</strong>
-          <span>Team</span>
-          <span aria-hidden="true">·</span>
-          <span>{copy.eyebrow}</span>
-          <span aria-hidden="true">·</span>
-          <span className="match-id" title={matchId}>
-            Match {matchId}
-          </span>
-        </div>
-      </div>
-      <div className="match-flow-saved-state">
-        <ShieldCheck size={15} aria-hidden="true" /> Room state saved
-      </div>
+    <header className="site-matchbar">
+      <Link href="/" className="site-wordmark" aria-label="RoboArena home">
+        <span className="site-wordmark-glyph" aria-hidden="true">
+          RA
+        </span>
+      </Link>
+      <span className="site-matchbar-team" data-team={team.color}>
+        <span className="site-lamp" aria-hidden="true" />
+        {team.name}
+      </span>
+      <span className="site-matchbar-room">Room {roomCode}</span>
+      {status === "finished" ? null : (
+        <span className="site-turnplate" role="img" aria-label={`Turn ${turnNumber}`}>
+          <span aria-hidden="true">T</span>
+          {turn.split("").map((digit, index) => (
+            <span key={index} aria-hidden="true">
+              {digit}
+            </span>
+          ))}
+        </span>
+      )}
+      {children}
+      <span className="site-matchbar-saved" title={`Match ${matchId}`}>
+        <ShieldCheck size={14} aria-hidden="true" /> Room state saved
+      </span>
       <FieldGuideButton />
-      <RoomStatus status={status} turnNumber={turnNumber} spectating={spectating} />
     </header>
   );
 }
