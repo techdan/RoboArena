@@ -24,7 +24,7 @@
     "dev:rooms": "wrangler dev -c worker/wrangler.jsonc",
     "deploy:rooms": "wrangler deploy -c worker/wrangler.jsonc",
     "preview:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "deploy": "node scripts/deploy-site.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.0",
