@@ -307,7 +307,7 @@ export class BattleScene3D {
   private cameraMode: CameraMode = "director";
   /** Concept preview of the arena art upgrade (`?art=next`). */
   private readonly art = artPreviewEnabled();
-  private readonly tileRoom = urlNumber("tile", ART_TILE_ROOM, 1, 2);
+  private readonly tileRoom = urlNumber("tile", ART_TILE_ROOM, 1, 4);
   private readonly robotSize = urlNumber("robotScale", ART_ROBOT_SIZE, 0.5, 2);
   private readonly focuses: Focus[] = [];
   private readonly cameraGoal = new THREE.Vector3();
