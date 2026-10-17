@@ -47,10 +47,18 @@ const write = (key: string, value: string): void => {
   }
 };
 
+/**
+ * Whether players may pick the 2D planner board. Hidden for now: the 2D board
+ * stays in the codebase and still serves browsers without WebGL2 and the 3D
+ * error fallback, but the camera bar offers no 2D switch and an earlier
+ * remembered "2d" choice is ignored so nobody is stranded without a way back.
+ */
+export const PLANNER_2D_CHOICE_ENABLED = false;
+
 /** The planner board follows the same rule as the movie: 3D where it can run. */
 export const preferredPlannerBoard = (): MovieRendererKind => {
   const stored = read(PLANNER_BOARD_KEY);
-  if (stored === "2d") return "2d";
+  if (PLANNER_2D_CHOICE_ENABLED && stored === "2d") return "2d";
   return supportsWebGl2() ? "3d" : "2d";
 };
 

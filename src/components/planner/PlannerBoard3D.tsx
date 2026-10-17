@@ -12,6 +12,7 @@ import { buildMovieTimeline } from "../../renderer/animations";
 import type { BattleScene3D, PlannedRobotPose } from "../../renderer3d/BattleScene3D";
 import { headingYaw } from "../../renderer3d/kinematics";
 import {
+  PLANNER_2D_CHOICE_ENABLED,
   preferredPlannerView,
   rememberPlannerView,
   type PlannerView,
@@ -412,9 +413,11 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
           >
             Fit
           </button>
-          <button type="button" className="cursor-pointer" onClick={onUse2D}>
-            2D
-          </button>
+          {PLANNER_2D_CHOICE_ENABLED ? (
+            <button type="button" className="cursor-pointer" onClick={onUse2D}>
+              2D
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
