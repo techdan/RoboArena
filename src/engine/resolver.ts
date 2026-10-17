@@ -22,6 +22,7 @@ import {
   EXPLOSIVE_SCAN_MIN_DISTANCE,
   ORIGINAL_FORMATIONS_RULES_REVISION,
   ORIGINAL_TIMING_RULES_REVISION,
+  ORIGINAL_DEPLOY_RULES_REVISION,
   MOVE_TILE_SWITCH_TICKS,
   MOVE_DOUBLE_DESTINATION_SWITCH_TICKS,
   PLACE_BOMB_COST_TICKS,
@@ -416,6 +417,8 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
   const formationRules = revision >= ORIGINAL_FORMATIONS_RULES_REVISION;
   /** Revision 4: the original combat timing (mid-move tile switch and the rest). */
   const timingRules = revision >= ORIGINAL_TIMING_RULES_REVISION;
+  /** Revision 5: a deploying robot lands on its tile when Deploy starts. */
+  const deployAtStart = revision >= ORIGINAL_DEPLOY_RULES_REVISION;
   const showAllEnemies = formationRules && state.config.showEnemyPositions === true;
   const isStepTick = (tick: number): boolean => tick % SIMULATION_STEP_TICKS === 0;
   const rng = createRng(input.seed);
@@ -642,6 +645,11 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         );
       }
       completesAt = tick + (commandDurationTicks(command, robot) ?? 0);
+      if (deployAtStart) {
+        // seg6:0x2ECF places the robot once, at dispatch; the record then runs out its cost.
+        robots.set(robot.id, { ...robot, position: command.to });
+        emit(tick, { kind: "deployed", robotId: robot.id, to: command.to });
+      }
     } else if (command.kind === "set-posture") {
       if (!POSTURES.includes(command.posture)) {
         return malformed("illegal-command", "Posture value is invalid.", robot.id, commandIndex);
@@ -1939,8 +1947,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
     }
     if (command.kind === "move" || command.kind === "deploy") timingMoved.add(robot.id);
     if (command.kind === "deploy") {
-      robots.set(robot.id, { ...robot, position: command.to });
-      emit(tick, { kind: "deployed", robotId: robot.id, to: command.to });
+      if (!deployAtStart) {
+        robots.set(robot.id, { ...robot, position: command.to });
+        emit(tick, { kind: "deployed", robotId: robot.id, to: command.to });
+      }
       finishActive(cursor);
       return null;
     }
@@ -2294,8 +2304,10 @@ export const resolveTurn = (input: ResolveTurnInput): ResolveTurnResult => {
         if (!robot || !cursor || robot.hp <= 0) continue;
 
         if (active.command.kind === "deploy") {
-          robots.set(robot.id, { ...robot, position: active.command.to });
-          emit(tick, { kind: "deployed", robotId: robot.id, to: active.command.to });
+          if (!deployAtStart) {
+            robots.set(robot.id, { ...robot, position: active.command.to });
+            emit(tick, { kind: "deployed", robotId: robot.id, to: active.command.to });
+          }
           finishActive(cursor);
           continue;
         }

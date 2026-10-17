@@ -802,6 +802,41 @@ export class Effects3D {
     });
   }
 
+  /**
+   * Deploy beacon: a team-coloured landing ring and a light column that the
+   * robot falls through over `seconds`.
+   */
+  deployBeam(at: THREE.Vector3, color: THREE.ColorRepresentation, seconds: number): void {
+    const ground = at.clone().setY(0.03);
+    this.shockwave(ground, 0.7, seconds, color, true);
+    this.flash(at.clone().setY(1.2), color, 8, 3, 5);
+    for (let i = 0; i < 16; i += 1) {
+      const y = 0.2 + (i / 16) * 5;
+      this.glow.spawn({
+        position: {
+          x: at.x + (Math.random() - 0.5) * 0.1,
+          y,
+          z: at.z + (Math.random() - 0.5) * 0.1,
+        },
+        velocity: { x: 0, y: -3 - Math.random() * 2, z: 0 },
+        life: seconds * (0.6 + Math.random() * 0.4),
+        size: [0.22, 0.06],
+        color: [0xffffff, color],
+        alpha: [0.55, 0],
+        stretch: 0.08,
+        delay: Math.random() * seconds * 0.3,
+      });
+    }
+  }
+
+  /** Landing burst under a robot that just deployed. */
+  deployLanding(at: THREE.Vector3, color: THREE.ColorRepresentation): void {
+    this.dust(at, 1.4);
+    this.shockwave(at.clone().setY(0.03), 1.1, 0.5, color, true);
+    this.flash(at.clone().setY(0.4), color, 10, 9, 4);
+    this.shake = Math.min(1, this.shake + 0.12);
+  }
+
   /** Ghost marker where an enemy was last seen. */
   ghostMarker(at: THREE.Vector3): void {
     this.shockwave(at.clone().setY(0.03), 0.45, 0.9, 0x9a9aff, true);

@@ -118,6 +118,8 @@ export class RobotRig {
   private readonly shoveZ = new Spring(0, 160, 14);
   private readonly recoil = new Spring(0, 260, 16);
   private airborne = 0;
+  /** Deploy drop from the sky (see `dropIn`). */
+  private drop: { start: number; duration: number; height: number } | null = null;
   private gaitClock = 0;
   private barrelSpin = 0;
   private barrelSpinVelocity = 0;
@@ -265,10 +267,18 @@ export class RobotRig {
     const centre = tileCenter(tile);
     this.position.set(centre.x, centre.z);
     this.segment = null;
+    this.drop = null;
     this.velocity.set(0, 0);
     this.airborne = 0;
     this.applyRootTransform();
     this.plantAll(now);
+  }
+
+  /** Deploys onto a tile by falling from the sky, legs tucked, and landing hard. */
+  dropIn(tile: TileCoord, durationSeconds: number, now: number, height = 4.5): void {
+    this.place(tile, now);
+    this.drop = { start: now, duration: Math.max(0.08, durationSeconds), height };
+    this.airborne = 1;
   }
 
   /** Starts walking (single) or leaping (double straight) to a tile. */
@@ -520,6 +530,21 @@ export class RobotRig {
         }
       }
     }
+    if (this.drop !== null) {
+      const u = Math.min(1, (now - this.drop.start) / this.drop.duration);
+      // Free fall: height drops with the square of elapsed time.
+      hopLift = this.drop.height * (1 - u * u);
+      if (u >= 1) {
+        this.drop = null;
+        this.airborne = 0;
+        hopLift = 0;
+        this.height.kick(-4.5);
+        this.pitch.kick(1.6);
+        this.applyRootTransform();
+        this.plantAll(now);
+        this.events.onFootfall?.(this.groundPosition(tmpV3), true);
+      }
+    }
     if (dt > 0) {
       const vx = (this.position.x - previous.x) / dt;
       const vz = (this.position.y - previous.y) / dt;
@@ -615,7 +640,8 @@ export class RobotRig {
         // Tuck legs under the hull mid-leap.
         this.restWorld(leg, leg.planted, 0);
         leg.planted.lerp(tmpV3b.set(this.position.x, 0, this.position.y), 0.3);
-        leg.planted.y = hopLift * 0.6 + 0.06;
+        // A deploy drop braces its legs straight down for the landing.
+        leg.planted.y = this.drop !== null ? hopLift - 0.08 : hopLift * 0.6 + 0.06;
         leg.stepping = false;
         return;
       }

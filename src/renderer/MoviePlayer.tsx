@@ -284,6 +284,11 @@ export function MoviePlayer({
     return () => window.clearTimeout(timeout);
   }, [compressIdle, currentIndex, fps, playing, rendererStatus, speed, timeline.ticks]);
 
+  // Starting playback on the first snapshot plays its beat (the deploy drop).
+  useEffect(() => {
+    if (playing && currentIndexRef.current === 0) sceneRef.current?.playOpening(speedRef.current);
+  }, [playing]);
+
   useEffect(
     () => renderSnapshotRef.current(currentIndex, !reducedMotion),
     [currentIndex, reducedMotion],

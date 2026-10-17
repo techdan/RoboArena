@@ -64,7 +64,10 @@ describe("planner segments", () => {
     orders = appendSegment(orders, robot.id, { kind: "set-posture", posture: "ducking" });
     orders = appendSegment(orders, robot.id, { kind: "set-scan-direction", heading: "S" });
     const segments = timelineForRobot(orders, robot.id).segments;
-    expect(projectRobotAtTick(robot, segments, 119).position).toBe("dock");
+    // Deploy lands the robot as it starts; the next command still waits 120 ticks.
+    expect(projectRobotAtTick(robot, segments, 0).position).toEqual({ x: 1, y: 1 });
+    expect(projectRobotAtTick(robot, segments, 119).position).toEqual({ x: 1, y: 1 });
+    expect(projectRobotAtTick(robot, segments, 119).tick).toBe(0);
     expect(projectRobotAtTick(robot, segments, 120).position).toEqual({ x: 1, y: 1 });
     expect(projectRobotAtTick(robot, segments, 130).posture).toBe("ducking");
     expect(projectRobotAtTick(robot, segments, 135).scanHeading).not.toBe("S");

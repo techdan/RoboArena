@@ -177,9 +177,10 @@ const assertConfig = (value: unknown, path: string): void => {
     value.rulesRevision !== undefined &&
     value.rulesRevision !== 2 &&
     value.rulesRevision !== 3 &&
-    value.rulesRevision !== 4
+    value.rulesRevision !== 4 &&
+    value.rulesRevision !== 5
   ) {
-    throw new Error(`${path}.rulesRevision must be 2, 3 or 4 when present.`);
+    throw new Error(`${path}.rulesRevision must be 2, 3, 4 or 5 when present.`);
   }
   for (const flag of ["showEnemyPositions", "zapArmed"] as const) {
     if (value[flag] !== undefined && value[flag] !== true) {
