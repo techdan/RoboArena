@@ -278,9 +278,22 @@ function paint(
     ctx.fill(caps);
     ctx.fillStyle = OUTER_CAP;
     ctx.fill(outerCaps);
-    ctx.strokeStyle = "rgba(255,255,255,0.14)";
-    ctx.lineWidth = 1;
-    ctx.stroke(caps);
+    // Catch the light only on exposed north edges, so a multi-tile building
+    // reads as one roof instead of a grid of squares.
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.lineWidth = Math.max(1, cell * 0.06);
+    ctx.beginPath();
+    for (let y = 0; y < arena.height; y += 1) {
+      for (let x = 0; x < arena.width; x += 1) {
+        if (blockGroup(terrainAt(arena, x, y)) !== group) continue;
+        if (blockGroup(terrainAt(arena, x, y - 1)) === group) continue;
+        const [roundLeft, roundRight] = outsideCorners(arena, x, y);
+        const inset = cell * 0.22;
+        ctx.moveTo(x * cell + (roundLeft ? inset : 0), y * cell + ctx.lineWidth / 2);
+        ctx.lineTo((x + 1) * cell - (roundRight ? inset : 0), y * cell + ctx.lineWidth / 2);
+      }
+    }
+    ctx.stroke();
   }
 
   // Floodlight pools and a vignette tie the board to the Coliseum lighting.
@@ -444,8 +457,7 @@ export function ArenaSchematic({
     >
       <canvas
         ref={canvasRef}
-        role="img"
-        aria-label={label}
+        {...(label === "" ? { "aria-hidden": true } : { role: "img", "aria-label": label })}
         style={{ cursor: interactive && hovered !== null ? "pointer" : "default" }}
         onPointerMove={interactive ? (event) => setHovered(cornerFromPointer(event)) : undefined}
         onPointerLeave={interactive ? () => setHovered(null) : undefined}

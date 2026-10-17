@@ -4,17 +4,18 @@ Concepts approved by Manheim 2026-10-17 (artifact JCQ9rdf4htFKCkZJtAP7Vp) with
 two corrections: lobby copy must respect the async flow (players join any time;
 the host starts once everyone seated is ready), and the map schematic must look
 less blocky than a terrain-lab grid. Out of scope: 3D planner, the movie itself,
-Boot Camp, first-turn coach, in-arena 3D graphics. Shipped as four PRs.
+Boot Camp, first-turn coach, in-arena 3D graphics. Manheim chose one PR (#22)
+with one commit per page group instead of four PRs; /preview is named "Arena Lab".
 
 - [x] PR 1 — Foundation + Home: site tokens/fonts (`site.css`, `layout.tsx`),
       per-route tab titles, `SiteHeader`, `RoomCode`, `CodeInput`, `TeamColorPicker`,
       static Coliseum hero + `scripts/capture-site-hero.mjs`, recent-room summary
       helper + tests, `HomeSetup` rebuild
-- [ ] PR 2 — Lobby: `RoomSetup`, `TeamRow`, claim seat, rejoin loader, shared
+- [x] PR 2 — Lobby: `RoomSetup`, `TeamRow`, claim seat, rejoin loader, shared
       illustrated `ArenaSchematic`, fixed ready dock with async copy
-- [ ] PR 3 — Match shell: `MatchGate` wait/movie/results/denied, `FinalCeremony`,
+- [x] PR 3 — Match shell: `MatchGate` wait/movie/results/denied, `FinalCeremony`,
       reset-data confirmation, section boundary panel, dynamic tab titles
-- [ ] PR 4 — Atlas + extras: `/preview` → Arena atlas, dev-page shell for
+- [x] PR 4 — Atlas + extras: `/preview` → Arena atlas, dev-page shell for
       `/movie/*`, `/graphics-demo`, `/planner-concept`, squeezed sidebar fix
 
 # Phase 11.6 — 3-/4-player FFA hardening + corner selection

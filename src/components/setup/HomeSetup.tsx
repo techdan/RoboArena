@@ -281,7 +281,7 @@ export function HomeSetup() {
           <Film size={14} aria-hidden="true" /> Replay demo
         </Link>
         <Link href="/preview">
-          <MapIcon size={14} aria-hidden="true" /> Terrain lab
+          <MapIcon size={14} aria-hidden="true" /> Arena Lab
         </Link>
         <GraphicsQualityControl />
       </footer>
