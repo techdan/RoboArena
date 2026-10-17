@@ -39,11 +39,33 @@ const matteStandSteel = (material: THREE.Material | THREE.Material[]) => {
   return matte;
 };
 
+/**
+ * Art upgrade: the stands are window dressing. Every stand material fades to a
+ * dark, matte near-silhouette and the LED ribbons, seat strips and canopy
+ * lamps go out, so nothing at the board's edge glows or draws the eye.
+ */
+const quietStands = new WeakMap<THREE.Material, THREE.Material>();
+const quietStand = (material: THREE.Material | THREE.Material[]) => {
+  if (Array.isArray(material) || !(material instanceof THREE.MeshStandardMaterial)) return material;
+  const cached = quietStands.get(material);
+  if (cached !== undefined) return cached;
+  const quiet = material.clone();
+  quiet.color.multiplyScalar(0.09);
+  quiet.emissiveIntensity = 0;
+  quiet.metalness = 0;
+  quiet.roughness = 1;
+  quiet.onBeforeCompile = () => undefined;
+  quiet.customProgramCacheKey = () => "quiet-stand";
+  quietStands.set(material, quiet);
+  return quiet;
+};
+
 /** Collects one instanced batch per (prop, mesh primitive). */
 const instanceProps = (
   library: ModelLibrary,
   placements: readonly Placement[],
   parent: THREE.Object3D,
+  art = false,
 ): void => {
   const byProp = new Map<PropName, THREE.Matrix4[]>();
   for (const placement of placements) {
@@ -57,7 +79,12 @@ const instanceProps = (
     template.updateMatrixWorld(true);
     template.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-      const material = prop === "Grandstand" ? matteStandSteel(child.material) : child.material;
+      const material =
+        prop !== "Grandstand"
+          ? child.material
+          : art
+            ? quietStand(child.material)
+            : matteStandSteel(child.material);
       const mesh = new THREE.InstancedMesh(child.geometry, material, matrices.length);
       const local = child.matrixWorld;
       matrices.forEach((matrix, index) =>
@@ -330,7 +357,12 @@ export const buildArena = (
       switch (terrain) {
         case "wall":
           placements.push({
-            prop: library.props.has("WallB") && hash01(key, 13) > 0.5 ? "WallB" : "Wall",
+            prop:
+              art && library.props.has("WallTall")
+                ? "WallTall"
+                : library.props.has("WallB") && hash01(key, 13) > 0.5
+                  ? "WallB"
+                  : "Wall",
             matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }),
           });
           break;
@@ -431,7 +463,7 @@ export const buildArena = (
           weatherMaterial(child.material);
       });
   }
-  instanceProps(library, placements, group);
+  instanceProps(library, placements, group, art);
   if (bushes.length > 0) {
     const foliage = buildFoliage(bushes, ["#5a9e36", "#6cb03e", "#82c24a", "#94cc58", "#4a8a2e"]);
     group.add(foliage.mesh);

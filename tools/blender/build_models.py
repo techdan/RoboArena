@@ -662,29 +662,38 @@ def build_arena() -> None:
     objects: list[bpy.types.Object] = []
     import random
 
-    # Wall: a ruined brick-and-concrete block with exposed rebar.
-    rnd = random.Random(7)
-    parts = [box("w_base", (0.5, 0.5, 0.08), (0, 0, 0.08), m["concrete_dark"], bevel=0.02)]
-    for row in range(4):
-        offset = 0.125 if row % 2 else 0.0
-        for col in range(4):
-            x = -0.375 + col * 0.25 + offset
-            if x > 0.42:
-                continue
-            h = 0.16 + row * 0.15
-            if row == 3 and rnd.random() < 0.35:
-                continue
-            parts.append(box(f"w_b{row}{col}", (0.118, 0.47, 0.068), (x, 0, h), m["brick"],
-                             bevel=0.012, rot=(0, 0, rnd.uniform(-0.02, 0.02))))
-    # Broken capstones: two weathered slabs with a gap and a tilted, chipped end.
-    parts.append(box("w_cap0", (0.27, 0.5, 0.04), (-0.23, 0, 0.7), m["capstone"], bevel=0.018))
-    parts.append(box("w_cap1", (0.19, 0.48, 0.035), (0.29, -0.01, 0.695), m["capstone"],
-                     bevel=0.018, rot=(0.05, -0.06, 0.03)))
-    for i in range(3):
-        parts.append(box(f"w_chip{i}", (0.035, 0.03, 0.02),
-                         (rnd.uniform(-0.4, 0.4), rnd.uniform(-0.4, 0.4), 0.755),
-                         m["capstone"], bevel=0.008, rot=(0, 0, rnd.uniform(0, 3))))
-    objects.append(join("Wall", parts))
+    # Wall: a ruined brick-and-concrete block with exposed rebar. WallTall adds
+    # courses so full cover stands above every robot's head (art upgrade).
+    def coliseum_wall(name: str, rows: int, segments: int = 2) -> None:
+        rnd = random.Random(7)
+        top = 0.16 + (rows - 1) * 0.15 + 0.09
+        parts = [box("w_base", (0.5, 0.5, 0.08), (0, 0, 0.08), m["concrete_dark"], bevel=0.02)]
+        for row in range(rows):
+            offset = 0.125 if row % 2 else 0.0
+            for col in range(4):
+                x = -0.375 + col * 0.25 + offset
+                if x > 0.42:
+                    continue
+                h = 0.16 + row * 0.15
+                if row == rows - 1 and rnd.random() < 0.35:
+                    continue
+                parts.append(box(f"w_b{row}{col}", (0.118, 0.47, 0.068), (x, 0, h), m["brick"],
+                                 bevel=0.012, segments=segments,
+                                 rot=(0, 0, rnd.uniform(-0.02, 0.02))))
+        # Broken capstones: two weathered slabs with a gap and a tilted, chipped end.
+        parts.append(box("w_cap0", (0.27, 0.5, 0.04), (-0.23, 0, top), m["capstone"], bevel=0.018))
+        parts.append(box("w_cap1", (0.19, 0.48, 0.035), (0.29, -0.01, top - 0.005), m["capstone"],
+                         bevel=0.018, rot=(0.05, -0.06, 0.03)))
+        for i in range(3):
+            parts.append(box(f"w_chip{i}", (0.035, 0.03, 0.02),
+                             (rnd.uniform(-0.4, 0.4), rnd.uniform(-0.4, 0.4), top + 0.055),
+                             m["capstone"], bevel=0.008, rot=(0, 0, rnd.uniform(0, 3))))
+        objects.append(join(name, parts))
+
+    coliseum_wall("Wall", 4)
+    # Single-chamfer bricks keep the taller wall under the short wall's triangle
+    # count; every wall is drawn three times (scene, shadow map, AO normals).
+    coliseum_wall("WallTall", 7, segments=1)
 
     # Low wall: a sandbag-topped concrete barrier, crouch-height.
     parts = [box("lw_base", (0.48, 0.3, 0.17), (0, 0, 0.17), m["concrete"], bevel=0.04,

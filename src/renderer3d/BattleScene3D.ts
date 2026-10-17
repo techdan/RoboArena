@@ -205,6 +205,32 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
   };
 };
 
+/** Art upgrade: robots at true scale against taller cover, with dimmer glow. */
+const ART_ROBOT_SCALE = 1.0;
+const ART_ROBOT_GLOW = 0.4;
+
+/** Art upgrade: mirror-like robot steel catches every floodlight as glare;
+ * a satin finish keeps form shading without hot specular flashes. */
+const satinRobotMetal = (library: ModelLibrary | null): void => {
+  const done = new Set<THREE.Material>();
+  for (const model of library?.robots.values() ?? [])
+    for (const part of Object.values(model))
+      if (part instanceof THREE.Object3D)
+        part.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          for (const material of Array.isArray(child.material)
+            ? child.material
+            : [child.material]) {
+            if (!(material instanceof THREE.MeshStandardMaterial) || done.has(material)) continue;
+            done.add(material);
+            if (material.name === "Steel" || material.name === "Gunmetal")
+              material.roughness = Math.max(material.roughness, 0.5);
+            if (material.name === "TeamPaint")
+              material.roughness = Math.max(material.roughness, 0.5);
+          }
+        });
+};
+
 /** Frame rate for pulsing route and target overlays while planning. */
 const PLANNING_AMBIENT_FPS = 20;
 
@@ -427,11 +453,12 @@ export class BattleScene3D {
     this.ao.blendIntensity = 0.9;
     this.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.5, thickness: 1, scale: 1 });
     this.composer.addPass(this.ao);
+    // Art upgrade: bloom only for genuine light sources, not sunlit highlights.
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(1, 1),
-      theme.bloom.strength,
+      this.art ? theme.bloom.strength * 0.7 : theme.bloom.strength,
       theme.bloom.radius,
-      theme.bloom.threshold,
+      this.art ? Math.max(theme.bloom.threshold, 0.96) : theme.bloom.threshold,
     );
     this.composer.addPass(this.bloom);
     const vignette = new ShaderPass(VignetteShader);
@@ -488,7 +515,9 @@ export class BattleScene3D {
     this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme, this.art);
     this.scene.add(this.arena.group);
     if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
-    this.addMotes();
+    // Art upgrade: no drifting motes; constant twinkle across the board distracts.
+    if (!this.art) this.addMotes();
+    if (this.art) satinRobotMetal(this.library);
     // Warm up the hover material too: first input must not compile its shader.
     this.resize();
     this.overlays.setCursor({ x: 0, y: 0 }, "#e8ffd0");
@@ -655,7 +684,8 @@ export class BattleScene3D {
         },
         onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
       },
-      this.theme.robotGlow,
+      this.art ? this.theme.robotGlow * ART_ROBOT_GLOW : this.theme.robotGlow,
+      this.art ? ART_ROBOT_SCALE : undefined,
     );
     this.rigs.set(id, rig);
     this.scene.add(rig.root);
@@ -1174,7 +1204,7 @@ export class BattleScene3D {
     for (const beam of this.beams) beam.visible = !on;
     if (this.motes !== null) this.motes.visible = !on;
     // Floodlight glare is drama for the movie; while planning it hides the board.
-    this.bloom.strength = this.theme.bloom.strength * (on ? 0.35 : 1);
+    this.bloom.strength = this.theme.bloom.strength * (this.art ? 0.7 : 1) * (on ? 0.35 : 1);
     // A narrow top-down lens sits much further out than the movie camera.
     const { width, height } = this.state.arena;
     this.controls.maxDistance = Math.max(width, height) * (on ? 4.5 : 2.2);
@@ -1394,7 +1424,8 @@ export class BattleScene3D {
       positions.needsUpdate = true;
     }
     for (const beam of this.beams) {
-      const opacity = 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      // Art upgrade: steady beams; a pulsing light reads as flicker.
+      const opacity = this.art ? 0.02 : 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
       const material = beam.material as THREE.MeshBasicMaterial | THREE.ShaderMaterial;
       if (material instanceof THREE.ShaderMaterial) material.uniforms["uOpacity"]!.value = opacity;
       else material.opacity = opacity;

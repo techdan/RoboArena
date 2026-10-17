@@ -144,6 +144,7 @@ export class RobotRig {
     teamColor: string,
     private readonly events: RigEvents = {},
     glowIntensity = 1.8,
+    private readonly scale = ROBOT_SCALE,
   ) {
     const materials = teamMaterials(teamColor, glowIntensity);
     this.disposeTeamMaterials = materials.dispose;
@@ -152,7 +153,7 @@ export class RobotRig {
     this.idlePhase = hash01(id) * Math.PI * 2;
     this.height = new Spring(model.hullHeight, 140, 13);
     this.root.name = `robot:${id}`;
-    this.root.scale.setScalar(ROBOT_SCALE);
+    this.root.scale.setScalar(scale);
 
     const hullPart = instantiatePart(model.hull, materials);
     this.hull.add(hullPart);
@@ -494,8 +495,8 @@ export class RobotRig {
     const spread = this.destroyedState ? 1.35 : POSTURE_SPREAD[this.posture];
     const cos = Math.cos(this.bodyYaw);
     const sin = Math.sin(this.bodyYaw);
-    const rx = leg.rest.x * spread * ROBOT_SCALE;
-    const rz = leg.rest.y * spread * ROBOT_SCALE;
+    const rx = leg.rest.x * spread * this.scale;
+    const rz = leg.rest.y * spread * this.scale;
     // rotation.y = θ maps local (x, z) to (x cos θ + z sin θ, -x sin θ + z cos θ).
     out.set(
       this.position.x + rx * cos + rz * sin + this.velocity.x * lookahead,
@@ -623,7 +624,7 @@ export class RobotRig {
     // previews, fast playback) quicken the stride until a foot cannot fall
     // further behind than the leg can stretch. Plan for the segment's peak pace,
     // not the lagging smoothed velocity.
-    const legSpan = (this.model.upperLength + this.model.lowerLength) * ROBOT_SCALE;
+    const legSpan = (this.model.upperLength + this.model.lowerLength) * this.scale;
     const bodySpeed =
       this.segment !== null && !this.segment.hop
         ? (this.segment.from.distanceTo(this.segment.to) / this.segment.duration) * STRIDE_PEAK
