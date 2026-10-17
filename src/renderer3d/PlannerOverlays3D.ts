@@ -257,9 +257,12 @@ export class PlannerOverlays3D {
         vertexShader: /* glsl */ `
           varying float vH;
           void main() { vH = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        // pow() is undefined for a negative base, and 1.0 - vH can land a hair
+        // below zero at the top rim on ANGLE/Direct3D. The resulting NaN
+        // makes the bloom pass black out the whole board, so clamp it.
         fragmentShader: /* glsl */ `
           uniform vec3 uColor; varying float vH;
-          void main() { gl_FragColor = vec4(uColor, pow(1.0 - vH, 2.2) * 0.28); }`,
+          void main() { gl_FragColor = vec4(uColor, pow(clamp(1.0 - vH, 0.0, 1.0), 2.2) * 0.28); }`,
       }),
     );
     column.position.set(c.x, 1.1, c.y);
