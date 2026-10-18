@@ -13,6 +13,7 @@ import { hash01 } from "./kinematics";
 import type { ModelLibrary, PropName } from "./models";
 import type { ArenaTheme, FloorPalette } from "./themes";
 import { buildFoliage, paintFloorDetail, weatherMaterial } from "./arenaArt";
+import { buildArtWalls } from "./arenaWalls";
 
 const FLOOR_PX = 64;
 
@@ -132,50 +133,6 @@ export interface ArtSizing {
 }
 /** Props were authored for robots at scale 1.15 on a 1-tile grid. */
 const AUTHORED_ROBOT_SCALE = 1.15;
-/** Tallest robot (missile titan) per unit of rig scale, measured in tiles. */
-const TALLEST_ROBOT_PER_SCALE = 1.046;
-/** "Wall" model top (capstones), tiles. */
-const WALL_MODEL_TOP = 0.72;
-const WALL_THICKNESS = 0.5;
-const PILLAR_SIZE = 0.6;
-
-/** Wall pieces for one tile: a thick bar along each run, or a pillar. */
-const artWallMatrices = (arena: Arena, x: number, y: number, height: number): THREE.Matrix4[] => {
-  const solid = (dx: number, dy: number) => {
-    const terrain = arena.tiles[y + dy]?.[x + dx]?.terrain;
-    // Low walls join too: a collapsed section meets the standing wall's end.
-    return terrain === "wall" || terrain === "outer-wall" || terrain === "low-wall";
-  };
-  const left = solid(-1, 0);
-  const right = solid(1, 0);
-  const near = solid(0, -1);
-  const far = solid(0, 1);
-  const half = WALL_THICKNESS / 2;
-  const pieces: THREE.Matrix4[] = [];
-  if (left || right) {
-    const x0 = left ? 0 : 0.5 - half;
-    const x1 = right ? 1 : 0.5 + half;
-    pieces.push(
-      tileMatrix(x + (x0 + x1) / 2, y + 0.5, 0, { x: x1 - x0, y: height, z: WALL_THICKNESS }),
-    );
-  }
-  if (near || far) {
-    const z0 = near ? 0 : 0.5 - half;
-    const z1 = far ? 1 : 0.5 + half;
-    // A quarter turn maps the model's local x (its run axis) onto world z.
-    pieces.push(
-      tileMatrix(x + 0.5, y + (z0 + z1) / 2, Math.PI / 2, {
-        x: z1 - z0,
-        y: height,
-        z: WALL_THICKNESS,
-      }),
-    );
-  }
-  if (pieces.length === 0)
-    pieces.push(tileMatrix(x + 0.5, y + 0.5, 0, { x: PILLAR_SIZE, y: height, z: PILLAR_SIZE }));
-  return pieces;
-};
-
 /** Paints the arena floor (colour map, plus an emissive map for glowing seams). */
 const paintFloor = (
   arena: Arena,
@@ -422,13 +379,8 @@ export const buildArena = (
       const quarter = Math.floor(hash01(key, 1) * 4) * (Math.PI / 2);
       switch (terrain) {
         case "wall":
-          if (sizing !== null && !sizing.tileWalls) {
-            const top = TALLEST_ROBOT_PER_SCALE * sizing.robotScale * 1.12;
-            const height = (top / WALL_MODEL_TOP) * (0.96 + hash01(key, 2) * 0.08);
-            for (const matrix of artWallMatrices(arena, x, y, height))
-              placements.push({ prop: "Wall", matrix });
-            break;
-          }
+          // Art upgrade: brick-textured blocks are built below (arenaWalls.ts).
+          if (sizing !== null && !sizing.tileWalls) break;
           placements.push({
             prop:
               art && library.props.has("WallTall")
@@ -447,46 +399,8 @@ export const buildArena = (
           const horizontal =
             arena.tiles[y]?.[x - 1]?.terrain === "low-wall" ||
             arena.tiles[y]?.[x + 1]?.terrain === "low-wall";
-          if (
-            sizing !== null &&
-            !sizing.tileWalls &&
-            !sizing.blockLowWalls &&
-            library.props.has("LowWallRubble")
-          ) {
-            // A collapsed section spanning edge to edge, running toward whichever
-            // neighbours it connects (standing walls or more low wall).
-            const joins = (dx: number, dy: number) => {
-              const next = arena.tiles[y + dy]?.[x + dx]?.terrain;
-              return next === "low-wall" || next === "wall" || next === "outer-wall";
-            };
-            const alongX = joins(-1, 0) || joins(1, 0) || !(joins(0, -1) || joins(0, 1));
-            const scale = { x: 1, y: sizing.robotScale / AUTHORED_ROBOT_SCALE, z: 1 };
-            placements.push({
-              prop: "LowWallRubble",
-              matrix: tileMatrix(cx, cz, alongX ? 0 : Math.PI / 2, scale),
-            });
-            // Ends that meet a standing wall climb toward it instead of dropping
-            // sheer. The ramp is built at local +X; each yaw turns it to face one
-            // neighbour (+X, -X, -Z, +Z in turn).
-            const standing = (dx: number, dy: number) => {
-              const next = arena.tiles[y + dy]?.[x + dx]?.terrain;
-              return next === "wall" || next === "outer-wall";
-            };
-            const ends: readonly [number, number, number][] = alongX
-              ? [
-                  [1, 0, 0],
-                  [-1, 0, Math.PI],
-                ]
-              : [
-                  [0, -1, Math.PI / 2],
-                  [0, 1, -Math.PI / 2],
-                ];
-            if (library.props.has("LowWallRamp"))
-              for (const [dx, dy, yaw] of ends)
-                if (standing(dx, dy))
-                  placements.push({ prop: "LowWallRamp", matrix: tileMatrix(cx, cz, yaw, scale) });
-            break;
-          }
+          // Art upgrade: collapsed-rubble mounds are built per run below.
+          if (sizing !== null && !sizing.tileWalls && !sizing.blockLowWalls) break;
           const relative =
             sizing === null || sizing.tileWalls ? 1 : sizing.robotScale / AUTHORED_ROBOT_SCALE;
           placements.push({
@@ -619,6 +533,11 @@ export const buildArena = (
       });
   }
   instanceProps(library, placements, group, art);
+  if (sizing !== null && !sizing.tileWalls) {
+    const walls = buildArtWalls(arena, sizing.robotScale, { lowWalls: !sizing.blockLowWalls });
+    group.add(walls.group);
+    disposables.push(walls);
+  }
   if (bushes.length > 0) {
     const foliage = buildFoliage(bushes, ["#5a9e36", "#6cb03e", "#82c24a", "#94cc58", "#4a8a2e"]);
     group.add(foliage.mesh);
