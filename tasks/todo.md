@@ -1,3 +1,20 @@
+# Planner command bar + one-screen Boot Camp (approved 2026-10-18)
+
+Concepts: artifact D5w5r5FnjNzAzSrkZLpzBM. Manheim chose option A (bar docked
+above the timeline, labelled Undo/Redo in the top bar) and a one-screen
+"Meet your squad" Boot Camp with the numbers left to the Field Guide.
+
+- [x] Auto rotary cannon spins on its own axis (`RobotRig`, test first)
+- [x] Merge local main (ring placement, arena art) onto the site redesign
+- [x] `describeOrdersChange` for Undo/Redo labels + tests
+- [x] `CommandBar` replaces `RadialOrders`; Move (M), Aim, Scan, posture,
+      Face picker, Zap, Bomb, Self destruct; selecting a robot no longer opens
+      anything on the board
+- [x] Undo/Redo move to the top bar with labels; the notice offers Undo
+- [x] First-turn coach copy points at the bar instead of the ring
+- [ ] Boot Camp becomes one "Meet your squad" screen with 3D portraits
+- [ ] Checks, screenshots at 1440x900 and 1024x768, local commits
+
 # Site UX redesign — Floodlit broadcast (started 2026-10-17)
 
 Concepts approved by Manheim 2026-10-17 (artifact JCQ9rdf4htFKCkZJtAP7Vp) with

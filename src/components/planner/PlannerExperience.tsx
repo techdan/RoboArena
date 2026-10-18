@@ -91,9 +91,10 @@ import {
 } from "../../planner/firstTurnCoach";
 import { RobotSelector } from "./RobotSelector";
 import { PlannerBoard3D } from "./PlannerBoard3D";
-import { RadialOrders } from "./RadialOrders";
+import { CommandBar, type CommandMode } from "./CommandBar";
 import { ShotCard } from "./ShotCard";
-import { SquadRail } from "./SquadRail";
+import { CHASSIS, SquadRail } from "./SquadRail";
+import { describeOrdersChange } from "../../planner/describeChange";
 import { TurnTrack } from "./TurnTrack";
 import {
   preferredPlannerBoard,
@@ -276,7 +277,9 @@ export function PlannerExperience({
   >({});
   const [cursor, setCursor] = useState<TileCoord | null>(null);
   const [showAllPrograms, setShowAllPrograms] = useState(false);
-  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [faceOpen, setFaceOpen] = useState(false);
+  // The notice text that came from the last edit; only that notice offers Undo.
+  const [undoNotice, setUndoNotice] = useState<string | null>(null);
   const [rehearsing, setRehearsing] = useState(false);
   // First-turn guide: shown until the player finishes or closes it once.
   const [coachActive, setCoachActive] = useState(false);
@@ -286,9 +289,6 @@ export function PlannerExperience({
   useEffect(() => {
     setCoachActive(match.turnNumber === 1 && !coachFinished(window.localStorage));
   }, [match.turnNumber]);
-  useEffect(() => {
-    if (ordersOpen) setCoachOrdersOpened(true);
-  }, [ordersOpen]);
   useEffect(() => {
     if (rehearsing) setCoachRehearsed(true);
   }, [rehearsing]);
@@ -483,7 +483,9 @@ export function PlannerExperience({
     setAimReviewOpen(false);
     setScanDialog(null);
     setSpecialDialog(null);
+    setFaceOpen(false);
     setNotice(message);
+    setUndoNotice(message);
     setPreviewTick(
       parkTick ??
         previewParkingTick(
@@ -556,29 +558,27 @@ export function PlannerExperience({
       previewParkingTick(robot, timelineForRobot(orders, robotId).segments, budgetTicks),
     );
   };
-  /** Tapping a robot on the board selects it and opens its orders ring. */
+  /** Tapping a robot on the board selects it; its orders live in the command bar. */
   const pickRobotOnBoard = (robotId: string) => {
     if (robotId === selectedRobot.id) {
       setRehearsing(false);
       setPreviewTick(selectedEndTick);
-      setOrdersOpen((open) => !open);
       return;
     }
     selectRobot(robotId);
-    setOrdersOpen(true);
   };
   const chooseBoardTile = (
     tile: TileCoord,
     modifiers: { readonly ctrl: boolean; readonly shift: boolean },
   ) => {
     setMoveTool(false);
-    setOrdersOpen(false);
+    setFaceOpen(false);
     setRehearsing(false);
     chooseTile(tile, modifiers);
   };
   const selectCommand = (robotId: string, _index: number, endTick: number) => {
     setRehearsing(false);
-    setOrdersOpen(false);
+    setFaceOpen(false);
     if (robotId !== selectedRobot.id) selectRobot(robotId);
     setPreviewTick(endTick);
   };
@@ -586,6 +586,8 @@ export function PlannerExperience({
     setMoveTool(false);
     setRehearsing(false);
     setNotice(type === "undo" ? "Last edit undone." : "Last edit redone.");
+    setUndoNotice(null);
+    setFaceOpen(false);
     const nextOrders =
       type === "undo" ? (state.history.past.at(-1) ?? orders) : (state.history.future[0] ?? orders);
     dispatch({ type });
@@ -1079,7 +1081,7 @@ export function PlannerExperience({
       setRehearsing(false);
       return;
     }
-    setOrdersOpen(false);
+    setFaceOpen(false);
     // Edits park at the program's end. Rehearse must show the whole plan,
     // rather than silently playing only its final fraction of a second.
     previewTickRef.current = 0;
@@ -1098,8 +1100,10 @@ export function PlannerExperience({
       setMoveTool(false);
       setRehearsing(false);
       setPreviewTick(selectedEndTick);
-      setOrdersOpen(true);
+      setCoachOrdersOpened(true);
+      setFaceOpen(true);
     },
+    move: () => startMove(),
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
@@ -1113,8 +1117,10 @@ export function PlannerExperience({
       setMoveTool(false);
       setRehearsing(false);
       setPreviewTick(selectedEndTick);
-      setOrdersOpen(true);
+      setCoachOrdersOpened(true);
+      setFaceOpen(true);
     },
+    move: () => startMove(),
     rehearse: toggleRehearse,
     zap: () => startSpecial("zap"),
     bomb: () => startSpecial("place-bomb"),
@@ -1158,22 +1164,25 @@ export function PlannerExperience({
                 ? tacticalKeysRef.current.posture
                 : key === "f"
                   ? tacticalKeysRef.current.orders
-                  : key === "r"
-                    ? tacticalKeysRef.current.rehearse
-                    : key === "z"
-                      ? tacticalKeysRef.current.zap
-                      : key === "b"
-                        ? tacticalKeysRef.current.bomb
-                        : key === "x"
-                          ? tacticalKeysRef.current.selfDestruct
-                          : null;
+                  : key === "m"
+                    ? tacticalKeysRef.current.move
+                    : key === "r"
+                      ? tacticalKeysRef.current.rehearse
+                      : key === "z"
+                        ? tacticalKeysRef.current.zap
+                        : key === "b"
+                          ? tacticalKeysRef.current.bomb
+                          : key === "x"
+                            ? tacticalKeysRef.current.selfDestruct
+                            : null;
         if (action !== null) {
           event.preventDefault();
           action();
           return;
         }
         if (event.key === "Escape") {
-          setOrdersOpen(false);
+          setFaceOpen(false);
+          setHeadingPreview(null);
           return;
         }
       }
@@ -1242,6 +1251,34 @@ export function PlannerExperience({
     );
   };
   const fireActive = aimTool || aimDialog !== null || scanDialog !== null || specialDialog !== null;
+  const commandMode: CommandMode =
+    aimTool || aimDialog !== null
+      ? "aim"
+      : scanDialog !== null
+        ? "scan"
+        : specialDialog !== null
+          ? specialDialog.kind
+          : "move";
+  const undoPrevious = state.history.past.at(-1);
+  const redoNext = state.history.future[0];
+  const undoLabel =
+    undoPrevious === undefined ? null : describeOrdersChange(undoPrevious, orders, robotNames);
+  const redoLabel =
+    redoNext === undefined ? null : describeOrdersChange(orders, redoNext, robotNames);
+  /** Move is the default order; the tool also lets a route end on an occupied tile. */
+  function startMove() {
+    setFaceOpen(false);
+    setRehearsing(false);
+    setAimTool(false);
+    setAimDialog(null);
+    setAimShots(1);
+    setAimReviewOpen(false);
+    setScanDialog(null);
+    setSpecialDialog(null);
+    setPreviewTick(selectedEndTick);
+    setMoveTool(true);
+    setNotice(`Tap the floor to move ${robotNames.get(selectedRobotId) ?? "the robot"}.`);
+  }
   const conflictBanner =
     state.conflictRevision !== null && state.conflictOrders !== null ? (
       <div className="planner-conflict" role="alert">
@@ -1364,60 +1401,6 @@ export function PlannerExperience({
           onCursor={setCursor}
           onChooseTile={chooseBoardTile}
           onChooseRobot={pickRobotOnBoard}
-          anchorTile={
-            ordersOpen && !fireActive && !rehearsing && projected.position !== "dock"
-              ? projected.position
-              : null
-          }
-          anchorContent={
-            <RadialOrders
-              key={selectedRobot.id}
-              name={selectedName}
-              posture={projected.posture}
-              heading={projected.scanHeading}
-              onMove={() => {
-                setOrdersOpen(false);
-                setMoveTool(true);
-                setNotice(`Tap the floor to move ${selectedName}.`);
-              }}
-              onAim={() => {
-                setOrdersOpen(false);
-                startAim();
-              }}
-              onScan={() => {
-                setOrdersOpen(false);
-                startScan();
-              }}
-              {...(zapAllowed
-                ? {
-                    onZap: () => {
-                      setOrdersOpen(false);
-                      startSpecial("zap");
-                    },
-                  }
-                : {})}
-              {...(bombAllowed
-                ? {
-                    onPlaceBomb: () => {
-                      setOrdersOpen(false);
-                      startSpecial("place-bomb");
-                    },
-                  }
-                : {})}
-              {...(selfDestructAllowed
-                ? {
-                    onSelfDestruct: () => {
-                      setOrdersOpen(false);
-                      startSpecial("self-destruct");
-                    },
-                  }
-                : {})}
-              onPosture={addPosture}
-              onHeadingPreview={setHeadingPreview}
-              onHeading={addHeading}
-              onClose={() => setOrdersOpen(false)}
-            />
-          }
         />
         <header className="tactical-bar" ref={barRef}>
           <div className="tactical-bar-lead">
@@ -1426,6 +1409,32 @@ export function PlannerExperience({
               <p className="eyebrow">Turn {match.turnNumber} · Your orders</p>
               <h1>Plan your {match.config.turnLengthSeconds} seconds</h1>
             </div>
+          </div>
+          <div className="tactical-history-bar" role="group" aria-label="Draft history">
+            <button
+              type="button"
+              className="history-action cursor-pointer"
+              onClick={() => changeHistory("undo")}
+              disabled={state.history.past.length === 0}
+              aria-keyshortcuts="Control+Z"
+              title="Undo · Ctrl+Z"
+            >
+              <Undo2 size={16} aria-hidden="true" />
+              <span>Undo</span>
+              {undoLabel === null ? null : <small>{undoLabel}</small>}
+            </button>
+            <button
+              type="button"
+              className="history-action cursor-pointer"
+              onClick={() => changeHistory("redo")}
+              disabled={state.history.future.length === 0}
+              aria-keyshortcuts="Control+Shift+Z"
+              title="Redo · Ctrl+Shift+Z"
+            >
+              <Redo2 size={16} aria-hidden="true" />
+              <span>Redo</span>
+              {redoLabel === null ? null : <small>{redoLabel}</small>}
+            </button>
           </div>
           <div className="tactical-bar-actions">
             <span className="tactical-progress">
@@ -1441,10 +1450,7 @@ export function PlannerExperience({
             orders={orders}
             selectedRobotId={selectedRobot.id}
             budgetTicks={budgetTicks}
-            onSelect={(robotId) => {
-              selectRobot(robotId);
-              setOrdersOpen(true);
-            }}
+            onSelect={selectRobot}
             onClear={() =>
               edit(
                 replaceTimeline(orders, selectedRobot.id, []),
@@ -1452,26 +1458,6 @@ export function PlannerExperience({
               )
             }
           />
-          <div className="history-buttons tactical-history" aria-label="Draft history">
-            <button
-              type="button"
-              onClick={() => changeHistory("undo")}
-              disabled={state.history.past.length === 0}
-              aria-label="Undo"
-              title="Undo — Ctrl+Z"
-            >
-              <Undo2 size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => changeHistory("redo")}
-              disabled={state.history.future.length === 0}
-              aria-label="Redo"
-              title="Redo — Ctrl+Shift+Z"
-            >
-              <Redo2 size={16} aria-hidden="true" />
-            </button>
-          </div>
         </div>
         {conflictBanner}
         {coachStep !== null ? (
@@ -1487,7 +1473,7 @@ export function PlannerExperience({
           <div className="tactical-hint" role="status">
             Tap a tile in your home corner to deploy <strong>{selectedName}</strong>.
           </div>
-        ) : !ordersOpen && !fireActive && !rehearsing ? (
+        ) : !fireActive && !rehearsing ? (
           <div className="tactical-hint" role="status">
             {moveTool ? (
               <>
@@ -1502,7 +1488,8 @@ export function PlannerExperience({
               </>
             ) : (
               <>
-                Tap the floor to move <strong>{selectedName}</strong>, or tap it for orders.
+                Tap the floor to move <strong>{selectedName}</strong>, or pick an order in the bar
+                below.
               </>
             )}
           </div>
@@ -1585,9 +1572,59 @@ export function PlannerExperience({
             aria-live="polite"
           >
             <span>{notice}</span>
+            {notice === undoNotice && state.history.past.length > 0 ? (
+              <button
+                type="button"
+                className="tactical-notice-undo cursor-pointer"
+                onClick={() => changeHistory("undo")}
+              >
+                <Undo2 size={14} aria-hidden="true" /> Undo
+              </button>
+            ) : null}
           </div>
         )}
         <div className="tactical-track" ref={trackRef}>
+          {rehearsing ? null : (
+            <CommandBar
+              name={selectedName}
+              detail={CHASSIS[selectedRobot.definition.class] ?? selectedRobot.definition.class}
+              teamColor={team.color}
+              usedSeconds={(selectedEndTick > 0 ? selectedEndTick : 0) / TICKS_PER_SECOND}
+              budgetSeconds={budgetTicks / TICKS_PER_SECOND}
+              deployed={projected.position !== "dock"}
+              mode={commandMode}
+              posture={projected.posture}
+              heading={projected.scanHeading}
+              faceOpen={faceOpen}
+              onFaceOpen={(open) => {
+                if (open) setCoachOrdersOpened(true);
+                setFaceOpen(open);
+              }}
+              onMove={() => {
+                setCoachOrdersOpened(true);
+                startMove();
+              }}
+              onAim={() => {
+                setCoachOrdersOpened(true);
+                startAim();
+              }}
+              onScan={() => {
+                setCoachOrdersOpened(true);
+                startScan();
+              }}
+              {...(zapAllowed ? { onZap: () => startSpecial("zap") } : {})}
+              {...(bombAllowed ? { onPlaceBomb: () => startSpecial("place-bomb") } : {})}
+              {...(selfDestructAllowed
+                ? { onSelfDestruct: () => startSpecial("self-destruct") }
+                : {})}
+              onPosture={(posture) => {
+                setCoachOrdersOpened(true);
+                addPosture(posture);
+              }}
+              onHeadingPreview={setHeadingPreview}
+              onHeading={addHeading}
+            />
+          )}
           <TurnTrack
             robots={team.robots}
             names={robotNames}

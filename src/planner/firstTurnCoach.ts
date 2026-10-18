@@ -3,7 +3,7 @@
  * a real turn, and the rule that decides which step is current.
  *
  * Steps advance only on things the player actually did (orders in the draft,
- * the orders ring opening, Rehearse running), never on a timer, so the guide
+ * using the command bar, Rehearse running), never on a timer, so the guide
  * cannot run ahead of the player. Pure data; the planner supplies the facts.
  */
 
@@ -35,20 +35,20 @@ export const COACH_STEPS: readonly CoachStep[] = [
   },
   {
     id: "orders",
-    title: "Open its orders",
-    body: "Tap the robot itself. Its orders open around it: move, aim, scan & fire, posture and facing.",
+    title: "Meet the command bar",
+    body: "The selected robot's orders sit in the bar above the timeline: move, aim, scan & fire, posture and facing. Pick one to try it.",
     skippable: false,
   },
   {
     id: "facing",
     title: "Point it the right way",
-    body: "In its orders, choose Face, then pick one of the eight compass points. A robot only spots and shoots at enemies inside the cone it faces.",
+    body: "Choose Face in the command bar, then pick one of the eight compass points. A robot only spots and shoots at enemies inside the cone it faces.",
     skippable: true,
   },
   {
     id: "aim",
     title: "Line up a shot",
-    body: "Choose Aim. Lit tiles can be hit, and brighter means better odds. Tap one to see the exact chance, then Confirm.",
+    body: "Choose Aim & fire in the command bar. Lit tiles can be hit, and brighter means better odds. Tap one to see the exact chance, then Confirm.",
     skippable: true,
   },
   {
