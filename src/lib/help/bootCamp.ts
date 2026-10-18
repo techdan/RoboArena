@@ -386,8 +386,8 @@ export const PRIMER_RULES: readonly { readonly title: string; readonly body: str
     body: "Duck behind a low wall or in a bush and you are far harder to hit. Walls block shots completely.",
   },
   {
-    title: "Scan & fire ambushes",
-    body: "Point a robot's sensor down a lane. It fires at the first enemy that walks in.",
+    title: "Scan & fire first",
+    body: "Face a likely enemy approach and add Scan & fire: the robot shoots the first enemy that enters its view and range. Save Aim & fire for when you expect an enemy on a particular tile.",
   },
 ];
 
