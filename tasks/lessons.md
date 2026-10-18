@@ -38,3 +38,20 @@ alone**. The sheet hues are palette variants the engine re-maps per team.
   selection indicator only.
 - `docs/reverse-engineering.md` §12b takeaway 4 records the corrected
   interpretation.
+
+## 2026-10-17 — Arena art: legibility before mood
+
+The Coliseum art concept (`?art=next`) went darker and moodier than the
+shipped arena and added wet, glossy floor patches. The owner liked the new
+shrubs but rejected the result as too dark, with distracting "sparkling
+tiles": "priority is to see everything clearly."
+
+**Rules:**
+- Arena art upgrades must keep overall brightness at or above the current
+  shipped look. Grit comes from surface detail (texture, weathering), never
+  from lowering scene light. Compare mean luminance against the baseline
+  capture before showing a concept.
+- No glossy/wet floor or fine high-frequency normal detail that catches
+  floodlights as specular sparkle; it reads as noise from the planner camera.
+- Judge every arena change from the top-down planner view first; the
+  cinematic angle comes second.

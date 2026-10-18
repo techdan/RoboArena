@@ -59,3 +59,6 @@ public/spike/
 .wrangler/
 .open-next/
 .dev.vars
+
+# Locked-camera art review images (tools/visual/compare-arena.mjs)
+public/compare-*.png

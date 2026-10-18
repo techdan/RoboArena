@@ -16,6 +16,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { artPreviewEnabled, beamMaterial } from "./arenaArt";
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import type {
   Heading,
@@ -175,6 +176,85 @@ class AntialiasedScenePass extends RenderPass {
   }
 }
 
+/** GTAO's normal pass ignores alphaTest, so alpha-card foliage would occlude as
+ * solid quads. Objects flagged `userData.noAO` are hidden from that pass only.
+ * Wraps the installed pass's runtime visibility hooks (`_overrideVisibility`
+ * in three r186; the bundled typings still name them without the underscore). */
+const hideFlaggedFromAO = (pass: GTAOPass): void => {
+  const hooks = pass as unknown as {
+    _overrideVisibility?: () => void;
+    _restoreVisibility?: () => void;
+  };
+  const override = hooks._overrideVisibility?.bind(pass);
+  const restore = hooks._restoreVisibility?.bind(pass);
+  if (override === undefined || restore === undefined) return;
+  const hidden: THREE.Object3D[] = [];
+  hooks._overrideVisibility = () => {
+    override();
+    pass.scene.traverse((object) => {
+      if (object.userData["noAO"] === true && object.visible) {
+        object.visible = false;
+        hidden.push(object);
+      }
+    });
+  };
+  hooks._restoreVisibility = () => {
+    restore();
+    for (const object of hidden) object.visible = true;
+    hidden.length = 0;
+  };
+};
+
+/**
+ * Art upgrade: tiles are 75% larger relative to robots, so every robot stands
+ * in clear floor. The board stays in tile units; robots are drawn at 1/1.75 of
+ * their tile size and every default camera stands 1.75x closer, so robots keep
+ * the owner's preferred 1.15 on-screen size and the arena grows past the
+ * viewport (pan and zoom reach the rest). For review, `?tile=` sets the
+ * growth and `?robotScale=` the on-screen robot size in today's units.
+ */
+const ART_TILE_ROOM = 1.75;
+const ART_ROBOT_SIZE = 1.15;
+const ART_ROBOT_GLOW = 0.4;
+/** Review dial: `?name=` within [min, max], else the default. */
+const urlNumber = (name: string, fallback: number, min: number, max: number): number => {
+  try {
+    const requested = Number(new URLSearchParams(window.location.search).get(name) ?? "");
+    if (Number.isFinite(requested) && requested >= min && requested <= max) return requested;
+  } catch {
+    // No URL: use the default.
+  }
+  return fallback;
+};
+/** Optic lenses and eyes are a few pixels tall; far above the bloom threshold
+ * they flare on frames that sample them and vanish on frames that miss them.
+ * Below the threshold they read as steady coloured slits. */
+const ART_OPTIC_EMISSION = 0.9;
+
+/** Art upgrade: mirror-like robot steel catches every floodlight as glare;
+ * a satin finish keeps form shading without hot specular flashes. */
+const satinRobotMetal = (library: ModelLibrary | null): void => {
+  const done = new Set<THREE.Material>();
+  for (const model of library?.robots.values() ?? [])
+    for (const part of Object.values(model))
+      if (part instanceof THREE.Object3D)
+        part.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          for (const material of Array.isArray(child.material)
+            ? child.material
+            : [child.material]) {
+            if (!(material instanceof THREE.MeshStandardMaterial) || done.has(material)) continue;
+            done.add(material);
+            if (material.name === "Steel" || material.name === "Gunmetal")
+              material.roughness = Math.max(material.roughness, 0.5);
+            if (material.name === "TeamPaint")
+              material.roughness = Math.max(material.roughness, 0.5);
+            if (material.name === "Optic")
+              material.emissiveIntensity = Math.min(material.emissiveIntensity, ART_OPTIC_EMISSION);
+          }
+        });
+};
+
 /** Frame rate for pulsing route and target overlays while planning. */
 const PLANNING_AMBIENT_FPS = 20;
 
@@ -225,11 +305,14 @@ export class BattleScene3D {
   private reducedMotion = false;
   private renderedIndex: number | null = null;
   private cameraMode: CameraMode = "director";
+  /** Concept preview of the arena art upgrade (`?art=next`). */
+  private readonly art = artPreviewEnabled();
+  private readonly tileRoom = urlNumber("tile", ART_TILE_ROOM, 1, 4);
+  private readonly robotSize = urlNumber("robotScale", ART_ROBOT_SIZE, 0.5, 2);
   private readonly focuses: Focus[] = [];
   private readonly cameraGoal = new THREE.Vector3();
   private readonly lookGoal = new THREE.Vector3();
   private readonly lookCurrent = new THREE.Vector3();
-  private orbitAngle = 0;
   private disposed = false;
   private readonly beams: THREE.Mesh[] = [];
   private readonly scheduled: { at: number; run: () => void }[] = [];
@@ -391,14 +474,16 @@ export class BattleScene3D {
     this.composer.addPass(new AntialiasedScenePass(this.scene, this.camera));
     // Ambient occlusion grounds robots and props: contact shadows in every crease.
     this.ao = new GTAOPass(this.scene, this.camera, 1, 1);
+    hideFlaggedFromAO(this.ao);
     this.ao.blendIntensity = 0.9;
     this.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.5, thickness: 1, scale: 1 });
     this.composer.addPass(this.ao);
+    // Art upgrade: bloom only for genuine light sources, not sunlit highlights.
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(1, 1),
-      theme.bloom.strength,
+      this.art ? theme.bloom.strength * 0.7 : theme.bloom.strength,
       theme.bloom.radius,
-      theme.bloom.threshold,
+      this.art ? Math.max(theme.bloom.threshold, 0.96) : theme.bloom.threshold,
     );
     this.composer.addPass(this.bloom);
     const vignette = new ShaderPass(VignetteShader);
@@ -408,10 +493,21 @@ export class BattleScene3D {
     if (new URLSearchParams(window.location.search).has("gpuProfile")) this.profileGpuPasses();
 
     this.controls = new OrbitControls(this.camera, this.canvas);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.08;
+    // No inertia: the view stops when the drag ends. Damping decays per
+    // update, and draw-on-demand updates an idle scene far below 60 fps, so a
+    // short drag kept gliding for seconds.
+    this.controls.enableDamping = false;
+    // Plain drag pans across the (now larger than the screen) arena; rotating
+    // takes the right button or two fingers, and the wheel or pinch zooms.
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.ROTATE,
+    };
+    this.controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    this.controls.screenSpacePanning = false;
     this.controls.maxPolarAngle = Math.PI * 0.46;
-    this.controls.minDistance = 3;
+    this.controls.minDistance = 3 / (this.art ? this.tileRoom : 1);
     this.controls.maxDistance = Math.max(width, height) * 2.2;
     this.controls.target.copy(this.lookCurrent);
     this.controls.addEventListener("start", () => this.setCameraMode("free"));
@@ -452,10 +548,25 @@ export class BattleScene3D {
   private async initialize(): Promise<void> {
     this.library = await loadModelLibrary(this.theme.id, this.robotFamily);
     if (this.disposed) return;
-    this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme);
+    this.arena = buildArena(
+      this.state.arena,
+      this.library,
+      this.renderer,
+      this.theme,
+      this.art,
+      this.art
+        ? {
+            robotScale: this.robotSize / this.tileRoom,
+            tileWalls: new URLSearchParams(window.location.search).get("walls") === "tile",
+            blockLowWalls: new URLSearchParams(window.location.search).get("lowWall") === "block",
+          }
+        : null,
+    );
     this.scene.add(this.arena.group);
     if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
-    this.addMotes();
+    // Art upgrade: no drifting motes; constant twinkle across the board distracts.
+    if (!this.art) this.addMotes();
+    if (this.art) satinRobotMetal(this.library);
     // Warm up the hover material too: first input must not compile its shader.
     this.resize();
     this.overlays.setCursor({ x: 0, y: 0 }, "#e8ffd0");
@@ -480,14 +591,16 @@ export class BattleScene3D {
       const geometry = new THREE.ConeGeometry(2.6, length, 24, 1, true);
       geometry.translate(0, -length / 2, 0);
       const flood = this.theme.floodlights;
-      const material = new THREE.MeshBasicMaterial({
-        color: flood?.color ?? 0xfff1d0,
-        transparent: true,
-        opacity: flood?.beam ?? 0.022,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
+      const material = this.art
+        ? beamMaterial(flood?.color ?? 0xfff1d0, flood?.beam ?? 0.022)
+        : new THREE.MeshBasicMaterial({
+            color: flood?.color ?? 0xfff1d0,
+            transparent: true,
+            opacity: flood?.beam ?? 0.022,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
       const beam = new THREE.Mesh(geometry, material);
       beam.position.copy(light);
       beam.lookAt(center);
@@ -620,7 +733,8 @@ export class BattleScene3D {
         },
         onDetachTurret: (turret, velocity) => this.effects.throwPart(turret, velocity),
       },
-      this.theme.robotGlow,
+      this.art ? this.theme.robotGlow * ART_ROBOT_GLOW : this.theme.robotGlow,
+      this.art ? this.robotSize / this.tileRoom : undefined,
     );
     this.rigs.set(id, rig);
     this.scene.add(rig.root);
@@ -983,11 +1097,12 @@ export class BattleScene3D {
     if (view === "orbit") {
       controls.enableRotate = true;
       controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
+        LEFT: THREE.MOUSE.PAN,
         MIDDLE: THREE.MOUSE.DOLLY,
-        RIGHT: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.ROTATE,
       };
-      controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+      controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+      controls.screenSpacePanning = false;
       this.setFov(38);
       const yaw = (quarter * Math.PI) / 2;
       const target = new THREE.Vector3(width / 2, 0, height / 2);
@@ -1008,19 +1123,10 @@ export class BattleScene3D {
     controls.screenSpacePanning = true;
     const fov = view === "top" ? 30 : 34;
     this.setFov(fov);
-    const rect = this.host.getBoundingClientRect();
-    const insets = this.viewInsets;
-    const openWidth = Math.max(1, rect.width - insets.left - insets.right);
-    const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
-    const aspect = Math.max(0.3, openWidth / openHeight);
-    // The lens spans the full canvas height; only the open fraction may hold the arena.
-    const half =
-      Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
     const rotated = quarter % 2 === 1;
-    const spanX = (rotated ? height : width) + 1.5;
-    const spanZ = (rotated ? width : height) + 1.5;
     const distance =
-      Math.max(spanZ / 2 / half, spanX / 2 / (half * aspect)) * (view === "top" ? 1 : 1.08);
+      this.boardFitDistance(fov, rotated ? height : width, rotated ? width : height) *
+      (view === "top" ? 1 : 1.08);
     const polar = view === "top" ? 0.0005 : THREE.MathUtils.degToRad(35);
     const yaw = (quarter * Math.PI) / 2;
     const target = new THREE.Vector3(width / 2, 0, height / 2);
@@ -1032,6 +1138,25 @@ export class BattleScene3D {
     // Straight down, the tiny polar offset toward `yaw` keeps that edge at the
     // bottom of the screen, so board North stays up for quarter 0.
     this.moveCamera(position, target, animate);
+  }
+
+  /**
+   * Camera distance at which a board spanning `spanX` x `spanZ` tiles fills the
+   * view area not covered by overlaid UI, with a 1.5-tile margin. The art
+   * upgrade stands `tileRoom` times closer: tiles grow on screen and the board
+   * overflows the view (pan covers the rest).
+   */
+  private boardFitDistance(fov: number, spanX: number, spanZ: number): number {
+    const rect = this.host.getBoundingClientRect();
+    const insets = this.viewInsets;
+    const openWidth = Math.max(1, rect.width - insets.left - insets.right);
+    const openHeight = Math.max(1, rect.height - insets.top - insets.bottom);
+    const aspect = Math.max(0.3, openWidth / openHeight);
+    // The lens spans the full canvas height; only the open fraction may hold the arena.
+    const half =
+      Math.tan(THREE.MathUtils.degToRad(fov / 2)) * (openHeight / Math.max(1, rect.height));
+    const fit = Math.max((spanZ + 1.5) / 2 / half, (spanX + 1.5) / 2 / (half * aspect));
+    return this.art ? fit / this.tileRoom : fit;
   }
 
   private moveCamera(position: THREE.Vector3, target: THREE.Vector3, animate: boolean): void {
@@ -1139,7 +1264,7 @@ export class BattleScene3D {
     for (const beam of this.beams) beam.visible = !on;
     if (this.motes !== null) this.motes.visible = !on;
     // Floodlight glare is drama for the movie; while planning it hides the board.
-    this.bloom.strength = this.theme.bloom.strength * (on ? 0.35 : 1);
+    this.bloom.strength = this.theme.bloom.strength * (this.art ? 0.7 : 1) * (on ? 0.35 : 1);
     // A narrow top-down lens sits much further out than the movie camera.
     const { width, height } = this.state.arena;
     this.controls.maxDistance = Math.max(width, height) * (on ? 4.5 : 2.2);
@@ -1302,7 +1427,7 @@ export class BattleScene3D {
       this.lookCurrent.copy(this.controls.target);
     } else {
       // Director: drift toward the weighted centre of recent action, framing it
-      // from a high three-quarter angle that slowly orbits for parallax.
+      // from a high three-quarter angle with a fixed heading.
       for (let i = this.focuses.length - 1; i >= 0; i -= 1) {
         if ((this.focuses[i]?.until ?? 0) < this.now) this.focuses.splice(i, 1);
       }
@@ -1322,17 +1447,16 @@ export class BattleScene3D {
         this.lookGoal.copy(arena.center);
         spread = extent * 0.6;
       }
-      this.orbitAngle += dt * (this.cameraMode === "overview" ? 0.05 : 0.025);
       const overview = this.cameraMode === "overview" || weight === 0;
-      const distance = overview
-        ? extent * 1.25
-        : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05);
+      const distance =
+        (overview ? extent * 1.25 : THREE.MathUtils.clamp(spread * 1.9 + 5.5, 6.5, extent * 1.05)) /
+        (this.art ? this.tileRoom : 1);
       const elevation = overview ? 0.95 : 0.78;
-      const azimuth = Math.sin(this.orbitAngle) * 0.45;
+      // A fixed heading from the south; the camera no longer orbits while idle.
       this.cameraGoal.set(
-        this.lookGoal.x + Math.sin(azimuth) * distance * Math.cos(elevation),
+        this.lookGoal.x,
         this.lookGoal.y + Math.sin(elevation) * distance,
-        this.lookGoal.z + Math.cos(azimuth) * distance * Math.cos(elevation),
+        this.lookGoal.z + distance * Math.cos(elevation),
       );
       const ease = 1 - Math.exp(-dt * (overview ? 0.9 : 1.6));
       this.camera.position.lerp(this.cameraGoal, ease);
@@ -1359,8 +1483,11 @@ export class BattleScene3D {
       positions.needsUpdate = true;
     }
     for (const beam of this.beams) {
-      (beam.material as THREE.MeshBasicMaterial).opacity =
-        0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      // Art upgrade: steady beams; a pulsing light reads as flicker.
+      const opacity = this.art ? 0.02 : 0.02 + Math.sin(this.now * 0.7 + beam.id) * 0.004;
+      const material = beam.material as THREE.MeshBasicMaterial | THREE.ShaderMaterial;
+      if (material instanceof THREE.ShaderMaterial) material.uniforms["uOpacity"]!.value = opacity;
+      else material.opacity = opacity;
     }
   }
 

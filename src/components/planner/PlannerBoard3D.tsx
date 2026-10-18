@@ -18,6 +18,7 @@ import {
   type PlannerView,
 } from "../../renderer3d/support";
 import type { ArenaThemeId } from "../../renderer3d/themes";
+import { placeOrdersRing } from "../../planner/ordersRingPlacement";
 import { targetingTileVisual } from "../../planner/targetingVisuals";
 import type { ArenaCanvasProps } from "./ArenaCanvas";
 import { TargetingLegend } from "./TargetingLegend";
@@ -87,6 +88,7 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
   } = props;
   const anchorRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const cameraControlsRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BattleScene3D | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [view, setView] = useState<PlannerView>("top");
@@ -298,13 +300,29 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
         const host = hostRef.current;
         if (host !== null) {
           // Home-corner robots and panned tiles can otherwise put orders under
-          // the header, squad rail, or timeline. Keep every button reachable.
-          const left = (insets?.left ?? 0) + 160;
-          const right = Math.max(left, host.clientWidth - (insets?.right ?? 0) - 160);
-          const top = (insets?.top ?? 0) + 115;
-          const bottom = Math.max(top, host.clientHeight - (insets?.bottom ?? 0) - 115);
-          const x = Math.max(left, Math.min(right, point.x));
-          const y = Math.max(top, Math.min(bottom, point.y));
+          // the header, squad rail, timeline, or the floating camera buttons.
+          // Keep every button reachable.
+          const origin = host.getBoundingClientRect();
+          const controls = cameraControlsRef.current?.getBoundingClientRect();
+          const { x, y } = placeOrdersRing(
+            point,
+            {
+              left: insets?.left ?? 0,
+              top: insets?.top ?? 0,
+              right: host.clientWidth - (insets?.right ?? 0),
+              bottom: host.clientHeight - (insets?.bottom ?? 0),
+            },
+            controls === undefined
+              ? []
+              : [
+                  {
+                    left: controls.left - origin.left,
+                    top: controls.top - origin.top,
+                    right: controls.right - origin.left,
+                    bottom: controls.bottom - origin.top,
+                  },
+                ],
+          );
           element.style.transform = `translate(${x}px, ${y}px)`;
         }
       }
@@ -475,7 +493,11 @@ export function PlannerBoard3D(props: PlannerBoard3DProps) {
           </div>
         ) : null}
       </div>
-      <div className="planner-camera-controls planner-view-controls" aria-label="Board camera">
+      <div
+        ref={cameraControlsRef}
+        className="planner-camera-controls planner-view-controls"
+        aria-label="Board camera"
+      >
         <div className="planner-view-segment" role="group" aria-label="Camera angle">
           {VIEWS.map((option) => (
             <button

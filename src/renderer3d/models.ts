@@ -127,6 +127,7 @@ export interface RobotModel {
 export type PropName =
   | "Wall"
   | "WallB"
+  | "WallTall"
   | "LowWall"
   | "OuterWall"
   | "Bush"
@@ -201,6 +202,7 @@ const parseRobot = (robotClass: RobotClass, scene: THREE.Object3D): RobotModel =
 const PROP_NAMES: readonly PropName[] = [
   "Wall",
   "WallB",
+  "WallTall",
   "LowWall",
   "OuterWall",
   "Bush",
