@@ -34,6 +34,67 @@ afterAll(() => {
   (globalThis as { document?: unknown }).document = originalDocument;
 });
 
+/** The shipped crab Auto ("Bulldog", auto.glb): its rotary cannon's axis sits
+ *  below the BarrelMount, through the single centred muzzle. */
+const AUTO_AXIS = new THREE.Vector3(0, -0.2015, 0);
+const bulldog = (): RobotModel => {
+  const barrel = new THREE.Object3D();
+  // Two probes on the cannon: one on its spin axis, one on an outer barrel.
+  const onAxis = new THREE.Object3D();
+  onAxis.name = "probe-axis";
+  onAxis.position.set(AUTO_AXIS.x, AUTO_AXIS.y, 0.3);
+  const outer = new THREE.Object3D();
+  outer.name = "probe-outer";
+  outer.position.set(AUTO_AXIS.x + 0.046, AUTO_AXIS.y, 0.3);
+  barrel.add(onAxis, outer);
+  return {
+    ...strider(),
+    robotClass: "auto",
+    barrel,
+    barrelMount: new THREE.Vector3(0, 0.156, 0.144),
+    muzzles: [new THREE.Vector3(0, -0.2015, 0.465)],
+  };
+};
+
+describe("RobotRig rotary cannon", () => {
+  it("spins the barrels about the cannon's own axis instead of swinging the gun", () => {
+    const rig = new RobotRig("auto-1", bulldog(), "#3fa7ff");
+    rig.place({ x: 2, y: 2 }, 0);
+    const inTurret = (name: string) => {
+      rig.root.updateMatrixWorld(true);
+      const probe = rig.root.getObjectByName(name)!;
+      return rig.turret.worldToLocal(probe.getWorldPosition(new THREE.Vector3()));
+    };
+    const axisBefore = inTurret("probe-axis");
+    const radiusBefore = inTurret("probe-outer").sub(axisBefore);
+    const muzzleBefore = rig.turret.worldToLocal(rig.muzzleWorld(0));
+
+    rig.fireKick(false);
+    let now = 0;
+    let turned = 0;
+    for (let frame = 0; frame < 20; frame += 1) {
+      now += 1 / 60;
+      rig.update(now, 1 / 60, 1);
+      const outerNow = inTurret("probe-outer").sub(inTurret("probe-axis"));
+      turned = Math.max(turned, Math.abs(Math.atan2(outerNow.y, outerNow.x)));
+      // The axis line holds still (only recoil may slide it along the barrel).
+      const axisNow = inTurret("probe-axis");
+      expect(Math.hypot(axisNow.x - axisBefore.x, axisNow.y - axisBefore.y)).toBeLessThan(1e-4);
+      // Outer barrels keep their distance from the axis while they turn.
+      expect(Math.hypot(outerNow.x, outerNow.y)).toBeCloseTo(
+        Math.hypot(radiusBefore.x, radiusBefore.y),
+        4,
+      );
+      // The muzzle flash stays at the front of the cannon.
+      const muzzleNow = rig.turret.worldToLocal(rig.muzzleWorld(0));
+      expect(Math.hypot(muzzleNow.x - muzzleBefore.x, muzzleNow.y - muzzleBefore.y)).toBeLessThan(
+        1e-4,
+      );
+    }
+    expect(turned).toBeGreaterThan(0.5);
+  });
+});
+
 describe("RobotRig walk", () => {
   it.each([0.5, 0.25, 0.22, 0.12])(
     "keeps both strider feet stepping at %ss per tile",
