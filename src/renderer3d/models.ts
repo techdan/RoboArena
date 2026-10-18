@@ -130,6 +130,7 @@ export type PropName =
   | "WallTall"
   | "LowWall"
   | "LowWallRubble"
+  | "LowWallRamp"
   | "OuterWall"
   | "Bush"
   | "Rubble0"
@@ -206,6 +207,7 @@ const PROP_NAMES: readonly PropName[] = [
   "WallTall",
   "LowWall",
   "LowWallRubble",
+  "LowWallRamp",
   "OuterWall",
   "Bush",
   "Rubble0",

@@ -460,14 +460,31 @@ export const buildArena = (
               return next === "low-wall" || next === "wall" || next === "outer-wall";
             };
             const alongX = joins(-1, 0) || joins(1, 0) || !(joins(0, -1) || joins(0, 1));
+            const scale = { x: 1, y: sizing.robotScale / AUTHORED_ROBOT_SCALE, z: 1 };
             placements.push({
               prop: "LowWallRubble",
-              matrix: tileMatrix(cx, cz, alongX ? 0 : Math.PI / 2, {
-                x: 1,
-                y: sizing.robotScale / AUTHORED_ROBOT_SCALE,
-                z: 1,
-              }),
+              matrix: tileMatrix(cx, cz, alongX ? 0 : Math.PI / 2, scale),
             });
+            // Ends that meet a standing wall climb toward it instead of dropping
+            // sheer. The ramp is built at local +X; each yaw turns it to face one
+            // neighbour (+X, -X, -Z, +Z in turn).
+            const standing = (dx: number, dy: number) => {
+              const next = arena.tiles[y + dy]?.[x + dx]?.terrain;
+              return next === "wall" || next === "outer-wall";
+            };
+            const ends: readonly [number, number, number][] = alongX
+              ? [
+                  [1, 0, 0],
+                  [-1, 0, Math.PI],
+                ]
+              : [
+                  [0, -1, Math.PI / 2],
+                  [0, 1, -Math.PI / 2],
+                ];
+            if (library.props.has("LowWallRamp"))
+              for (const [dx, dy, yaw] of ends)
+                if (standing(dx, dy))
+                  placements.push({ prop: "LowWallRamp", matrix: tileMatrix(cx, cz, yaw, scale) });
             break;
           }
           const relative =

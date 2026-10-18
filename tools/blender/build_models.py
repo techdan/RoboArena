@@ -728,6 +728,39 @@ def build_arena() -> None:
     jitter_mesh(obj, 0.006, 43)
     objects.append(obj)
 
+    # LowWallRamp: where a collapsed section meets a standing wall, the broken
+    # courses climb toward it in a ragged curve instead of dropping sheer. Built
+    # at the +X end of the tile; the runtime turns it to face each wall
+    # neighbour. Heights share LowWallRubble's units (scaled with the robots).
+    rnd = random.Random(47)
+    parts = []
+    for row in range(4, 10):
+        rise = (row - 3) / 6.0
+        # Each course reaches less far from the wall: an eased, curved profile
+        # that leaves the middle of the tile low.
+        reach = 0.26 * (1.0 - rise ** 0.7) + 0.05
+        z = 0.1 + row * 0.085
+        x = 0.5 - 0.06
+        while x > 0.5 - reach:
+            length = rnd.uniform(0.04, 0.075)
+            if rnd.random() > 0.18:
+                parts.append(box(f"lp_b{row}_{len(parts)}", (length, 0.22 - rise * 0.1, 0.04),
+                                 (x - length, rnd.uniform(-0.02, 0.02), z + rnd.uniform(-0.01, 0.01)),
+                                 m["brick"], bevel=0.01, segments=1,
+                                 rot=(rnd.uniform(-0.08, 0.08), rnd.uniform(-0.1, 0.1) * rise,
+                                      rnd.uniform(-0.1, 0.1))))
+            x -= length * 2 + 0.008
+    # Fallen bricks heaped at the foot of the climb.
+    for i in range(8):
+        sx = rnd.uniform(0.035, 0.07)
+        parts.append(box(f"lp_s{i}", (sx, sx * rnd.uniform(0.7, 1.4), sx * 0.55),
+                         (rnd.uniform(0.05, 0.42), rnd.uniform(-0.38, 0.38), 0.1 + rnd.uniform(0, 0.25)),
+                         m["brick"] if i % 3 else m["rock"], bevel=0.008, segments=1,
+                         rot=(rnd.uniform(-0.6, 0.6), rnd.uniform(-0.6, 0.6), rnd.uniform(0, 3))))
+    obj = join("LowWallRamp", parts)
+    jitter_mesh(obj, 0.006, 49)
+    objects.append(obj)
+
     # Low wall: a sandbag-topped concrete barrier, crouch-height.
     parts = [box("lw_base", (0.48, 0.3, 0.17), (0, 0, 0.17), m["concrete"], bevel=0.04,
                  taper=(1.0, 0.7))]
