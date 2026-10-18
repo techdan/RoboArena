@@ -171,7 +171,7 @@ export const paintFloorDetail = (
 // ---------------------------------------------------------------------------
 // Weathering: world-space procedural detail injected into prop materials.
 
-type WeatherProfile = "masonry" | "metal" | "soft";
+type WeatherProfile = "masonry" | "metal" | "soft" | "floor";
 
 const MATERIAL_PROFILES: Readonly<Record<string, WeatherProfile>> = {
   Brick: "masonry",
@@ -184,6 +184,7 @@ const MATERIAL_PROFILES: Readonly<Record<string, WeatherProfile>> = {
   ArenaSteel: "metal",
   Rebar: "metal",
   ArenaHazard: "metal",
+  ArenaFloor: "floor",
 };
 
 const PROFILE_UNIFORMS: Readonly<
@@ -195,6 +196,8 @@ const PROFILE_UNIFORMS: Readonly<
   masonry: { scale: 7, tone: 0.24, bump: 0.02, grime: 0.2, rough: 0.12 },
   soft: { scale: 12, tone: 0.16, bump: 0.008, grime: 0.18, rough: 0.05 },
   metal: { scale: 4, tone: 0.08, bump: 0.003, grime: 0.18, rough: 0.22 },
+  // Fine grain for enlarged tiles: sharp up close, no ground grime (it is the ground).
+  floor: { scale: 22, tone: 0.1, bump: 0.006, grime: 0, rough: 0.08 },
 };
 
 /** Tileable detail noise, generated once: R = fine grain, G = broad blotches,

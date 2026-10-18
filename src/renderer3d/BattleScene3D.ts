@@ -206,14 +206,14 @@ const hideFlaggedFromAO = (pass: GTAOPass): void => {
 };
 
 /**
- * Art upgrade: tiles are 50% larger relative to robots, so every robot stands
- * in clear floor. The board stays in tile units; robots are drawn at 1/1.5 of
- * their tile size and every default camera stands 1.5x closer, so robots keep
+ * Art upgrade: tiles are 75% larger relative to robots, so every robot stands
+ * in clear floor. The board stays in tile units; robots are drawn at 1/1.75 of
+ * their tile size and every default camera stands 1.75x closer, so robots keep
  * the owner's preferred 1.15 on-screen size and the arena grows past the
  * viewport (pan and zoom reach the rest). For review, `?tile=` sets the
  * growth and `?robotScale=` the on-screen robot size in today's units.
  */
-const ART_TILE_ROOM = 1.5;
+const ART_TILE_ROOM = 1.75;
 const ART_ROBOT_SIZE = 1.15;
 const ART_ROBOT_GLOW = 0.4;
 /** Review dial: `?name=` within [min, max], else the default. */
@@ -537,7 +537,19 @@ export class BattleScene3D {
   private async initialize(): Promise<void> {
     this.library = await loadModelLibrary(this.theme.id, this.robotFamily);
     if (this.disposed) return;
-    this.arena = buildArena(this.state.arena, this.library, this.renderer, this.theme, this.art);
+    this.arena = buildArena(
+      this.state.arena,
+      this.library,
+      this.renderer,
+      this.theme,
+      this.art,
+      this.art
+        ? {
+            robotScale: this.robotSize / this.tileRoom,
+            tileWalls: new URLSearchParams(window.location.search).get("walls") === "tile",
+          }
+        : null,
+    );
     this.scene.add(this.arena.group);
     if (this.theme.floodlights !== null) this.addFloodlightBeams(this.arena.floodlights);
     // Art upgrade: no drifting motes; constant twinkle across the board distracts.

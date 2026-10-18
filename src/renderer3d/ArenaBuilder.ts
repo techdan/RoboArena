@@ -115,6 +115,64 @@ const tileMatrix = (
     new THREE.Vector3(scale.x, scale.y, scale.z),
   );
 
+/**
+ * Art upgrade sizing. Tiles are larger than robots, so props are sized to the
+ * robots rather than the tile: full walls stand a little above the tallest
+ * robot, low walls at crouch height, shrubs and rubble at robot scale. A dark
+ * footing under every wall tile still marks the whole tile as blocked. All of
+ * this is presentation only; cover and line-of-sight rules are unchanged.
+ */
+export interface ArtSizing {
+  /** Robot scale in tile units (the rig's root scale). */
+  readonly robotScale: number;
+  /** Keep the shipped tile-filling walls (review comparison). */
+  readonly tileWalls: boolean;
+}
+/** Props were authored for robots at scale 1.15 on a 1-tile grid. */
+const AUTHORED_ROBOT_SCALE = 1.15;
+/** Tallest robot (missile titan) per unit of rig scale, measured in tiles. */
+const TALLEST_ROBOT_PER_SCALE = 1.046;
+/** "Wall" model top (capstones), tiles. */
+const WALL_MODEL_TOP = 0.72;
+const WALL_THICKNESS = 0.5;
+const PILLAR_SIZE = 0.6;
+
+/** Wall pieces for one tile: a thick bar along each run, or a pillar. */
+const artWallMatrices = (arena: Arena, x: number, y: number, height: number): THREE.Matrix4[] => {
+  const solid = (dx: number, dy: number) => {
+    const terrain = arena.tiles[y + dy]?.[x + dx]?.terrain;
+    return terrain === "wall" || terrain === "outer-wall";
+  };
+  const left = solid(-1, 0);
+  const right = solid(1, 0);
+  const near = solid(0, -1);
+  const far = solid(0, 1);
+  const half = WALL_THICKNESS / 2;
+  const pieces: THREE.Matrix4[] = [];
+  if (left || right) {
+    const x0 = left ? 0 : 0.5 - half;
+    const x1 = right ? 1 : 0.5 + half;
+    pieces.push(
+      tileMatrix(x + (x0 + x1) / 2, y + 0.5, 0, { x: x1 - x0, y: height, z: WALL_THICKNESS }),
+    );
+  }
+  if (near || far) {
+    const z0 = near ? 0 : 0.5 - half;
+    const z1 = far ? 1 : 0.5 + half;
+    // A quarter turn maps the model's local x (its run axis) onto world z.
+    pieces.push(
+      tileMatrix(x + 0.5, y + (z0 + z1) / 2, Math.PI / 2, {
+        x: z1 - z0,
+        y: height,
+        z: WALL_THICKNESS,
+      }),
+    );
+  }
+  if (pieces.length === 0)
+    pieces.push(tileMatrix(x + 0.5, y + 0.5, 0, { x: PILLAR_SIZE, y: height, z: PILLAR_SIZE }));
+  return pieces;
+};
+
 /** Paints the arena floor (colour map, plus an emissive map for glowing seams). */
 const paintFloor = (
   arena: Arena,
@@ -282,6 +340,7 @@ export const buildArena = (
   renderer: THREE.WebGLRenderer,
   theme: ArenaTheme,
   art = false,
+  sizing: ArtSizing | null = null,
 ): ArenaBuild => {
   const group = new THREE.Group();
   group.name = "arena";
@@ -327,6 +386,8 @@ export const buildArena = (
     // Relief shading darkens the floor slightly; lift it back so the board
     // stays at least as bright as the flat painted floor (legibility first).
     floorMaterial.color.setScalar(1.06);
+    floorMaterial.name = "ArenaFloor";
+    weatherMaterial(floorMaterial);
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
@@ -349,6 +410,7 @@ export const buildArena = (
   const placements: Placement[] = [];
   const crevices: THREE.Matrix4[] = [];
   const bushes: THREE.Matrix4[] = [];
+  const footings: THREE.Matrix4[] = [];
   for (let y = 0; y < arena.height; y += 1) {
     for (let x = 0; x < arena.width; x += 1) {
       const terrain = arena.tiles[y]?.[x]?.terrain;
@@ -358,6 +420,14 @@ export const buildArena = (
       const quarter = Math.floor(hash01(key, 1) * 4) * (Math.PI / 2);
       switch (terrain) {
         case "wall":
+          if (sizing !== null && !sizing.tileWalls) {
+            const top = TALLEST_ROBOT_PER_SCALE * sizing.robotScale * 1.12;
+            const height = (top / WALL_MODEL_TOP) * (0.96 + hash01(key, 2) * 0.08);
+            for (const matrix of artWallMatrices(arena, x, y, height))
+              placements.push({ prop: "Wall", matrix });
+            footings.push(tileMatrix(cx, cz, 0));
+            break;
+          }
           placements.push({
             prop:
               art && library.props.has("WallTall")
@@ -376,17 +446,42 @@ export const buildArena = (
           const horizontal =
             arena.tiles[y]?.[x - 1]?.terrain === "low-wall" ||
             arena.tiles[y]?.[x + 1]?.terrain === "low-wall";
+          const relative =
+            sizing === null || sizing.tileWalls ? 1 : sizing.robotScale / AUTHORED_ROBOT_SCALE;
           placements.push({
             prop: "LowWall",
-            matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2),
+            matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2, {
+              x: 1,
+              y: relative,
+              z: relative,
+            }),
           });
+          if (relative !== 1) footings.push(tileMatrix(cx, cz, 0));
           break;
         }
         case "bush": {
           // Art upgrade: shrubs sit inside their tile, leaving floor around them.
           const s = art ? 0.72 + hash01(key, 3) * 0.16 : 0.9 + hash01(key, 3) * 0.3;
           if (art && theme.id === "coliseum") {
-            bushes.push(tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }));
+            if (sizing === null || sizing.tileWalls) {
+              bushes.push(tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }));
+              break;
+            }
+            // Two or three robot-sized clumps scattered across the tile.
+            const clump = s * (sizing.robotScale / AUTHORED_ROBOT_SCALE) * 1.1;
+            const count = hash01(key, 40) > 0.5 ? 3 : 2;
+            for (let n = 0; n < count; n += 1) {
+              const angle = (n / count) * Math.PI * 2 + hash01(key, 41) * Math.PI;
+              const spread = count === 2 ? 0.2 : 0.24;
+              bushes.push(
+                tileMatrix(
+                  cx + Math.cos(angle) * spread,
+                  cz + Math.sin(angle) * spread,
+                  hash01(key, 42 + n) * Math.PI * 2,
+                  { x: clump, y: clump, z: clump },
+                ),
+              );
+            }
             break;
           }
           placements.push({
@@ -396,6 +491,23 @@ export const buildArena = (
           break;
         }
         case "rough": {
+          if (sizing !== null && !sizing.tileWalls) {
+            // Smaller, more numerous rubble: three robot-scaled heaps per tile.
+            const relative = sizing.robotScale / AUTHORED_ROBOT_SCALE;
+            for (let n = 0; n < 3; n += 1) {
+              const heap = Math.floor(hash01(key, 50 + n) * 3) as 0 | 1 | 2;
+              placements.push({
+                prop: `Rubble${heap}`,
+                matrix: tileMatrix(
+                  cx + (hash01(key, 53 + n) - 0.5) * 0.6,
+                  cz + (hash01(key, 56 + n) - 0.5) * 0.6,
+                  hash01(key, 59 + n) * Math.PI * 2,
+                  { x: relative, y: relative, z: relative },
+                ),
+              });
+            }
+            break;
+          }
           const variant = Math.floor(hash01(key, 5) * 3) as 0 | 1 | 2;
           placements.push({
             prop: `Rubble${variant}`,
@@ -493,6 +605,24 @@ export const buildArena = (
     );
     glow.instanceMatrix.needsUpdate = true;
     group.add(glow);
+    disposables.push(geometry, material);
+  }
+
+  // Footings: a dark plinth under every wall tile, so the whole tile still
+  // reads as blocked when the wall body is narrower than the tile.
+  if (footings.length > 0) {
+    const geometry = new THREE.BoxGeometry(1, 0.03, 1);
+    geometry.translate(0, 0.015, 0);
+    const material = new THREE.MeshStandardMaterial({ color: 0x1f1d1b, roughness: 0.95 });
+    material.name = "ConcreteDark";
+    weatherMaterial(material);
+    const plinths = new THREE.InstancedMesh(geometry, material, footings.length);
+    footings.forEach((matrix, index) => plinths.setMatrixAt(index, matrix));
+    plinths.instanceMatrix.needsUpdate = true;
+    plinths.receiveShadow = true;
+    plinths.name = "terrain:Footing";
+    plinths.computeBoundingSphere();
+    group.add(plinths);
     disposables.push(geometry, material);
   }
 
