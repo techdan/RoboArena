@@ -2172,3 +2172,194 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ── Boot Camp: one "Meet your squad" screen ────────────────────────────── */
+
+.site-bootcamp-body {
+  display: grid;
+  gap: 18px;
+  padding: 28px var(--site-gutter) 48px;
+}
+
+.site-bootcamp-title {
+  font-size: clamp(52px, 6.5vw, 88px);
+}
+
+.site-bootcamp-lede {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--site-ink-2);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.site-squad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-squad-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--site-line-2);
+  border-radius: 16px;
+  background: var(--site-deck);
+}
+
+.site-squad-card[data-class="rifle"] {
+  --site-team: var(--site-team-red);
+}
+.site-squad-card[data-class="burst"] {
+  --site-team: var(--site-team-blue);
+}
+.site-squad-card[data-class="auto"] {
+  --site-team: var(--site-team-green);
+}
+.site-squad-card[data-class="missile"] {
+  --site-team: var(--site-team-yellow);
+}
+
+.site-squad-portrait {
+  display: block;
+  width: 100%;
+  height: 190px;
+  object-fit: cover;
+  -webkit-mask-image: linear-gradient(180deg, black 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, black 55%, transparent 100%);
+}
+
+.site-squad-body {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  margin-top: -22px;
+  padding: 0 18px 18px;
+}
+
+.site-squad-role {
+  margin: 0;
+  color: var(--site-team);
+  font: 700 11px/1 var(--site-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.site-squad-name {
+  margin: 0;
+  font: 900 34px/0.9 var(--site-display);
+  text-transform: uppercase;
+}
+
+.site-squad-job {
+  margin: 0;
+  color: var(--site-ink-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.site-squad-ratings {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+
+.site-squad-ratings div {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+}
+
+.site-squad-ratings dt {
+  color: var(--site-ink-3);
+  font-size: 12px;
+}
+
+.site-squad-ratings dd {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+}
+
+.site-squad-ratings dd span {
+  width: 16px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 9%);
+}
+
+.site-squad-ratings dd span[data-on="true"] {
+  background: var(--site-team);
+}
+
+.site-squad-weapon {
+  width: fit-content;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--site-ink-2);
+  font: 700 11px/1 var(--site-mono);
+}
+
+.site-rules {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-rules li {
+  display: grid;
+  gap: 6px;
+  border-top: 2px solid var(--site-rail);
+  padding-top: 14px;
+}
+
+.site-rules strong {
+  font: 800 23px/1 var(--site-display);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.site-rules p {
+  margin: 0;
+  color: var(--site-ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.site-bootcamp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1100px) {
+  .site-squad {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .site-squad-portrait {
+    height: 160px;
+  }
+}
+
+@media (max-width: 720px) {
+  .site-rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .site-squad {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

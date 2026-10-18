@@ -326,6 +326,72 @@ export const CLASS_BRIEFING: Readonly<Record<V1RobotClass, ClassBriefing>> = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// One-screen primer ("Meet your squad")
+
+export interface PrimerRating {
+  readonly label: "Armour" | "Accuracy" | "Firepower";
+  /** 1..5, from the same normalized bars the stat comparison uses. */
+  readonly dots: number;
+}
+
+export interface SquadPrimerCard {
+  readonly robotClass: V1RobotClass;
+  readonly name: string;
+  readonly role: string;
+  readonly job: string;
+  readonly weapon: string;
+  readonly ratings: readonly PrimerRating[];
+}
+
+/** A 0..1 bar as one to five dots; every class shows at least one. */
+export const ratingDots = (fill: number): number => Math.max(1, Math.min(5, Math.round(fill * 5)));
+
+const PRIMER_JOB: Readonly<Record<V1RobotClass, () => string>> = {
+  rifle: () => "Toughest and most accurate. Picks robots off from cover.",
+  burst: () => "Hard-hitting bursts at medium range. Leads the push.",
+  auto: () => "A spinning machine gun. Shreds robots caught in the open.",
+  missile: () =>
+    `${String(stat("missile").ammo)} missiles a match that never roll to hit. Blasts hurt your own robots too.`,
+};
+
+/** The four robot cards for Boot Camp, with ratings derived from the catalog. */
+export const squadPrimer = (): readonly SquadPrimerCard[] => {
+  const bars = squadStatBars();
+  return SQUAD_STATS.map((entry) => {
+    const fill = (id: StatBarId) =>
+      bars.get(entry.robotClass)?.find((bar) => bar.id === id)?.fill ?? 0;
+    return {
+      robotClass: entry.robotClass,
+      name: entry.label,
+      role: CLASS_BRIEFING[entry.robotClass].role,
+      job: PRIMER_JOB[entry.robotClass](),
+      weapon: [entry.weaponName, ...entry.secondaryWeaponNames].join(" + "),
+      ratings: [
+        { label: "Armour", dots: ratingDots(fill("armor")) },
+        { label: "Accuracy", dots: ratingDots(fill("accuracy")) },
+        { label: "Firepower", dots: ratingDots(fill("output")) },
+      ],
+    };
+  });
+};
+
+/** The three rules new players most often get wrong, with the turn length from the engine. */
+export const PRIMER_RULES: readonly { readonly title: string; readonly body: string }[] = [
+  {
+    title: "Everything costs time",
+    body: `Each robot gets ${ticksToSeconds(TURN_DURATION_TICKS_DEFAULT)} seconds a turn. Moving, turning, ducking and firing all use some of it.`,
+  },
+  {
+    title: "Cover beats armour",
+    body: "Duck behind a low wall or in a bush and you are far harder to hit. Walls block shots completely.",
+  },
+  {
+    title: "Scan & fire ambushes",
+    body: "Point a robot's sensor down a lane. It fires at the first enemy that walks in.",
+  },
+];
+
+// ──────────────────────────────────────────────────────────────────────────
 // Rosters by game length
 
 export interface RosterSlot {

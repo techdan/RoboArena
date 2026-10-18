@@ -12,8 +12,8 @@ above the timeline, labelled Undo/Redo in the top bar) and a one-screen
       anything on the board
 - [x] Undo/Redo move to the top bar with labels; the notice offers Undo
 - [x] First-turn coach copy points at the bar instead of the ring
-- [ ] Boot Camp becomes one "Meet your squad" screen with 3D portraits
-- [ ] Checks, screenshots at 1440x900 and 1024x768, local commits
+- [x] Boot Camp becomes one "Meet your squad" screen with 3D portraits
+- [x] Checks, screenshots at 1440x900 and 1024x768, local commits
 
 # Site UX redesign — Floodlit broadcast (started 2026-10-17)
 
