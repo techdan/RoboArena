@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PLANNER_2D_CHOICE_ENABLED, preferredPlannerBoard } from "./support";
+import {
+  MOVIE_2D_CHOICE_ENABLED,
+  PLANNER_2D_CHOICE_ENABLED,
+  preferredMovieRenderer,
+  preferredPlannerBoard,
+} from "./support";
 
 const stubBrowser = (stored: Record<string, string>, webgl2: boolean) => {
   const loseContext = vi.fn();
@@ -40,5 +45,20 @@ describe("preferredPlannerBoard", () => {
     expect(preferredPlannerBoard()).toBe("3d");
     expect(probe.getContext).toHaveBeenCalledTimes(1);
     expect(probe.loseContext).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("preferredMovieRenderer", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the 2D movie choice hidden", () => {
+    expect(MOVIE_2D_CHOICE_ENABLED).toBe(false);
+  });
+
+  it("ignores an earlier remembered 2D movie choice while that choice is hidden", () => {
+    stubBrowser({ "roboarena.movieRenderer": "2d" }, true);
+    expect(preferredMovieRenderer()).toBe("3d");
   });
 });

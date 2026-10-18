@@ -5,7 +5,8 @@ import type { RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
 import { timelineForRobot, timelineTiming } from "../../planner/segments";
 
-const CHASSIS: Readonly<Record<string, string>> = {
+/** Chassis and weapon for each class, as the rail and the command bar show it. */
+export const CHASSIS: Readonly<Record<string, string>> = {
   rifle: "Strider · Rifle",
   burst: "Hound · Burst",
   auto: "Crab · Machine gun",

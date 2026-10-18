@@ -3,6 +3,7 @@ import { Big_Shoulders, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import "./site.css";
+import "./planner-bar.css";
 import { HelpProvider } from "../components/help/HelpProvider";
 
 // Site-page faces only. The planner and movie keep their existing font stack;

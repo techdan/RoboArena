@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RobotCommandSegment, RobotState, TurnOrders } from "../../engine/types";
 import { formatGameTime } from "../../lib/formatTime";
-import { commandPresentation } from "../../planner/presentation";
+import { commandPresentation, moveArrows } from "../../planner/presentation";
 import { projectRobotAtTick, timelineForRobot, timelineTiming } from "../../planner/segments";
 import { PostureIcon } from "./PostureIcon";
 
@@ -31,12 +31,23 @@ const weaponInitial = (
           ? "A"
           : "R";
 
-const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) => {
+const CommandGlyph = ({
+  segment,
+  arrows,
+}: {
+  readonly segment: RobotCommandSegment;
+  /** Every step's arrow, spread across the move's cell like footprints in time. */
+  readonly arrows: readonly string[];
+}) => {
   switch (segment.kind) {
     case "deploy":
-      return <MapPin size={15} aria-hidden="true" />;
+      return <MapPin size={17} aria-hidden="true" />;
     case "move":
-      return <span className="timeline-move-glyph">{commandPresentation(segment).compact}</span>;
+      return (
+        <span className="timeline-move-glyph" aria-hidden="true">
+          {arrows.length === 0 ? "Move" : arrows.map((arrow, index) => <i key={index}>{arrow}</i>)}
+        </span>
+      );
     case "set-posture":
       return <PostureIcon posture={segment.posture} />;
     case "set-scan-direction":
@@ -48,28 +59,28 @@ const CommandGlyph = ({ segment }: { readonly segment: RobotCommandSegment }) =>
     case "aim-and-fire":
       return (
         <span className="timeline-fire-glyph" aria-hidden="true">
-          <Crosshair size={15} />
+          <Crosshair size={17} />
           <i>{weaponInitial(segment)}</i>
         </span>
       );
     case "scan-and-fire":
       return (
         <span className="timeline-fire-glyph" aria-hidden="true">
-          <Radar size={15} />
+          <Radar size={17} />
           <i>{weaponInitial(segment)}</i>
         </span>
       );
     case "zap":
-      return <Zap size={15} aria-hidden="true" />;
+      return <Zap size={17} aria-hidden="true" />;
     case "place-bomb":
       return (
         <span className="timeline-fire-glyph" aria-hidden="true">
-          <Bomb size={15} />
+          <Bomb size={17} />
           <i>{segment.fuseSeconds}</i>
         </span>
       );
     case "self-destruct":
-      return <Skull size={15} aria-hidden="true" />;
+      return <Skull size={17} aria-hidden="true" />;
   }
 };
 
@@ -124,12 +135,13 @@ export function TimelineLane({
   );
   const presentations = useMemo(() => {
     const segments = timelineForRobot(orders, robot.id).segments;
-    return timing.map((entry) =>
-      commandPresentation(
-        entry.segment,
-        projectRobotAtTick(robot, segments.slice(0, entry.index)).position,
-      ),
-    );
+    return timing.map((entry) => {
+      const start = projectRobotAtTick(robot, segments.slice(0, entry.index)).position;
+      return {
+        ...commandPresentation(entry.segment, start),
+        arrows: entry.segment.kind === "move" ? moveArrows(entry.segment, start) : [],
+      };
+    });
   }, [timing, orders, robot]);
   useEffect(
     () => () => {
@@ -266,7 +278,7 @@ export function TimelineLane({
                   else openDetail(key, event.currentTarget, true);
                 }}
               >
-                <CommandGlyph segment={entry.segment} />
+                <CommandGlyph segment={entry.segment} arrows={presentation.arrows} />
               </button>
               {/* Portaled to <body>: the track's backdrop-filter would otherwise
                   become the containing block for this position: fixed popover

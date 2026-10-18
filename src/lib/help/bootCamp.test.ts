@@ -36,9 +36,12 @@ import {
   missileBlastRings,
   normalizeBars,
   POSTURES,
+  PRIMER_RULES,
+  ratingDots,
   rosterSlots,
   SELECTABLE_LENGTHS,
   SQUAD_STATS,
+  squadPrimer,
   squadStatBars,
   V1_CLASSES,
 } from "./bootCamp.js";
@@ -297,5 +300,37 @@ describe("Boot Camp browser-safe engine mirrors", () => {
         }
       }
     }
+  });
+});
+
+describe("Boot Camp primer", () => {
+  it("turns bars into one to five dots", () => {
+    expect(ratingDots(0)).toBe(1);
+    expect(ratingDots(0.5)).toBe(3);
+    expect(ratingDots(1)).toBe(5);
+  });
+
+  it("gives every class a card whose ratings follow the catalog", () => {
+    const cards = squadPrimer();
+    expect(cards.map((card) => card.robotClass)).toEqual(V1_CLASSES);
+    const dots = (robotClass: string, label: string) =>
+      cards
+        .find((card) => card.robotClass === robotClass)!
+        .ratings.find((rating) => rating.label === label)!.dots;
+    expect(dots("rifle", "Armour")).toBe(5);
+    expect(dots("rifle", "Accuracy")).toBe(5);
+    expect(dots("missile", "Firepower")).toBe(5);
+    for (const robotClass of ["rifle", "burst", "missile"])
+      expect(dots("auto", "Accuracy")).toBeLessThan(dots(robotClass, "Accuracy"));
+    expect(cards.find((card) => card.robotClass === "missile")!.job).toContain(
+      String(classStats("missile").ammo),
+    );
+    expect(cards.find((card) => card.robotClass === "missile")!.weapon).toContain(" + ");
+  });
+
+  it("states the default turn length in the time rule", () => {
+    expect(PRIMER_RULES[0]!.body).toContain(
+      `${formatSeconds(TURN_DURATION_TICKS_DEFAULT).replace("s", "")} seconds`,
+    );
   });
 });

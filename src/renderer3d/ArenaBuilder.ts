@@ -12,6 +12,8 @@ import type { Arena, Terrain } from "../engine/types";
 import { hash01 } from "./kinematics";
 import type { ModelLibrary, PropName } from "./models";
 import type { ArenaTheme, FloorPalette } from "./themes";
+import { buildFoliage, paintFloorDetail, weatherMaterial } from "./arenaArt";
+import { buildArtWalls } from "./arenaWalls";
 
 const FLOOR_PX = 64;
 
@@ -38,11 +40,35 @@ const matteStandSteel = (material: THREE.Material | THREE.Material[]) => {
   return matte;
 };
 
+/**
+ * Art upgrade: the stands are window dressing. The crowd stays recognisable
+ * but dim, the structure recedes, the canopy lamps glow faintly over the seats
+ * and the LED ribbons and seat strips go out, so the edge never shimmers.
+ */
+const quietStands = new WeakMap<THREE.Material, THREE.Material>();
+const quietStand = (material: THREE.Material | THREE.Material[]) => {
+  if (Array.isArray(material) || !(material instanceof THREE.MeshStandardMaterial)) return material;
+  const cached = quietStands.get(material);
+  if (cached !== undefined) return cached;
+  const quiet = material.clone();
+  const name = material.name;
+  const crowd = name.startsWith("Crowd") || name.startsWith("Banner");
+  quiet.color.multiplyScalar(crowd ? 0.5 : 0.28);
+  quiet.emissiveIntensity = name === "CanopyLight" ? material.emissiveIntensity * 0.2 : 0;
+  quiet.metalness = 0;
+  quiet.roughness = 1;
+  quiet.onBeforeCompile = () => undefined;
+  quiet.customProgramCacheKey = () => "quiet-stand";
+  quietStands.set(material, quiet);
+  return quiet;
+};
+
 /** Collects one instanced batch per (prop, mesh primitive). */
 const instanceProps = (
   library: ModelLibrary,
   placements: readonly Placement[],
   parent: THREE.Object3D,
+  art = false,
 ): void => {
   const byProp = new Map<PropName, THREE.Matrix4[]>();
   for (const placement of placements) {
@@ -56,7 +82,12 @@ const instanceProps = (
     template.updateMatrixWorld(true);
     template.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-      const material = prop === "Grandstand" ? matteStandSteel(child.material) : child.material;
+      const material =
+        prop !== "Grandstand"
+          ? child.material
+          : art
+            ? quietStand(child.material)
+            : matteStandSteel(child.material);
       const mesh = new THREE.InstancedMesh(child.geometry, material, matrices.length);
       const local = child.matrixWorld;
       matrices.forEach((matrix, index) =>
@@ -85,6 +116,23 @@ const tileMatrix = (
     new THREE.Vector3(scale.x, scale.y, scale.z),
   );
 
+/**
+ * Art upgrade sizing. Tiles are larger than robots, so props are sized to the
+ * robots rather than the tile: full walls stand a little above the tallest
+ * robot, low walls at crouch height, shrubs and rubble at robot scale. Blocked
+ * tiles keep the ordinary floor; the wall on top marks them. All of this is
+ * presentation only; cover and line-of-sight rules are unchanged.
+ */
+export interface ArtSizing {
+  /** Robot scale in tile units (the rig's root scale). */
+  readonly robotScale: number;
+  /** Keep the shipped tile-filling walls (review comparison). */
+  readonly tileWalls: boolean;
+  /** Keep the sandbag block low wall instead of collapsed rubble (review). */
+  readonly blockLowWalls: boolean;
+}
+/** Props were authored for robots at scale 1.15 on a 1-tile grid. */
+const AUTHORED_ROBOT_SCALE = 1.15;
 /** Paints the arena floor (colour map, plus an emissive map for glowing seams). */
 const paintFloor = (
   arena: Arena,
@@ -251,6 +299,8 @@ export const buildArena = (
   library: ModelLibrary,
   renderer: THREE.WebGLRenderer,
   theme: ArenaTheme,
+  art = false,
+  sizing: ArtSizing | null = null,
 ): ArenaBuild => {
   const group = new THREE.Group();
   group.name = "arena";
@@ -276,6 +326,29 @@ export const buildArena = (
     floorMaterial.emissiveIntensity = theme.floor.glowIntensity;
     disposables.push(glowTexture);
   }
+  if (art) {
+    const detail = paintFloorDetail(arena, FLOOR_PX, {
+      roughness: theme.floor.roughness,
+      metalness: theme.floor.metalness,
+      relief: 7,
+    });
+    const normalMap = new THREE.CanvasTexture(detail.normal);
+    const orm = new THREE.CanvasTexture(detail.orm);
+    for (const texture of [normalMap, orm]) {
+      texture.anisotropy = floorTexture.anisotropy;
+      disposables.push(texture);
+    }
+    floorMaterial.normalMap = normalMap;
+    floorMaterial.roughnessMap = orm;
+    floorMaterial.aoMap = orm;
+    floorMaterial.aoMapIntensity = 1;
+    floorMaterial.roughness = 1;
+    // Relief shading darkens the floor slightly; lift it back so the board
+    // stays at least as bright as the flat painted floor (legibility first).
+    floorMaterial.color.setScalar(1.06);
+    floorMaterial.name = "ArenaFloor";
+    weatherMaterial(floorMaterial);
+  }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(arena.width, arena.height), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(arena.width / 2, 0, arena.height / 2);
@@ -296,6 +369,7 @@ export const buildArena = (
 
   const placements: Placement[] = [];
   const crevices: THREE.Matrix4[] = [];
+  const bushes: THREE.Matrix4[] = [];
   for (let y = 0; y < arena.height; y += 1) {
     for (let x = 0; x < arena.width; x += 1) {
       const terrain = arena.tiles[y]?.[x]?.terrain;
@@ -305,8 +379,15 @@ export const buildArena = (
       const quarter = Math.floor(hash01(key, 1) * 4) * (Math.PI / 2);
       switch (terrain) {
         case "wall":
+          // Art upgrade: brick-textured blocks are built below (arenaWalls.ts).
+          if (sizing !== null && !sizing.tileWalls) break;
           placements.push({
-            prop: library.props.has("WallB") && hash01(key, 13) > 0.5 ? "WallB" : "Wall",
+            prop:
+              art && library.props.has("WallTall")
+                ? "WallTall"
+                : library.props.has("WallB") && hash01(key, 13) > 0.5
+                  ? "WallB"
+                  : "Wall",
             matrix: tileMatrix(cx, cz, quarter, { x: 1, y: 0.92 + hash01(key, 2) * 0.16, z: 1 }),
           });
           break;
@@ -318,14 +399,45 @@ export const buildArena = (
           const horizontal =
             arena.tiles[y]?.[x - 1]?.terrain === "low-wall" ||
             arena.tiles[y]?.[x + 1]?.terrain === "low-wall";
+          // Art upgrade: collapsed-rubble mounds are built per run below.
+          if (sizing !== null && !sizing.tileWalls && !sizing.blockLowWalls) break;
+          const relative =
+            sizing === null || sizing.tileWalls ? 1 : sizing.robotScale / AUTHORED_ROBOT_SCALE;
           placements.push({
             prop: "LowWall",
-            matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2),
+            matrix: tileMatrix(cx, cz, horizontal ? 0 : Math.PI / 2, {
+              x: 1,
+              y: relative,
+              z: relative,
+            }),
           });
           break;
         }
         case "bush": {
-          const s = 0.9 + hash01(key, 3) * 0.3;
+          // Art upgrade: shrubs sit inside their tile, leaving floor around them.
+          const s = art ? 0.72 + hash01(key, 3) * 0.16 : 0.9 + hash01(key, 3) * 0.3;
+          if (art && theme.id === "coliseum") {
+            if (sizing === null || sizing.tileWalls) {
+              bushes.push(tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }));
+              break;
+            }
+            // Two or three robot-sized clumps scattered across the tile.
+            const clump = s * (sizing.robotScale / AUTHORED_ROBOT_SCALE) * 1.1;
+            const count = hash01(key, 40) > 0.5 ? 3 : 2;
+            for (let n = 0; n < count; n += 1) {
+              const angle = (n / count) * Math.PI * 2 + hash01(key, 41) * Math.PI;
+              const spread = count === 2 ? 0.2 : 0.24;
+              bushes.push(
+                tileMatrix(
+                  cx + Math.cos(angle) * spread,
+                  cz + Math.sin(angle) * spread,
+                  hash01(key, 42 + n) * Math.PI * 2,
+                  { x: clump, y: clump, z: clump },
+                ),
+              );
+            }
+            break;
+          }
           placements.push({
             prop: "Bush",
             matrix: tileMatrix(cx, cz, hash01(key, 4) * Math.PI * 2, { x: s, y: s, z: s }),
@@ -333,6 +445,23 @@ export const buildArena = (
           break;
         }
         case "rough": {
+          if (sizing !== null && !sizing.tileWalls) {
+            // Smaller, more numerous rubble: three robot-scaled heaps per tile.
+            const relative = sizing.robotScale / AUTHORED_ROBOT_SCALE;
+            for (let n = 0; n < 3; n += 1) {
+              const heap = Math.floor(hash01(key, 50 + n) * 3) as 0 | 1 | 2;
+              placements.push({
+                prop: `Rubble${heap}`,
+                matrix: tileMatrix(
+                  cx + (hash01(key, 53 + n) - 0.5) * 0.6,
+                  cz + (hash01(key, 56 + n) - 0.5) * 0.6,
+                  hash01(key, 59 + n) * Math.PI * 2,
+                  { x: relative, y: relative, z: relative },
+                ),
+              });
+            }
+            break;
+          }
           const variant = Math.floor(hash01(key, 5) * 3) as 0 | 1 | 2;
           placements.push({
             prop: `Rubble${variant}`,
@@ -396,7 +525,24 @@ export const buildArena = (
     });
     floodlights.push(new THREE.Vector3(fx, 6.6, fz));
   }
-  instanceProps(library, placements, group);
+  if (art) {
+    for (const template of library.props.values())
+      template.traverse((child) => {
+        if (child instanceof THREE.Mesh && !Array.isArray(child.material))
+          weatherMaterial(child.material);
+      });
+  }
+  instanceProps(library, placements, group, art);
+  if (sizing !== null && !sizing.tileWalls) {
+    const walls = buildArtWalls(arena, sizing.robotScale, { lowWalls: !sizing.blockLowWalls });
+    group.add(walls.group);
+    disposables.push(walls);
+  }
+  if (bushes.length > 0) {
+    const foliage = buildFoliage(bushes, ["#5a9e36", "#6cb03e", "#82c24a", "#94cc58", "#4a8a2e"]);
+    group.add(foliage.mesh);
+    disposables.push(foliage);
+  }
 
   // Crevices: a dark sunken slot with a faint magma glow at the bottom.
   if (crevices.length > 0) {

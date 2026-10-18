@@ -4,7 +4,8 @@
  *    root           ground position + body yaw (walks / hops the tile path)
  *    └── hull       height, bob, lean, flinch (springs)
  *        ├── turret yaw toward scan heading or aim target
- *        │   └── barrel   recoil slide (+ spin for the rotary cannon)
+ *        │   └── barrel   recoil slide
+ *        │       └── spinner   rotary cannon only: spins on the cannon's own axis
  *        └── hipN   yaw toward the planted foot
  *            └── upper → knee → foot   two-bone IK, knee up (spider stance)
  *
@@ -90,11 +91,21 @@ export interface RigEvents {
 const tmpV3 = new THREE.Vector3();
 const tmpV3b = new THREE.Vector3();
 
+/** Barrel-space axis of a rotary cannon: the centre of its muzzles across the bore. */
+export const cannonAxis = (muzzles: readonly THREE.Vector3[]): THREE.Vector2 => {
+  const axis = new THREE.Vector2();
+  if (muzzles.length === 0) return axis;
+  for (const muzzle of muzzles) axis.add(new THREE.Vector2(muzzle.x, muzzle.y));
+  return axis.divideScalar(muzzles.length);
+};
+
 export class RobotRig {
   readonly root = new THREE.Group();
   readonly hull = new THREE.Group();
   readonly turret = new THREE.Group();
   readonly barrel = new THREE.Group();
+  /** Rotary cannon pivot, placed on the cannon's axis rather than its mount. */
+  private readonly spinner = new THREE.Group();
   private readonly legs: Leg[] = [];
   private readonly muzzles: THREE.Object3D[] = [];
   private readonly ring: THREE.Mesh;
@@ -144,6 +155,7 @@ export class RobotRig {
     teamColor: string,
     private readonly events: RigEvents = {},
     glowIntensity = 1.8,
+    private readonly scale = ROBOT_SCALE,
   ) {
     const materials = teamMaterials(teamColor, glowIntensity);
     this.disposeTeamMaterials = materials.dispose;
@@ -152,7 +164,7 @@ export class RobotRig {
     this.idlePhase = hash01(id) * Math.PI * 2;
     this.height = new Spring(model.hullHeight, 140, 13);
     this.root.name = `robot:${id}`;
-    this.root.scale.setScalar(ROBOT_SCALE);
+    this.root.scale.setScalar(scale);
 
     const hullPart = instantiatePart(model.hull, materials);
     this.hull.add(hullPart);
@@ -163,7 +175,19 @@ export class RobotRig {
     this.turret.add(instantiatePart(model.turret, materials));
     this.hull.add(this.turret);
     this.barrel.position.copy(model.barrelMount);
-    this.barrel.add(instantiatePart(model.barrel, materials));
+    const gun = instantiatePart(model.barrel, materials);
+    if (this.spin) {
+      // The barrel cluster is modelled around its own axis, which sits below the
+      // mount and runs through the centre of the muzzles. Spinning the mount
+      // would swing the whole gun in a circle; spin about that axis instead.
+      const axis = cannonAxis(model.muzzles);
+      this.spinner.position.set(axis.x, axis.y, 0);
+      gun.position.set(-axis.x, -axis.y, 0);
+      this.spinner.add(gun);
+      this.barrel.add(this.spinner);
+    } else {
+      this.barrel.add(gun);
+    }
     this.turret.add(this.barrel);
     for (const muzzle of model.muzzles) {
       const anchor = new THREE.Object3D();
@@ -494,8 +518,8 @@ export class RobotRig {
     const spread = this.destroyedState ? 1.35 : POSTURE_SPREAD[this.posture];
     const cos = Math.cos(this.bodyYaw);
     const sin = Math.sin(this.bodyYaw);
-    const rx = leg.rest.x * spread * ROBOT_SCALE;
-    const rz = leg.rest.y * spread * ROBOT_SCALE;
+    const rx = leg.rest.x * spread * this.scale;
+    const rz = leg.rest.y * spread * this.scale;
     // rotation.y = θ maps local (x, z) to (x cos θ + z sin θ, -x sin θ + z cos θ).
     out.set(
       this.position.x + rx * cos + rz * sin + this.velocity.x * lookahead,
@@ -611,7 +635,7 @@ export class RobotRig {
     if (this.spin) {
       this.barrelSpinVelocity *= Math.exp(-sdt * 2.5);
       this.barrelSpin += this.barrelSpinVelocity * sdt;
-      this.barrel.rotation.z = this.barrelSpin;
+      this.spinner.rotation.z = this.barrelSpin;
     }
     this.ring.position.y = 0.015;
     this.hpBar.position.set(0, height + hopLift + 0.55, 0);
@@ -623,7 +647,7 @@ export class RobotRig {
     // previews, fast playback) quicken the stride until a foot cannot fall
     // further behind than the leg can stretch. Plan for the segment's peak pace,
     // not the lagging smoothed velocity.
-    const legSpan = (this.model.upperLength + this.model.lowerLength) * ROBOT_SCALE;
+    const legSpan = (this.model.upperLength + this.model.lowerLength) * this.scale;
     const bodySpeed =
       this.segment !== null && !this.segment.hop
         ? (this.segment.from.distanceTo(this.segment.to) / this.segment.duration) * STRIDE_PEAK

@@ -29,8 +29,9 @@ export function FirstTimeHint() {
       <div>
         <strong>Program, then watch.</strong>
         <p>
-          Select a robot, tap a movement destination, set posture, scan, or fire actions, review the
-          timeline, then lock. Opponents never see your draft.
+          Select a robot, move into cover, choose a protective posture, and face an enemy approach.
+          Add Scan & Fire, review the timeline, then lock. Use Aim & Fire when you want to attack a
+          specific tile. Opponents never see your draft.
         </p>
       </div>
       <button type="button" onClick={dismiss} aria-label="Dismiss planning basics">
