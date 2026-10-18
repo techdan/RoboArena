@@ -495,6 +495,15 @@ export class BattleScene3D {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
+    // Plain drag pans across the (now larger than the screen) arena; rotating
+    // takes the right button or two fingers, and the wheel or pinch zooms.
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.ROTATE,
+    };
+    this.controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    this.controls.screenSpacePanning = false;
     this.controls.maxPolarAngle = Math.PI * 0.46;
     this.controls.minDistance = 3 / (this.art ? this.tileRoom : 1);
     this.controls.maxDistance = Math.max(width, height) * 2.2;
@@ -547,6 +556,7 @@ export class BattleScene3D {
         ? {
             robotScale: this.robotSize / this.tileRoom,
             tileWalls: new URLSearchParams(window.location.search).get("walls") === "tile",
+            blockLowWalls: new URLSearchParams(window.location.search).get("lowWall") === "block",
           }
         : null,
     );
@@ -1085,11 +1095,12 @@ export class BattleScene3D {
     if (view === "orbit") {
       controls.enableRotate = true;
       controls.mouseButtons = {
-        LEFT: THREE.MOUSE.ROTATE,
+        LEFT: THREE.MOUSE.PAN,
         MIDDLE: THREE.MOUSE.DOLLY,
-        RIGHT: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.ROTATE,
       };
-      controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+      controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+      controls.screenSpacePanning = false;
       this.setFov(38);
       const yaw = (quarter * Math.PI) / 2;
       const target = new THREE.Vector3(width / 2, 0, height / 2);

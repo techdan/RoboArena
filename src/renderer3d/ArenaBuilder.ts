@@ -118,15 +118,17 @@ const tileMatrix = (
 /**
  * Art upgrade sizing. Tiles are larger than robots, so props are sized to the
  * robots rather than the tile: full walls stand a little above the tallest
- * robot, low walls at crouch height, shrubs and rubble at robot scale. A dark
- * footing under every wall tile still marks the whole tile as blocked. All of
- * this is presentation only; cover and line-of-sight rules are unchanged.
+ * robot, low walls at crouch height, shrubs and rubble at robot scale. Blocked
+ * tiles keep the ordinary floor; the wall on top marks them. All of this is
+ * presentation only; cover and line-of-sight rules are unchanged.
  */
 export interface ArtSizing {
   /** Robot scale in tile units (the rig's root scale). */
   readonly robotScale: number;
   /** Keep the shipped tile-filling walls (review comparison). */
   readonly tileWalls: boolean;
+  /** Keep the sandbag block low wall instead of collapsed rubble (review). */
+  readonly blockLowWalls: boolean;
 }
 /** Props were authored for robots at scale 1.15 on a 1-tile grid. */
 const AUTHORED_ROBOT_SCALE = 1.15;
@@ -141,7 +143,8 @@ const PILLAR_SIZE = 0.6;
 const artWallMatrices = (arena: Arena, x: number, y: number, height: number): THREE.Matrix4[] => {
   const solid = (dx: number, dy: number) => {
     const terrain = arena.tiles[y + dy]?.[x + dx]?.terrain;
-    return terrain === "wall" || terrain === "outer-wall";
+    // Low walls join too: a collapsed section meets the standing wall's end.
+    return terrain === "wall" || terrain === "outer-wall" || terrain === "low-wall";
   };
   const left = solid(-1, 0);
   const right = solid(1, 0);
@@ -410,7 +413,6 @@ export const buildArena = (
   const placements: Placement[] = [];
   const crevices: THREE.Matrix4[] = [];
   const bushes: THREE.Matrix4[] = [];
-  const footings: THREE.Matrix4[] = [];
   for (let y = 0; y < arena.height; y += 1) {
     for (let x = 0; x < arena.width; x += 1) {
       const terrain = arena.tiles[y]?.[x]?.terrain;
@@ -425,7 +427,6 @@ export const buildArena = (
             const height = (top / WALL_MODEL_TOP) * (0.96 + hash01(key, 2) * 0.08);
             for (const matrix of artWallMatrices(arena, x, y, height))
               placements.push({ prop: "Wall", matrix });
-            footings.push(tileMatrix(cx, cz, 0));
             break;
           }
           placements.push({
@@ -446,6 +447,29 @@ export const buildArena = (
           const horizontal =
             arena.tiles[y]?.[x - 1]?.terrain === "low-wall" ||
             arena.tiles[y]?.[x + 1]?.terrain === "low-wall";
+          if (
+            sizing !== null &&
+            !sizing.tileWalls &&
+            !sizing.blockLowWalls &&
+            library.props.has("LowWallRubble")
+          ) {
+            // A collapsed section spanning edge to edge, running toward whichever
+            // neighbours it connects (standing walls or more low wall).
+            const joins = (dx: number, dy: number) => {
+              const next = arena.tiles[y + dy]?.[x + dx]?.terrain;
+              return next === "low-wall" || next === "wall" || next === "outer-wall";
+            };
+            const alongX = joins(-1, 0) || joins(1, 0) || !(joins(0, -1) || joins(0, 1));
+            placements.push({
+              prop: "LowWallRubble",
+              matrix: tileMatrix(cx, cz, alongX ? 0 : Math.PI / 2, {
+                x: 1,
+                y: sizing.robotScale / AUTHORED_ROBOT_SCALE,
+                z: 1,
+              }),
+            });
+            break;
+          }
           const relative =
             sizing === null || sizing.tileWalls ? 1 : sizing.robotScale / AUTHORED_ROBOT_SCALE;
           placements.push({
@@ -456,7 +480,6 @@ export const buildArena = (
               z: relative,
             }),
           });
-          if (relative !== 1) footings.push(tileMatrix(cx, cz, 0));
           break;
         }
         case "bush": {
@@ -605,24 +628,6 @@ export const buildArena = (
     );
     glow.instanceMatrix.needsUpdate = true;
     group.add(glow);
-    disposables.push(geometry, material);
-  }
-
-  // Footings: a dark plinth under every wall tile, so the whole tile still
-  // reads as blocked when the wall body is narrower than the tile.
-  if (footings.length > 0) {
-    const geometry = new THREE.BoxGeometry(1, 0.03, 1);
-    geometry.translate(0, 0.015, 0);
-    const material = new THREE.MeshStandardMaterial({ color: 0x1f1d1b, roughness: 0.95 });
-    material.name = "ConcreteDark";
-    weatherMaterial(material);
-    const plinths = new THREE.InstancedMesh(geometry, material, footings.length);
-    footings.forEach((matrix, index) => plinths.setMatrixAt(index, matrix));
-    plinths.instanceMatrix.needsUpdate = true;
-    plinths.receiveShadow = true;
-    plinths.name = "terrain:Footing";
-    plinths.computeBoundingSphere();
-    group.add(plinths);
     disposables.push(geometry, material);
   }
 

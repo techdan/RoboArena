@@ -13,7 +13,8 @@
 //
 // Requires the dev server on http://localhost:3000 (npm run dev) and Python
 // with Pillow for the montage. Options via env: TICK (default 40), THEME
-// (coliseum), CENTER ("12,14.5" tile coordinates), HEIGHT (13), and
+// (coliseum), CENTER ("12,14.5" tile coordinates), HEIGHT (13), TILT (camera
+// offset south per unit of height, 0 = straight down; 0.9 for an angled look), and
 // VIEW=overview to capture each variant's own default overview framing (full
 // canvas, no crop) instead of the locked close-up.
 import { execFileSync } from "node:child_process";
@@ -32,6 +33,7 @@ const theme = process.env.THEME ?? "coliseum";
 const [cx, cz] = (process.env.CENTER ?? "12,14.5").split(",").map(Number);
 const height = Number(process.env.HEIGHT ?? 13);
 const overview = process.env.VIEW === "overview";
+const tilt = Number(process.env.TILT ?? 0);
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "arena-compare-"));
 
 const browser = await chromium.launch({
@@ -49,7 +51,7 @@ for (const [index, spec] of specs.entries()) {
   const canvas = page.locator("canvas[data-movie-renderer='3d']");
   await canvas.scrollIntoViewIfNeeded();
   await page.evaluate(
-    ({ tick, cx, cz, height, overview }) => {
+    ({ tick, cx, cz, height, overview, tilt }) => {
       const scene = window.__movie3d.scene;
       scene.enableManualClock();
       window.__movie3d.show(tick, false);
@@ -60,10 +62,10 @@ for (const [index, spec] of specs.entries()) {
         return;
       }
       scene.setFov(24);
-      scene.lookFrom({ x: cx, y: height, z: cz + 0.1 }, { x: cx, y: 0, z: cz });
+      scene.lookFrom({ x: cx, y: height, z: cz + 0.1 + height * tilt }, { x: cx, y: 0, z: cz });
       scene.advance(0.2);
     },
-    { tick, cx, cz, height: cameraHeight, overview },
+    { tick, cx, cz, height: cameraHeight, overview, tilt },
   );
   const file = path.join(work, `${index}.png`);
   await canvas.screenshot({ path: file });

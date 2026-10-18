@@ -22,12 +22,18 @@ export const supportsWebGl2 = (): boolean => {
   }
 };
 
-/** A remembered choice wins; otherwise 3D wherever the browser can run it. */
+/**
+ * Whether players may pick the 2D movie. Hidden like the planner's 2D board:
+ * the 2D renderer remains for browsers without WebGL2 and the 3D error
+ * fallback, but no switch is offered and a remembered "2d" choice is ignored.
+ */
+export const MOVIE_2D_CHOICE_ENABLED = false;
+
+/** 3D wherever the browser can run it; a remembered 2D choice only while offered. */
 export const preferredMovieRenderer = (): MovieRendererKind => {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "2d" || stored === "3d")
-      return stored === "3d" && !supportsWebGl2() ? "2d" : stored;
+    if (stored === "2d" && MOVIE_2D_CHOICE_ENABLED) return "2d";
   } catch {
     // Storage blocked: fall through to detection.
   }

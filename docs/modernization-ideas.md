@@ -39,3 +39,8 @@ playtesting:
   could become selectable options, each with trade-offs such as faster turning,
   better spotting, more armour or slower movement. This would move the game
   away from the original's balance, so it needs its own playtesting.
+- **Destructible high walls.** A missile (and perhaps a grenade) hitting a
+  high wall could collapse it into a low wall, drawn in the same broken-rubble
+  style as the 3D low walls. Cover and line of sight on that tile would change
+  mid-match, so the planner and the movie must both show the new state, and
+  the rule needs playtesting against the original's balance.

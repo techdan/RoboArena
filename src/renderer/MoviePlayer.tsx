@@ -5,7 +5,11 @@ import type { Application, Texture } from "pixi.js";
 import { Box, Clapperboard, Map as MapIcon, Move3d, Square } from "lucide-react";
 import { MovieControls, type MovieSpeed } from "../components/MovieControls";
 import type { BattleScene3D, CameraMode } from "../renderer3d/BattleScene3D";
-import { preferredMovieRenderer, type MovieRendererKind } from "../renderer3d/support";
+import {
+  MOVIE_2D_CHOICE_ENABLED,
+  preferredMovieRenderer,
+  type MovieRendererKind,
+} from "../renderer3d/support";
 import { GraphicsQualityControl } from "../components/GraphicsQualityControl";
 import { DEFAULT_ARENA_THEME, isArenaThemeId, type ArenaThemeId } from "../renderer3d/themes";
 import type { MatchState, Terrain, TileCoord } from "../engine/types";
@@ -688,28 +692,30 @@ export function MoviePlayer({
         </div>
         <div className="movie-view-toolbar" role="toolbar" aria-label="Movie view">
           {is3d ? <GraphicsQualityControl /> : null}
-          <div className="movie-view-group" role="group" aria-label="Renderer">
-            <button
-              type="button"
-              className="movie-view-button"
-              aria-pressed={is3d}
-              onClick={() => chooseRenderer("3d")}
-              title="Cinematic 3D arena"
-            >
-              <Box aria-hidden="true" className="size-3.5" />
-              3D
-            </button>
-            <button
-              type="button"
-              className="movie-view-button"
-              aria-pressed={!is3d}
-              onClick={() => chooseRenderer("2d")}
-              title="Top-down tactical board"
-            >
-              <Square aria-hidden="true" className="size-3.5" />
-              2D
-            </button>
-          </div>
+          {MOVIE_2D_CHOICE_ENABLED ? (
+            <div className="movie-view-group" role="group" aria-label="Renderer">
+              <button
+                type="button"
+                className="movie-view-button"
+                aria-pressed={is3d}
+                onClick={() => chooseRenderer("3d")}
+                title="Cinematic 3D arena"
+              >
+                <Box aria-hidden="true" className="size-3.5" />
+                3D
+              </button>
+              <button
+                type="button"
+                className="movie-view-button"
+                aria-pressed={!is3d}
+                onClick={() => chooseRenderer("2d")}
+                title="Top-down tactical board"
+              >
+                <Square aria-hidden="true" className="size-3.5" />
+                2D
+              </button>
+            </div>
+          ) : null}
           {is3d ? (
             <div className="movie-view-group" role="group" aria-label="Camera">
               <button
@@ -737,7 +743,7 @@ export function MoviePlayer({
                 className="movie-view-button"
                 aria-pressed={cameraMode === "free"}
                 onClick={() => sceneRef.current?.setCameraMode("free")}
-                title="Free camera: drag to orbit, right-drag to pan, scroll to zoom"
+                title="Free camera: drag to pan, right-drag to orbit, scroll to zoom"
               >
                 <Move3d aria-hidden="true" className="size-3.5" />
                 Free

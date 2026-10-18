@@ -693,6 +693,41 @@ def build_arena() -> None:
     # count; every wall is drawn three times (scene, shadow map, AO normals).
     coliseum_wall("WallTall", 7, segments=1)
 
+    # LowWallRubble (art upgrade): a collapsed wall section spanning its tile
+    # edge to edge. Broken brick courses rise toward both ends, where they meet
+    # standing walls, and sag in the middle; no capstones, a jagged top and loose
+    # rubble on both sides keep it unmistakably low. Half a tile thick to match
+    # the high-wall bars it joins.
+    rnd = random.Random(41)
+    parts = [box("lr_base", (0.5, 0.25, 0.03), (0, 0, 0.03), m["concrete_dark"], bevel=0.012)]
+    for row in range(4):
+        offset = 0.06 if row % 2 else -0.06
+        z = 0.1 + row * 0.085
+        for col in range(5):
+            x = -0.48 + col * 0.24 + offset
+            if abs(x) > 0.5:
+                continue
+            # Courses survive near the ends and crumble toward the middle.
+            end_weight = abs(x) / 0.5
+            survive = 1.0 if row == 0 else (0.15 + 0.85 * end_weight) - row * 0.18
+            if rnd.random() > survive:
+                continue
+            parts.append(box(f"lr_b{row}{col}", (0.112, 0.235, 0.04), (x, rnd.uniform(-0.02, 0.02), z),
+                             m["brick"], bevel=0.01, segments=1,
+                             rot=(rnd.uniform(-0.06, 0.06), rnd.uniform(-0.08, 0.08),
+                                  rnd.uniform(-0.08, 0.08))))
+    # Spill: broken bricks and concrete lumps on both faces.
+    for i in range(14):
+        side = 1 if i % 2 else -1
+        sx = rnd.uniform(0.03, 0.07)
+        parts.append(box(f"lr_s{i}", (sx, sx * rnd.uniform(0.6, 1.4), sx * 0.55),
+                         (rnd.uniform(-0.46, 0.46), side * rnd.uniform(0.27, 0.42), sx * 0.45),
+                         m["brick"] if i % 3 else m["rock"], bevel=0.008, segments=1,
+                         rot=(rnd.uniform(-0.5, 0.5), rnd.uniform(-0.5, 0.5), rnd.uniform(0, 3))))
+    obj = join("LowWallRubble", parts)
+    jitter_mesh(obj, 0.006, 43)
+    objects.append(obj)
+
     # Low wall: a sandbag-topped concrete barrier, crouch-height.
     parts = [box("lw_base", (0.48, 0.3, 0.17), (0, 0, 0.17), m["concrete"], bevel=0.04,
                  taper=(1.0, 0.7))]
