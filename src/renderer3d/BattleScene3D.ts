@@ -493,8 +493,10 @@ export class BattleScene3D {
     if (new URLSearchParams(window.location.search).has("gpuProfile")) this.profileGpuPasses();
 
     this.controls = new OrbitControls(this.camera, this.canvas);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.08;
+    // No inertia: the view stops when the drag ends. Damping decays per
+    // update, and draw-on-demand updates an idle scene far below 60 fps, so a
+    // short drag kept gliding for seconds.
+    this.controls.enableDamping = false;
     // Plain drag pans across the (now larger than the screen) arena; rotating
     // takes the right button or two fingers, and the wheel or pinch zooms.
     this.controls.mouseButtons = {
