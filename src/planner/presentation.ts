@@ -93,6 +93,27 @@ const arrowForStep = (from: TileCoord, to: TileCoord): string => {
   return directions[key as keyof typeof directions] ?? "·";
 };
 
+/**
+ * One arrow per tile stepped (double steps contribute their via tile too).
+ * A robot still in the dock has no origin, so its first step has no arrow.
+ */
+export const moveArrows = (
+  segment: Extract<RobotCommandSegment, { readonly kind: "move" }>,
+  startPosition?: TileCoord | "dock",
+): readonly string[] => {
+  const arrows: string[] = [];
+  let previous = startPosition === "dock" ? undefined : startPosition;
+  for (const step of segment.path) {
+    if (previous !== undefined && step.via !== undefined) {
+      arrows.push(arrowForStep(previous, step.via));
+      previous = step.via;
+    }
+    if (previous !== undefined) arrows.push(arrowForStep(previous, step.to));
+    previous = step.to;
+  }
+  return arrows;
+};
+
 export interface CommandPresentation {
   readonly label: string;
   readonly compact: string;
@@ -112,24 +133,13 @@ export const commandPresentation = (
         detail: `Deploy at tile ${segment.to.x},${segment.to.y}`,
         weapon: null,
       };
-    case "move": {
-      const arrows: string[] = [];
-      let previous = startPosition === "dock" ? undefined : startPosition;
-      for (const step of segment.path) {
-        if (previous !== undefined && step.via !== undefined) {
-          arrows.push(arrowForStep(previous, step.via));
-          previous = step.via;
-        }
-        if (previous !== undefined) arrows.push(arrowForStep(previous, step.to));
-        previous = step.to;
-      }
+    case "move":
       return {
         label: "Move",
-        compact: arrows.join("").slice(0, 8) || "Move",
+        compact: moveArrows(segment, startPosition).join("").slice(0, 8) || "Move",
         detail: `${segment.path.length} movement selector${segment.path.length === 1 ? "" : "s"} while ${segment.posture}`,
         weapon: null,
       };
-    }
     case "set-posture":
       return {
         label: "Posture",

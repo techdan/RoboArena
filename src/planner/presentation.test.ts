@@ -3,6 +3,7 @@ import { makeRobot } from "../engine/__fixtures__/match";
 import {
   commandPresentation,
   headingFromVector,
+  moveArrows,
   nextSurvivingRobotId,
   participantRobotDisplayName,
   removableSegmentIndex,
@@ -11,6 +12,16 @@ import {
 } from "./presentation";
 
 describe("planner presentation", () => {
+  it("gives every move step an arrow, including the first one off a known tile", () => {
+    const segment = {
+      kind: "move",
+      posture: "upright",
+      path: [{ to: { x: 3, y: 2 } }, { via: { x: 4, y: 3 }, to: { x: 4, y: 4 } }],
+    } as const;
+    expect(moveArrows(segment, { x: 2, y: 2 })).toEqual(["→", "↘", "↓"]);
+    expect(moveArrows(segment, "dock")).toEqual(["↘", "↓"]);
+  });
+
   it("uses class names and adds ordinals only for duplicate classes", () => {
     const robots = [
       makeRobot("r1", "t1", "rifle", "dock"),

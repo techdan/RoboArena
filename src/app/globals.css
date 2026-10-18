@@ -1317,8 +1317,8 @@ a.planner-menu-item:focus-visible {
 }
 .timeline-empty {
   align-self: center;
-  color: rgb(255 255 255 / 22%);
-  font-size: 0.65rem;
+  color: rgb(255 255 255 / 32%);
+  font-size: 0.7rem;
 }
 .planner-workspace {
   position: relative;
@@ -1798,11 +1798,24 @@ a.planner-menu-item:focus-visible {
   font-family: ui-monospace, monospace;
   font-size: 0.5rem;
 }
+/* One arrow per step, spread across the move's cell so a long walk reads as a
+   walk instead of a tiny word lost in an empty block. Narrow cells clip. */
 .timeline-move-glyph {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-evenly;
+  overflow: hidden;
   color: #a5f3fc;
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
+}
+.timeline-move-glyph i {
+  font-style: normal;
 }
 .timeline-scan-glyph {
   position: relative;
@@ -3425,10 +3438,10 @@ a.planner-menu-item:focus-visible {
   top: 0;
   bottom: 0;
   padding-left: 0.15rem;
-  border-left: 1px solid rgb(255 255 255 / 8%);
-  color: rgb(255 255 255 / 26%);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 42%);
   font-family: ui-monospace, monospace;
-  font-size: 0.46rem;
+  font-size: 0.6rem;
 }
 .timeline-ticks span:first-child {
   border-left: 0;
@@ -3646,10 +3659,10 @@ a.planner-menu-item:focus-visible {
   top: 0;
   bottom: 0;
   padding-left: 0.15rem;
-  border-left: 1px solid rgb(255 255 255 / 8%);
-  color: rgb(255 255 255 / 26%);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 42%);
   font-family: ui-monospace, monospace;
-  font-size: 0.46rem;
+  font-size: 0.6rem;
 }
 .all-programs-rows {
   position: relative;
@@ -3666,7 +3679,7 @@ a.planner-menu-item:focus-visible {
   padding: 0.35rem 0.4rem;
   color: rgb(255 255 255 / 65%);
   background: rgb(0 0 0 / 22%);
-  font-size: 0.58rem;
+  font-size: 0.7rem;
   font-weight: 850;
   text-align: left;
   text-overflow: ellipsis;
@@ -3730,7 +3743,8 @@ a.planner-menu-item:focus-visible {
   left: 0.15rem;
   color: #a5f3fc;
   font-family: ui-monospace, monospace;
-  font-size: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
 }
 
 /* Action-strip captions + in-place fire takeover. */
@@ -5313,9 +5327,9 @@ a.planner-menu-item:focus-visible {
   font-weight: 900;
 }
 .squad-card-class {
-  color: rgb(255 255 255 / 48%);
+  color: rgb(255 255 255 / 55%);
   font-family: ui-monospace, monospace;
-  font-size: 0.58rem;
+  font-size: 0.66rem;
   text-transform: uppercase;
 }
 .squad-card-bars {
@@ -5347,9 +5361,9 @@ a.planner-menu-item:focus-visible {
 }
 .squad-card-time {
   grid-column: 2;
-  color: rgb(255 255 255 / 55%);
+  color: rgb(255 255 255 / 62%);
   font-family: ui-monospace, monospace;
-  font-size: 0.6rem;
+  font-size: 0.68rem;
 }
 .squad-card-clear {
   position: absolute;
@@ -5609,9 +5623,9 @@ a.planner-menu-item:focus-visible {
   color: #a5f3fc;
 }
 .turn-track-caption {
-  color: rgb(255 255 255 / 40%);
+  color: rgb(255 255 255 / 48%);
   font-family: ui-monospace, monospace;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -5625,9 +5639,9 @@ a.planner-menu-item:focus-visible {
   justify-content: center;
 }
 .turn-track-name small {
-  color: rgb(255 255 255 / 40%);
+  color: rgb(255 255 255 / 52%);
   font-family: ui-monospace, monospace;
-  font-size: 0.52rem;
+  font-size: 0.62rem;
   font-weight: 600;
 }
 .turn-track-name[data-over="true"] small {
