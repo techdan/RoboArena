@@ -205,7 +205,7 @@ const PROFILE_UNIFORMS: Readonly<
  *  of procedural noise per pixel, which integrated GPUs pay for heavily. */
 const NOISE_SIZE = 256;
 let noiseTexture: THREE.DataTexture | null = null;
-const weatherNoise = (): THREE.DataTexture => {
+export const weatherNoise = (): THREE.DataTexture => {
   if (noiseTexture !== null) return noiseTexture;
   const size = NOISE_SIZE;
   const lattice = (period: number, salt: string) => {
